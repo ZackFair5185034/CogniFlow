@@ -29,3 +29,93 @@
 
 __version__ = "0.1.0"
 __author__ = "VisionGame Team"
+
+# 数据输入模块
+from visiongame.core.data_input import (
+    ScreenCapture,
+    VideoReader,
+    FrameBuffer,
+    DatasetManager,
+)
+
+# 视觉处理模块
+from visiongame.core.vision import (
+    ImagePreprocessor,
+    CNNEncoder,
+    UIDetector,
+)
+
+# 强化学习模块
+from visiongame.core.rl import (
+    PPO,
+    SAC,
+    GameEnv,
+    GameAdapter,
+    Trainer,
+)
+
+# 控制模块
+from visiongame.core.control import (
+    KeyboardEmulator,
+    MouseEmulator,
+    GameController,
+)
+
+# 标注工具
+from visiongame.annotation import (
+    BoundingBox,
+    BoundingBoxAnnotator,
+)
+
+# 配置
+from visiongame.config import (
+    Config,
+    DataInputConfig,
+    VisionConfig,
+    RLConfig,
+    ControlConfig,
+    AnnotationConfig,
+    StorageConfig,
+    TrainingConfig,
+    get_config,
+    set_config,
+)
+
+__all__ = [
+    # 版本信息
+    "__version__",
+    "__author__",
+    # 数据输入
+    "ScreenCapture",
+    "VideoReader",
+    "FrameBuffer",
+    "DatasetManager",
+    # 视觉处理
+    "ImagePreprocessor",
+    "CNNEncoder",
+    "UIDetector",
+    # 强化学习
+    "PPO",
+    "SAC",
+    "GameEnv",
+    "GameAdapter",
+    "Trainer",
+    # 控制
+    "KeyboardEmulator",
+    "MouseEmulator",
+    "GameController",
+    # 标注
+    "BoundingBox",
+    "BoundingBoxAnnotator",
+    # 配置
+    "Config",
+    "DataInputConfig",
+    "VisionConfig",
+    "RLConfig",
+    "ControlConfig",
+    "AnnotationConfig",
+    "StorageConfig",
+    "TrainingConfig",
+    "get_config",
+    "set_config",
+]

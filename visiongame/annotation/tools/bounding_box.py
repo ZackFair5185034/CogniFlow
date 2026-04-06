@@ -1,4 +1,4 @@
-"""Bounding box annotation tool."""
+"""VisionGame 边界框标注工具模块。"""
 
 from typing import List, Tuple, Optional, Dict, Any
 from dataclasses import dataclass
@@ -13,7 +13,7 @@ except ImportError:
 
 @dataclass
 class BoundingBox:
-    """Bounding box annotation."""
+    """边界框标注。"""
     x1: int
     y1: int
     x2: int
@@ -24,20 +24,20 @@ class BoundingBox:
 
     @property
     def area(self) -> int:
-        """Compute box area."""
+        """计算框面积。"""
         return max(0, self.x2 - self.x1) * max(0, self.y2 - self.y1)
 
     @property
     def center(self) -> Tuple[int, int]:
-        """Compute box center."""
+        """计算框中心点。"""
         return ((self.x1 + self.x2) // 2, (self.y1 + self.y2) // 2)
 
     def to_coco(self) -> List[float]:
-        """Convert to COCO format [x, y, width, height]."""
+        """转换为 COCO 格式 [x, y, width, height]。"""
         return [self.x1, self.y1, self.x2 - self.x1, self.y2 - self.y1]
 
     def to_yolo(self, img_width: int, img_height: int) -> List[float]:
-        """Convert to YOLO format [class_id, x_center, y_center, width, height] (normalized)."""
+        """转换为 YOLO 格式 [class_id, x_center, y_center, width, height]（归一化）。"""
         x_center = (self.x1 + self.x2) / 2 / img_width
         y_center = (self.y1 + self.y2) / 2 / img_height
         width = (self.x2 - self.x1) / img_width
@@ -46,76 +46,76 @@ class BoundingBox:
 
 
 class BoundingBoxAnnotator:
-    """Interactive bounding box annotation tool.
+    """交互式边界框标注工具。
 
-    Supports:
-    - Click and drag to create boxes
-    - Multiple class labels
-    - Box editing and deletion
+    支持功能：
+    - 点击拖拽创建框
+    - 多类别标签
+    - 框的编辑和删除
     """
 
     def __init__(self, labels: List[str]):
-        """Initialize annotator.
+        """初始化标注器。
 
         Args:
-            labels: List of class labels.
+            labels: 类别标签列表。
         """
         if not CV2_AVAILABLE:
-            raise ImportError("OpenCV is required for annotation")
+            raise ImportError("标注需要安装 OpenCV")
 
         self.labels = labels
         self.boxes: List[BoundingBox] = []
 
-        # Drawing state
+        # 绘图状态
         self._drawing = False
         self._current_start: Optional[Tuple[int, int]] = None
         self._current_end: Optional[Tuple[int, int]] = None
         self._selected_box_idx: Optional[int] = None
 
-        # Colors for different classes (BGR)
+        # 不同类别的颜色 (BGR)
         self._colors = [
-            (255, 0, 0),    # Red
-            (0, 255, 0),    # Green
-            (0, 0, 255),    # Blue
-            (255, 255, 0),  # Cyan
-            (255, 0, 255),  # Magenta
-            (0, 255, 255),  # Yellow
+            (255, 0, 0),    # 红色
+            (0, 255, 0),    # 绿色
+            (0, 0, 255),    # 蓝色
+            (255, 255, 0),  # 青色
+            (255, 0, 255),  # 洋红色
+            (0, 255, 255),  # 黄色
         ]
 
     def add_box(self, box: BoundingBox) -> None:
-        """Add a bounding box."""
+        """添加边界框。"""
         self.boxes.append(box)
 
     def remove_box(self, index: int) -> None:
-        """Remove a bounding box by index."""
+        """根据索引移除边界框。"""
         if 0 <= index < len(self.boxes):
             self.boxes.pop(index)
 
     def get_box_at_point(self, x: int, y: int) -> Optional[int]:
-        """Get box index at point, or None."""
+        """获取指定点处的框索引。"""
         for i, box in enumerate(self.boxes):
             if box.x1 <= x <= box.x2 and box.y1 <= y <= box.y2:
                 return i
         return None
 
     def draw_boxes(self, image: np.ndarray) -> np.ndarray:
-        """Draw all boxes on image.
+        """在图像上绘制所有框。
 
         Args:
-            image: Input image (H, W, 3).
+            image: 输入图像 (H, W, 3)。
 
         Returns:
-            Image with boxes drawn.
+            绘制了框的图像。
         """
         img = image.copy()
 
         for i, box in enumerate(self.boxes):
             color = self._colors[box.label_id % len(self._colors)]
 
-            # Draw box
+            # 绘制框
             cv2.rectangle(img, (box.x1, box.y1), (box.x2, box.y2), color, 2)
 
-            # Draw label
+            # 绘制标签
             label_text = box.label
             font = cv2.FONT_HERSHEY_SIMPLEX
             font_scale = 0.5
@@ -125,11 +125,11 @@ class BoundingBoxAnnotator:
             cv2.rectangle(img, (box.x1, box.y1 - text_h - 4), (box.x1 + text_w, box.y1), color, -1)
             cv2.putText(img, label_text, (box.x1, box.y1 - 2), font, font_scale, (255, 255, 255), thickness)
 
-            # Highlight selected box
+            # 高亮选中的框
             if i == self._selected_box_idx:
                 cv2.rectangle(img, (box.x1 - 2, box.y1 - 2), (box.x2 + 2, box.y2 + 2), (0, 255, 0), 2)
 
-        # Draw current box being created
+        # 绘制正在创建的框
         if self._drawing and self._current_start and self._current_end:
             cv2.rectangle(img, self._current_start, self._current_end, (128, 128, 128), 1)
 
@@ -142,25 +142,25 @@ class BoundingBoxAnnotator:
         y: int,
         flags: int,
     ) -> Optional[str]:
-        """Handle mouse events for interactive annotation.
+        """处理交互式标注的鼠标事件。
 
         Args:
-            event: Mouse event type (cv2.EVENT_*).
-            x: Mouse x position.
-            y: Mouse y position.
-            flags: Event flags.
+            event: 鼠标事件类型 (cv2.EVENT_*)。
+            x: 鼠标 x 坐标。
+            y: 鼠标 y 坐标。
+            flags: 事件标志。
 
         Returns:
-            Event description or None.
+            事件描述或 None。
         """
         if event == cv2.EVENT_LBUTTONDOWN:
-            # Check if clicking on existing box
+            # 检查是否点击了现有框
             box_idx = self.get_box_at_point(x, y)
             if box_idx is not None:
                 self._selected_box_idx = box_idx
                 return "box_selected"
             else:
-                # Start drawing new box
+                # 开始绘制新框
                 self._drawing = True
                 self._current_start = (x, y)
                 self._current_end = (x, y)
@@ -181,7 +181,7 @@ class BoundingBoxAnnotator:
                     x2 = max(self._current_start[0], self._current_end[0])
                     y2 = max(self._current_start[1], self._current_end[1])
 
-                    if x2 - x1 > 5 and y2 - y1 > 5:  # Minimum size
+                    if x2 - x1 > 5 and y2 - y1 > 5:  # 最小尺寸
                         box = BoundingBox(x1=x1, y1=y1, x2=x2, y2=y2, label="")
                         self.boxes.append(box)
                         self._selected_box_idx = len(self.boxes) - 1
@@ -192,7 +192,7 @@ class BoundingBoxAnnotator:
                 return "drawing_cancelled"
 
         elif event == cv2.EVENT_RBUTTONDOWN:
-            # Delete box at point
+            # 删除点击处的框
             box_idx = self.get_box_at_point(x, y)
             if box_idx is not None:
                 self.remove_box(box_idx)
@@ -202,13 +202,13 @@ class BoundingBoxAnnotator:
         return None
 
     def export_coco(self, image_id: int) -> List[Dict[str, Any]]:
-        """Export boxes in COCO format.
+        """以 COCO 格式导出框。
 
         Args:
-            image_id: Image ID for COCO format.
+            image_id: COCO 格式的图片 ID。
 
         Returns:
-            List of COCO annotations.
+            COCO 格式标注列表。
         """
         annotations = []
         for i, box in enumerate(self.boxes):
@@ -224,14 +224,14 @@ class BoundingBoxAnnotator:
         return annotations
 
     def export_yolo(self, img_width: int, img_height: int) -> List[str]:
-        """Export boxes in YOLO format.
+        """以 YOLO 格式导出框。
 
         Args:
-            img_width: Image width.
-            img_height: Image height.
+            img_width: 图像宽度。
+            img_height: 图像高度。
 
         Returns:
-            List of YOLO format strings.
+            YOLO 格式字符串列表。
         """
         lines = []
         for box in self.boxes:
@@ -240,7 +240,7 @@ class BoundingBoxAnnotator:
         return lines
 
     def clear(self) -> None:
-        """Clear all boxes."""
+        """清除所有框。"""
         self.boxes.clear()
         self._selected_box_idx = None
         self._drawing = False
