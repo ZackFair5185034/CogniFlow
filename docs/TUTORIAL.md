@@ -586,6 +586,52 @@ yolo_lines = annotator.export_yolo(img_width=640, img_height=480)
 annotator.clear()
 ```
 
+### 4.6 标注工具 GUI (`visiongame.annotation.tools.label_tool`)
+
+图形界面版标注工具，支持鼠标交互式标注。
+
+#### LabelTool - 标注工具 GUI
+
+```bash
+# 启动标注工具
+python -m visiongame.annotation.tools.label_tool
+
+# 或在 Python 中运行
+from visiongame.annotation.tools import LabelTool
+tool = LabelTool(
+    labels=["player", "enemy", "item", "npc", "ui"],
+    output_dir="./annotations",
+    output_format="coco"
+)
+tool.run()
+```
+
+#### 快捷键说明
+
+| 快捷键 | 功能 |
+|-------|------|
+| 1-9 | 选择类别 |
+| o | 打开图片文件夹 |
+| s | 保存标注 |
+| c | 清除当前标注 |
+| z | 撤销上一个框 |
+| space | 下一张图片 |
+| 左箭头 | 上一张图片 |
+| q | 退出 |
+
+#### 命令行参数
+
+```bash
+# 指定类别标签
+python -m visiongame.annotation.tools.label_tool --labels player enemy item npc
+
+# 指定输出目录
+python -m visiongame.annotation.tools.label_tool --output-dir ./my_annotations
+
+# 指定输出格式
+python -m visiongame.annotation.tools.label_tool --format yolo
+```
+
 ---
 
 ## 5. API 参考
@@ -631,7 +677,8 @@ annotator.clear()
 | 类/函数 | 说明 |
 |---------|------|
 | `BoundingBox` | 边界框数据类 |
-| `BoundingBoxAnnotator` | 边界框标注工具 |
+| `BoundingBoxAnnotator` | 边界框标注工具（程序化） |
+| `LabelTool` | 图形界面标注工具 |
 
 ---
 

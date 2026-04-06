@@ -1,6 +1,6 @@
-# VisionGame
+# VisionGame 依赖包
 
-```
+# 核心依赖
 torch>=2.0.0
 torchvision>=0.15.0
 numpy>=1.21.0
@@ -10,17 +10,10 @@ pyautogui>=0.9.54
 pyyaml>=6.0
 gymnasium>=0.29.0
 tensorboard>=2.14.0
-```
 
-## Optional
+# GUI 标注工具依赖
+pillow>=10.0.0
 
-```
-ffmpeg-python>=0.2.0  # For enhanced video decoding
-pygetwindow>=0.0.9    # For window management
-```
-
-## Installation
-
-```bash
-pip install -e .
-```
+# 可选依赖
+ffmpeg-python>=0.2.0  # 增强视频解码
+pygetwindow>=0.0.9    # 窗口管理

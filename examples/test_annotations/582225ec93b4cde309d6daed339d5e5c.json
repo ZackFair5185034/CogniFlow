@@ -1,0 +1,19 @@
+{
+  "image_path": "C:\\Users\\wanglei\\Downloads\\img\\582225ec93b4cde309d6daed339d5e5c.jpeg",
+  "image_shape": [
+    1350,
+    2400,
+    3
+  ],
+  "boxes": [
+    {
+      "x1": 433,
+      "y1": 257,
+      "x2": 1782,
+      "y2": 630,
+      "class_id": 0,
+      "class_name": "player"
+    }
+  ],
+  "format": "coco"
+}

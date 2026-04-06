@@ -65,6 +65,7 @@ from visiongame.core.control import (
 from visiongame.annotation import (
     BoundingBox,
     BoundingBoxAnnotator,
+    LabelTool,
 )
 
 # 配置
@@ -107,6 +108,7 @@ __all__ = [
     # 标注
     "BoundingBox",
     "BoundingBoxAnnotator",
+    "LabelTool",
     # 配置
     "Config",
     "DataInputConfig",
