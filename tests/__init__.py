@@ -1,0 +1,1 @@
+"""VisionGame test suite."""

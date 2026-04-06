@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c *)",
+      "Bash(python *.py)",
+      "Bash(pip install *)",
+      "Bash(cd:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(curl * | sh)"
+    ]
+  }
+}
