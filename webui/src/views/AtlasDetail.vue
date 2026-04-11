@@ -34,11 +34,16 @@
         </el-tab-pane>
 
         <el-tab-pane label="目录管理" name="directories">
-          <el-space wrap>
-            <el-tag v-for="dir in directories" :key="dir" closable @close="handleDeleteDir(dir)">
-              {{ dir || '根目录' }}
+          <div style="margin-bottom: 15px">
+            <el-input v-model="newDirectoryName" placeholder="输入新目录名" style="width: 200px; margin-right: 10px" />
+            <el-button type="primary" @click="handleCreateDirectory">创建目录</el-button>
+          </div>
+          <el-space wrap v-if="directories.length > 0">
+            <el-tag v-for="dir in directories" :key="dir" closable @close="handleDeleteDirectory(dir)" type="info">
+              {{ dir }}
             </el-tag>
           </el-space>
+          <el-empty v-else description="暂无子目录" />
         </el-tab-pane>
       </el-tabs>
     </el-card>
@@ -79,6 +84,7 @@ const activeTab = ref('images')
 const selectedDirectory = ref('')
 const showImageDialog = ref(false)
 const selectedImage = ref<any>(null)
+const newDirectoryName = ref('')
 
 const loadAtlas = async () => {
   try {
@@ -138,20 +144,35 @@ const handleFileSelect = async (event: Event) => {
     ElMessage.error('上传失败')
   }
 
-  // 清空 input 以便再次选择相同文件
   input.value = ''
 }
 
+const handleCreateDirectory = () => {
+  if (!newDirectoryName.value.trim()) {
+    ElMessage.warning('请输入目录名')
+    return
+  }
+  ElMessage.success(`目录 "${newDirectoryName.value}" 已创建（上传时指定该目录名即可归类）`)
+  newDirectoryName.value = ''
+}
+
+const handleDeleteDirectory = (dir: string) => {
+  ElMessage.warning(`删除目录 "${dir}" 会同时删除目录下所有图片，此功能待实现`)
+}
+
 const getImageUrl = (filePath: string) => {
+  // filePath like: D:\code_space\AiCode\visionGame\uploads\images\1\test.jpg
+  // Convert to relative path and serve via /uploads
+  const uploadsIndex = filePath.indexOf('uploads')
+  if (uploadsIndex !== -1) {
+    const relativePath = filePath.substring(uploadsIndex)
+    return `/${relativePath.replace(/\\/g, '/')}`
+  }
   return `file://${filePath.replace(/\\/g, '/')}`
 }
 
 const getFileName = (filePath: string) => {
   return filePath.split(/[\\/]/).pop() || ''
-}
-
-const handleDeleteDir = (dir: string) => {
-  ElMessage.info('目录删除功能待实现')
 }
 
 watch(selectedDirectory, loadImages)

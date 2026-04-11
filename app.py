@@ -16,11 +16,17 @@ import os
 from database import init_db
 from routers import atlas, image, annotation, category, model, training, launch, websocket
 
+# 上传文件存储目录
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理。"""
     init_db()
+    # 确保上传目录存在
+    os.makedirs(os.path.join(UPLOAD_DIR, "images"), exist_ok=True)
+    os.makedirs(os.path.join(UPLOAD_DIR, "models"), exist_ok=True)
     yield
 
 
@@ -50,6 +56,9 @@ app.include_router(model.router, prefix="/api/models", tags=["模型管理"])
 app.include_router(training.router, prefix="/api/training", tags=["训练管理"])
 app.include_router(launch.router, prefix="/api/launch", tags=["模型启动"])
 app.include_router(websocket.router, prefix="/api/ws", tags=["WebSocket"])
+
+# 挂载上传文件目录为静态文件服务
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
 @app.get("/")
