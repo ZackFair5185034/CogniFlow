@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 import os
 
 from database import init_db
-from routers import atlas, image, annotation, category, model, training, launch
+from routers import atlas, image, annotation, category, model, training, launch, websocket
 
 
 @asynccontextmanager
@@ -49,6 +49,7 @@ app.include_router(category.router, prefix="/api/categories", tags=["类别管�
 app.include_router(model.router, prefix="/api/models", tags=["模型管理"])
 app.include_router(training.router, prefix="/api/training", tags=["训练管理"])
 app.include_router(launch.router, prefix="/api/launch", tags=["模型启动"])
+app.include_router(websocket.router, prefix="/api/ws", tags=["WebSocket"])
 
 
 @app.get("/")
