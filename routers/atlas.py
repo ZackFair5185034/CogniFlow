@@ -8,6 +8,7 @@ import shutil
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
+from PIL import Image as PILImage
 
 from database import get_db, Atlas, Image
 from schemas import AtlasCreate, AtlasUpdate, AtlasResponse
@@ -162,6 +163,14 @@ async def upload_images(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
+        # 提取图片元数据
+        img_width, img_height = None, None
+        try:
+            with PILImage.open(file_path) as img:
+                img_width, img_height = img.size
+        except Exception:
+            pass
+
         # 从路径中提取目录分组（相对于 atlas_id 目录）
         directory = os.path.dirname(filename).replace("\\", "/")
 
@@ -170,6 +179,8 @@ async def upload_images(
             atlas_id=atlas_id,
             file_path=file_path,
             directory=directory if directory else None,
+            width=img_width,
+            height=img_height,
         )
         db.add(image)
         uploaded_images.append(filename)
