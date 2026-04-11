@@ -4,14 +4,18 @@
 提供模型的元数据管理和最佳模型设置。
 """
 import json
+import os
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
 from database import get_db, Model
 from schemas import ModelCreate, ModelUpdate, ModelResponse
 
 router = APIRouter()
+
+# 模型存储根目录
+MODEL_STORAGE_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "models")
 
 
 @router.get("", response_model=List[ModelResponse])
@@ -144,3 +148,68 @@ async def set_best_model(model_id: int, db: Session = Depends(get_db)):
         is_best=m.is_best,
         created_at=m.created_at,
     )
+
+
+@router.post("/{model_id}/upload", response_model=ModelResponse)
+async def upload_model_file(
+    model_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """上传模型文件。"""
+    m = db.query(Model).filter(Model.id == model_id).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="模型不存在")
+
+    # 确保上传目录存在
+    os.makedirs(MODEL_STORAGE_DIR, exist_ok=True)
+
+    # 保存模型文件
+    file_path = os.path.join(MODEL_STORAGE_DIR, f"model_{model_id}_{file.filename}")
+    with open(file_path, "wb") as buffer:
+        content = await file.read()
+        buffer.write(content)
+
+    # 更新模型记录
+    m.file_path = file_path
+    db.commit()
+    db.refresh(m)
+
+    return ModelResponse(
+        id=m.id,
+        name=m.name,
+        version=m.version,
+        file_path=m.file_path,
+        atlas_id=m.atlas_id,
+        metrics=json.loads(m.metrics) if m.metrics else None,
+        is_best=m.is_best,
+        created_at=m.created_at,
+    )
+
+
+@router.get("/{model_id}/training-history")
+async def get_model_training_history(model_id: int, db: Session = Depends(get_db)):
+    """获取模型的训练历史。"""
+    from database import TrainingJob
+
+    m = db.query(Model).filter(Model.id == model_id).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="模型不存在")
+
+    jobs = db.query(TrainingJob).filter(
+        TrainingJob.model_id == model_id
+    ).order_by(TrainingJob.started_at.desc()).all()
+
+    results = []
+    for job in jobs:
+        results.append({
+            "id": job.id,
+            "status": job.status,
+            "config": json.loads(job.config) if job.config else None,
+            "current_step": job.current_step,
+            "total_steps": job.total_steps,
+            "metrics": json.loads(job.metrics) if job.metrics else None,
+            "started_at": job.started_at,
+            "finished_at": job.finished_at,
+        })
+    return results
