@@ -6,17 +6,8 @@
       <template #header>
         <div class="header-actions">
           <span>图集详情: {{ atlas?.name }}</span>
-          <el-upload
-            :action="`/api/atlas/${id}/images`"
-            :headers="{ 'Content-Type': 'multipart/form-data' }"
-            :show-file-list="false"
-            :on-success="handleUploadSuccess"
-            :before-upload="beforeUpload"
-            accept="image/*"
-            multiple
-          >
-            <el-button type="primary">上传图片</el-button>
-          </el-upload>
+          <el-button type="primary" @click="triggerUpload">上传图片</el-button>
+          <input ref="fileInputRef" type="file" accept="image/*" multiple style="display: none" @change="handleFileSelect" />
         </div>
       </template>
 
@@ -30,7 +21,7 @@
           <el-row :gutter="10" v-loading="loadingImages">
             <el-col :span="4" v-for="img in images" :key="img.id">
               <el-card shadow="hover" class="image-card">
-                <img :src="getImageUrl(img.file_path)" class="image-thumb" @click="selectedImage = img" />
+                <img :src="getImageUrl(img.file_path)" class="image-thumb" @click="openImageDialog(img)" />
                 <div class="image-info">
                   <span class="image-name">{{ getFileName(img.file_path) }}</span>
                   <el-tag v-if="img.annotated" size="small" type="success">已标注</el-tag>
@@ -78,6 +69,7 @@ import { atlasApi } from '@/api'
 
 const route = useRoute()
 const id = Number(route.params.id)
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const atlas = ref<any>(null)
 const images = ref<any[]>([])
@@ -119,22 +111,43 @@ const loadDirectories = async () => {
   }
 }
 
+const triggerUpload = () => {
+  fileInputRef.value?.click()
+}
+
+const openImageDialog = (img: any) => {
+  selectedImage.value = img
+  showImageDialog.value = true
+}
+
+const handleFileSelect = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (!input.files || input.files.length === 0) return
+
+  const formData = new FormData()
+  for (let i = 0; i < input.files.length; i++) {
+    formData.append('files', input.files[i])
+  }
+
+  try {
+    await atlasApi.uploadImages(id, formData)
+    ElMessage.success('上传成功')
+    loadImages()
+    loadDirectories()
+  } catch (error) {
+    ElMessage.error('上传失败')
+  }
+
+  // 清空 input 以便再次选择相同文件
+  input.value = ''
+}
+
 const getImageUrl = (filePath: string) => {
   return `file://${filePath.replace(/\\/g, '/')}`
 }
 
 const getFileName = (filePath: string) => {
   return filePath.split(/[\\/]/).pop() || ''
-}
-
-const beforeUpload = (file: File) => {
-  return true
-}
-
-const handleUploadSuccess = () => {
-  ElMessage.success('上传成功')
-  loadImages()
-  loadDirectories()
 }
 
 const handleDeleteDir = (dir: string) => {
