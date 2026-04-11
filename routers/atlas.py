@@ -3,6 +3,8 @@
 
 提供图集的创建、读取、更新、删除功能。
 """
+import os
+import shutil
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
@@ -11,6 +13,20 @@ from database import get_db, Atlas, Image
 from schemas import AtlasCreate, AtlasUpdate, AtlasResponse
 
 router = APIRouter()
+
+# 图片存储根目录
+IMAGE_STORAGE_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "images")
+
+
+def get_image_storage_path(atlas_id: int, filename: str) -> tuple[str, str]:
+    """获取图片存储路径。
+
+    Returns:
+        (directory, file_path) - 目录路径和完整文件路径
+    """
+    atlas_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id))
+    file_path = os.path.join(atlas_dir, filename)
+    return atlas_dir, file_path
 
 
 @router.get("", response_model=List[AtlasResponse])
@@ -72,14 +88,43 @@ async def delete_atlas(atlas_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{atlas_id}/images")
-async def list_atlas_images(atlas_id: int, db: Session = Depends(get_db)):
-    """获取图集图片列表。"""
+async def list_atlas_images(
+    atlas_id: int,
+    directory: str = None,
+    db: Session = Depends(get_db)
+):
+    """获取图集图片列表，支持按目录筛选。
+
+    Args:
+        atlas_id: 图集 ID
+        directory: 可选，按目录名筛选
+    """
     atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
     if not atlas:
         raise HTTPException(status_code=404, detail="图集不存在")
 
-    images = db.query(Image).filter(Image.atlas_id == atlas_id).all()
+    query = db.query(Image).filter(Image.atlas_id == atlas_id)
+    if directory is not None:
+        query = query.filter(Image.directory == directory)
+
+    images = query.all()
     return images
+
+
+@router.get("/{atlas_id}/directories")
+async def list_atlas_directories(atlas_id: int, db: Session = Depends(get_db)):
+    """获取图集中的所有目录分组。"""
+    atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
+    if not atlas:
+        raise HTTPException(status_code=404, detail="图集不存在")
+
+    images = db.query(Image.directory).filter(
+        Image.atlas_id == atlas_id,
+        Image.directory.isnot(None)
+    ).distinct().all()
+
+    directories = [img.directory for img in images if img.directory]
+    return directories
 
 
 @router.post("/{atlas_id}/images", status_code=201)
@@ -88,10 +133,46 @@ async def upload_images(
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
 ):
-    """上传图片到图集（占位，后续实现文件存储）。"""
+    """上传图片到图集。"""
     atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
     if not atlas:
         raise HTTPException(status_code=404, detail="图集不存在")
 
-    # TODO: 实现文件存储逻辑
-    return {"message": f"收到 {len(files)} 个文件，待实现存储逻辑"}
+    # 确保上传目录存在
+    atlas_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id))
+    os.makedirs(atlas_dir, exist_ok=True)
+
+    uploaded_images = []
+    for file in files:
+        if not file.content_type or not file.content_type.startswith("image/"):
+            continue
+
+        # 保持原始文件名（可加唯一前缀避免冲突）
+        filename = file.filename
+        file_path = os.path.join(atlas_dir, filename)
+
+        # 如果文件已存在，添加时间戳前缀
+        if os.path.exists(file_path):
+            import time
+            name, ext = os.path.splitext(filename)
+            filename = f"{name}_{int(time.time())}{ext}"
+            file_path = os.path.join(atlas_dir, filename)
+
+        # 保存文件
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # 从路径中提取目录分组（相对于 atlas_id 目录）
+        directory = os.path.dirname(filename).replace("\\", "/")
+
+        # 创建数据库记录
+        image = Image(
+            atlas_id=atlas_id,
+            file_path=file_path,
+            directory=directory if directory else None,
+        )
+        db.add(image)
+        uploaded_images.append(filename)
+
+    db.commit()
+    return {"message": f"成功上传 {len(uploaded_images)} 个文件", "files": uploaded_images}

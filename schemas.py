@@ -5,7 +5,7 @@
 """
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 # ============ Atlas Schemas ============
@@ -33,8 +33,7 @@ class AtlasResponse(AtlasBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============ Image Schemas ============
@@ -54,8 +53,7 @@ class ImageResponse(ImageBase):
     annotated: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============ Category Schemas ============
@@ -81,8 +79,7 @@ class CategoryResponse(CategoryBase):
     """类别响应。"""
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============ Annotation Schemas ============
@@ -111,8 +108,7 @@ class AnnotationResponse(AnnotationBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============ Model Schemas ============
@@ -145,8 +141,7 @@ class ModelResponse(ModelBase):
     is_best: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============ TrainingJob Schemas ============
@@ -173,8 +168,7 @@ class TrainingJobResponse(TrainingJobBase):
     started_at: Optional[datetime]
     finished_at: Optional[datetime]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ============ WebSocket 消息 ============

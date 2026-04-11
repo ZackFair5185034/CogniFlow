@@ -6,6 +6,7 @@
 - WebSocket 实时通信
 - Vue3 前端静态文件托管
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -15,11 +16,20 @@ import os
 from database import init_db
 from routers import atlas, image, annotation, category, model, training, launch
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理。"""
+    init_db()
+    yield
+
+
 # 创建 FastAPI 应用
 app = FastAPI(
     title="VisionGame WebUI",
     description="VisionGame 训练图集管理、模型管理、数据标注",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # CORS 配置
@@ -39,12 +49,6 @@ app.include_router(category.router, prefix="/api/categories", tags=["类别管�
 app.include_router(model.router, prefix="/api/models", tags=["模型管理"])
 app.include_router(training.router, prefix="/api/training", tags=["训练管理"])
 app.include_router(launch.router, prefix="/api/launch", tags=["模型启动"])
-
-
-@app.on_event("startup")
-async def startup_event():
-    """应用启动时初始化数据库。"""
-    init_db()
 
 
 @app.get("/")
