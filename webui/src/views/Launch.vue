@@ -323,7 +323,7 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .launch {
   display: flex;
   flex-direction: column;
@@ -331,14 +331,11 @@ onUnmounted(() => {
 }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  @apply flex justify-between items-center;
 }
 
 .header-info h2 {
-  font-size: 24px;
-  font-weight: 600;
+  @apply text-2xl font-semibold;
   background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -346,30 +343,19 @@ onUnmounted(() => {
 }
 
 .header-info .subtitle {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-left: 12px;
+  @apply text-sm text-[var(--text-muted)] ml-3;
 }
 
 .system-status {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 20px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 30px;
+  @apply flex items-center gap-2.5 px-5 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full;
 }
 
 .status-indicator {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--text-muted);
+  @apply w-2.5 h-2.5 rounded-full bg-[var(--text-muted)];
 }
 
 .status-indicator.active {
-  background: var(--accent-green);
+  @apply bg-[var(--accent-green)];
   box-shadow: 0 0 15px var(--accent-green);
   animation: statusGlow 2s infinite;
 }
@@ -380,9 +366,7 @@ onUnmounted(() => {
 }
 
 .status-text {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  @apply text-sm font-medium text-[var(--text-secondary)];
 }
 
 /* 网格布局 */
@@ -398,68 +382,47 @@ onUnmounted(() => {
   animation: fadeInUp 0.6s ease forwards;
 }
 
-.realtime-panel {
+.realtime-panel,
+.guide-panel {
   animation: fadeInUp 0.6s ease forwards;
+}
+
+.realtime-panel {
   animation-delay: 0.1s;
-  opacity: 0;
 }
 
 .guide-panel {
-  animation: fadeInUp 0.6s ease forwards;
   animation-delay: 0.2s;
-  opacity: 0;
 }
 
 /* 面板头部 */
 .panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-color);
+  @apply flex justify-between items-center px-6 py-5 border-b border-[var(--border-color)];
 }
 
 .header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  @apply flex items-center gap-3;
 }
 
 .panel-icon {
-  width: 24px;
-  height: 24px;
-  color: var(--accent-cyan);
+  @apply w-6 h-6 text-[var(--accent-cyan)];
 }
 
 .panel-header h3 {
-  font-size: 16px;
-  font-weight: 600;
+  @apply text-base font-semibold;
 }
 
 .mode-badge,
 .live-indicator {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  letter-spacing: 1px;
-  padding: 6px 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-muted);
+  @apply font-mono text-xs tracking-wider px-3 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-[var(--text-muted)];
 }
 
 .live-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #ff4466;
+  @apply flex items-center gap-1.5 text-[#ff4466];
 }
 
 .live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ff4466;
+  @apply w-1.5 h-1.5 rounded-full bg-[#ff4466];
   animation: livePulse 1s infinite;
 }
 
@@ -470,126 +433,76 @@ onUnmounted(() => {
 
 /* 控制内容 */
 .control-content {
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  @apply p-6 flex flex-col gap-6;
 }
 
 .section-label {
-  display: block;
-  font-size: 12px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 10px;
+  @apply block text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-2.5;
 }
 
-.model-select .select-wrapper {
-  position: relative;
-}
+.model-select {
+  .select-wrapper {
+    @apply relative;
+  }
 
-.model-select select {
-  width: 100%;
-  padding: 14px 50px 14px 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  color: var(--text-primary);
-  font-size: 15px;
-  cursor: pointer;
-  appearance: none;
-  transition: all 0.2s ease;
-}
+  select {
+    @apply w-full px-4 py-3.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-base cursor-pointer appearance-none transition-all;
 
-.model-select select:focus {
-  outline: none;
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
-}
+    &:focus {
+      @apply outline-none border-[var(--accent-cyan)];
+      box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+    }
 
-.model-select select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+    &:disabled {
+      @apply opacity-50 cursor-not-allowed;
+    }
 
-.model-select select option {
-  background: var(--bg-card);
-  padding: 12px;
+    option {
+      @apply bg-[var(--bg-card)] p-3;
+    }
+  }
 }
 
 .select-wrapper::after {
   content: '';
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-top: 6px solid var(--text-muted);
+  @apply absolute right-4 top-1/2 -translate-y-1/2 border-l-1.5 border-r-1.5 border-t-1.5 border-l-transparent border-r-transparent border-t-[var(--text-muted)];
   pointer-events: none;
 }
 
 /* 控制按钮 */
 .control-buttons {
-  display: flex;
-  gap: 14px;
+  @apply flex gap-3.5;
 }
 
 :deep(.control-btn) {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  font-family: inherit;
-  white-space: nowrap;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--bg-card);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.25s ease;
-}
+  @apply flex-1 inline-flex items-center justify-center gap-2.5 px-5 py-3.5 text-sm font-medium font-sans whitespace-nowrap border border-[var(--border-color)] rounded-lg bg-[var(--bg-card)] text-[var(--text-primary)] cursor-pointer transition-all;
 
-:deep(.control-btn:hover:not(:disabled)) {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-  background: rgba(0, 240, 255, 0.05);
-}
+  &:hover:not(:disabled) {
+    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+    background: rgba(0, 240, 255, 0.05);
+  }
 
-:deep(.control-btn:disabled) {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+  &:disabled {
+    @apply opacity-40 cursor-not-allowed;
+  }
 
-:deep(.control-btn.success) {
-  border-color: var(--accent-green);
-  color: var(--accent-green);
-}
+  &.success {
+    @apply border-[var(--accent-green)] text-[var(--accent-green)];
+    &:hover:not(:disabled) {
+      background: rgba(0, 255, 136, 0.08);
+    }
+  }
 
-:deep(.control-btn.success:hover:not(:disabled)) {
-  background: rgba(0, 255, 136, 0.08);
-  border-color: var(--accent-green);
-}
+  &.danger {
+    @apply border-[#ff4466] text-[#ff4466];
+    &:hover:not(:disabled) {
+      background: rgba(255, 68, 102, 0.08);
+    }
+  }
 
-:deep(.control-btn.danger) {
-  border-color: #ff4466;
-  color: #ff4466;
-}
-
-:deep(.control-btn.danger:hover:not(:disabled)) {
-  background: rgba(255, 68, 102, 0.08);
-  border-color: #ff4466;
-}
-
-:deep(.control-btn svg) {
-  width: 16px;
-  height: 16px;
-  flex-shrink: 0;
+  svg {
+    @apply w-4 h-4 shrink-0;
+  }
 }
 
 /* 状态网格 */
@@ -602,47 +515,41 @@ onUnmounted(() => {
 }
 
 .status-item {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+  @apply flex flex-col gap-1.5;
 
-.status-item.full {
-  grid-column: span 2;
+  &.full {
+    grid-column: span 2;
+  }
 }
 
 .status-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  @apply text-xs text-[var(--text-muted)] uppercase tracking-wide;
 }
 
 .status-value {
-  font-size: 16px;
-  font-weight: 600;
-}
+  @apply text-base font-semibold;
 
-.status-value.success {
-  color: var(--accent-green);
-}
+  &.success {
+    @apply text-[var(--accent-green)];
+  }
 
-.status-value.running {
-  color: var(--accent-cyan);
-  text-shadow: 0 0 10px var(--accent-cyan);
-}
+  &.running {
+    @apply text-[var(--accent-cyan)];
+    text-shadow: 0 0 10px var(--accent-cyan);
+  }
 
-.status-value.muted {
-  color: var(--text-muted);
-}
+  &.muted {
+    @apply text-[var(--text-muted)];
+  }
 
-.status-value.mono {
-  font-family: 'JetBrains Mono', monospace;
+  &.mono {
+    @apply font-mono;
+  }
 }
 
 /* 实时内容 */
 .realtime-content {
-  padding: 24px;
+  @apply p-6;
 }
 
 .metrics-grid {
@@ -652,38 +559,27 @@ onUnmounted(() => {
 }
 
 .metric-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
+  @apply flex items-center gap-3.5 p-4 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl;
 }
 
 .metric-icon {
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 240, 255, 0.1);
-  border-radius: 10px;
-  color: var(--accent-cyan);
-}
+  @apply w-11 h-11 flex items-center justify-center bg-[rgba(0,240,255,0.1)] rounded-lg text-[var(--accent-cyan)];
 
-.metric-icon.fps {
-  background: rgba(255, 0, 170, 0.1);
-  color: var(--accent-magenta);
-}
+  &.fps {
+    @apply bg-[rgba(255,0,170,0.1)] text-[var(--accent-magenta)];
+  }
 
-.metric-icon.status-icon {
-  background: rgba(0, 255, 136, 0.1);
-  color: var(--accent-green);
-}
+  &.status-icon {
+    @apply bg-[rgba(0,255,136,0.1)] text-[var(--accent-green)];
 
-.metric-icon.status-icon.running {
-  animation: iconPulse 1s infinite;
+    &.running {
+      animation: iconPulse 1s infinite;
+    }
+  }
+
+  svg {
+    @apply w-5.5 h-5.5;
+  }
 }
 
 @keyframes iconPulse {
@@ -691,58 +587,34 @@ onUnmounted(() => {
   50% { transform: scale(1.1); }
 }
 
-.metric-icon svg {
-  width: 22px;
-  height: 22px;
-}
-
 .metric-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  @apply flex flex-col gap-1;
 }
 
 .metric-value {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text-primary);
+  @apply font-mono text-xl font-bold text-[var(--text-primary)];
 }
 
 .metric-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  @apply text-xs text-[var(--text-muted)] uppercase tracking-wide;
 }
 
 /* 空状态 */
 .empty-realtime {
-  padding: 60px 24px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+  @apply p-15 flex flex-col items-center text-center;
 }
 
 .empty-graphic {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  margin-bottom: 20px;
+  @apply relative w-20 h-20 mb-5;
 }
 
 .pulse-ring {
-  position: absolute;
-  inset: 0;
-  border: 2px solid var(--accent-cyan);
-  border-radius: 50%;
-  opacity: 0;
+  @apply absolute inset-0 border-2 border-[var(--accent-cyan)] rounded-full opacity-0;
   animation: pulseRing 2s infinite;
-}
 
-.pulse-ring.delay {
-  animation-delay: 1s;
+  &.delay {
+    animation-delay: 1s;
+  }
 }
 
 @keyframes pulseRing {
@@ -757,69 +629,40 @@ onUnmounted(() => {
 }
 
 .empty-icon {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 36px;
-  height: 36px;
-  color: var(--text-muted);
+  @apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 text-[var(--text-muted)];
 }
 
 .empty-realtime p {
-  font-size: 15px;
-  color: var(--text-secondary);
-  margin-bottom: 6px;
+  @apply text-base text-[var(--text-secondary)] mb-1.5;
 }
 
 .empty-realtime span {
-  font-size: 13px;
-  color: var(--text-muted);
+  @apply text-sm text-[var(--text-muted)];
 }
 
 /* 操作指南 */
 .guide-content {
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  @apply p-5 flex flex-col gap-4;
 }
 
 .guide-step {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  @apply flex items-start gap-3.5;
 }
 
 .step-number {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-magenta));
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--bg-primary);
-  flex-shrink: 0;
+  @apply w-7 h-7 flex items-center justify-center bg-gradient-to-br from-[var(--accent-cyan)] to-[var(--accent-magenta)] rounded-lg text-xs font-bold text-[var(--bg-primary)] shrink-0;
 }
 
 .step-content {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  @apply flex flex-col gap-1;
 }
 
 .step-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
+  @apply text-sm font-medium text-[var(--text-primary)];
 }
 
 .step-desc {
-  font-size: 12px;
-  color: var(--text-muted);
+  @apply text-xs text-[var(--text-muted)];
 }
 
 @keyframes fadeInUp {

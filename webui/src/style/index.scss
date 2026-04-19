@@ -1,15 +1,39 @@
 // -*- coding: utf-8 -*-
 /**
  * 全局样式入口
- * 导入所有公共样式文件
  */
 
-@use 'variables';
-@use 'animations';
-@use 'common';
+// ===== CSS 变量 =====
+:root {
+  // 背景色
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #12121a;
+  --bg-card: #1a1a24;
+  --bg-hover: #22222e;
+
+  // 边框色
+  --border-color: #2a2a3a;
+  --border-glow: #00f0ff;
+
+  // 文字色
+  --text-primary: #ffffff;
+  --text-secondary: #8888aa;
+  --text-muted: #555566;
+
+  // 强调色
+  --accent-cyan: #00f0ff;
+  --accent-magenta: #ff00aa;
+  --accent-green: #00ff88;
+  --accent-yellow: #ffdd00;
+  --accent-orange: #ff8800;
+
+  // 发光效果
+  --glow-cyan: 0 0 20px rgba(0, 240, 255, 0.5);
+  --glow-magenta: 0 0 20px rgba(255, 0, 170, 0.5);
+  --glow-green: 0 0 20px rgba(0, 255, 136, 0.5);
+}
 
 // ===== 基础重置 =====
-
 * {
   margin: 0;
   padding: 0;
@@ -25,8 +49,299 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-// ===== Element Plus 主题覆盖 =====
+// ===== 动画 =====
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes iconPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+// ===== 公共组件样式 =====
+
+// 按钮
+.vg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.vg-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--accent-cyan);
+}
+
+.vg-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vg-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.vg-btn-primary {
+  background: linear-gradient(135deg, var(--accent-cyan), #00aaff);
+  color: var(--bg-primary);
+  border-color: var(--accent-cyan);
+}
+
+.vg-btn-primary:hover:not(:disabled) {
+  box-shadow: var(--glow-cyan);
+  transform: translateY(-2px);
+}
+
+.vg-btn-success {
+  background: linear-gradient(135deg, var(--accent-green), #00aa66);
+  color: var(--bg-primary);
+  border-color: var(--accent-green);
+}
+
+.vg-btn-success:hover:not(:disabled) {
+  box-shadow: var(--glow-green);
+  transform: translateY(-2px);
+}
+
+.vg-btn-danger {
+  background: linear-gradient(135deg, #ff4466, #cc0033);
+  color: white;
+  border-color: #ff4466;
+}
+
+.vg-btn-danger:hover:not(:disabled) {
+  box-shadow: 0 0 20px rgba(255, 68, 102, 0.5);
+  transform: translateY(-2px);
+}
+
+.vg-btn-small {
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.vg-btn-small svg {
+  width: 14px;
+  height: 14px;
+}
+
+.vg-btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.vg-btn-icon:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.vg-btn-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+// 卡片
+.vg-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.vg-card:hover {
+  border-color: rgba(0, 240, 255, 0.3);
+}
+
+.vg-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.vg-card:hover::before {
+  opacity: 1;
+}
+
+.vg-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.vg-card-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.vg-card-content {
+  padding: 24px;
+}
+
+// 标签
+.vg-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.vg-tag-cyan {
+  background: rgba(0, 240, 255, 0.15);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+.vg-tag-green {
+  background: rgba(0, 255, 136, 0.15);
+  color: var(--accent-green);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+}
+
+.vg-tag-yellow {
+  background: rgba(255, 221, 0, 0.15);
+  color: var(--accent-yellow);
+  border: 1px solid rgba(255, 221, 0, 0.3);
+}
+
+.vg-tag-magenta {
+  background: rgba(255, 0, 170, 0.15);
+  color: var(--accent-magenta);
+  border: 1px solid rgba(255, 0, 170, 0.3);
+}
+
+// 输入框
+.vg-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.vg-input:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+}
+
+.vg-input::placeholder {
+  color: var(--text-muted);
+}
+
+// 徽章
+.vg-badge {
+  padding: 4px 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+// 滚动条
+.vg-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) var(--bg-secondary);
+}
+
+.vg-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.vg-scrollbar::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+  border-radius: 3px;
+}
+
+.vg-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.vg-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+// ===== Element Plus 主题覆盖 =====
 .el-message-box {
   background: var(--bg-card) !important;
   border: 1px solid var(--border-color) !important;

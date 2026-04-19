@@ -318,22 +318,17 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .model-list {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  @apply flex flex-col gap-6;
 }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  @apply flex justify-between items-center;
 }
 
 .header-info h2 {
-  font-size: 24px;
-  font-weight: 600;
+  @apply text-2xl font-semibold;
   background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -341,27 +336,10 @@ onMounted(() => {
 }
 
 .header-info .subtitle {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-left: 12px;
-}
-
-.vg-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.vg-btn svg {
-  width: 18px;
-  height: 18px;
+  @apply text-sm text-[var(--text-muted)] ml-3;
 }
 
 /* 表格样式覆盖 */
-.table-container {
-  padding: 0;
-}
-
 :deep(.el-table) {
   --el-table-bg-color: transparent;
   --el-table-tr-bg-color: transparent;
@@ -370,23 +348,18 @@ onMounted(() => {
   --el-table-border-color: var(--border-color);
   --el-table-text-color: var(--text-primary);
   --el-table-header-text-color: var(--text-secondary);
-}
 
-:deep(.el-table th.el-table__cell) {
-  background: var(--bg-secondary);
-  font-weight: 500;
-  text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 1px;
-}
+  th.el-table__cell {
+    @apply bg-[var(--bg-secondary)] font-medium uppercase text-xs tracking-wider;
+  }
 
-:deep(.el-table td.el-table__cell) {
-  border-bottom: 1px solid var(--border-color);
-  padding: 16px 12px;
+  td.el-table__cell {
+    @apply border-b border-[var(--border-color)] py-4 px-3;
+  }
 }
 
 :deep(.even-row) {
-  background: var(--bg-card);
+  @apply bg-[var(--bg-card)];
 }
 
 :deep(.odd-row) {
@@ -394,151 +367,89 @@ onMounted(() => {
 }
 
 .id-badge {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  color: var(--accent-cyan);
-  padding: 4px 8px;
-  background: rgba(0, 240, 255, 0.1);
-  border-radius: 4px;
+  @apply font-mono text-xs text-[var(--accent-cyan)] px-2 py-1 bg-[rgba(0,240,255,0.1)] rounded;
 }
 
 .name-cell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  @apply flex items-center gap-2.5;
 }
 
 .model-icon {
-  width: 20px;
-  height: 20px;
-  color: var(--accent-magenta);
+  @apply w-5 h-5 text-[var(--accent-magenta)];
 }
 
 .version-badge {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  padding: 3px 8px;
-  background: rgba(255, 221, 0, 0.1);
-  color: var(--accent-yellow);
-  border: 1px solid rgba(255, 221, 0, 0.3);
-  border-radius: 4px;
+  @apply font-mono text-xs px-2 py-1 bg-[rgba(255,221,0,0.1)] text-[var(--accent-yellow)] border border-[rgba(255,221,0,0.3)] rounded;
 }
 
 .best-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  padding: 4px 8px;
-  background: rgba(0, 255, 136, 0.1);
-  color: var(--accent-green);
-  border: 1px solid rgba(0, 255, 136, 0.3);
-  border-radius: 4px;
-}
+  @apply inline-flex items-center gap-1 text-xs px-2 py-1 bg-[rgba(0,255,136,0.1)] text-[var(--accent-green)] border border-[rgba(0,255,136,0.3)] rounded;
 
-.best-badge svg {
-  width: 12px;
-  height: 12px;
+  svg {
+    @apply w-3 h-3;
+  }
 }
 
 .metric-value {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  color: var(--accent-cyan);
+  @apply font-mono text-sm text-[var(--accent-cyan)];
 }
 
 .time-badge {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  color: var(--text-muted);
+  @apply font-mono text-xs text-[var(--text-muted)];
 }
 
 .text-muted {
-  color: var(--text-muted);
+  @apply text-[var(--text-muted)];
 }
 
 .action-buttons {
-  display: flex;
-  gap: 16px;
-  align-items: center;
+  @apply flex gap-4 items-center;
 }
 
 :deep(.el-button--text) {
-  padding: 4px 0;
-  border: none;
-  background: transparent;
-  color: var(--accent-cyan);
-  font-size: 13px;
-}
+  @apply p-1 border-none bg-transparent text-[var(--accent-cyan)] text-sm;
 
-:deep(.el-button--text:hover) {
-  color: var(--accent-cyan);
-  background: transparent;
-  border: none;
-}
+  &:hover {
+    @apply bg-transparent border-none text-[var(--accent-cyan)];
+  }
 
-:deep(.el-button--text:last-child:hover) {
-  color: #ff4466;
-}
+  &:last-child:hover {
+    @apply text-[#ff4466];
+  }
 
-:deep(.el-button--text:disabled) {
-  color: var(--text-muted);
-  opacity: 0.5;
+  &:disabled {
+    @apply text-[var(--text-muted)] opacity-50;
+  }
 }
 
 /* 空状态 */
 .empty-state {
-  padding: 80px 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+  @apply py-20 px-5 flex flex-col items-center text-center;
 }
 
 .empty-icon {
-  width: 80px;
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-secondary);
-  border-radius: 20px;
-  margin-bottom: 20px;
-  color: var(--text-muted);
-  opacity: 0.5;
-}
+  @apply w-20 h-20 flex items-center justify-center bg-[var(--bg-secondary)] rounded-xl mb-5 text-[var(--text-muted)] opacity-50;
 
-.empty-icon svg {
-  width: 40px;
-  height: 40px;
+  svg {
+    @apply w-10 h-10;
+  }
 }
 
 .empty-state p {
-  font-size: 18px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
+  @apply text-lg text-[var(--text-secondary)] mb-2;
 }
 
 .empty-state span {
-  font-size: 14px;
-  color: var(--text-muted);
+  @apply text-sm text-[var(--text-muted)];
 }
 
 /* 对话框 */
 .dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+  @apply fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-1000;
 }
 
 .dialog-panel {
-  width: 450px;
-  max-width: 90vw;
+  @apply w-[450px] max-w-[90vw];
   animation: dialogIn 0.3s ease;
 }
 
@@ -554,145 +465,88 @@ onMounted(() => {
 }
 
 .dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-color);
-}
+  @apply flex justify-between items-center px-6 py-5 border-b border-[var(--border-color)];
 
-.dialog-header h3 {
-  font-size: 18px;
-  font-weight: 600;
+  h3 {
+    @apply text-lg font-semibold;
+  }
 }
 
 .close-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
+  @apply w-8 h-8 flex items-center justify-center border-none bg-transparent text-[var(--text-muted)] cursor-pointer rounded transition-all;
 
-.close-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
+  &:hover {
+    @apply bg-[var(--bg-hover)] text-[var(--text-primary)];
+  }
 
-.close-btn svg {
-  width: 18px;
-  height: 18px;
+  svg {
+    @apply w-4.5 h-4.5;
+  }
 }
 
 .dialog-body {
-  padding: 24px;
+  @apply p-6;
 }
 
 .form-group {
-  margin-bottom: 20px;
-}
+  @apply mb-5;
 
-.form-group label {
-  display: block;
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
+  label {
+    @apply block text-sm text-[var(--text-secondary)] mb-2 uppercase tracking-wide;
+  }
 
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 12px 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-family: inherit;
-  transition: all 0.2s ease;
-}
+  input,
+  select {
+    @apply w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-sm font-sans transition-all;
+  }
 
-.form-group input:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
-}
+  input:focus,
+  select:focus {
+    @apply outline-none border-[var(--accent-cyan)];
+    box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+  }
 
-.form-group input::placeholder {
-  color: var(--text-muted);
+  input::placeholder {
+    @apply text-[var(--text-muted)];
+  }
 }
 
 .select-wrapper {
-  position: relative;
-}
+  @apply relative;
 
-.select-wrapper select {
-  appearance: none;
-  cursor: pointer;
-}
+  select {
+    @apply appearance-none cursor-pointer;
+  }
 
-.select-wrapper::after {
-  content: '';
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 5px solid var(--text-muted);
-  pointer-events: none;
+  &::after {
+    content: '';
+    @apply absolute right-3.5 top-1/2 -translate-y-1/2 border-l-1.5 border-r-1.5 border-t-1.5 border-l-transparent border-r-transparent border-t-[var(--text-muted)];
+    pointer-events: none;
+  }
 }
 
 .dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px 24px;
-  border-top: 1px solid var(--border-color);
+  @apply flex justify-end gap-3 px-6 py-5 border-t border-[var(--border-color)];
 }
 
 /* 上传区域 */
 .upload-area {
-  text-align: center;
-  padding: 20px;
+  @apply text-center p-5;
 }
 
 .upload-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 24px;
-  background: var(--bg-secondary);
-  border: 2px dashed var(--border-color);
-  border-radius: 12px;
-  color: var(--text-secondary);
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
+  @apply inline-flex items-center gap-2.5 px-6 py-4 bg-[var(--bg-secondary)] border-2 border-dashed border-[var(--border-color)] rounded-xl text-[var(--text-secondary)] text-sm cursor-pointer transition-all;
 
-.upload-btn:hover {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-}
+  &:hover {
+    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  }
 
-.upload-btn svg {
-  width: 24px;
-  height: 24px;
+  svg {
+    @apply w-6 h-6;
+  }
 }
 
 .upload-hint {
-  margin-top: 12px;
-  font-size: 12px;
-  color: var(--text-muted);
+  @apply mt-3 text-xs text-[var(--text-muted)];
 }
 </style>

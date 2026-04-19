@@ -178,22 +178,17 @@ const handleDelete = async (row: any) => {
 onMounted(loadAtlases)
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .atlas-list {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  @apply flex flex-col gap-6;
 }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  @apply flex justify-between items-center;
 }
 
 .header-info h2 {
-  font-size: 24px;
-  font-weight: 600;
+  @apply text-2xl font-semibold;
   background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -201,25 +196,7 @@ onMounted(loadAtlases)
 }
 
 .header-info .subtitle {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-left: 12px;
-}
-
-.vg-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.vg-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
-/* 表格容器 */
-.table-container {
-  padding: 0;
+  @apply text-sm text-[var(--text-muted)] ml-3;
 }
 
 /* 表格样式覆盖 */
@@ -231,23 +208,18 @@ onMounted(loadAtlases)
   --el-table-border-color: var(--border-color);
   --el-table-text-color: var(--text-primary);
   --el-table-header-text-color: var(--text-secondary);
-}
 
-:deep(.el-table th.el-table__cell) {
-  background: var(--bg-secondary);
-  font-weight: 500;
-  text-transform: uppercase;
-  font-size: 11px;
-  letter-spacing: 1px;
-}
+  th.el-table__cell {
+    @apply bg-[var(--bg-secondary)] font-medium uppercase text-xs tracking-wider;
+  }
 
-:deep(.el-table td.el-table__cell) {
-  border-bottom: 1px solid var(--border-color);
-  padding: 16px 12px;
+  td.el-table__cell {
+    @apply border-b border-[var(--border-color)] py-4 px-3;
+  }
 }
 
 :deep(.even-row) {
-  background: var(--bg-card);
+  @apply bg-[var(--bg-card)];
 }
 
 :deep(.odd-row) {
@@ -255,76 +227,44 @@ onMounted(loadAtlases)
 }
 
 .id-badge {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  color: var(--accent-cyan);
-  padding: 4px 8px;
-  background: rgba(0, 240, 255, 0.1);
-  border-radius: 4px;
+  @apply font-mono text-xs text-[var(--accent-cyan)] px-2 py-1 bg-[rgba(0,240,255,0.1)] rounded;
 }
 
 .name-cell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  @apply flex items-center gap-2.5;
 }
 
 .folder-icon {
-  width: 20px;
-  height: 20px;
-  color: var(--accent-yellow);
+  @apply w-5 h-5 text-[var(--accent-yellow)];
 }
 
 .time-badge {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  color: var(--text-muted);
+  @apply font-mono text-xs text-[var(--text-muted)];
 }
 
 .action-buttons {
-  display: flex;
-  gap: 16px;
-  align-items: center;
+  @apply flex gap-4 items-center;
 }
 
 :deep(.el-button--text) {
-  padding: 4px 0;
-  border: none;
-  background: transparent;
-  color: var(--accent-cyan);
-  font-size: 13px;
-}
+  @apply p-1 border-none bg-transparent text-[var(--accent-cyan)] text-sm;
 
-:deep(.el-button--text:hover) {
-  color: var(--accent-cyan);
-  background: transparent;
-  border: none;
-}
+  &:hover {
+    @apply bg-transparent border-none text-[var(--accent-cyan)];
+  }
 
-:deep(.el-button--text:last-child:hover) {
-  color: #ff4466;
-}
-
-:deep(.action-btn svg) {
-  width: 13px;
-  height: 13px;
-  flex-shrink: 0;
+  &:last-child:hover {
+    @apply text-[#ff4466];
+  }
 }
 
 /* 对话框 */
 .dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+  @apply fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-1000;
 }
 
 .dialog-panel {
-  width: 450px;
+  @apply w-[450px];
   animation: dialogIn 0.3s ease;
 }
 
@@ -340,89 +280,54 @@ onMounted(loadAtlases)
 }
 
 .dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-color);
-}
+  @apply flex justify-between items-center px-6 py-5 border-b border-[var(--border-color)];
 
-.dialog-header h3 {
-  font-size: 18px;
-  font-weight: 600;
+  h3 {
+    @apply text-lg font-semibold;
+  }
 }
 
 .close-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
+  @apply w-8 h-8 flex items-center justify-center border-none bg-transparent text-[var(--text-muted)] cursor-pointer rounded transition-all;
 
-.close-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
+  &:hover {
+    @apply bg-[var(--bg-hover)] text-[var(--text-primary)];
+  }
 
-.close-btn svg {
-  width: 18px;
-  height: 18px;
+  svg {
+    @apply w-4.5 h-4.5;
+  }
 }
 
 .dialog-body {
-  padding: 24px;
+  @apply p-6;
 }
 
 .form-group {
-  margin-bottom: 20px;
-}
+  @apply mb-5;
 
-.form-group label {
-  display: block;
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
+  label {
+    @apply block text-sm text-[var(--text-secondary)] mb-2 uppercase tracking-wide;
+  }
 
-.form-group input,
-.form-group textarea {
-  width: 100%;
-  padding: 12px 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-family: inherit;
-  transition: all 0.2s ease;
-}
+  input,
+  textarea {
+    @apply w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-sm font-sans transition-all;
+  }
 
-.form-group input:focus,
-.form-group textarea:focus {
-  outline: none;
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
-}
+  input:focus,
+  textarea:focus {
+    @apply outline-none border-[var(--accent-cyan)];
+    box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+  }
 
-.form-group input::placeholder,
-.form-group textarea::placeholder {
-  color: var(--text-muted);
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-[var(--text-muted)];
+  }
 }
 
 .dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px 24px;
-  border-top: 1px solid var(--border-color);
+  @apply flex justify-end gap-3 px-6 py-5 border-t border-[var(--border-color)];
 }
 </style>
