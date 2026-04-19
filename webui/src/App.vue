@@ -156,6 +156,12 @@ onUnmounted(() => {
 // App 布局专用样式
 // 公共样式已抽取到 @/style/index.scss
 
+.app-container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
 // 背景效果
 .bg-grid {
   position: fixed;

@@ -299,33 +299,17 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .training {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  @apply flex flex-col gap-6;
 }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.header-stats {
-  display: flex;
-  gap: 12px;
+  @apply flex justify-between items-center;
 }
 
 .header-info h2 {
-  font-size: 24px;
-  font-weight: 600;
+  @apply text-2xl font-semibold;
   background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -333,43 +317,30 @@ onUnmounted(() => {
 }
 
 .header-info .subtitle {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-left: 12px;
+  @apply text-sm text-[var(--text-muted)] ml-3;
 }
 
 .header-stats {
-  display: flex;
-  gap: 12px;
+  @apply flex gap-3;
 }
 
 .stat-pill {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
-}
+  @apply flex items-center gap-2 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full text-sm font-medium;
 
-.stat-pill .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
+  .dot {
+    @apply w-2 h-2 rounded-full;
+  }
 
-.stat-pill.running .dot {
-  background: var(--accent-cyan);
-  box-shadow: 0 0 10px var(--accent-cyan);
-  animation: pulse 2s infinite;
-}
+  &.running .dot {
+    @apply bg-[var(--accent-cyan)];
+    box-shadow: 0 0 10px var(--accent-cyan);
+    animation: pulse 2s infinite;
+  }
 
-.stat-pill.completed .dot {
-  background: var(--accent-green);
-  box-shadow: 0 0 10px var(--accent-green);
+  &.completed .dot {
+    @apply bg-[var(--accent-green)];
+    box-shadow: 0 0 10px var(--accent-green);
+  }
 }
 
 @keyframes pulse {
@@ -386,219 +357,140 @@ onUnmounted(() => {
 
 /* 训练列表 */
 .section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-color);
-}
+  @apply flex justify-between items-center px-6 py-5 border-b border-[var(--border-color)];
 
-.section-header h3 {
-  font-size: 16px;
-  font-weight: 600;
+  h3 {
+    @apply text-base font-semibold;
+  }
 }
 
 .refresh-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
+  @apply w-9 h-9 flex items-center justify-center bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] cursor-pointer transition-all;
 
-.refresh-btn:hover {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-}
+  &:hover {
+    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  }
 
-.refresh-btn svg {
-  width: 18px;
-  height: 18px;
+  svg {
+    @apply w-4.5 h-4.5;
+  }
 }
 
 .jobs-list {
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 400px;
+  @apply p-4 flex flex-col gap-3 min-h-[400px];
 }
 
 .job-item {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 16px;
-  transition: all 0.3s ease;
-}
+  @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-4 transition-all;
 
-.job-item:hover {
-  border-color: var(--accent-cyan);
-}
+  &:hover {
+    @apply border-[var(--accent-cyan)];
+  }
 
-.job-item.active {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+  &.active {
+    @apply border-[var(--accent-cyan)];
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+  }
 }
 
 .job-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+  @apply flex justify-between items-center mb-3;
 }
 
 .job-id {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent-cyan);
+  @apply font-mono text-sm font-semibold text-[var(--accent-cyan)];
 }
 
 .job-status {
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 4px;
-}
+  @apply text-xs px-2 py-1 rounded;
 
-.job-status.pending {
-  background: rgba(136, 136, 170, 0.2);
-  color: var(--text-secondary);
-}
+  &.pending {
+    @apply bg-[rgba(136,136,170,0.2)] text-[var(--text-secondary)];
+  }
 
-.job-status.running {
-  background: rgba(0, 240, 255, 0.2);
-  color: var(--accent-cyan);
-}
+  &.running {
+    @apply bg-[rgba(0,240,255,0.2)] text-[var(--accent-cyan)];
+  }
 
-.job-status.completed {
-  background: rgba(0, 255, 136, 0.2);
-  color: var(--accent-green);
-}
+  &.completed {
+    @apply bg-[rgba(0,255,136,0.2)] text-[var(--accent-green)];
+  }
 
-.job-status.failed {
-  background: rgba(255, 68, 102, 0.2);
-  color: #ff4466;
+  &.failed {
+    @apply bg-[rgba(255,68,102,0.2)] text-[#ff4466];
+  }
 }
 
 .job-progress {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  @apply flex items-center gap-3 mb-3;
 }
 
 .progress-bar {
-  flex: 1;
-  height: 6px;
-  background: var(--bg-primary);
-  border-radius: 3px;
-  overflow: hidden;
-}
+  @apply flex-1 h-1.5 bg-[var(--bg-primary)] rounded overflow-hidden;
 
-.progress-bar.large {
-  height: 10px;
-  border-radius: 5px;
+  &.large {
+    @apply h-2.5 rounded-lg;
+  }
 }
 
 .progress-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.5s ease;
-}
+  @apply h-full rounded transition-all duration-500;
 
-.progress-fill.pending { background: var(--text-muted); }
-.progress-fill.running {
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
-  box-shadow: 0 0 10px var(--accent-cyan);
+  &.pending { @apply bg-[var(--text-muted)]; }
+  &.running {
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+    box-shadow: 0 0 10px var(--accent-cyan);
+  }
+  &.completed { @apply bg-[var(--accent-green)]; }
+  &.failed { @apply bg-[#ff4466]; }
 }
-.progress-fill.completed { background: var(--accent-green); }
-.progress-fill.failed { background: #ff4466; }
 
 .progress-text {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--text-muted);
-  min-width: 80px;
-  text-align: right;
+  @apply font-mono text-xs text-[var(--text-muted)] min-w-20 text-right;
 }
 
 .job-meta {
-  display: flex;
-  gap: 8px;
+  @apply flex gap-2;
 }
 
 .meta-tag {
-  font-size: 11px;
-  padding: 3px 8px;
-  background: var(--bg-primary);
-  border-radius: 4px;
-  color: var(--text-muted);
+  @apply text-xs px-2 py-1 bg-[var(--bg-primary)] rounded text-[var(--text-muted)];
 }
 
 .job-actions {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-color);
+  @apply mt-3 pt-3 border-t border-[var(--border-color)];
 }
 
 :deep(.el-button--text) {
-  padding: 4px 0;
-  border: none;
-  background: transparent;
-  color: #ff4466;
-  font-size: 13px;
-}
-
-:deep(.el-button--text:hover) {
-  color: #ff4466;
-  background: transparent;
-  border: none;
+  @apply p-1 border-none bg-transparent text-[#ff4466] text-sm;
+  &:hover {
+    @apply bg-transparent border-none text-[#ff4466];
+  }
 }
 
 .empty-jobs {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  color: var(--text-muted);
+  @apply flex-1 flex flex-col items-center justify-center text-center text-[var(--text-muted)];
 }
 
 .empty-icon {
-  width: 64px;
-  height: 64px;
-  margin-bottom: 16px;
-  opacity: 0.3;
-}
+  @apply w-16 h-16 mb-4 opacity-30;
 
-.empty-icon svg {
-  width: 100%;
-  height: 100%;
+  svg {
+    @apply w-full h-full;
+  }
 }
 
 .empty-jobs p {
-  font-size: 16px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
+  @apply text-base text-[var(--text-secondary)] mb-2;
 }
 
 .empty-jobs span {
-  font-size: 13px;
+  @apply text-sm;
 }
 
 /* 控制区 */
 .control-section {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  @apply flex flex-col gap-6;
 }
 
 .start-training-card,
@@ -607,145 +499,71 @@ onUnmounted(() => {
 }
 
 .start-form {
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  @apply p-6 flex flex-col gap-5;
 }
 
 .form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+  @apply flex flex-col gap-2;
 
-.form-group label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  label {
+    @apply text-xs text-[var(--text-secondary)] uppercase tracking-wide;
+  }
 }
 
 .select-wrapper {
-  position: relative;
-}
+  @apply relative;
 
-.select-wrapper select {
-  width: 100%;
-  padding: 12px 40px 12px 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-size: 14px;
-  cursor: pointer;
-  appearance: none;
-  transition: all 0.2s ease;
-}
+  select {
+    @apply w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-sm cursor-pointer appearance-none transition-all;
 
-.select-wrapper select:focus {
-  outline: none;
-  border-color: var(--accent-cyan);
-}
+    &:focus {
+      @apply outline-none border-[var(--accent-cyan)];
+    }
 
-.select-wrapper select option {
-  background: var(--bg-card);
-}
+    option {
+      @apply bg-[var(--bg-card)];
+    }
+  }
 
-.select-wrapper::after {
-  content: '';
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 5px solid var(--text-muted);
-  pointer-events: none;
-}
-
-.select-wrapper svg {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
-  color: var(--text-muted);
-  pointer-events: none;
+  &::after {
+    content: '';
+    @apply absolute right-4 top-1/2 -translate-y-1/2 border-l-1.5 border-r-1.5 border-t-1.5 border-l-transparent border-r-transparent border-t-[var(--text-muted)];
+    pointer-events: none;
+  }
 }
 
 .number-input {
-  display: flex;
-  align-items: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  overflow: hidden;
-}
+  @apply flex items-center bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg overflow-hidden;
 
-.number-input button {
-  width: 44px;
-  height: 44px;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 18px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
+  button {
+    @apply w-11 h-11 bg-transparent border-none text-[var(--text-secondary)] text-lg cursor-pointer transition-all;
+    &:hover {
+      @apply bg-[var(--bg-hover)] text-[var(--accent-cyan)];
+    }
+  }
 
-.number-input button:hover {
-  background: var(--bg-hover);
-  color: var(--accent-cyan);
-}
-
-.number-input input {
-  flex: 1;
-  padding: 12px;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-family: 'JetBrains Mono', monospace;
-  text-align: center;
-}
-
-.number-input input:focus {
-  outline: none;
+  input {
+    @apply flex-1 px-3 py-3 bg-transparent border-none text-[var(--text-primary)] text-sm font-mono text-center;
+    &:focus {
+      @apply outline-none;
+    }
+  }
 }
 
 .start-btn {
-  width: 100%;
-  justify-content: center;
-  padding: 14px;
-  font-size: 15px;
-  margin-top: 8px;
-}
-
-.start-btn svg {
-  width: 18px;
-  height: 18px;
+  @apply w-full justify-center py-3.5 text-base mt-2;
+  svg {
+    @apply w-4.5 h-4.5;
+  }
 }
 
 /* 实时状态 */
 .live-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  color: #ff4466;
-  letter-spacing: 1px;
+  @apply flex items-center gap-1.5 font-mono text-xs text-[#ff4466] tracking-wider;
 }
 
 .live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #ff4466;
+  @apply w-1.5 h-1.5 rounded-full bg-[#ff4466];
   animation: livePulse 1s infinite;
 }
 
@@ -755,48 +573,32 @@ onUnmounted(() => {
 }
 
 .realtime-content {
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  @apply p-6 flex flex-col gap-4;
 }
 
 .realtime-stat {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+  @apply flex justify-between items-center;
 
-.realtime-stat .stat-label {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
+  .stat-label {
+    @apply text-sm text-[var(--text-secondary)];
+  }
 
-.realtime-stat .stat-value {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
-  font-weight: 600;
-}
+  .stat-value {
+    @apply font-mono text-sm font-semibold;
+  }
 
-.realtime-stat .stat-value.status-running {
-  color: var(--accent-cyan);
-  text-shadow: 0 0 10px var(--accent-cyan);
+  .stat-value.status-running {
+    @apply text-[var(--accent-cyan)];
+    text-shadow: 0 0 10px var(--accent-cyan);
+  }
 }
 
 .realtime-progress {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-top: 8px;
+  @apply flex items-center gap-4 mt-2;
 }
 
 .progress-percent {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--accent-cyan);
-  min-width: 60px;
-  text-align: right;
+  @apply font-mono text-2xl font-bold text-[var(--accent-cyan)] min-w-15 text-right;
 }
 
 @keyframes fadeInUp {

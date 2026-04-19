@@ -632,18 +632,15 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .annotate-page {
-  display: flex;
-  flex-direction: column;
+  @apply flex flex-col;
   height: calc(100vh - 60px);
   background: var(--bg-primary);
 }
 
 .toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  @apply flex justify-between items-center;
   padding: 12px 20px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
@@ -651,86 +648,59 @@ onUnmounted(() => {
 
 .toolbar-left,
 .toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  @apply flex items-center gap-4;
 }
 
 .toolbar-center {
-  display: flex;
-  align-items: center;
+  @apply flex items-center;
 }
 
 .image-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  @apply flex items-center gap-2;
 }
 
 .nav-info {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  color: var(--accent-cyan);
-  padding: 4px 12px;
+  @apply text-sm text-[var(--accent-cyan)] px-3 py-1 rounded;
   background: rgba(0, 240, 255, 0.1);
-  border-radius: 4px;
 }
 
 .hotkey-hints {
-  display: flex;
-  gap: 20px;
+  @apply flex gap-5;
 }
 
 .hint {
-  font-size: 12px;
-  color: var(--text-muted);
+  @apply text-xs text-[var(--text-muted)];
 }
 
 .hint kbd {
-  display: inline-block;
-  padding: 2px 6px;
+  @apply inline-block px-1.5 py-0.5 rounded;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--text-secondary);
-  margin-right: 4px;
+  @apply text-[11px] text-[var(--text-secondary)] mr-1;
 }
 
 .vg-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  @apply inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-sm cursor-pointer transition-all;
 }
 
 .vg-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--accent-cyan);
+  @apply bg-[var(--bg-hover)] border-[var(--accent-cyan)];
 }
 
 .vg-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  @apply opacity-50 cursor-not-allowed;
 }
 
 .vg-btn svg {
-  width: 16px;
-  height: 16px;
+  @apply w-4 h-4;
 }
 
 .vg-btn-primary {
   background: var(--accent-cyan);
   border-color: var(--accent-cyan);
-  color: #000;
+  @apply text-black;
 }
 
 .vg-btn-primary:hover:not(:disabled) {
@@ -739,98 +709,68 @@ onUnmounted(() => {
 }
 
 .vg-btn-small {
-  padding: 4px 8px;
+  @apply px-2 py-1;
 }
 
 .vg-btn-small svg {
-  width: 14px;
-  height: 14px;
+  @apply w-3.5 h-3.5;
 }
 
 .content-area {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
+  @apply flex flex-1 overflow-hidden;
 }
 
 .category-panel {
+  @apply flex flex-col;
   width: 220px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
 }
 
 .panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
+  @apply flex justify-between items-center p-4;
   border-bottom: 1px solid var(--border-color);
-}
 
-.panel-header h3 {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
+  h3 {
+    @apply text-sm font-medium text-[var(--text-primary)];
+  }
 }
 
 .category-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
+  @apply flex-1 overflow-y-auto p-2;
 }
 
 .category-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
+  @apply flex items-center gap-2.5 p-2.5 rounded-md cursor-pointer transition-all border border-transparent;
 }
 
 .category-item:hover {
-  background: var(--bg-hover);
+  @apply bg-[var(--bg-hover)];
 }
 
 .category-item.active {
   background: rgba(0, 240, 255, 0.1);
-  border-color: var(--accent-cyan);
+  @apply border-[var(--accent-cyan)];
 }
 
 .cat-color {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  flex-shrink: 0;
+  @apply w-3 h-3 rounded flex-shrink-0;
 }
 
 .cat-name {
-  flex: 1;
-  font-size: 13px;
-  color: var(--text-primary);
+  @apply flex-1 text-sm text-[var(--text-primary)];
 }
 
 .cat-hotkey {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: var(--text-muted);
+  @apply text-[11px] text-[var(--text-muted)] px-1.5 py-0.5 rounded;
   background: var(--bg-primary);
-  padding: 2px 6px;
-  border-radius: 4px;
 }
 
 .canvas-container {
+  @apply flex items-center justify-center relative overflow-hidden;
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: var(--bg-primary);
-  position: relative;
-  overflow: hidden;
   padding: 20px;
 }
 
@@ -841,22 +781,15 @@ onUnmounted(() => {
 }
 
 .canvas-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  @apply absolute inset-0 flex flex-col items-center justify-center;
   background: rgba(0, 0, 0, 0.7);
-  gap: 16px;
+  @apply gap-4;
 }
 
 .loading-spinner {
-  width: 40px;
-  height: 40px;
+  @apply w-10 h-10 rounded-full;
   border: 3px solid var(--border-color);
   border-top-color: var(--accent-cyan);
-  border-radius: 50%;
   animation: spin 1s linear infinite;
 }
 
@@ -865,122 +798,81 @@ onUnmounted(() => {
 }
 
 .canvas-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  @apply absolute inset-0 flex items-center justify-center;
   background: rgba(0, 0, 0, 0.5);
 }
 
 .no-image {
-  font-size: 16px;
-  color: var(--text-muted);
+  @apply text-base text-[var(--text-muted)];
 }
 
 .annotation-panel {
+  @apply flex flex-col;
   width: 280px;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
 }
 
 .annotation-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
+  @apply flex-1 overflow-y-auto p-2;
 }
 
 .annotation-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
+  @apply flex items-center gap-2 p-2 rounded-md cursor-pointer transition-all border border-transparent;
 }
 
 .annotation-item:hover {
-  background: var(--bg-hover);
+  @apply bg-[var(--bg-hover)];
 }
 
 .annotation-item.selected {
   background: rgba(0, 240, 255, 0.1);
-  border-color: var(--accent-cyan);
+  @apply border-[var(--accent-cyan)];
 }
 
 .annotation-item.pending {
-  opacity: 0.7;
+  @apply opacity-70;
 }
 
 .ann-color {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  flex-shrink: 0;
+  @apply w-2.5 h-2.5 rounded flex-shrink-0;
 }
 
 .ann-name {
-  flex: 1;
-  font-size: 12px;
-  color: var(--text-primary);
+  @apply flex-1 text-xs text-[var(--text-primary)];
 }
 
 .ann-bbox {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  color: var(--text-muted);
+  @apply text-[10px] text-[var(--text-muted)];
 }
 
 .ann-actions {
-  display: flex;
-  gap: 4px;
+  @apply flex gap-1;
 }
 
 .icon-btn {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+  @apply w-6 h-6 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded transition-all;
 }
 
 .icon-btn:hover {
   background: rgba(255, 68, 102, 0.2);
-  color: #ff4466;
+  @apply text-[#ff4466];
 }
 
 .icon-btn svg {
-  width: 14px;
-  height: 14px;
+  @apply w-3.5 h-3.5;
 }
 
 .empty-tip {
-  padding: 20px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-muted);
-  line-height: 1.6;
+  @apply p-5 text-center text-sm text-[var(--text-muted)] leading-relaxed;
 }
 
 /* 对话框 */
 .dialog-overlay {
-  position: fixed;
-  inset: 0;
+  @apply fixed inset-0 flex items-center justify-center;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 1000;
 }
 
@@ -1001,101 +893,60 @@ onUnmounted(() => {
 }
 
 .dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
+  @apply flex justify-between items-center p-4;
   border-bottom: 1px solid var(--border-color);
-}
 
-.dialog-header h3 {
-  font-size: 16px;
-  font-weight: 600;
+  h3 {
+    @apply text-base font-semibold;
+  }
 }
 
 .close-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+  @apply w-7 h-7 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded transition-all;
 }
 
 .close-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  @apply bg-[var(--bg-hover)] text-[var(--text-primary)];
 }
 
 .close-btn svg {
-  width: 16px;
-  height: 16px;
+  @apply w-4 h-4;
 }
 
 .dialog-body {
-  padding: 20px;
+  @apply p-5;
 }
 
 .form-group {
-  margin-bottom: 16px;
-}
+  @apply mb-4;
 
-.form-group label {
-  display: block;
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
+  label {
+    @apply block text-xs text-[var(--text-secondary)] mb-1.5 uppercase tracking-wide;
+  }
 
-.form-group input {
-  width: 100%;
-  padding: 10px 12px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 14px;
-}
+  input {
+    @apply w-full px-3 py-2.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-sm text-[var(--text-primary)];
+  }
 
-.form-group input:focus {
-  outline: none;
-  border-color: var(--accent-cyan);
+  input:focus {
+    @apply outline-none border-[var(--accent-cyan)];
+  }
 }
 
 .color-picker {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  @apply flex items-center gap-3;
 }
 
 .color-picker input[type="color"] {
-  width: 40px;
-  height: 32px;
-  padding: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  cursor: pointer;
+  @apply w-10 h-8 p-0 border border-[var(--border-color)] rounded cursor-pointer;
 }
 
 .color-preview {
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
+  @apply w-8 h-8 rounded border border-[var(--border-color)];
 }
 
 .dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 16px 20px;
+  @apply flex justify-end gap-2.5 p-4;
   border-top: 1px solid var(--border-color);
 }
 </style>

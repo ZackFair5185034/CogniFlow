@@ -439,50 +439,33 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .atlas-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  @apply flex flex-col gap-6;
 }
 
 .page-header {
-  display: flex;
-  align-items: center;
-  gap: 20px;
+  @apply flex items-center gap-5;
 }
 
 .back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-secondary);
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  @apply inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] text-sm cursor-pointer transition-all;
 }
 
 .back-btn:hover {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
+  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
 }
 
 .back-btn svg {
-  width: 18px;
-  height: 18px;
+  @apply w-4.5 h-4.5;
 }
 
 .atlas-info {
-  flex: 1;
+  @apply flex-1;
 }
 
 .atlas-info h2 {
-  font-size: 24px;
-  font-weight: 600;
+  @apply text-2xl font-semibold;
   background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -490,20 +473,15 @@ onMounted(() => {
 }
 
 .atlas-desc {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin-left: 12px;
+  @apply text-sm text-[var(--text-muted)] ml-3;
 }
 
 .vg-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  @apply inline-flex items-center gap-2;
 }
 
 .vg-btn svg {
-  width: 18px;
-  height: 18px;
+  @apply w-4.5 h-4.5;
 }
 
 /* 内容网格 */
@@ -515,126 +493,79 @@ onMounted(() => {
 
 /* 面板头部 */
 .panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
+  @apply flex justify-between items-center p-4;
   border-bottom: 1px solid var(--border-color);
 }
 
 .tabs {
-  display: flex;
-  gap: 8px;
+  @apply flex gap-2;
 }
 
 .tab-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  color: var(--text-secondary);
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  @apply inline-flex items-center gap-2 px-4 py-2.5 bg-transparent border border-transparent rounded-lg text-[var(--text-secondary)] text-sm cursor-pointer transition-all;
 }
 
 .tab-btn svg {
-  width: 18px;
-  height: 18px;
+  @apply w-4.5 h-4.5;
 }
 
 .tab-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  @apply bg-[var(--bg-hover)] text-[var(--text-primary)];
 }
 
 .tab-btn.active {
   background: rgba(0, 240, 255, 0.1);
   border-color: rgba(0, 240, 255, 0.3);
-  color: var(--accent-cyan);
+  @apply text-[var(--accent-cyan)];
 }
 
 .tab-btn .count {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
-  padding: 2px 6px;
+  @apply text-[11px] px-1.5 py-0.5 rounded;
   background: var(--bg-secondary);
-  border-radius: 4px;
 }
 
 .header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  @apply flex items-center gap-2.5;
 }
 
 .select-wrapper {
-  position: relative;
-}
+  @apply relative;
 
-.select-wrapper select {
-  padding: 8px 36px 8px 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-size: 13px;
-  cursor: pointer;
-  appearance: none;
-}
+  select {
+    @apply px-4 py-2 pr-9 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-sm cursor-pointer appearance-none;
+  }
 
-.select-wrapper select:focus {
-  outline: none;
-  border-color: var(--accent-cyan);
-}
+  select:focus {
+    @apply outline-none border-[var(--accent-cyan)];
+  }
 
-.select-wrapper::after {
-  content: '';
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-top: 4px solid var(--text-muted);
-  pointer-events: none;
+  &::after {
+    content: '';
+    @apply absolute right-3 top-1/2 -translate-y-1/2 border-l-1.5 border-r-1.5 border-t-1.5 border-l-transparent border-r-transparent border-t-[var(--text-muted)];
+    pointer-events: none;
+  }
 }
 
 .action-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
+  @apply w-9 h-9 flex items-center justify-center bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md text-[var(--text-secondary)] cursor-pointer transition-all;
 }
 
 .action-btn:hover {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
+  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
 }
 
 .action-btn svg {
-  width: 16px;
-  height: 16px;
+  @apply w-4 h-4;
 }
 
 .action-btn.danger:hover {
-  border-color: #ff4466;
-  color: #ff4466;
+  @apply border-[#ff4466] text-[#ff4466];
 }
 
 /* 图片网格 */
 .images-content {
-  padding: 20px;
+  @apply p-5;
 }
 
 .images-grid {
@@ -644,299 +575,182 @@ onMounted(() => {
 }
 
 .image-card {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: all 0.3s ease;
+  @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl overflow-hidden cursor-pointer transition-all;
 }
 
 .image-card:hover {
-  border-color: var(--accent-cyan);
+  @apply border-[var(--accent-cyan)];
   transform: translateY(-4px);
   box-shadow: 0 8px 24px rgba(0, 240, 255, 0.15);
 }
 
 .image-wrapper {
-  position: relative;
+  @apply relative overflow-hidden;
   aspect-ratio: 1;
-  overflow: hidden;
 }
 
 .image-wrapper img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  @apply w-full h-full object-cover;
 }
 
 .image-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s ease;
+  @apply absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 transition-opacity duration-200;
 }
 
 .image-card:hover .image-overlay {
-  opacity: 1;
+  @apply opacity-100;
 }
 
 .overlay-icon {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-cyan);
-  border-radius: 50%;
-  color: var(--bg-primary);
+  @apply w-10 h-10 flex items-center justify-center bg-[var(--accent-cyan)] rounded-full text-[var(--bg-primary)];
 }
 
 .overlay-icon svg {
-  width: 20px;
-  height: 20px;
+  @apply w-5 h-5;
 }
 
 .annotated-badge {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  padding: 4px 8px;
-  background: var(--accent-green);
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--bg-primary);
+  @apply absolute top-2 left-2 px-2 py-1 bg-[var(--accent-green)] rounded text-[10px] font-semibold text-[var(--bg-primary)];
 }
 
 .delete-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 68, 102, 0.9);
-  border: none;
-  border-radius: 6px;
-  color: white;
-  cursor: pointer;
-  opacity: 0;
-  transition: all 0.2s ease;
+  @apply absolute top-2 right-2 w-7 h-7 flex items-center justify-center bg-[rgba(255,68,102,0.9)] border-none rounded-md text-white cursor-pointer opacity-0 transition-all;
 }
 
 .delete-btn svg {
-  width: 14px;
-  height: 14px;
+  @apply w-3.5 h-3.5;
 }
 
 .annotate-btn {
-  position: absolute;
-  top: 8px;
-  right: 44px;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 240, 255, 0.9);
-  border: none;
-  border-radius: 6px;
-  color: #000;
-  cursor: pointer;
-  opacity: 0;
-  transition: all 0.2s ease;
+  @apply absolute top-2 right-10 w-7 h-7 flex items-center justify-center bg-[rgba(0,240,255,0.9)] border-none rounded-md text-black cursor-pointer opacity-0 transition-all;
 }
 
 .annotate-btn svg {
-  width: 14px;
-  height: 14px;
+  @apply w-3.5 h-3.5;
 }
 
 .image-card:hover .annotate-btn {
-  opacity: 1;
+  @apply opacity-100;
 }
 
 .annotate-btn:hover {
-  background: var(--accent-cyan);
-  transform: scale(1.1);
+  @apply bg-[var(--accent-cyan)] scale-110;
 }
 
 .image-card:hover .delete-btn {
-  opacity: 1;
+  @apply opacity-100;
 }
 
 .delete-btn:hover {
-  background: #ff4466;
-  transform: scale(1.1);
+  @apply bg-[#ff4466] scale-110;
 }
 
 .image-info {
-  padding: 12px;
+  @apply p-3;
 }
 
 .image-name {
-  display: block;
-  font-size: 12px;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  @apply block text-xs text-[var(--text-primary)] truncate;
 }
 
 .image-dir {
-  display: block;
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 4px;
+  @apply block text-[11px] text-[var(--text-muted)] mt-1;
 }
 
 /* 目录管理 */
 .directories-content {
-  padding: 20px;
+  @apply p-5;
 }
 
 .create-dir-section {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
+  @apply flex gap-3 mb-6;
 }
 
 .input-group {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
+  @apply flex-1 flex items-center gap-2.5 px-3.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg;
 }
 
 .input-icon {
-  width: 18px;
-  height: 18px;
-  color: var(--text-muted);
+  @apply w-4.5 h-4.5 text-[var(--text-muted)];
 }
 
 .input-group input {
-  flex: 1;
-  padding: 12px 0;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font-size: 14px;
+  @apply flex-1 py-3 bg-transparent border-none text-sm text-[var(--text-primary)];
 }
 
 .input-group input:focus {
-  outline: none;
+  @apply outline-none;
 }
 
 .input-group input::placeholder {
-  color: var(--text-muted);
+  @apply text-[var(--text-muted)];
 }
 
 .directories-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  @apply flex flex-col gap-2;
 }
 
 .dir-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  transition: all 0.2s ease;
+  @apply flex items-center justify-between p-3.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg transition-all;
 }
 
 .dir-item:hover {
-  border-color: var(--accent-cyan);
+  @apply border-[var(--accent-cyan)];
 }
 
 .dir-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  @apply flex items-center gap-3;
 }
 
 .dir-icon {
-  width: 22px;
-  height: 22px;
-  color: var(--accent-yellow);
+  @apply w-5.5 h-5.5 text-[var(--accent-yellow)];
 }
 
 .dir-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
+  @apply text-sm font-medium text-[var(--text-primary)];
 }
 
 .dir-actions {
-  display: flex;
-  gap: 8px;
+  @apply flex gap-2;
 }
 
 /* 侧边栏 */
 .side-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  @apply flex flex-col gap-5;
 }
 
 .info-card .card-header {
-  padding: 16px 20px;
+  @apply p-4;
   border-bottom: 1px solid var(--border-color);
-}
 
-.info-card .card-header h4 {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  h4 {
+    @apply text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wide;
+  }
 }
 
 .info-list {
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  @apply p-4 flex flex-col gap-3.5;
 }
 
 .info-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  @apply flex justify-between items-center;
 }
 
 .info-label {
-  font-size: 13px;
-  color: var(--text-muted);
+  @apply text-sm text-[var(--text-muted)];
 }
 
 .info-value {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
+  @apply text-sm font-medium text-[var(--text-primary)];
 }
 
 .info-value.id {
   font-family: 'JetBrains Mono', monospace;
-  color: var(--accent-cyan);
+  @apply text-[var(--accent-cyan)];
 }
 
 .info-value.success {
-  color: var(--accent-green);
+  @apply text-[var(--accent-green)];
 }
 
 /* 上传提示 */
@@ -945,97 +759,59 @@ onMounted(() => {
 }
 
 .tip-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 16px 20px;
+  @apply flex items-center gap-2.5 p-4 text-sm font-semibold text-[var(--accent-yellow)];
   border-bottom: 1px solid var(--border-color);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--accent-yellow);
-}
 
-.tip-header svg {
-  width: 18px;
-  height: 18px;
+  svg {
+    @apply w-4.5 h-4.5;
+  }
 }
 
 .tip-list {
-  padding: 16px 20px;
-  margin: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  @apply p-4 m-0 list-none flex flex-col gap-2.5;
 }
 
 .tip-list li {
-  font-size: 13px;
-  color: var(--text-secondary);
-  padding-left: 16px;
-  position: relative;
+  @apply text-sm text-[var(--text-secondary)] pl-4 relative;
 }
 
 .tip-list li::before {
   content: '›';
-  position: absolute;
-  left: 0;
-  color: var(--accent-cyan);
+  @apply absolute left-0 text-[var(--accent-cyan)];
 }
 
 /* 空状态 */
 .empty-state {
-  padding: 60px 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
+  @apply py-15 px-5 flex flex-col items-center text-center;
 }
 
 .empty-icon {
-  width: 64px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-secondary);
-  border-radius: 16px;
-  margin-bottom: 16px;
-  color: var(--text-muted);
-  opacity: 0.5;
-}
+  @apply w-16 h-16 flex items-center justify-center bg-[var(--bg-secondary)] rounded-xl mb-4 text-[var(--text-muted)] opacity-50;
 
-.empty-icon svg {
-  width: 32px;
-  height: 32px;
+  svg {
+    @apply w-8 h-8;
+  }
 }
 
 .empty-state p {
-  font-size: 16px;
-  color: var(--text-secondary);
-  margin-bottom: 6px;
+  @apply text-base text-[var(--text-secondary)] mb-1.5;
 }
 
 .empty-state span {
-  font-size: 13px;
-  color: var(--text-muted);
+  @apply text-sm text-[var(--text-muted)];
 }
 
 /* 对话框 */
 .dialog-overlay {
-  position: fixed;
-  inset: 0;
+  @apply fixed inset-0 flex items-center justify-center;
   background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 1000;
 }
 
 .dialog-panel {
   width: 600px;
-  max-width: 90vw;
+  @apply max-w-[90vw];
   animation: dialogIn 0.3s ease;
 }
 
@@ -1051,119 +827,77 @@ onMounted(() => {
 }
 
 .dialog-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
+  @apply flex justify-between items-center p-5;
   border-bottom: 1px solid var(--border-color);
-}
 
-.dialog-header h3 {
-  font-size: 18px;
-  font-weight: 600;
+  h3 {
+    @apply text-lg font-semibold;
+  }
 }
 
 .dialog-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  @apply flex items-center gap-2.5;
 }
 
 :deep(.el-button--text) {
-  padding: 4px 0;
-  border: none;
-  background: transparent;
-  color: #ff4466;
-  font-size: 13px;
-}
-
-:deep(.el-button--text:hover) {
-  color: #ff4466;
-  background: transparent;
-  border: none;
+  @apply p-1 border-none bg-transparent text-[#ff4466] text-sm;
+  &:hover {
+    @apply bg-transparent border-none text-[#ff4466];
+  }
 }
 
 .close-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  @apply w-9 h-9 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded-lg transition-all;
 }
 
 .close-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  @apply bg-[var(--bg-hover)] text-[var(--text-primary)];
 }
 
 .close-btn svg {
-  width: 20px;
-  height: 20px;
+  @apply w-5 h-5;
 }
 
 .dialog-content {
-  padding: 24px;
+  @apply p-6;
 }
 
 .image-preview {
-  background: var(--bg-secondary);
-  border-radius: 12px;
-  overflow: hidden;
-  margin-bottom: 20px;
+  @apply bg-[var(--bg-secondary)] rounded-xl overflow-hidden mb-5;
 }
 
 .image-preview img {
-  width: 100%;
+  @apply w-full object-contain;
   max-height: 400px;
-  object-fit: contain;
 }
 
 .image-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  @apply flex flex-col gap-3.5;
 }
 
 .meta-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 14px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
+  @apply flex justify-between items-center p-2.5 bg-[var(--bg-secondary)] rounded-lg;
 }
 
 .meta-label {
-  font-size: 13px;
-  color: var(--text-muted);
+  @apply text-sm text-[var(--text-muted)];
 }
 
 .meta-value {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
+  @apply text-sm font-medium text-[var(--text-primary)];
 }
 
 .status-tag {
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+  @apply px-2 py-1 rounded text-xs font-medium;
 }
 
 .status-tag.annotated {
   background: rgba(0, 255, 136, 0.15);
-  color: var(--accent-green);
+  @apply text-[var(--accent-green)];
 }
 
 .status-tag.pending {
   background: rgba(136, 136, 170, 0.15);
-  color: var(--text-muted);
+  @apply text-[var(--text-muted)];
 }
 </style>

@@ -207,11 +207,9 @@ onMounted(async () => {
 })
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .home {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  @apply flex flex-col gap-6;
 }
 
 .stats-grid {
@@ -221,15 +219,11 @@ onMounted(async () => {
 }
 
 .stat-card {
-  --un-rotate: 0;
+  @apply relative overflow-hidden rounded-2xl p-6;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 24px;
-  position: relative;
-  overflow: hidden;
   animation: fadeInUp 0.6s ease forwards;
-  opacity: 0;
+  @apply opacity-0;
 }
 
 @keyframes fadeInUp {
@@ -244,62 +238,46 @@ onMounted(async () => {
 }
 
 .stat-glow {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+  @apply absolute inset-0 pointer-events-none;
 }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 16px;
-  position: relative;
-  z-index: 1;
+  @apply relative z-10 w-12 h-12 mb-4;
 }
 
 .stat-icon svg {
-  width: 100%;
-  height: 100%;
+  @apply w-full h-full;
 }
 
 .stat-content {
-  position: relative;
-  z-index: 1;
+  @apply relative z-10;
 }
 
 .stat-value {
   font-size: 36px;
   font-weight: 700;
   font-family: 'JetBrains Mono', monospace;
-  line-height: 1;
+  @apply leading-none;
 }
 
 .stat-label {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-top: 8px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  @apply text-sm text-[var(--text-secondary)] mt-2 uppercase tracking-wider;
 }
 
 .stat-decoration {
-  position: absolute;
-  bottom: 0;
-  right: 0;
+  @apply absolute bottom-0 right-0 overflow-hidden;
   width: 80px;
   height: 80px;
-  overflow: hidden;
 }
 
 .decoration-line {
-  position: absolute;
+  @apply absolute rounded-full;
   bottom: -40px;
   right: -40px;
   width: 100px;
   height: 100px;
   border: 2px solid var(--border-color);
-  border-radius: 50%;
-  opacity: 0.3;
+  @apply opacity-30;
 }
 
 .main-grid {
@@ -309,126 +287,80 @@ onMounted(async () => {
 }
 
 .card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 20px 24px;
+  @apply flex items-center gap-3 p-5;
   border-bottom: 1px solid var(--border-color);
 }
 
 .header-line {
-  width: 4px;
-  height: 20px;
+  @apply w-1 h-5 rounded-sm;
   background: linear-gradient(180deg, var(--accent-cyan), var(--accent-magenta));
-  border-radius: 2px;
 }
 
 .card-header h3 {
-  font-size: 16px;
-  font-weight: 600;
-  flex: 1;
+  @apply text-base font-semibold flex-1;
 }
 
 .header-badge {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  color: var(--text-muted);
-  letter-spacing: 1px;
-  padding: 4px 8px;
-  background: var(--bg-secondary);
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
+  @apply text-[10px] text-[var(--text-muted)] tracking-wider px-2 py-1 bg-[var(--bg-secondary)] rounded border border-[var(--border-color)];
 }
 
 .action-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
-  padding: 24px;
+  @apply p-6;
 }
 
 .action-tile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 24px 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
+  @apply flex flex-col items-center gap-3 p-6 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl cursor-pointer transition-all relative overflow-hidden;
 }
 
 .action-tile:hover {
   border-color: var(--accent);
-  background: var(--bg-hover);
-  transform: translateY(-4px);
+  @apply bg-[var(--bg-hover)] -translate-y-1;
 }
 
 .action-tile:hover .action-hover-effect {
-  opacity: 1;
+  @apply opacity-100;
 }
 
 .action-hover-effect {
-  position: absolute;
-  inset: 0;
+  @apply absolute inset-0 opacity-0 transition-opacity duration-300;
   background: radial-gradient(circle at center, var(--accent), transparent 70%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
 }
 
 .action-icon {
-  width: 36px;
-  height: 36px;
+  @apply relative z-10 w-9 h-9;
   color: var(--accent);
-  position: relative;
-  z-index: 1;
 }
 
 .action-icon svg {
-  width: 100%;
-  height: 100%;
+  @apply w-full h-full;
 }
 
 .action-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  position: relative;
-  z-index: 1;
+  @apply relative z-10 text-sm font-medium text-[var(--text-primary)];
 }
 
 .status-content {
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  @apply p-6 flex flex-col gap-5;
 }
 
 .status-item {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  @apply flex flex-col gap-2;
 }
 
 .status-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  @apply flex justify-between items-center;
 }
 
 .status-label {
-  font-size: 13px;
-  color: var(--text-secondary);
+  @apply text-sm text-[var(--text-secondary)];
 }
 
 .status-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+  @apply w-2 h-2 rounded-full;
   background: var(--accent-green);
   box-shadow: 0 0 10px var(--accent-green);
 }
@@ -444,165 +376,118 @@ onMounted(async () => {
 }
 
 .status-bar {
-  height: 6px;
+  @apply h-1.5 rounded overflow-hidden;
   background: var(--bg-secondary);
-  border-radius: 3px;
-  overflow: hidden;
 }
 
 .status-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 1s ease;
+  @apply h-full rounded transition-all duration-1000;
   box-shadow: 0 0 10px currentColor;
 }
 
 .training-section {
   animation: fadeInUp 0.6s ease forwards;
   animation-delay: 0.4s;
-  opacity: 0;
+  @apply opacity-0;
 }
 
 .training-content {
-  padding: 24px;
+  @apply p-6;
 }
 
 .training-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  @apply flex flex-col gap-4;
 }
 
 .training-item {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 20px;
-  display: grid;
+  @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-5 grid gap-5 items-center;
   grid-template-columns: 1fr 2fr 1fr;
-  gap: 20px;
-  align-items: center;
 }
 
 .training-info {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  @apply flex flex-col gap-1.5;
 }
 
 .training-id {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
+  @apply text-sm font-semibold text-[var(--text-primary)];
 }
 
 .training-status {
-  font-size: 12px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  width: fit-content;
+  @apply text-xs px-2 py-1 rounded w-fit;
 }
 
 .training-status.pending {
   background: rgba(136, 136, 170, 0.2);
-  color: var(--text-secondary);
+  @apply text-[var(--text-secondary)];
 }
 
 .training-status.running {
   background: rgba(0, 240, 255, 0.2);
-  color: var(--accent-cyan);
+  @apply text-[var(--accent-cyan)];
 }
 
 .training-status.completed {
   background: rgba(0, 255, 136, 0.2);
-  color: var(--accent-green);
+  @apply text-[var(--accent-green)];
 }
 
 .training-status.failed {
   background: rgba(255, 68, 102, 0.2);
-  color: #ff4466;
+  @apply text-[#ff4466];
 }
 
 .training-progress {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  @apply flex items-center gap-3;
 }
 
 .progress-bar {
-  flex: 1;
-  height: 8px;
+  @apply flex-1 h-2 rounded overflow-hidden;
   background: var(--bg-primary);
-  border-radius: 4px;
-  overflow: hidden;
 }
 
 .progress-fill {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.5s ease;
+  @apply h-full rounded transition-all duration-500;
 }
 
-.progress-fill.pending { background: var(--text-muted); }
+.progress-fill.pending { @apply bg-[var(--text-muted)]; }
 .progress-fill.running {
   background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
   box-shadow: 0 0 10px var(--accent-cyan);
 }
-.progress-fill.completed { background: var(--accent-green); }
-.progress-fill.failed { background: #ff4466; }
+.progress-fill.completed { @apply bg-[var(--accent-green)]; }
+.progress-fill.failed { @apply bg-[#ff4466]; }
 
 .progress-text {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  color: var(--text-muted);
-  min-width: 100px;
-  text-align: right;
+  @apply text-xs text-[var(--text-muted)] min-w-[100px] text-right;
 }
 
 .training-meta {
-  display: flex;
-  gap: 12px;
+  @apply flex gap-3;
 }
 
 .meta-item {
-  font-size: 12px;
-  color: var(--text-muted);
-  padding: 4px 8px;
-  background: var(--bg-primary);
-  border-radius: 4px;
+  @apply text-xs text-[var(--text-muted)] px-2 py-1 bg-[var(--bg-primary)] rounded;
 }
 
 .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  text-align: center;
+  @apply flex flex-col items-center justify-center py-15 px-5 text-center;
 }
 
 .empty-icon {
-  width: 64px;
-  height: 64px;
-  color: var(--text-muted);
-  margin-bottom: 20px;
-  opacity: 0.5;
-}
+  @apply w-16 h-16 text-[var(--text-muted)] mb-5 opacity-50;
 
-.empty-icon svg {
-  width: 100%;
-  height: 100%;
+  svg {
+    @apply w-full h-full;
+  }
 }
 
 .empty-state p {
-  font-size: 16px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
+  @apply text-base text-[var(--text-secondary)] mb-2;
 }
 
 .empty-state span {
-  font-size: 13px;
-  color: var(--text-muted);
+  @apply text-sm text-[var(--text-muted)];
 }
 </style>
