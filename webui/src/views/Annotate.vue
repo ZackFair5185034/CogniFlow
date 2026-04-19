@@ -242,6 +242,15 @@ const CloseIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '
   h('line', { x1: '6', y1: '6', x2: '18', y2: '18' })
 ])
 
+const getImageUrl = (filePath: string) => {
+  const uploadsIndex = filePath.indexOf('uploads')
+  if (uploadsIndex !== -1) {
+    const relativePath = filePath.substring(uploadsIndex)
+    return `/${relativePath.replace(/\\/g, '/')}`
+  }
+  return `file://${filePath.replace(/\\/g, '/')}`
+}
+
 const formatBbox = (bbox: number[]) => {
   return bbox.map(v => Math.round(v)).join(', ')
 }
@@ -335,7 +344,7 @@ const initCanvas = () => {
     ElMessage.error('图片加载失败')
     imageLoading.value = false
   }
-  img.src = `/api/images/${currentImage.value.id}/file`
+  img.src = getImageUrl(currentImage.value.file_path)
 }
 
 const drawAllBboxes = () => {
@@ -413,16 +422,35 @@ const handleMouseMove = (e: MouseEvent) => {
 
   drawAllBboxes()
 
-  // 绘制预览框（虚线）
-  ctx.strokeStyle = categories.value.find(c => c.id === selectedCategoryId.value)?.color || '#ff4444'
-  ctx.lineWidth = 2
-  ctx.setLineDash([5, 5])
+  const cat = categories.value.find(c => c.id === selectedCategoryId.value)
+  const color = cat?.color || '#ff4444'
+
+  // 绘制预览框（实线 + 半透明填充）
   const x = Math.min(startX, currentX)
   const y = Math.min(startY, currentY)
   const w = Math.abs(currentX - startX)
   const h = Math.abs(currentY - startY)
+
+  // 半透明填充
+  ctx.fillStyle = color + '40'  // 40 = 25% opacity
+  ctx.fillRect(x, y, w, h)
+
+  // 实线边框
+  ctx.strokeStyle = color
+  ctx.lineWidth = 3
   ctx.strokeRect(x, y, w, h)
-  ctx.setLineDash([])
+
+  // 绘制尺寸标签
+  const labelText = `${Math.round(w / displayScale)} × ${Math.round(h / displayScale)}`
+  ctx.font = 'bold 14px JetBrains Mono, monospace'
+  const textMetrics = ctx.measureText(labelText)
+  const labelPadding = 6
+  const labelHeight = 22
+
+  ctx.fillStyle = color
+  ctx.fillRect(x, y - labelHeight - 4, textMetrics.width + labelPadding * 2, labelHeight)
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText(labelText, x + labelPadding, y - 10)
 }
 
 const handleMouseUp = (e: MouseEvent) => {
