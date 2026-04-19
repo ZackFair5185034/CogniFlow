@@ -2,8 +2,12 @@
   <div class="home">
     <!-- 统计卡片 -->
     <div class="stats-grid">
-      <div class="stat-card" v-for="(stat, index) in stats" :key="stat.label"
-           :style="{ animationDelay: `${index * 0.1}s` }">
+      <div
+        v-for="(stat, index) in stats"
+        :key="stat.label"
+        class="stat-card"
+        :style="{ animationDelay: `${index * 0.1}s` }"
+      >
         <div class="stat-glow" :style="{ background: stat.gradient }"></div>
         <div class="stat-icon" :style="{ color: stat.color }">
           <component :is="stat.icon" />
@@ -28,8 +32,13 @@
           <span class="header-badge">QUICK ACTIONS</span>
         </div>
         <div class="action-grid">
-          <button class="action-tile" v-for="action in quickActions" :key="action.label"
-                  @click="$router.push(action.path)" :style="{ '--accent': action.color }">
+          <button
+            class="action-tile"
+            v-for="action in quickActions"
+            :key="action.label"
+            @click="$router.push(action.path)"
+            :style="{ '--accent': action.color }"
+          >
             <div class="action-icon">
               <component :is="action.icon" />
             </div>
@@ -123,7 +132,6 @@ const statusText: Record<string, string> = {
   failed: '失败',
 }
 
-// 图标组件
 const FolderIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
   h('path', { d: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z' })
 ])
@@ -206,7 +214,6 @@ onMounted(async () => {
   gap: 24px;
 }
 
-/* 统计卡片 */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -214,6 +221,7 @@ onMounted(async () => {
 }
 
 .stat-card {
+  --un-rotate: 0;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 16px;
@@ -237,10 +245,7 @@ onMounted(async () => {
 
 .stat-glow {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100%;
+  inset: 0;
   pointer-events: none;
 }
 
@@ -297,18 +302,10 @@ onMounted(async () => {
   opacity: 0.3;
 }
 
-/* 主功能区 */
 .main-grid {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
   gap: 24px;
-}
-
-.vg-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  overflow: hidden;
 }
 
 .card-header {
@@ -343,7 +340,6 @@ onMounted(async () => {
   border: 1px solid var(--border-color);
 }
 
-/* 快速操作 */
 .action-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -405,7 +401,6 @@ onMounted(async () => {
   z-index: 1;
 }
 
-/* 系统状态 */
 .status-content {
   padding: 24px;
   display: flex;
@@ -462,7 +457,6 @@ onMounted(async () => {
   box-shadow: 0 0 10px currentColor;
 }
 
-/* 训练进度 */
 .training-section {
   animation: fadeInUp 0.6s ease forwards;
   animation-delay: 0.4s;
@@ -579,7 +573,6 @@ onMounted(async () => {
   border-radius: 4px;
 }
 
-/* 空状态 */
 .empty-state {
   display: flex;
   flex-direction: column;
