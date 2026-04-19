@@ -14,14 +14,12 @@ export const atlasApi = {
   create: (data: { name: string; description?: string }) => api.post('/atlas', data),
   update: (id: number, data: { name?: string; description?: string }) => api.put(`/atlas/${id}`, data),
   delete: (id: number) => api.delete(`/atlas/${id}`),
-  getImages: (id: number, directory?: string) => api.get(`/atlas/${id}/images`, { params: { directory } }),
+  getImages: (id: number, directory?: string) => api.get(`/atlas/${id}/images`, { params: directory ? { directory } : {} }),
   getDirectories: (id: number) => api.get(`/atlas/${id}/directories`),
   createDirectory: (id: number, directory: string) => api.post(`/atlas/${id}/directories`, null, { params: { directory } }),
   uploadImages: (id: number, files: FormData, directory?: string) => {
-    if (directory) {
-      files.append('directory', directory)
-    }
     return api.post(`/atlas/${id}/images`, files, {
+      params: directory ? { directory } : {},
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
@@ -72,13 +70,15 @@ export const trainingApi = {
   listJobs: () => api.get('/training/jobs'),
   getJob: (id: number) => api.get(`/training/jobs/${id}`),
   start: (data: { model_id: number; atlas_id: number; config?: object }) => api.post('/training/start', data),
-  stop: (jobId: number) => api.post('/training/stop', { job_id: jobId }),
+  stop: (jobId: number) => api.post(`/training/stop?job_id=${jobId}`),
+  deleteJob: (jobId: number) => api.delete(`/training/jobs/${jobId}`),
+  clearCompleted: () => api.delete('/training/jobs'),
   getMetricsHistory: (jobId: number) => api.get(`/training/jobs/${jobId}/metrics-history`),
 }
 
 // Launch API
 export const launchApi = {
-  load: (modelId: number) => api.post('/launch/load', { model_id: modelId }),
+  load: (modelId: number) => api.post(`/launch/load?model_id=${modelId}`),
   start: () => api.post('/launch/start'),
   stop: () => api.post('/launch/stop'),
   status: () => api.get('/launch/status'),

@@ -191,6 +191,28 @@ async def stop_training(job_id: int, db: Session = Depends(get_db)):
     return {"message": "训练任务已停止"}
 
 
+@router.delete("/jobs/{job_id}", status_code=204)
+async def delete_training_job(job_id: int, db: Session = Depends(get_db)):
+    """删除训练任务。"""
+    job = db.query(TrainingJob).filter(TrainingJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="训练任务不存在")
+
+    db.delete(job)
+    db.commit()
+    return None
+
+
+@router.delete("/jobs", status_code=204)
+async def delete_all_training_jobs(db: Session = Depends(get_db)):
+    """删除所有已完成的训练任务。"""
+    db.query(TrainingJob).filter(
+        TrainingJob.status.in_(["completed", "failed"])
+    ).delete()
+    db.commit()
+    return None
+
+
 @router.get("/jobs/{job_id}/metrics-history")
 async def get_training_metrics_history(job_id: int, db: Session = Depends(get_db)):
     """获取训练任务的指标历史（用于绘制训练曲线）。"""

@@ -39,6 +39,11 @@ async def list_atlases(db: Session = Depends(get_db)):
 @router.post("", response_model=AtlasResponse, status_code=201)
 async def create_atlas(atlas_data: AtlasCreate, db: Session = Depends(get_db)):
     """创建新图集。"""
+    # 检查名称是否已存在
+    existing = db.query(Atlas).filter(Atlas.name == atlas_data.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"图集名称 '{atlas_data.name}' 已存在")
+
     atlas = Atlas(name=atlas_data.name, description=atlas_data.description)
     db.add(atlas)
     db.commit()
@@ -100,15 +105,32 @@ async def list_atlas_images(
         atlas_id: 图集 ID
         directory: 可选，按目录名筛选
     """
+    import sys
+    print(f"[DEBUG] list_atlas_images called with atlas_id={atlas_id}, directory={directory}", flush=True)
+    print(f"[DEBUG] directory type: {type(directory)}, repr: {repr(directory)}", flush=True)
+    if directory:
+        print(f"[DEBUG] directory encoding: {directory.encode('utf-8')}", flush=True)
+
     atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
     if not atlas:
         raise HTTPException(status_code=404, detail="图集不存在")
 
     query = db.query(Image).filter(Image.atlas_id == atlas_id)
+
+    # Debug: check what directories are stored
+    all_images = query.all()
+    print(f"[DEBUG] Total images for atlas {atlas_id}: {len(all_images)}", flush=True)
+
     if directory is not None:
+        print(f"[DEBUG] Filtering by directory: '{directory}'", flush=True)
+        # Try direct string comparison
+        matching = [img for img in all_images if img.directory == directory]
+        print(f"[DEBUG] Direct Python comparison matches: {len(matching)}", flush=True)
+
         query = query.filter(Image.directory == directory)
 
     images = query.all()
+    print(f"[DEBUG] Final query result: {len(images)} images", flush=True)
     return images
 
 

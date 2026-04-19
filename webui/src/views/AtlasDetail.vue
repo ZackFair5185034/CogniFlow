@@ -39,7 +39,6 @@
                 <option value="">全部目录</option>
                 <option v-for="dir in directories" :key="dir" :value="dir">{{ dir }}</option>
               </select>
-              <ChevronIcon />
             </div>
             <button class="action-btn" @click="loadImages">
               <RefreshIcon />
@@ -165,13 +164,10 @@
         <div class="dialog-header">
           <h3>图片详情</h3>
           <div class="dialog-actions">
-            <button class="delete-confirm-btn" @click="handleDeleteImage(selectedImage)">
-              <TrashIcon />
-              删除图片
-            </button>
-            <button class="close-btn" @click="showImageDialog = false">
+            <el-button type="text" @click="handleDeleteImage(selectedImage)">删除</el-button>
+            <el-button class="close-btn" @click="showImageDialog = false">
               <CloseIcon />
-            </button>
+            </el-button>
           </div>
         </div>
         <div class="dialog-content" v-if="selectedImage">
@@ -308,11 +304,14 @@ const loadAtlas = async () => {
 const loadImages = async () => {
   loadingImages.value = true
   try {
-    const params = selectedDirectory.value ? { directory: selectedDirectory.value } : {}
-    const res = await atlasApi.getImages(id, params)
+    const directory = selectedDirectory.value || undefined
+    console.log('[DEBUG] loadImages called, directory:', directory)
+    const res = await atlasApi.getImages(id, directory)
+    console.log('[DEBUG] getImages response, count:', res.data.length)
     images.value = res.data
   } catch (error) {
     ElMessage.error('加载图片失败')
+    console.error('[DEBUG] loadImages error:', error)
   } finally {
     loadingImages.value = false
   }
@@ -377,8 +376,9 @@ const handleCreateDirectory = async () => {
     selectedDirectory.value = dirName
     ElMessage.success(`已创建目录 "${dirName}"，上传图片将自动归类到此目录`)
     newDirectoryName.value = ''
-  } catch (error) {
-    ElMessage.error('创建目录失败')
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '创建目录失败'
+    ElMessage.error(msg)
   }
 }
 
@@ -391,7 +391,7 @@ const handleDeleteImage = async (img: any) => {
     await ElMessageBox.confirm(
       `确定删除图片 "${getFileName(img.file_path)}" 吗？此操作不可撤销。`,
       '删除确认',
-      { type: 'warning' }
+      { type: 'warning', confirmButtonText: '确认', cancelButtonText: '取消' }
     )
     await imageApi.delete(img.id)
     ElMessage.success('删除成功')
@@ -580,12 +580,12 @@ onMounted(() => {
 .select-wrapper::after {
   content: '';
   position: absolute;
-  right: 12px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 5px solid var(--text-muted);
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid var(--text-muted);
   pointer-events: none;
 }
 
@@ -1023,28 +1023,18 @@ onMounted(() => {
   gap: 10px;
 }
 
-.delete-confirm-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  background: rgba(255, 68, 102, 0.1);
-  border: 1px solid rgba(255, 68, 102, 0.3);
-  border-radius: 6px;
+:deep(.el-button--text) {
+  padding: 4px 0;
+  border: none;
+  background: transparent;
   color: #ff4466;
   font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.delete-confirm-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.delete-confirm-btn:hover {
-  background: rgba(255, 68, 102, 0.2);
-  border-color: #ff4466;
+:deep(.el-button--text:hover) {
+  color: #ff4466;
+  background: transparent;
+  border: none;
 }
 
 .close-btn {

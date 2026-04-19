@@ -500,6 +500,7 @@ body {
   padding: 25px 30px;
   overflow-y: auto;
   position: relative;
+  background: var(--bg-primary);
 }
 
 /* 滚动条样式 */
@@ -637,5 +638,50 @@ body {
   background: rgba(255, 0, 170, 0.15);
   color: var(--accent-magenta);
   border: 1px solid rgba(255, 0, 170, 0.3);
+}
+
+/* Element Plus MessageBox 主题覆盖 */
+.el-message-box {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+}
+
+.el-message-box__title {
+  color: var(--text-primary) !important;
+}
+
+.el-message-box__content {
+  color: var(--text-secondary) !important;
+}
+
+.el-message-box__message {
+  color: var(--text-secondary) !important;
+}
+
+.el-message-box .el-button {
+  border-radius: 6px !important;
+}
+
+.el-message-box .el-button--primary {
+  background: rgba(255, 68, 102, 0.1) !important;
+  border-color: rgba(255, 68, 102, 0.3) !important;
+  color: #ff4466 !important;
+}
+
+.el-message-box .el-button--primary:hover {
+  background: rgba(255, 68, 102, 0.2) !important;
+  border-color: #ff4466 !important;
+}
+
+.el-message-box .el-button--default {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+
+.el-message-box .el-button--default:hover {
+  border-color: var(--accent-cyan) !important;
+  color: var(--accent-cyan) !important;
 }
 </style>

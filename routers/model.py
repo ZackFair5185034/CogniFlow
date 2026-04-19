@@ -40,6 +40,14 @@ async def list_models(db: Session = Depends(get_db)):
 @router.post("", response_model=ModelResponse, status_code=201)
 async def create_model(data: ModelCreate, db: Session = Depends(get_db)):
     """创建新模型记录。"""
+    # 检查名称+版本组合是否已存在
+    existing = db.query(Model).filter(
+        Model.name == data.name,
+        Model.version == data.version
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"模型 '{data.name}' (版本: {data.version or '无'}) 已存在")
+
     model = Model(
         name=data.name,
         version=data.version,

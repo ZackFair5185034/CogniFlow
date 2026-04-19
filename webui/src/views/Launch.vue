@@ -35,27 +35,24 @@
                     {{ m.name }}{{ m.version ? ` (${m.version})` : '' }}
                   </option>
                 </select>
-                <ChevronIcon />
               </div>
             </div>
           </div>
 
           <!-- 控制按钮 -->
           <div class="control-buttons">
-            <button class="vg-btn control-btn load" @click="handleLoad" :disabled="!selectedModelId || loading">
+            <el-button class="control-btn" @click="handleLoad" :disabled="!selectedModelId || loading">
               <DownloadIcon />
               加载模型
-            </button>
-            <button class="vg-btn vg-btn-success control-btn start" @click="handleStart"
-                    :disabled="!status.loaded || status.inference_running">
+            </el-button>
+            <el-button class="control-btn success" @click="handleStart" :disabled="!status.loaded || status.inference_running">
               <PlayIcon />
               开始执行
-            </button>
-            <button class="vg-btn vg-btn-danger control-btn stop" @click="handleStop"
-                    :disabled="!status.inference_running">
+            </el-button>
+            <el-button class="control-btn danger" @click="handleStop" :disabled="!status.inference_running">
               <StopIcon />
               停止执行
-            </button>
+            </el-button>
           </div>
 
           <!-- 状态显示 -->
@@ -272,8 +269,9 @@ const handleLoad = async () => {
     await launchApi.load(selectedModelId.value)
     ElMessage.success('模型加载成功')
     loadStatus()
-  } catch (error) {
-    ElMessage.error('模型加载失败')
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '模型加载失败'
+    ElMessage.error(msg)
   } finally {
     loading.value = false
   }
@@ -284,8 +282,9 @@ const handleStart = async () => {
     await launchApi.start()
     ElMessage.success('推理已开始')
     loadStatus()
-  } catch (error) {
-    ElMessage.error('启动失败')
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '启动失败'
+    ElMessage.error(msg)
   }
 }
 
@@ -294,8 +293,9 @@ const handleStop = async () => {
     await launchApi.stop()
     ElMessage.success('推理已停止')
     loadStatus()
-  } catch (error) {
-    ElMessage.error('停止失败')
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '停止失败'
+    ElMessage.error(msg)
   }
 }
 
@@ -533,42 +533,63 @@ onUnmounted(() => {
 /* 控制按钮 */
 .control-buttons {
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 
-.control-btn {
+:deep(.control-btn) {
   flex: 1;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 14px 20px;
   font-size: 14px;
   font-weight: 500;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.control-btn svg {
-  width: 18px;
-  height: 18px;
-}
-
-.control-btn.load {
-  background: var(--bg-secondary);
+  font-family: inherit;
+  white-space: nowrap;
   border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-card);
   color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.25s ease;
 }
 
-.control-btn.load:hover:not(:disabled) {
+:deep(.control-btn:hover:not(:disabled)) {
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.05);
 }
 
-.control-btn:disabled {
+:deep(.control-btn:disabled) {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+:deep(.control-btn.success) {
+  border-color: var(--accent-green);
+  color: var(--accent-green);
+}
+
+:deep(.control-btn.success:hover:not(:disabled)) {
+  background: rgba(0, 255, 136, 0.08);
+  border-color: var(--accent-green);
+}
+
+:deep(.control-btn.danger) {
+  border-color: #ff4466;
+  color: #ff4466;
+}
+
+:deep(.control-btn.danger:hover:not(:disabled)) {
+  background: rgba(255, 68, 102, 0.08);
+  border-color: #ff4466;
+}
+
+:deep(.control-btn svg) {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 /* 状态网格 */

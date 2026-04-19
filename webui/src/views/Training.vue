@@ -6,15 +6,20 @@
         <h2>训练监控</h2>
         <span class="subtitle">实时监控训练进度</span>
       </div>
-      <div class="header-stats">
-        <div class="stat-pill running">
-          <span class="dot"></span>
-          {{ runningCount }} 运行中
+      <div class="header-actions">
+        <div class="header-stats">
+          <div class="stat-pill running">
+            <span class="dot"></span>
+            {{ runningCount }} 运行中
+          </div>
+          <div class="stat-pill completed">
+            <span class="dot"></span>
+            {{ completedCount }} 已完成
+          </div>
         </div>
-        <div class="stat-pill completed">
-          <span class="dot"></span>
-          {{ completedCount }} 已完成
-        </div>
+        <el-button type="text" @click="handleClearCompleted" :disabled="completedCount === 0">
+          清理记录
+        </el-button>
       </div>
     </div>
 
@@ -47,10 +52,7 @@
               <span class="meta-tag">Atlas #{{ job.atlas_id }}</span>
             </div>
             <div class="job-actions" v-if="job.status === 'running'">
-              <button class="action-btn stop" @click="handleStop(job)">
-                <StopIcon />
-                停止
-              </button>
+              <el-button type="text" @click="handleStop(job)">停止</el-button>
             </div>
           </div>
 
@@ -80,7 +82,6 @@
                     {{ m.name }}{{ m.version ? ` (${m.version})` : '' }}
                   </option>
                 </select>
-                <ChevronIcon />
               </div>
             </div>
 
@@ -93,7 +94,6 @@
                     {{ a.name }}
                   </option>
                 </select>
-                <ChevronIcon />
               </div>
             </div>
 
@@ -158,7 +158,7 @@ const loading = ref(false)
 const starting = ref(false)
 const currentJob = computed(() => jobs.value.find(j => j.status === 'running') || null)
 const runningCount = computed(() => jobs.value.filter(j => j.status === 'running').length)
-const completedCount = computed(() => jobs.value.filter(j => j.status === 'completed').length)
+const completedCount = computed(() => jobs.value.filter(j => j.status === 'completed' || j.status === 'failed').length)
 
 const startForm = ref({
   model_id: null as number | null,
@@ -173,6 +173,17 @@ const statusText: Record<string, string> = {
   running: '进行中',
   completed: '已完成',
   failed: '失败',
+}
+
+const handleClearCompleted = async () => {
+  try {
+    await trainingApi.clearCompleted()
+    ElMessage.success('已清理完成和失败的记录')
+    loadJobs()
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '清理失败'
+    ElMessage.error(msg)
+  }
 }
 
 // 图标
@@ -246,8 +257,9 @@ const handleStart = async () => {
     })
     ElMessage.success('训练已启动')
     loadJobs()
-  } catch (error) {
-    ElMessage.error('启动失败')
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '启动失败'
+    ElMessage.error(msg)
   } finally {
     starting.value = false
   }
@@ -258,8 +270,9 @@ const handleStop = async (job: any) => {
     await trainingApi.stop(job.id)
     ElMessage.success('训练已停止')
     loadJobs()
-  } catch (error) {
-    ElMessage.error('停止失败')
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '停止失败'
+    ElMessage.error(msg)
   }
 }
 
@@ -297,6 +310,17 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.header-stats {
+  display: flex;
+  gap: 12px;
 }
 
 .header-info h2 {
@@ -524,31 +548,18 @@ onUnmounted(() => {
   border-top: 1px solid var(--border-color);
 }
 
-.action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid;
-  border-radius: 6px;
+:deep(.el-button--text) {
+  padding: 4px 0;
+  border: none;
   background: transparent;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.action-btn svg {
-  width: 14px;
-  height: 14px;
-}
-
-.action-btn.stop {
-  border-color: #ff4466;
   color: #ff4466;
+  font-size: 13px;
 }
 
-.action-btn.stop:hover {
-  background: rgba(255, 68, 102, 0.1);
+:deep(.el-button--text:hover) {
+  color: #ff4466;
+  background: transparent;
+  border: none;
 }
 
 .empty-jobs {

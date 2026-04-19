@@ -35,16 +35,11 @@
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="160" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
-                <button class="action-btn view" @click="$router.push(`/atlas/${row.id}`)">
-                  <EyeIcon />
-                  查看
-                </button>
-                <button class="action-btn delete" @click="handleDelete(row)">
-                  <TrashIcon />
-                </button>
+                <el-button type="text" @click="$router.push(`/atlas/${row.id}`)">查看</el-button>
+                <el-button type="text" @click="handleDelete(row)">删除</el-button>
               </div>
             </template>
           </el-table-column>
@@ -155,8 +150,9 @@ const handleCreate = async () => {
     showCreateDialog.value = false
     createForm.value = { name: '', description: '' }
     loadAtlases()
-  } catch (error) {
-    ElMessage.error('创建失败')
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '创建失败'
+    ElMessage.error(msg)
   } finally {
     creating.value = false
   }
@@ -166,6 +162,8 @@ const handleDelete = async (row: any) => {
   try {
     await ElMessageBox.confirm(`确定删除图集 "${row.name}" 吗？此操作不可撤销。`, '删除确认', {
       type: 'warning',
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
     })
     await atlasApi.delete(row.id)
     ElMessage.success('删除成功')
@@ -285,38 +283,32 @@ onMounted(loadAtlases)
 
 .action-buttons {
   display: flex;
-  gap: 8px;
-}
-
-.action-btn {
-  display: inline-flex;
+  gap: 16px;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
+}
+
+:deep(.el-button--text) {
+  padding: 4px 0;
+  border: none;
   background: transparent;
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.action-btn svg {
-  width: 14px;
-  height: 14px;
-}
-
-.action-btn.view:hover {
-  border-color: var(--accent-cyan);
   color: var(--accent-cyan);
-  background: rgba(0, 240, 255, 0.1);
+  font-size: 13px;
 }
 
-.action-btn.delete:hover {
-  border-color: #ff4466;
+:deep(.el-button--text:hover) {
+  color: var(--accent-cyan);
+  background: transparent;
+  border: none;
+}
+
+:deep(.el-button--text:last-child:hover) {
   color: #ff4466;
-  background: rgba(255, 68, 102, 0.1);
+}
+
+:deep(.action-btn svg) {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 
 /* 对话框 */
