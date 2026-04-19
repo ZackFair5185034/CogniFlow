@@ -121,3 +121,14 @@ data/
 .DS_Store
 Thumbs.db
 node_modules
+
+# Playwright
+.playwright-cli/
+.playwright-mcp/
+
+# Claude
+.claude/
+
+# Uploads (runtime data)
+uploads/
+*.log

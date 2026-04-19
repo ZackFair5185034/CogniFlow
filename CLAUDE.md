@@ -62,32 +62,52 @@ class ClassName:
 ## 3. 项目结构
 
 ```
-visiongame/
-├── visiongame/                    # 主包
-│   ├── __init__.py               # 包初始化
-│   ├── config/                    # 配置模块
-│   │   ├── schema.py             # 配置数据类
-│   │   ├── default.yaml          # 默认配置
+visionGame/
+├── backend/                      # FastAPI 后端
+│   ├── app.py                   # 应用入口
+│   ├── database.py              # 数据库配置
+│   ├── schemas.py               # Pydantic 模型
+│   ├── websocket_manager.py     # WebSocket 管理
+│   └── routers/                 # API 路由（按业务功能）
+│       ├── atlas.py             # 图集管理
+│       ├── image.py             # 图片管理
+│       ├── annotation.py         # 标注管理
+│       ├── category.py          # 类别管理
+│       ├── model.py             # 模型管理
+│       ├── training.py          # 训练管理
+│       ├── launch.py            # 启动管理
+│       └── websocket.py         # WebSocket
+├── visiongame/                  # 核心 RL/Vision 包
+│   ├── __init__.py             # 包初始化
+│   ├── config/                  # 配置模块
+│   │   ├── schema.py           # 配置数据类
+│   │   ├── default.yaml        # 默认配置
 │   │   └── __init__.py
-│   ├── core/                     # 核心模块
-│   │   ├── data_input/           # 数据输入
-│   │   │   ├── capture/          # 屏幕捕获
-│   │   │   └── storage/          # 数据存储
-│   │   ├── vision/               # 视觉处理
-│   │   │   ├── features/         # 特征提取
-│   │   │   ├── detector/         # 目标检测
-│   │   │   └── preprocessor/     # 图像预处理
-│   │   ├── rl/                   # 强化学习
-│   │   │   ├── algorithms/       # RL算法
-│   │   │   ├── environment/      # 环境封装
-│   │   │   └── trainer/          # 训练器
-│   │   └── control/              # 控制接口
-│   │       ├── input_emulator/   # 输入模拟
-│   │       └── controller/       # 控制器
-│   └── annotation/               # 标注工具
-├── examples/                     # 示例代码
-├── tests/                        # 单元测试
-└── docs/                         # 文档
+│   ├── core/                    # 核心模块
+│   │   ├── data_input/         # 数据输入
+│   │   │   ├── capture/        # 屏幕捕获
+│   │   │   └── storage/        # 数据存储
+│   │   ├── vision/             # 视觉处理
+│   │   │   ├── features/       # 特征提取
+│   │   │   ├── detector/       # 目标检测
+│   │   │   └── preprocessor/   # 图像预处理
+│   │   ├── rl/                 # 强化学习
+│   │   │   ├── algorithms/     # RL算法
+│   │   │   ├── environment/    # 环境封装
+│   │   │   └── trainer/        # 训练器
+│   │   └── control/            # 控制接口
+│   │       ├── input_emulator/ # 输入模拟
+│   │       └── controller/     # 控制器
+│   └── annotation/              # 标注工具
+├── webui/                       # Vue3 前端
+├── tests/                       # 单元测试
+├── examples/                    # 示例代码
+├── docs/                        # 文档
+├── uploads/                     # 上传文件目录
+├── checkpoints/                 # 模型检查点
+├── logs/                        # 日志目录
+├── requirements.txt             # 后端依赖
+└── requirements-webui.txt       # 前端依赖
 ```
 
 ## 4. Git 规范
