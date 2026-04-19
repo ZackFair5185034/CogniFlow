@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """WebSocket 路由。
 
-提供训练状态和模型执行状态的实时通信。
+提供训练状态、模型执行状态和系统状态的实时通信。
 """
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -39,3 +39,18 @@ async def websocket_launch(websocket: WebSocket):
             data = await websocket.receive_text()
     except WebSocketDisconnect:
         ws_manager.disconnect_launch(websocket)
+
+
+@router.websocket("/system")
+async def websocket_system(websocket: WebSocket):
+    """系统状态 WebSocket 连接。
+
+    客户端连接后接收系统状态的实时更新（CPU、内存、磁盘）。
+    """
+    await ws_manager.connect_system(websocket)
+    try:
+        while True:
+            # 保持连接，等待断开
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect_system(websocket)

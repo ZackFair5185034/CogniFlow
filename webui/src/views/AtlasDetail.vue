@@ -167,8 +167,8 @@
         <div class="dialog-header">
           <h3>图片详情</h3>
           <div class="dialog-actions">
-            <el-button type="text" @click="handleAnnotateImage(selectedImage)">标注</el-button>
-            <el-button type="text" @click="handleDeleteImage(selectedImage)">删除</el-button>
+            <el-button type="link" @click="handleAnnotateImage(selectedImage)">标注</el-button>
+            <el-button type="link" @click="handleDeleteImage(selectedImage)">删除</el-button>
             <el-button class="close-btn" @click="showImageDialog = false">
               <CloseIcon />
             </el-button>

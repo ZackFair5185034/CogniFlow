@@ -16,7 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker, backref
 from sqlalchemy.pool import StaticPool
 
 Base = declarative_base()
@@ -53,14 +53,22 @@ class Image(Base):
 
 
 class Category(Base):
-    """标注类别模型。"""
+    """标注类别模型 - 支持树形目录结构。
+
+    - is_directory=True: 目录容器，可嵌套
+    - is_directory=False: 实际标签，属于某个目录
+    """
     __tablename__ = "category"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(100), nullable=False, unique=True)
+    name = Column(String(100), nullable=False)
     color = Column(String(7), default="#FF0000")
+    is_directory = Column(Boolean, default=False)  # True=目录, False=标签
+    parent_id = Column(Integer, ForeignKey("category.id"), nullable=True)  # 父节点，支持嵌套
 
+    # 关系
     annotations = relationship("Annotation", back_populates="category")
+    children = relationship("Category", backref=backref("parent", remote_side=[id]), cascade="all")
 
 
 class Annotation(Base):

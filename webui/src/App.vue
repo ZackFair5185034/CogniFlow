@@ -27,7 +27,7 @@
           :key="item.path"
           :to="item.path"
           class="nav-item"
-          :class="{ active: route.path.startsWith(item.path) }"
+          :class="{ active: isNavActive(item.path) }"
         >
           <component :is="item.icon" class="nav-icon" />
           <span class="nav-text">{{ item.label }}</span>
@@ -46,9 +46,9 @@
       <header class="top-bar">
         <div class="page-title">
           <h1>{{ currentPageTitle }}</h1>
-          <span class="time-display">{{ currentTime }}</span>
         </div>
         <div class="top-actions">
+          <span class="time-display">{{ currentTime }}</span>
           <button class="action-btn" @click="refreshData">
             <RefreshIcon />
           </button>
@@ -133,6 +133,13 @@ const currentPageTitle = computed(() => {
   return pageTitles[path] || 'VisionGame'
 })
 
+const isNavActive = (path: string) => {
+  if (path === '/') {
+    return route.path === '/'
+  }
+  return route.path.startsWith(path)
+}
+
 const refreshData = () => {
   window.location.reload()
 }
@@ -141,7 +148,15 @@ let timeInterval: number
 onMounted(() => {
   const updateTime = () => {
     const now = new Date()
-    currentTime.value = now.toLocaleTimeString('zh-CN', { hour12: false })
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const day = String(now.getDate()).padStart(2, '0')
+    const hour = String(now.getHours()).padStart(2, '0')
+    const minute = String(now.getMinutes()).padStart(2, '0')
+    const second = String(now.getSeconds()).padStart(2, '0')
+    const weekDays = ['日', '一', '二', '三', '四', '五', '六']
+    const weekDay = weekDays[now.getDay()]
+    currentTime.value = `${year}/${month}/${day} ${hour}:${minute}:${second} 星期${weekDay}`
   }
   updateTime()
   timeInterval = window.setInterval(updateTime, 1000)
@@ -372,14 +387,15 @@ onUnmounted(() => {
 }
 
 .top-bar {
-  height: 70px;
+  height: 64px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 30px;
+  padding: 0 24px;
   position: relative;
+  backdrop-filter: blur(10px);
 
   &::after {
     content: '';
@@ -389,43 +405,39 @@ onUnmounted(() => {
     width: 100%;
     height: 1px;
     background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
-    opacity: 0.3;
+    opacity: 0.5;
   }
 }
 
 .page-title {
   display: flex;
-  align-items: baseline;
-  gap: 20px;
+  align-items: center;
+  gap: 16px;
 
   h1 {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 600;
-    background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--text-primary);
+    letter-spacing: 0.5px;
   }
 }
 
 .time-display {
   font-family: 'JetBrains Mono', monospace;
   font-size: 13px;
-  color: var(--text-muted);
-  padding: 4px 10px;
-  background: var(--bg-card);
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
 }
 
 .top-actions {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
 }
 
 .action-btn {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -434,17 +446,18 @@ onUnmounted(() => {
   border-radius: 8px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 
   &:hover {
     background: var(--bg-hover);
     border-color: var(--accent-cyan);
     color: var(--accent-cyan);
+    transform: translateY(-1px);
   }
 
   svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
 }
 

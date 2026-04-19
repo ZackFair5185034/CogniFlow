@@ -10,6 +10,21 @@ import '@/style/index.scss'
 
 const app = createApp(App)
 
+// 注册 click-outside 指令
+app.directive('click-outside', {
+  mounted(el, binding) {
+    el._clickOutside = (event: MouseEvent) => {
+      if (!(el === event.target || el.contains(event.target as Node))) {
+        binding.value(event)
+      }
+    }
+    document.addEventListener('click', el._clickOutside)
+  },
+  unmounted(el) {
+    document.removeEventListener('click', el._clickOutside)
+  }
+})
+
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)
 }

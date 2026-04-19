@@ -62,6 +62,8 @@ class CategoryBase(BaseModel):
     """类别基础模型。"""
     name: str
     color: str = "#FF0000"
+    is_directory: bool = False  # True=目录, False=标签
+    parent_id: Optional[int] = None  # 父节点ID，支持嵌套
 
 
 class CategoryCreate(CategoryBase):
@@ -73,11 +75,17 @@ class CategoryUpdate(BaseModel):
     """更新类别请求。"""
     name: Optional[str] = None
     color: Optional[str] = None
+    is_directory: Optional[bool] = None
+    parent_id: Optional[int] = None
 
 
-class CategoryResponse(CategoryBase):
+class CategoryResponse(BaseModel):
     """类别响应。"""
     id: int
+    name: str
+    color: str
+    is_directory: bool
+    parent_id: Optional[int]
 
     model_config = ConfigDict(from_attributes=True)
 

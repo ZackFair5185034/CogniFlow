@@ -59,9 +59,9 @@
           <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
-                <el-button type="text" @click="handleUpload(row)">上传</el-button>
-                <el-button type="text" @click="handleSetBest(row)" :disabled="row.is_best">最佳</el-button>
-                <el-button type="text" @click="handleDelete(row)">删除</el-button>
+                <el-button type="link" @click="handleUpload(row)">上传</el-button>
+                <el-button type="link" @click="handleSetBest(row)" :disabled="row.is_best">最佳</el-button>
+                <el-button type="link" @click="handleDelete(row)">删除</el-button>
               </div>
             </template>
           </el-table-column>

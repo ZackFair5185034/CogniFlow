@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """WebSocket 管理器 - 处理实时通信。
 
-支持训练状态和模型执行状态的实时推送。
+支持训练状态、模型执行状态和系统状态的实时推送。
 """
+import asyncio
+import psutil
 from typing import Dict, Set
 from fastapi import WebSocket
 
@@ -15,6 +17,10 @@ class WebSocketManager:
         self._training_connections: Dict[int, Set[WebSocket]] = {}
         # 模型执行状态连接
         self._launch_connections: Set[WebSocket] = set()
+        # 系统状态连接
+        self._system_connections: Set[WebSocket] = set()
+        # 系统状态推送任务
+        self._system_push_task: asyncio.Task | None = None
 
     async def connect_training(self, websocket: WebSocket, job_id: int):
         """连接训练状态 WebSocket。"""
@@ -66,6 +72,74 @@ class WebSocketManager:
                 disconnected.add(websocket)
         for ws in disconnected:
             self._launch_connections.discard(ws)
+
+    async def connect_system(self, websocket: WebSocket):
+        """连接系统状态 WebSocket。"""
+        await websocket.accept()
+        self._system_connections.add(websocket)
+        # 启动推送任务（如果还没启动）
+        if self._system_push_task is None or self._system_push_task.done():
+            self._system_push_task = asyncio.create_task(self._push_system_stats())
+
+    def disconnect_system(self, websocket: WebSocket):
+        """断开系统状态 WebSocket。"""
+        self._system_connections.discard(websocket)
+
+    async def _push_system_stats(self):
+        """定期推送系统状态。"""
+        while self._system_connections:
+            try:
+                stats = self._get_system_stats()
+                disconnected = set()
+                for websocket in self._system_connections:
+                    try:
+                        await websocket.send_json({
+                            "type": "system_stats",
+                            "data": stats
+                        })
+                    except Exception:
+                        disconnected.add(websocket)
+                for ws in disconnected:
+                    self._system_connections.discard(ws)
+                await asyncio.sleep(2)  # 每2秒推送一次
+            except Exception:
+                await asyncio.sleep(2)
+
+    def _get_system_stats(self) -> dict:
+        """获取系统状态。"""
+        # CPU 使用率
+        cpu_percent = psutil.cpu_percent(interval=None)
+
+        # 内存信息
+        memory = psutil.virtual_memory()
+        memory_total = memory.total
+        memory_used = memory.used
+        memory_percent = memory.percent
+
+        # 磁盘信息
+        disk = psutil.disk_usage('/')
+        disk_total = disk.total
+        disk_used = disk.used
+        disk_percent = disk.percent
+
+        return {
+            "cpu": {
+                "percent": cpu_percent,
+                "status": "warning" if cpu_percent > 80 else "normal"
+            },
+            "memory": {
+                "total": memory_total,
+                "used": memory_used,
+                "percent": memory_percent,
+                "status": "warning" if memory_percent > 80 else "normal"
+            },
+            "disk": {
+                "total": disk_total,
+                "used": disk_used,
+                "percent": disk_percent,
+                "status": "warning" if disk_percent > 90 else "normal"
+            }
+        }
 
 
 # 全局单例

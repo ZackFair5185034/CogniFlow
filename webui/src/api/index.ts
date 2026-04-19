@@ -35,8 +35,11 @@ export const imageApi = {
 // Category API
 export const categoryApi = {
   list: () => api.get('/categories'),
-  create: (data: { name: string; color: string }) => api.post('/categories', data),
-  update: (id: number, data: { name?: string; color?: string }) => api.put(`/categories/${id}`, data),
+  getTree: () => api.get('/categories/tree'),
+  create: (data: { name: string; color?: string; is_directory?: boolean; parent_id?: number | null }) =>
+    api.post('/categories', data),
+  update: (id: number, data: { name?: string; color?: string; is_directory?: boolean; parent_id?: number | null }) =>
+    api.put(`/categories/${id}`, data),
   delete: (id: number) => api.delete(`/categories/${id}`),
 }
 

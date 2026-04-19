@@ -39,26 +39,64 @@
       <div class="category-panel">
         <div class="panel-header">
           <h3>类别库</h3>
-          <button class="vg-btn vg-btn-small" @click="showCategoryDialog = true">
-            <PlusIcon />
-          </button>
-        </div>
-        <div class="category-list">
-          <div
-            v-for="(cat, index) in categories"
-            :key="cat.id"
-            class="category-item"
-            :class="{ active: selectedCategoryId === cat.id }"
-            :style="{ '--cat-color': cat.color }"
-            @click="selectCategory(cat.id)"
-          >
-            <span class="cat-color" :style="{ background: cat.color }"></span>
-            <span class="cat-name">{{ cat.name }}</span>
-            <span class="cat-hotkey">{{ index + 1 }}</span>
+          <div class="header-actions">
+            <button class="vg-btn vg-btn-small" @click="openCreateDialog">
+              <PlusIcon />
+            </button>
           </div>
         </div>
-        <div v-if="categories.length === 0" class="empty-tip">
-          暂无类别，请先创建
+
+        <!-- 路径导航 -->
+        <div class="breadcrumb" v-if="currentPath.length > 0">
+          <span class="breadcrumb-item" @click="navigateToRoot">根目录</span>
+          <template v-for="(item, idx) in currentPath" :key="item.id">
+            <ChevronRightIcon class="breadcrumb-sep" />
+            <span class="breadcrumb-item" @click="navigateTo(idx)">{{ item.name }}</span>
+          </template>
+        </div>
+
+        <!-- 当前目录下的目录列表 -->
+        <div class="dir-list">
+          <div
+            v-for="dir in currentDirectories"
+            :key="dir.id"
+            class="dir-item"
+            @click="enterDirectory(dir)"
+          >
+            <FolderIcon class="dir-icon" />
+            <span class="dir-name">{{ dir.name }}</span>
+            <div class="item-actions">
+              <button class="icon-btn" @click.stop="deleteCategory(dir.id)" title="删除">
+                <TrashIcon />
+              </button>
+              <ChevronRightIcon class="enter-icon" />
+            </div>
+          </div>
+        </div>
+
+        <!-- 当前目录下的标签列表 -->
+        <div class="tag-list" v-if="currentCategories.length > 0">
+          <div class="tag-header">标签</div>
+          <div
+            v-for="(cat, idx) in currentCategories"
+            :key="cat.id"
+            class="tag-item"
+            :class="{ active: selectedCategoryId === cat.id }"
+            @click="selectCategory(cat.id)"
+          >
+            <span class="tag-color" :style="{ background: cat.color }"></span>
+            <span class="tag-name">{{ cat.name }}</span>
+            <div class="item-actions">
+              <button class="icon-btn" @click.stop="deleteCategory(cat.id)" title="删除">
+                <TrashIcon />
+              </button>
+              <span class="tag-hotkey">{{ idx + 1 }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="currentItems.length === 0" class="empty-tip">
+          空目录
         </div>
       </div>
 
@@ -110,29 +148,60 @@
     </div>
 
     <!-- 创建类别对话框 -->
-    <div class="dialog-overlay" v-if="showCategoryDialog" @click.self="showCategoryDialog = false">
+    <div class="dialog-overlay" v-if="showCategoryDialog" @click.self="closeCreateDialog">
       <div class="dialog-panel vg-card">
         <div class="dialog-header">
-          <h3>创建类别</h3>
-          <button class="close-btn" @click="showCategoryDialog = false">
+          <h3>{{ categoryForm.is_directory ? '创建目录' : '创建标签' }}</h3>
+          <button class="close-btn" @click="closeCreateDialog">
             <CloseIcon />
           </button>
         </div>
         <div class="dialog-body">
+          <!-- 类型选择 -->
           <div class="form-group">
-            <label>类别名称</label>
-            <input type="text" v-model="categoryForm.name" placeholder="输入类别名称" />
+            <label>类型</label>
+            <div class="type-toggle">
+              <button
+                type="button"
+                class="toggle-btn"
+                :class="{ active: !categoryForm.is_directory }"
+                @click="categoryForm.is_directory = false"
+              >
+                <TagIcon /> 标签
+              </button>
+              <button
+                type="button"
+                class="toggle-btn"
+                :class="{ active: categoryForm.is_directory }"
+                @click="categoryForm.is_directory = true"
+              >
+                <FolderIcon /> 目录
+              </button>
+            </div>
           </div>
+          <!-- 名称 -->
           <div class="form-group">
+            <label>名称</label>
+            <input type="text" v-model="categoryForm.name" :placeholder="categoryForm.is_directory ? '输入目录名称' : '输入标签名称'" />
+          </div>
+          <!-- 颜色（仅标签） -->
+          <div class="form-group" v-if="!categoryForm.is_directory">
             <label>颜色</label>
             <div class="color-picker">
               <input type="color" v-model="categoryForm.color" />
               <span class="color-preview" :style="{ background: categoryForm.color }"></span>
             </div>
           </div>
+          <!-- 父目录 -->
+          <div class="form-group">
+            <label>父目录</label>
+            <div class="parent-path">
+              {{ currentPath.length === 0 ? '根目录' : currentPath.map(p => p.name).join(' > ') }}
+            </div>
+          </div>
         </div>
         <div class="dialog-footer">
-          <button class="vg-btn" @click="showCategoryDialog = false">取消</button>
+          <button class="vg-btn" @click="closeCreateDialog">取消</button>
           <button class="vg-btn vg-btn-primary" @click="handleCreateCategory" :disabled="creatingCategory">
             {{ creatingCategory ? '创建中...' : '创建' }}
           </button>
@@ -152,6 +221,9 @@ interface Category {
   id: number
   name: string
   color: string
+  is_directory: boolean
+  parent_id: number | null
+  children?: Category[]
 }
 
 interface Annotation {
@@ -176,6 +248,8 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 const canvasContainer = ref<HTMLDivElement | null>(null)
 
 const categories = ref<Category[]>([])
+const treeData = ref<Category[]>([])
+const currentPath = ref<Category[]>([])
 const currentImage = ref<ImageData | null>(null)
 const localAnnotations = ref<Annotation[]>([])
 const selectedCategoryId = ref<number | null>(null)
@@ -185,7 +259,7 @@ const imageLoading = ref(false)
 const saving = ref(false)
 const showCategoryDialog = ref(false)
 const creatingCategory = ref(false)
-const categoryForm = ref({ name: '', color: '#ff4444' })
+const categoryForm = ref({ name: '', color: '#FF0000', is_directory: false, parent_id: null as number | null })
 
 const imageList = ref<ImageData[]>([])
 const currentImageIndex = ref(0)
@@ -196,18 +270,84 @@ const hasChanges = computed(() => {
   return localAnnotations.value.some(ann => !ann.id)
 })
 
-let ctx: CanvasRenderingContext2D | null = null
-let isDrawing = false
-let startX = 0
-let startY = 0
-let imgElement: HTMLImageElement | null = null
-let originalWidth = 0
-let originalHeight = 0
-let displayScale = 1
+// ============ 类别树 Computed ============
+const flatCategories = computed(() => {
+  const result: Category[] = []
+  const flatten = (items: Category[]) => {
+    items.forEach(item => {
+      result.push(item)
+      if (item.children?.length) {
+        flatten(item.children)
+      }
+    })
+  }
+  flatten(treeData.value)
+  return result
+})
 
-const image_id = computed(() => Number(route.params.image_id))
+const currentItems = computed(() => {
+  const parentId = currentPath.value.length === 0 ? null : currentPath.value[currentPath.value.length - 1].id
+  return flatCategories.value.filter(c => c.parent_id === parentId)
+})
 
-// 图标组件
+const currentDirectories = computed(() => {
+  return currentItems.value.filter(c => c.is_directory)
+})
+
+const currentCategories = computed(() => {
+  return currentItems.value.filter(c => !c.is_directory)
+})
+
+// ============ 类别树 Methods ============
+const loadTree = async () => {
+  try {
+    const res = await categoryApi.getTree()
+    treeData.value = res.data || []
+    if (!selectedCategoryId.value && flatCategories.value.length > 0) {
+      const firstTag = flatCategories.value.find(c => !c.is_directory)
+      if (firstTag) selectedCategoryId.value = firstTag.id
+    }
+  } catch (error) {
+    console.error('加载类别失败:', error)
+  }
+}
+
+const enterDirectory = (dir: Category) => {
+  if (!dir.is_directory) return
+  currentPath.value.push(dir)
+}
+
+const navigateTo = (index: number) => {
+  if (index === currentPath.value.length - 1) return
+  currentPath.value = currentPath.value.slice(0, index + 1)
+}
+
+const navigateToRoot = () => {
+  currentPath.value = []
+}
+
+const selectCategory = (id: number) => {
+  selectedCategoryId.value = id
+}
+
+const deleteCategory = async (id: number) => {
+  if (!confirm('确定要删除吗？')) return
+  try {
+    await categoryApi.delete(id)
+    ElMessage.success('删除成功')
+    // 如果删除的是当前选中的类别，清除选中
+    if (selectedCategoryId.value === id) {
+      selectedCategoryId.value = null
+    }
+    // 重新加载树
+    await loadTree()
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '删除失败'
+    ElMessage.error(msg)
+  }
+}
+
+// ============ 图标组件 ============
 const ArrowLeftIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
   h('line', { x1: '19', y1: '12', x2: '5', y2: '12' }),
   h('polyline', { points: '12 19 5 12 12 5' })
@@ -219,6 +359,15 @@ const ChevronLeftIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', str
 
 const ChevronRightIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
   h('polyline', { points: '9 18 15 12 9 6' })
+])
+
+const FolderIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+  h('path', { d: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z' })
+])
+
+const TagIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+  h('path', { d: 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z' }),
+  h('line', { x1: '7', y1: '7', x2: '7.01', y2: '7' })
 ])
 
 const PlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
@@ -242,6 +391,32 @@ const CloseIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '
   h('line', { x1: '6', y1: '6', x2: '18', y2: '18' })
 ])
 
+const openCreateDialog = () => {
+  categoryForm.value = {
+    name: '',
+    color: '#FF0000',
+    is_directory: false,
+    parent_id: currentPath.value.length > 0 ? currentPath.value[currentPath.value.length - 1].id : null
+  }
+  showCategoryDialog.value = true
+}
+
+const closeCreateDialog = () => {
+  showCategoryDialog.value = false
+  categoryForm.value = { name: '', color: '#FF0000', is_directory: false, parent_id: null }
+}
+
+let ctx: CanvasRenderingContext2D | null = null
+let isDrawing = false
+let startX = 0
+let startY = 0
+let imgElement: HTMLImageElement | null = null
+let originalWidth = 0
+let originalHeight = 0
+let displayScale = 1
+
+const image_id = computed(() => Number(route.params.image_id))
+
 const getImageUrl = (filePath: string) => {
   const uploadsIndex = filePath.indexOf('uploads')
   if (uploadsIndex !== -1) {
@@ -259,12 +434,18 @@ const loadCategories = async () => {
   try {
     const res = await categoryApi.list()
     categories.value = res.data
+    // 查找第一个标签（非目录）作为默认选中
     if (categories.value.length > 0 && !selectedCategoryId.value) {
-      selectedCategoryId.value = categories.value[0].id
+      const firstTag = categories.value.find(c => !c.is_directory)
+      if (firstTag) {
+        selectedCategoryId.value = firstTag.id
+      }
     }
   } catch (error) {
     ElMessage.error('加载类别失败')
   }
+  // 同时加载树形结构
+  await loadTree()
 }
 
 const loadImage = async (id: number) => {
@@ -401,16 +582,38 @@ const draw_bbox = (ann: Annotation, selected = false) => {
 }
 
 const handleMouseDown = (e: MouseEvent) => {
+  if (!canvasRef.value) return
+
+  const rect = canvasRef.value.getBoundingClientRect()
+  const clickX = e.clientX - rect.left
+  const clickY = e.clientY - rect.top
+
+  // 检查是否点击在已有标注框上
+  for (let i = 0; i < localAnnotations.value.length; i++) {
+    const ann = localAnnotations.value[i]
+    const [origX, origY, origW, origH] = ann.bbox
+    const x = origX * displayScale
+    const y = origY * displayScale
+    const w = origW * displayScale
+    const h = origH * displayScale
+
+    if (clickX >= x && clickX <= x + w && clickY >= y && clickY <= y + h) {
+      // 点击在已有标注上，选中它
+      selectedAnnotationIndex.value = i
+      drawAllBboxes()
+      return
+    }
+  }
+
+  // 点击空白区域，开始绘制新标注
   if (!selectedCategoryId.value) {
     ElMessage.warning('请先选择类别')
     return
   }
-  if (!canvasRef.value) return
 
-  const rect = canvasRef.value.getBoundingClientRect()
   isDrawing = true
-  startX = e.clientX - rect.left
-  startY = e.clientY - rect.top
+  startX = clickX
+  startY = clickY
 }
 
 const handleMouseMove = (e: MouseEvent) => {
@@ -485,21 +688,19 @@ const handleMouseUp = (e: MouseEvent) => {
   isDrawing = false
 }
 
-const selectCategory = (id: number) => {
-  selectedCategoryId.value = id
-}
-
 const selectAnnotation = (index: number) => {
   selectedAnnotationIndex.value = index
   drawAllBboxes()
 }
 
 const getCategoryColor = (id: number) => {
-  return categories.value.find(c => c.id === id)?.color || '#ff4444'
+  const cat = flatCategories.value.find(c => c.id === id)
+  return cat?.color || '#ff4444'
 }
 
 const getCategoryName = (id: number) => {
-  return categories.value.find(c => c.id === id)?.name || '未知'
+  const cat = flatCategories.value.find(c => c.id === id)
+  return cat?.name || '未知'
 }
 
 const removeAnnotation = (index: number) => {
@@ -539,17 +740,21 @@ const saveAnnotations = async () => {
 
 const handleCreateCategory = async () => {
   if (!categoryForm.value.name) {
-    ElMessage.warning('请输入类别名称')
+    ElMessage.warning('请输入名称')
     return
   }
 
   creatingCategory.value = true
   try {
-    await categoryApi.create(categoryForm.value)
-    ElMessage.success('创建成功')
-    showCategoryDialog.value = false
-    categoryForm.value = { name: '', color: '#ff4444' }
-    await loadCategories()
+    await categoryApi.create({
+      name: categoryForm.value.name,
+      color: categoryForm.value.color,
+      is_directory: categoryForm.value.is_directory,
+      parent_id: categoryForm.value.parent_id
+    })
+    ElMessage.success(categoryForm.value.is_directory ? '目录创建成功' : '标签创建成功')
+    closeCreateDialog()
+    await loadTree()
   } catch (error: any) {
     const msg = error.response?.data?.detail || '创建失败'
     ElMessage.error(msg)
@@ -722,7 +927,7 @@ onUnmounted(() => {
 
 .category-panel {
   @apply flex flex-col;
-  width: 220px;
+  width: 280px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
 }
@@ -764,6 +969,110 @@ onUnmounted(() => {
 .cat-hotkey {
   font-family: 'JetBrains Mono', monospace;
   @apply text-[11px] text-[var(--text-muted)] px-1.5 py-0.5 rounded;
+  background: var(--bg-primary);
+}
+
+// 面包屑导航
+.breadcrumb {
+  @apply flex items-center gap-1 px-3 py-2 text-xs;
+  @apply bg-[var(--bg-primary)] border-b border-[var(--border-color)];
+}
+
+.breadcrumb-item {
+  @apply text-[var(--text-secondary)] cursor-pointer;
+  @apply hover:text-[var(--accent-cyan)];
+}
+
+.breadcrumb-item.active {
+  @apply text-[var(--text-primary)] cursor-default;
+  @apply hover:text-[var(--text-primary)];
+}
+
+.breadcrumb-sep {
+  @apply w-3 h-3 text-[var(--text-muted)];
+}
+
+// 目录列表
+.dir-list {
+  @apply p-2;
+}
+
+.dir-item {
+  @apply flex items-center gap-2 p-2 rounded-md cursor-pointer;
+  @apply text-sm text-[var(--accent-yellow)];
+}
+
+.dir-item:hover {
+  @apply bg-[var(--bg-hover)];
+}
+
+.dir-icon {
+  @apply w-4 h-4 flex-shrink-0;
+}
+
+.dir-name {
+  @apply flex-1 truncate;
+}
+
+.enter-icon {
+  @apply w-4 h-4 text-[var(--text-muted)];
+}
+
+.item-actions {
+  @apply flex items-center gap-1;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.dir-item:hover .item-actions,
+.tag-item:hover .item-actions {
+  opacity: 1;
+}
+
+.item-actions .icon-btn {
+  @apply w-5 h-5 p-0.5;
+}
+
+.item-actions .icon-btn svg {
+  @apply w-full h-full;
+}
+
+// 标签列表
+.tag-list {
+  @apply p-2;
+  border-top: 1px solid var(--border-color);
+}
+
+.tag-header {
+  @apply px-2 py-1 text-xs text-[var(--text-muted)] uppercase tracking-wide;
+}
+
+.tag-item {
+  @apply flex items-center gap-2 p-2 rounded-md cursor-pointer;
+  @apply text-sm text-[var(--text-primary)];
+  @apply border border-transparent;
+}
+
+.tag-item:hover {
+  @apply bg-[var(--bg-hover)];
+}
+
+.tag-item.active {
+  background: rgba(0, 240, 255, 0.1);
+  @apply border-[var(--accent-cyan)];
+}
+
+.tag-color {
+  @apply w-3 h-3 rounded flex-shrink-0;
+}
+
+.tag-name {
+  @apply flex-1 truncate;
+}
+
+.tag-hotkey {
+  font-family: 'JetBrains Mono', monospace;
+  @apply text-[10px] text-[var(--text-muted)] px-1.5 py-0.5 rounded;
   background: var(--bg-primary);
 }
 
@@ -943,6 +1252,31 @@ onUnmounted(() => {
 
 .color-preview {
   @apply w-8 h-8 rounded border border-[var(--border-color)];
+}
+
+.type-toggle {
+  @apply flex gap-2;
+}
+
+.toggle-btn {
+  @apply flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded border border-[var(--border-color)] text-sm cursor-pointer transition-all;
+  @apply text-[var(--text-secondary)] bg-[var(--bg-primary)];
+
+  svg {
+    @apply w-4 h-4;
+  }
+}
+
+.toggle-btn:hover {
+  @apply border-[var(--accent-cyan)] text-[var(--text-primary)];
+}
+
+.toggle-btn.active {
+  @apply border-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)] text-[var(--accent-cyan)];
+}
+
+.parent-path {
+  @apply text-sm text-[var(--text-muted)] py-2;
 }
 
 .dialog-footer {

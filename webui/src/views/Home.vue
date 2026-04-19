@@ -56,13 +56,34 @@
           <span class="header-badge">SYSTEM STATUS</span>
         </div>
         <div class="status-content">
-          <div class="status-item" v-for="item in systemStatus" :key="item.label">
+          <!-- CPU -->
+          <div class="status-item">
             <div class="status-header">
-              <span class="status-label">{{ item.label }}</span>
-              <span class="status-indicator" :class="item.status"></span>
+              <span class="status-label">CPU 使用率</span>
+              <span class="status-value">{{ systemStats.cpu.percent.toFixed(1) }}%</span>
             </div>
             <div class="status-bar">
-              <div class="status-fill" :style="{ width: item.value + '%', background: item.color }"></div>
+              <div class="status-fill" :style="{ width: systemStats.cpu.percent + '%', background: systemStats.cpu.percent > 80 ? '#ff4466' : '#00f0ff' }"></div>
+            </div>
+          </div>
+          <!-- 内存 -->
+          <div class="status-item">
+            <div class="status-header">
+              <span class="status-label">内存</span>
+              <span class="status-value">{{ formatBytes(systemStats.memory.used) }} / {{ formatBytes(systemStats.memory.total) }}</span>
+            </div>
+            <div class="status-bar">
+              <div class="status-fill" :style="{ width: systemStats.memory.percent + '%', background: systemStats.memory.percent > 80 ? '#ff4466' : '#ff00aa' }"></div>
+            </div>
+          </div>
+          <!-- 磁盘 -->
+          <div class="status-item">
+            <div class="status-header">
+              <span class="status-label">存储空间</span>
+              <span class="status-value">{{ formatBytes(systemStats.disk.used) }} / {{ formatBytes(systemStats.disk.total) }}</span>
+            </div>
+            <div class="status-bar">
+              <div class="status-fill" :style="{ width: systemStats.disk.percent + '%', background: systemStats.disk.percent > 90 ? '#ff4466' : '#ffdd00' }"></div>
             </div>
           </div>
         </div>
@@ -114,24 +135,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
+import { ref, onMounted, onUnmounted, h } from 'vue'
 import { atlasApi, modelApi, trainingApi } from '@/api'
 
-const stats = ref<any[]>([
-  { label: '图集总数', value: 0, color: '#00f0ff', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 240, 255, 0.2), transparent 70%)', icon: FolderIcon },
-  { label: '图片总数', value: 0, color: '#ff00aa', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 0, 170, 0.2), transparent 70%)', icon: ImageIcon },
-  { label: '模型数量', value: 0, color: '#00ff88', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 255, 136, 0.2), transparent 70%)', icon: BoxIcon },
-  { label: '训练任务', value: 0, color: '#ffdd00', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 221, 0, 0.2), transparent 70%)', icon: ChartIcon },
-])
-
-const recentJobs = ref<any[]>([])
-const statusText: Record<string, string> = {
-  pending: '等待中',
-  running: '进行中',
-  completed: '已完成',
-  failed: '失败',
-}
-
+// 图标定义必须在使用之前
 const FolderIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
   h('path', { d: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z' })
 ])
@@ -172,6 +179,21 @@ const BrainIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '
   h('path', { d: 'M14.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 004.96.44 2.5 2.5 0 002.96-3.08 3 3 0 00.34-5.58 2.5 2.5 0 00-1.32-4.24 2.5 2.5 0 00-1.98-3A2.5 2.5 0 0014.5 2z' })
 ])
 
+const stats = ref<any[]>([
+  { label: '图集总数', value: 0, color: '#00f0ff', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 240, 255, 0.2), transparent 70%)', icon: FolderIcon },
+  { label: '图片总数', value: 0, color: '#ff00aa', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 0, 170, 0.2), transparent 70%)', icon: ImageIcon },
+  { label: '模型数量', value: 0, color: '#00ff88', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 255, 136, 0.2), transparent 70%)', icon: BoxIcon },
+  { label: '训练任务', value: 0, color: '#ffdd00', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 221, 0, 0.2), transparent 70%)', icon: ChartIcon },
+])
+
+const recentJobs = ref<any[]>([])
+const statusText: Record<string, string> = {
+  pending: '等待中',
+  running: '进行中',
+  completed: '已完成',
+  failed: '失败',
+}
+
 const quickActions = [
   { label: '创建图集', path: '/atlas', icon: PlusIcon, color: '#00f0ff' },
   { label: '上传数据', path: '/atlas', icon: UploadIcon, color: '#ff00aa' },
@@ -179,11 +201,36 @@ const quickActions = [
   { label: '模型推理', path: '/launch', icon: BrainIcon, color: '#00ff88' },
 ]
 
-const systemStatus = [
-  { label: 'GPU 利用率', value: 45, status: 'normal', color: '#00f0ff' },
-  { label: '内存使用', value: 62, status: 'normal', color: '#ff00aa' },
-  { label: '存储空间', value: 78, status: 'warning', color: '#ffdd00' },
-]
+// 系统状态
+const systemStats = ref({
+  cpu: { percent: 0, status: 'normal' },
+  memory: { total: 0, used: 0, percent: 0, status: 'normal' },
+  disk: { total: 0, used: 0, percent: 0, status: 'normal' },
+})
+
+// WebSocket
+let wsSystem: WebSocket | null = null
+
+const formatBytes = (bytes: number) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+const connectSystemWs = () => {
+  wsSystem = new WebSocket('/ws/system')
+  wsSystem.onmessage = (event) => {
+    const data = JSON.parse(event.data)
+    if (data.type === 'system_stats') {
+      systemStats.value = data.data
+    }
+  }
+  wsSystem.onclose = () => {
+    setTimeout(connectSystemWs, 3000)
+  }
+}
 
 const getProgress = (job: any) => {
   if (!job || !job.total_steps) return 0
@@ -203,6 +250,14 @@ onMounted(async () => {
     recentJobs.value = trainingRes.data.slice(0, 5)
   } catch (error) {
     console.error('Failed to load stats:', error)
+  }
+  // 连接系统状态 WebSocket
+  connectSystemWs()
+})
+
+onUnmounted(() => {
+  if (wsSystem) {
+    wsSystem.close()
   }
 })
 </script>
@@ -357,6 +412,11 @@ onMounted(async () => {
 
 .status-label {
   @apply text-sm text-[var(--text-secondary)];
+}
+
+.status-value {
+  font-family: 'JetBrains Mono', monospace;
+  @apply text-xs text-[var(--text-primary)];
 }
 
 .status-indicator {

@@ -17,7 +17,7 @@
             {{ completedCount }} 已完成
           </div>
         </div>
-        <el-button type="text" @click="handleClearCompleted" :disabled="completedCount === 0">
+        <el-button type="link" @click="handleClearCompleted" :disabled="completedCount === 0">
           清理记录
         </el-button>
       </div>
@@ -52,7 +52,7 @@
               <span class="meta-tag">Atlas #{{ job.atlas_id }}</span>
             </div>
             <div class="job-actions" v-if="job.status === 'running'">
-              <el-button type="text" @click="handleStop(job)">停止</el-button>
+              <el-button type="link" @click="handleStop(job)">停止</el-button>
             </div>
           </div>
 
@@ -277,7 +277,7 @@ const handleStop = async (job: any) => {
 }
 
 const connectWebSocket = () => {
-  ws = new WebSocket(`ws://localhost:8000/api/ws/training`)
+  ws = new WebSocket(`/ws/training`)
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data)
     if (data.type === 'training_update') {
@@ -306,6 +306,11 @@ onUnmounted(() => {
 
 .page-header {
   @apply flex justify-between items-center;
+  gap: 20px;
+}
+
+.header-info {
+  @apply flex items-baseline;
 }
 
 .header-info h2 {
@@ -318,6 +323,10 @@ onUnmounted(() => {
 
 .header-info .subtitle {
   @apply text-sm text-[var(--text-muted)] ml-3;
+}
+
+.header-actions {
+  @apply flex items-center gap-4;
 }
 
 .header-stats {

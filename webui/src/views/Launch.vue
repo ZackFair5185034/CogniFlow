@@ -300,7 +300,7 @@ const handleStop = async () => {
 }
 
 const connectWebSocket = () => {
-  ws = new WebSocket('ws://localhost:8000/api/ws/launch')
+  ws = new WebSocket('/ws/launch')
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data)
     if (data.type === 'launch_update') {
