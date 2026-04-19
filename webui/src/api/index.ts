@@ -16,14 +16,21 @@ export const atlasApi = {
   delete: (id: number) => api.delete(`/atlas/${id}`),
   getImages: (id: number, directory?: string) => api.get(`/atlas/${id}/images`, { params: { directory } }),
   getDirectories: (id: number) => api.get(`/atlas/${id}/directories`),
-  uploadImages: (id: number, files: FormData) => api.post(`/atlas/${id}/images`, files, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
+  createDirectory: (id: number, directory: string) => api.post(`/atlas/${id}/directories`, null, { params: { directory } }),
+  uploadImages: (id: number, files: FormData, directory?: string) => {
+    if (directory) {
+      files.append('directory', directory)
+    }
+    return api.post(`/atlas/${id}/images`, files, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 }
 
 // Image API
 export const imageApi = {
   get: (id: number) => api.get(`/images/${id}`),
+  delete: (id: number) => api.delete(`/images/${id}`),
 }
 
 // Category API

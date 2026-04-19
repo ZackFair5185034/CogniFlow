@@ -114,33 +114,72 @@ async def list_atlas_images(
 
 @router.get("/{atlas_id}/directories")
 async def list_atlas_directories(atlas_id: int, db: Session = Depends(get_db)):
-    """获取图集中的所有目录分组。"""
+    """获取图集中的所有目录分组（包括空目录）。"""
     atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
     if not atlas:
         raise HTTPException(status_code=404, detail="图集不存在")
 
+    # 获取已有图片的目录
     images = db.query(Image.directory).filter(
         Image.atlas_id == atlas_id,
         Image.directory.isnot(None)
     ).distinct().all()
 
     directories = [img.directory for img in images if img.directory]
-    return directories
+
+    # 获取物理目录
+    atlas_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id))
+    if os.path.exists(atlas_dir):
+        for item in os.listdir(atlas_dir):
+            item_path = os.path.join(atlas_dir, item)
+            if os.path.isdir(item_path) and item not in directories:
+                directories.append(item)
+
+    return sorted(set(directories))
+
+
+@router.post("/{atlas_id}/directories")
+async def create_atlas_directory(
+    atlas_id: int,
+    directory: str,
+    db: Session = Depends(get_db)
+):
+    """创建目录（不依赖图片上传）。"""
+    atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
+    if not atlas:
+        raise HTTPException(status_code=404, detail="图集不存在")
+
+    # 创建物理目录
+    dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), directory)
+    os.makedirs(dir_path, exist_ok=True)
+
+    return {"message": f"目录 '{directory}' 已创建", "directory": directory}
 
 
 @router.post("/{atlas_id}/images", status_code=201)
 async def upload_images(
     atlas_id: int,
     files: List[UploadFile] = File(...),
+    directory: str = None,
     db: Session = Depends(get_db)
 ):
-    """上传图片到图集。"""
+    """上传图片到图集。
+
+    Args:
+        atlas_id: 图集 ID
+        files: 图片文件列表
+        directory: 可选，目录分组名称
+    """
     atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
     if not atlas:
         raise HTTPException(status_code=404, detail="图集不存在")
 
-    # 确保上传目录存在
-    atlas_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id))
+    # 确定目标目录
+    if directory:
+        # 使用用户指定的目录名
+        atlas_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), directory)
+    else:
+        atlas_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id))
     os.makedirs(atlas_dir, exist_ok=True)
 
     uploaded_images = []
@@ -170,9 +209,6 @@ async def upload_images(
                 img_width, img_height = img.size
         except Exception:
             pass
-
-        # 从路径中提取目录分组（相对于 atlas_id 目录）
-        directory = os.path.dirname(filename).replace("\\", "/")
 
         # 创建数据库记录
         image = Image(
