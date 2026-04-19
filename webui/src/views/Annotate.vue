@@ -38,7 +38,7 @@
       <!-- 左侧类别面板 -->
       <div class="category-panel">
         <div class="panel-header">
-          <h3>类别</h3>
+          <h3>类别库</h3>
           <button class="vg-btn vg-btn-small" @click="showCategoryDialog = true">
             <PlusIcon />
           </button>
@@ -71,7 +71,11 @@
           @mouseup="handleMouseUp"
           @mouseleave="handleMouseUp"
         ></canvas>
-        <div class="canvas-overlay" v-if="!currentImage">
+        <div class="canvas-loading" v-if="imageLoading">
+          <div class="loading-spinner"></div>
+          <span>加载图片中...</span>
+        </div>
+        <div class="canvas-overlay" v-if="!currentImage && !imageLoading">
           <div class="no-image">请先选择图片</div>
         </div>
       </div>
@@ -79,7 +83,7 @@
       <!-- 右侧标注列表 -->
       <div class="annotation-panel">
         <div class="panel-header">
-          <h3>标注 ({{ localAnnotations.length }})</h3>
+          <h3>当前标注 ({{ localAnnotations.length }})</h3>
         </div>
         <div class="annotation-list">
           <div
@@ -87,12 +91,13 @@
             :key="ann.id || index"
             class="annotation-item"
             :class="{ selected: selectedAnnotationIndex === index, pending: !ann.id }"
+            @click="selectAnnotation(index)"
           >
             <span class="ann-color" :style="{ background: getCategoryColor(ann.category_id) }"></span>
             <span class="ann-name">{{ getCategoryName(ann.category_id) }}</span>
-            <span class="ann-bbox">[{{ ann.bbox.map(v => Math.round(v)).join(', ') }}]</span>
+            <span class="ann-bbox">[{{ formatBbox(ann.bbox) }}]</span>
             <div class="ann-actions">
-              <button class="icon-btn" @click="removeAnnotation(index)" title="删除">
+              <button class="icon-btn" @click.stop="removeAnnotation(index)" title="删除">
                 <TrashIcon />
               </button>
             </div>
@@ -141,7 +146,7 @@
 import { ref, onMounted, onUnmounted, watch, computed, nextTick, h } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { categoryApi, annotationApi, imageApi, atlasApi } from '@/api'
+import { categoryApi, annotationApi, atlasApi } from '@/api'
 
 interface Category {
   id: number
@@ -153,13 +158,15 @@ interface Annotation {
   id?: number
   image_id: number
   category_id: number
-  bbox: number[]
+  bbox: number[]  // [x, y, w, h] 在原始图片坐标中
 }
 
 interface ImageData {
   id: number
   file_path: string
   atlas_id: number
+  width?: number
+  height?: number
 }
 
 const route = useRoute()
@@ -174,7 +181,7 @@ const localAnnotations = ref<Annotation[]>([])
 const selectedCategoryId = ref<number | null>(null)
 const selectedAnnotationIndex = ref<number | null>(null)
 
-const loading = ref(false)
+const imageLoading = ref(false)
 const saving = ref(false)
 const showCategoryDialog = ref(false)
 const creatingCategory = ref(false)
@@ -194,6 +201,9 @@ let isDrawing = false
 let startX = 0
 let startY = 0
 let imgElement: HTMLImageElement | null = null
+let originalWidth = 0
+let originalHeight = 0
+let displayScale = 1
 
 const image_id = computed(() => Number(route.params.image_id))
 
@@ -232,6 +242,10 @@ const CloseIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '
   h('line', { x1: '6', y1: '6', x2: '18', y2: '18' })
 ])
 
+const formatBbox = (bbox: number[]) => {
+  return bbox.map(v => Math.round(v)).join(', ')
+}
+
 const loadCategories = async () => {
   try {
     const res = await categoryApi.list()
@@ -245,14 +259,21 @@ const loadCategories = async () => {
 }
 
 const loadImage = async (id: number) => {
+  imageLoading.value = true
   try {
-    const res = await imageApi.get(id)
-    currentImage.value = res.data
+    const res = await fetch(`/api/images/${id}`)
+    if (!res.ok) throw new Error('图片不存在')
+    const imgData = await res.json()
+    currentImage.value = imgData
+
     await loadAnnotations(id)
     await nextTick()
     initCanvas()
   } catch (error) {
     ElMessage.error('加载图片失败')
+    console.error(error)
+  } finally {
+    imageLoading.value = false
   }
 }
 
@@ -266,16 +287,15 @@ const loadAnnotations = async (imageId: number) => {
       bbox: ann.bbox
     }))
   } catch (error) {
-    ElMessage.error('加载标注失败')
+    console.error('加载标注失败', error)
   }
 }
 
 const loadImageList = async () => {
   if (!currentImage.value) return
   try {
-    // 获取图集的所有图片
-    const atlasRes = await atlasApi.getImages(currentImage.value.atlas_id)
-    imageList.value = atlasRes.data || []
+    const res = await atlasApi.getImages(currentImage.value.atlas_id)
+    imageList.value = res.data || []
     currentImageIndex.value = imageList.value.findIndex((img: ImageData) => img.id === currentImage.value?.id)
   } catch (error) {
     console.error('加载图片列表失败', error)
@@ -283,31 +303,37 @@ const loadImageList = async () => {
 }
 
 const initCanvas = () => {
-  if (!canvasRef.value || !currentImage.value) return
+  if (!canvasRef.value || !canvasContainer.value || !currentImage.value) return
 
   const canvas = canvasRef.value
   const container = canvasContainer.value
-  if (!container) return
-
   ctx = canvas.getContext('2d')
   if (!ctx) return
 
   const img = new Image()
   imgElement = img
   img.onload = () => {
-    const containerWidth = container.clientWidth
-    const containerHeight = container.clientHeight
+    originalWidth = img.width
+    originalHeight = img.height
 
-    const scale = Math.min(
+    const containerWidth = container.clientWidth - 40
+    const containerHeight = container.clientHeight - 40
+
+    displayScale = Math.min(
       containerWidth / img.width,
-      containerHeight / img.height
+      containerHeight / img.height,
+      1
     )
 
-    canvas.width = img.width * scale
-    canvas.height = img.height * scale
+    canvas.width = img.width * displayScale
+    canvas.height = img.height * displayScale
 
-    ctx?.drawImage(img, 0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
     drawAllBboxes()
+  }
+  img.onerror = () => {
+    ElMessage.error('图片加载失败')
+    imageLoading.value = false
   }
   img.src = `/api/images/${currentImage.value.id}/file`
 }
@@ -330,7 +356,13 @@ const drawAllBboxes = () => {
 const draw_bbox = (ann: Annotation, selected = false) => {
   if (!ctx) return
 
-  const [x, y, w, h] = ann.bbox
+  // 将原始坐标转换为显示坐标
+  const [origX, origY, origW, origH] = ann.bbox
+  const x = origX * displayScale
+  const y = origY * displayScale
+  const w = origW * displayScale
+  const h = origH * displayScale
+
   const cat = categories.value.find(c => c.id === ann.category_id)
   const color = cat?.color || '#ff4444'
 
@@ -338,25 +370,25 @@ const draw_bbox = (ann: Annotation, selected = false) => {
   ctx.lineWidth = selected ? 3 : 2
   ctx.strokeRect(x, y, w, h)
 
+  // 绘制选择框的角点
   if (selected) {
+    const cornerSize = 6
     ctx.fillStyle = color
-    ctx.fillRect(x - 2, y - 2, 6, 6)
-    ctx.fillRect(x + w - 4, y - 2, 6, 6)
-    ctx.fillRect(x - 2, y + h - 4, 6, 6)
-    ctx.fillRect(x + w - 4, y + h - 4, 6, 6)
+    ctx.fillRect(x - 2, y - 2, cornerSize, cornerSize)
+    ctx.fillRect(x + w - 4, y - 2, cornerSize, cornerSize)
+    ctx.fillRect(x - 2, y + h - 4, cornerSize, cornerSize)
+    ctx.fillRect(x + w - 4, y + h - 4, cornerSize, cornerSize)
   }
 
+  // 绘制标签
   const labelHeight = 20
+  const labelText = cat?.name || '未知'
+  ctx.font = 'bold 12px sans-serif'
+  const textWidth = ctx.measureText(labelText).width + 10
   ctx.fillStyle = color
-  ctx.fillRect(x, y - labelHeight, ctx.measureText(cat?.name || '').width + 10, labelHeight)
+  ctx.fillRect(x, y - labelHeight, textWidth, labelHeight)
   ctx.fillStyle = '#ffffff'
-  ctx.font = '12px sans-serif'
-  ctx.fillText(cat?.name || '', x + 5, y - 5)
-}
-
-const getScale = () => {
-  if (!canvasRef.value || !imgElement) return 1
-  return canvasRef.value.width / imgElement.width
+  ctx.fillText(labelText, x + 5, y - 5)
 }
 
 const handleMouseDown = (e: MouseEvent) => {
@@ -364,10 +396,9 @@ const handleMouseDown = (e: MouseEvent) => {
     ElMessage.warning('请先选择类别')
     return
   }
+  if (!canvasRef.value) return
 
-  const rect = canvasRef.value?.getBoundingClientRect()
-  if (!rect) return
-
+  const rect = canvasRef.value.getBoundingClientRect()
   isDrawing = true
   startX = e.clientX - rect.left
   startY = e.clientY - rect.top
@@ -382,10 +413,15 @@ const handleMouseMove = (e: MouseEvent) => {
 
   drawAllBboxes()
 
+  // 绘制预览框（虚线）
   ctx.strokeStyle = categories.value.find(c => c.id === selectedCategoryId.value)?.color || '#ff4444'
   ctx.lineWidth = 2
   ctx.setLineDash([5, 5])
-  ctx.strokeRect(startX, startY, currentX - startX, currentY - startY)
+  const x = Math.min(startX, currentX)
+  const y = Math.min(startY, currentY)
+  const w = Math.abs(currentX - startX)
+  const h = Math.abs(currentY - startY)
+  ctx.strokeRect(x, y, w, h)
   ctx.setLineDash([])
 }
 
@@ -396,17 +432,22 @@ const handleMouseUp = (e: MouseEvent) => {
   const endX = e.clientX - rect.left
   const endY = e.clientY - rect.top
 
-  const width = Math.abs(endX - startX)
-  const height = Math.abs(endY - startY)
+  const canvasX = Math.min(startX, endX)
+  const canvasY = Math.min(startY, endY)
+  const canvasW = Math.abs(endX - startX)
+  const canvasH = Math.abs(endY - startY)
 
-  if (width > 10 && height > 10) {
-    const x = Math.min(startX, endX)
-    const y = Math.min(startY, endY)
+  if (canvasW > 10 && canvasH > 10) {
+    // 转换为原始图片坐标
+    const origX = canvasX / displayScale
+    const origY = canvasY / displayScale
+    const origW = canvasW / displayScale
+    const origH = canvasH / displayScale
 
     localAnnotations.value.push({
       image_id: currentImage.value!.id,
       category_id: selectedCategoryId.value!,
-      bbox: [x, y, width, height]
+      bbox: [origX, origY, origW, origH]
     })
 
     selectedAnnotationIndex.value = localAnnotations.value.length - 1
@@ -418,6 +459,11 @@ const handleMouseUp = (e: MouseEvent) => {
 
 const selectCategory = (id: number) => {
   selectedCategoryId.value = id
+}
+
+const selectAnnotation = (index: number) => {
+  selectedAnnotationIndex.value = index
+  drawAllBboxes()
 }
 
 const getCategoryColor = (id: number) => {
@@ -523,8 +569,8 @@ const handleKeyDown = (e: KeyboardEvent) => {
       const lastIndex = localAnnotations.value.length - 1
       if (!localAnnotations.value[lastIndex].id) {
         localAnnotations.value.splice(lastIndex, 1)
+        drawAllBboxes()
       }
-      drawAllBboxes()
     }
   }
 
@@ -546,8 +592,9 @@ watch(image_id, (newId) => {
 onMounted(() => {
   loadCategories()
   if (route.params.image_id) {
-    loadImage(Number(route.params.image_id))
-    loadImageList()
+    loadImage(Number(route.params.image_id)).then(() => {
+      loadImageList()
+    })
   }
   window.addEventListener('keydown', handleKeyDown)
 })
@@ -756,11 +803,37 @@ onUnmounted(() => {
   background: var(--bg-primary);
   position: relative;
   overflow: hidden;
+  padding: 20px;
 }
 
 .canvas-container canvas {
   cursor: crosshair;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  background: #1a1a24;
+}
+
+.canvas-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  gap: 16px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent-cyan);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .canvas-overlay {

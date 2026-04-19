@@ -58,6 +58,9 @@
                   </span>
                 </div>
                 <span class="annotated-badge" v-if="img.annotated">已标注</span>
+                <button class="annotate-btn" @click.stop="handleAnnotateImage(img)" title="标注图片">
+                  <TagIcon />
+                </button>
                 <button class="delete-btn" @click.stop="handleDeleteImage(img)" title="删除图片">
                   <TrashIcon />
                 </button>
@@ -286,6 +289,11 @@ const TrashIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '
 const CloseIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
   h('line', { x1: '18', y1: '6', x2: '6', y2: '18' }),
   h('line', { x1: '6', y1: '6', x2: '18', y2: '18' })
+])
+
+const TagIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+  h('path', { d: 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z' }),
+  h('line', { x1: '7', y1: '7', x2: '7.01', y2: '7' })
 ])
 
 const LightbulbIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
@@ -726,6 +734,38 @@ onMounted(() => {
 .delete-btn svg {
   width: 14px;
   height: 14px;
+}
+
+.annotate-btn {
+  position: absolute;
+  top: 8px;
+  right: 44px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 240, 255, 0.9);
+  border: none;
+  border-radius: 6px;
+  color: #000;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+}
+
+.annotate-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.image-card:hover .annotate-btn {
+  opacity: 1;
+}
+
+.annotate-btn:hover {
+  background: var(--accent-cyan);
+  transform: scale(1.1);
 }
 
 .image-card:hover .delete-btn {
