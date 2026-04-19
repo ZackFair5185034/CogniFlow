@@ -153,6 +153,115 @@ Closes #123
 - 开发依赖放在 `extras_require["dev"]`
 - 定期更新依赖版本
 
-## 7. 许可证
+## 7. WebUI 前端规范
+
+### 7.1 技术栈
+
+- **构建工具**: Vite 8.x
+- **CSS 引擎**: UnoCSS (原子化 CSS)
+- **框架**: Vue 3.4+ (Composition API)
+- **语言**: TypeScript 5.3+
+- **UI 组件库**: Element Plus 2.5+
+- **代码检查**: ESLint 9.x (Flat Config)
+
+### 7.2 项目结构
+
+```
+webui/
+├── src/
+│   ├── api/               # API 调用封装
+│   ├── components/        # 公共组件
+│   ├── router/            # 路由配置
+│   ├── stores/            # Pinia 状态管理
+│   ├── utils/             # 工具函数
+│   ├── views/             # 页面组件
+│   ├── App.vue            # 根组件
+│   └── main.ts            # 入口文件
+├── public/                # 静态资源
+├── uno.config.ts          # UnoCSS 配置
+├── eslint.config.mjs      # ESLint 9 配置
+├── vite.config.ts         # Vite 配置
+├── tsconfig.json          # TypeScript 配置
+└── package.json
+```
+
+### 7.3 UnoCSS 样式规范
+
+UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
+
+**常用快捷方式（shortcuts）：**
+```typescript
+// uno.config.ts 中定义
+'vg-btn': 'px-4 py-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] cursor-pointer transition-all duration-200 hover:border-[var(--accent-cyan)] hover:bg-[var(--bg-hover)]'
+'vg-btn-primary': 'px-4 py-2 rounded-md bg-[var(--accent-cyan)] border border-[var(--accent-cyan)] text-black cursor-pointer'
+'vg-card': 'bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl'
+```
+
+**使用示例：**
+```html
+<button class="vg-btn">默认按钮</button>
+<button class="vg-btn-primary">主要按钮</button>
+<div class="vg-card">卡片内容</div>
+```
+
+### 7.4 代码规范
+
+**Vue 组件规范：**
+- 使用 `<script setup lang="ts">` 语法
+- 组件文件使用 PascalCase 命名（如 `UserProfile.vue`）
+- Props 使用 TypeScript 类型定义
+- 事件使用 `defineEmits` 声明
+
+**命名规范：**
+- 组件名：PascalCase（如 `UserCard`）
+- 事件名：camelCase（如 `update:modelValue`）
+- CSS 类名：kebab-case（如 `user-card`）
+
+**TypeScript 规范：**
+- 使用 `interface` 而非 `type` 定义对象类型
+- 使用 `type` 定义联合类型和原始类型别名
+- 避免使用 `any`，使用 `unknown` 代替需要类型检查的场景
+- 使用 `as const` 断言字面量
+
+**样式规范：**
+- 使用 UnoCSS 原子化类名编写样式
+- 使用 CSS 变量管理主题颜色
+- 组件样式使用 `scoped`
+- 避免行内样式（除了动态值）
+
+### 7.5 ESLint 规则
+
+```javascript
+// eslint.config.mjs 核心规则
+{
+  '@typescript-eslint/no-explicit-any': 'warn',
+  '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+  '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
+  'prefer-const': 'error',
+  'prefer-template': 'error',
+}
+```
+
+### 7.6 Git 提交规范（前端）
+
+提交前端代码时，scope 使用以下值：
+- `webui`: WebUI 通用修改
+- `webui/api`: API 相关
+- `webui/components`: 组件相关
+- `webui/views`: 页面相关
+
+### 7.7 常用命令
+
+```bash
+cd webui
+pnpm install          # 安装依赖
+pnpm dev            # 开发服务器
+pnpm build          # 生产构建
+pnpm build:type     # TypeScript 类型检查
+pnpm lint           # ESLint 检查
+pnpm lint:fix       # ESLint 自动修复
+```
+
+## 8. 许可证
 
 MIT License
