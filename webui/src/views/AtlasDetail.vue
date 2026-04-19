@@ -164,6 +164,7 @@
         <div class="dialog-header">
           <h3>图片详情</h3>
           <div class="dialog-actions">
+            <el-button type="text" @click="handleAnnotateImage(selectedImage)">标注</el-button>
             <el-button type="text" @click="handleDeleteImage(selectedImage)">删除</el-button>
             <el-button class="close-btn" @click="showImageDialog = false">
               <CloseIcon />
@@ -204,11 +205,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, h } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi, imageApi } from '@/api'
 
 const route = useRoute()
+const router = useRouter()
 const id = Number(route.params.id)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
@@ -384,6 +386,10 @@ const handleCreateDirectory = async () => {
 
 const handleDeleteDirectory = (dir: string) => {
   ElMessage.warning(`删除目录 "${dir}" 功能待实现`)
+}
+
+const handleAnnotateImage = (img: any) => {
+  router.push(`/annotate/${img.id}`)
 }
 
 const handleDeleteImage = async (img: any) => {

@@ -28,6 +28,7 @@ export const atlasApi = {
 // Image API
 export const imageApi = {
   get: (id: number) => api.get(`/images/${id}`),
+  getFile: (id: number) => `/api/images/${id}/file`,
   delete: (id: number) => api.delete(`/images/${id}`),
 }
 
