@@ -152,49 +152,11 @@ onUnmounted(() => {
 })
 </script>
 
-<style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+<style lang="scss">
+// App 布局专用样式
+// 公共样式已抽取到 @/style/index.scss
 
-:root {
-  --bg-primary: #0a0a0f;
-  --bg-secondary: #12121a;
-  --bg-card: #1a1a24;
-  --bg-hover: #22222e;
-  --border-color: #2a2a3a;
-  --border-glow: #00f0ff;
-  --text-primary: #ffffff;
-  --text-secondary: #8888aa;
-  --text-muted: #555566;
-  --accent-cyan: #00f0ff;
-  --accent-magenta: #ff00aa;
-  --accent-green: #00ff88;
-  --accent-yellow: #ffdd00;
-  --accent-orange: #ff8800;
-  --glow-cyan: 0 0 20px rgba(0, 240, 255, 0.5);
-  --glow-magenta: 0 0 20px rgba(255, 0, 170, 0.5);
-  --glow-green: 0 0 20px rgba(0, 255, 136, 0.5);
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: 'Space Grotesk', -apple-system, sans-serif;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  overflow: hidden;
-}
-
-.app-container {
-  display: flex;
-  height: 100vh;
-  position: relative;
-}
-
-/* 背景效果 */
+// 背景效果
 .bg-grid {
   position: fixed;
   inset: 0;
@@ -220,11 +182,6 @@ body {
   animation: glowPulse 10s ease-in-out infinite;
 }
 
-@keyframes glowPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}
-
 .scanline {
   position: fixed;
   inset: 0;
@@ -240,7 +197,7 @@ body {
   opacity: 0.3;
 }
 
-/* 侧边栏 */
+// 侧边栏
 .sidebar {
   width: 240px;
   background: var(--bg-secondary);
@@ -250,17 +207,17 @@ body {
   padding: 20px 0;
   position: relative;
   z-index: 10;
-}
 
-.sidebar::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 1px;
-  height: 100%;
-  background: linear-gradient(180deg, var(--accent-cyan), var(--accent-magenta));
-  opacity: 0.5;
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 1px;
+    height: 100%;
+    background: linear-gradient(180deg, var(--accent-cyan), var(--accent-magenta));
+    opacity: 0.5;
+  }
 }
 
 .logo {
@@ -277,11 +234,6 @@ body {
   color: var(--accent-cyan);
   filter: drop-shadow(var(--glow-cyan));
   animation: iconPulse 3s ease-in-out infinite;
-}
-
-@keyframes iconPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
 }
 
 .logo-text {
@@ -321,33 +273,38 @@ body {
   text-decoration: none;
   position: relative;
   transition: all 0.3s ease;
-}
 
-.nav-item::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 0;
-  background: var(--accent-cyan);
-  transition: height 0.3s ease;
-}
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 0;
+    background: var(--accent-cyan);
+    transition: height 0.3s ease;
+  }
 
-.nav-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
 
-.nav-item.active {
-  background: linear-gradient(90deg, rgba(0, 240, 255, 0.1), transparent);
-  color: var(--accent-cyan);
-}
+  &.active {
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.1), transparent);
+    color: var(--accent-cyan);
 
-.nav-item.active::before {
-  height: 24px;
-  box-shadow: var(--glow-cyan);
+    &::before {
+      height: 24px;
+      box-shadow: var(--glow-cyan);
+    }
+
+    .nav-indicator {
+      opacity: 1;
+      box-shadow: var(--glow-cyan);
+    }
+  }
 }
 
 .nav-icon {
@@ -370,11 +327,6 @@ body {
   transition: opacity 0.3s ease;
 }
 
-.nav-item.active .nav-indicator {
-  opacity: 1;
-  box-shadow: var(--glow-cyan);
-}
-
 .sidebar-footer {
   display: flex;
   align-items: center;
@@ -389,17 +341,12 @@ body {
   border-radius: 50%;
   background: var(--accent-orange);
   box-shadow: 0 0 10px var(--accent-orange);
-}
 
-.status-dot.online {
-  background: var(--accent-green);
-  box-shadow: 0 0 10px var(--accent-green);
-  animation: statusPulse 2s ease-in-out infinite;
-}
-
-@keyframes statusPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  &.online {
+    background: var(--accent-green);
+    box-shadow: 0 0 10px var(--accent-green);
+    animation: statusPulse 2s ease-in-out infinite;
+  }
 }
 
 .status-text {
@@ -408,7 +355,7 @@ body {
   color: var(--text-muted);
 }
 
-/* 主内容区 */
+// 主内容区
 .main-content {
   flex: 1;
   display: flex;
@@ -427,32 +374,32 @@ body {
   justify-content: space-between;
   padding: 0 30px;
   position: relative;
-}
 
-.top-bar::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
-  opacity: 0.3;
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
+    opacity: 0.3;
+  }
 }
 
 .page-title {
   display: flex;
   align-items: baseline;
   gap: 20px;
-}
 
-.page-title h1 {
-  font-size: 24px;
-  font-weight: 600;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  h1 {
+    font-size: 24px;
+    font-weight: 600;
+    background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
 }
 
 .time-display {
@@ -482,17 +429,17 @@ body {
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.3s ease;
-}
 
-.action-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-}
+  &:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+  }
 
-.action-btn svg {
-  width: 18px;
-  height: 18px;
+  svg {
+    width: 18px;
+    height: 18px;
+  }
 }
 
 .content-area {
@@ -501,27 +448,26 @@ body {
   overflow-y: auto;
   position: relative;
   background: var(--bg-primary);
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+
+    &:hover {
+      background: var(--text-muted);
+    }
+  }
 }
 
-/* 滚动条样式 */
-.content-area::-webkit-scrollbar {
-  width: 6px;
-}
-
-.content-area::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
-}
-
-.content-area::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 3px;
-}
-
-.content-area::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
-}
-
-/* 页面过渡动画 */
+// 页面过渡动画
 .page-fade-enter-active,
 .page-fade-leave-active {
   transition: opacity 0.3s ease, transform 0.3s ease;
@@ -535,153 +481,5 @@ body {
 .page-fade-leave-to {
   opacity: 0;
   transform: translateY(-10px);
-}
-
-/* 卡片样式 */
-.vg-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  overflow: hidden;
-  position: relative;
-}
-
-.vg-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.vg-card:hover::before {
-  opacity: 1;
-}
-
-/* 按钮样式 */
-.vg-btn {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.vg-btn-primary {
-  background: linear-gradient(135deg, var(--accent-cyan), #00aaff);
-  color: var(--bg-primary);
-}
-
-.vg-btn-primary:hover {
-  box-shadow: var(--glow-cyan);
-  transform: translateY(-2px);
-}
-
-.vg-btn-success {
-  background: linear-gradient(135deg, var(--accent-green), #00aa66);
-  color: var(--bg-primary);
-}
-
-.vg-btn-success:hover {
-  box-shadow: var(--glow-green);
-  transform: translateY(-2px);
-}
-
-.vg-btn-danger {
-  background: linear-gradient(135deg, #ff4466, #cc0033);
-  color: white;
-}
-
-.vg-btn-danger:hover {
-  box-shadow: 0 0 20px rgba(255, 68, 102, 0.5);
-  transform: translateY(-2px);
-}
-
-/* 标签样式 */
-.vg-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.vg-tag-cyan {
-  background: rgba(0, 240, 255, 0.15);
-  color: var(--accent-cyan);
-  border: 1px solid rgba(0, 240, 255, 0.3);
-}
-
-.vg-tag-green {
-  background: rgba(0, 255, 136, 0.15);
-  color: var(--accent-green);
-  border: 1px solid rgba(0, 255, 136, 0.3);
-}
-
-.vg-tag-yellow {
-  background: rgba(255, 221, 0, 0.15);
-  color: var(--accent-yellow);
-  border: 1px solid rgba(255, 221, 0, 0.3);
-}
-
-.vg-tag-magenta {
-  background: rgba(255, 0, 170, 0.15);
-  color: var(--accent-magenta);
-  border: 1px solid rgba(255, 0, 170, 0.3);
-}
-
-/* Element Plus MessageBox 主题覆盖 */
-.el-message-box {
-  background: var(--bg-card) !important;
-  border: 1px solid var(--border-color) !important;
-  border-radius: 8px !important;
-}
-
-.el-message-box__title {
-  color: var(--text-primary) !important;
-}
-
-.el-message-box__content {
-  color: var(--text-secondary) !important;
-}
-
-.el-message-box__message {
-  color: var(--text-secondary) !important;
-}
-
-.el-message-box .el-button {
-  border-radius: 6px !important;
-}
-
-.el-message-box .el-button--primary {
-  background: rgba(255, 68, 102, 0.1) !important;
-  border-color: rgba(255, 68, 102, 0.3) !important;
-  color: #ff4466 !important;
-}
-
-.el-message-box .el-button--primary:hover {
-  background: rgba(255, 68, 102, 0.2) !important;
-  border-color: #ff4466 !important;
-}
-
-.el-message-box .el-button--default {
-  background: var(--bg-secondary) !important;
-  border-color: var(--border-color) !important;
-  color: var(--text-secondary) !important;
-}
-
-.el-message-box .el-button--default:hover {
-  border-color: var(--accent-cyan) !important;
-  color: var(--accent-cyan) !important;
 }
 </style>

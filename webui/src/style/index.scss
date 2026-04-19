@@ -1,0 +1,72 @@
+// -*- coding: utf-8 -*-
+/**
+ * 全局样式入口
+ * 导入所有公共样式文件
+ */
+
+@use 'variables';
+@use 'animations';
+@use 'common';
+
+// ===== 基础重置 =====
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// ===== Element Plus 主题覆盖 =====
+
+.el-message-box {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+}
+
+.el-message-box__title {
+  color: var(--text-primary) !important;
+}
+
+.el-message-box__content {
+  color: var(--text-secondary) !important;
+}
+
+.el-message-box__message {
+  color: var(--text-secondary) !important;
+}
+
+.el-message-box .el-button {
+  border-radius: 6px !important;
+}
+
+.el-message-box .el-button--primary {
+  background: rgba(255, 68, 102, 0.1) !important;
+  border-color: rgba(255, 68, 102, 0.3) !important;
+  color: #ff4466 !important;
+}
+
+.el-message-box .el-button--primary:hover {
+  background: rgba(255, 68, 102, 0.2) !important;
+  border-color: #ff4466 !important;
+}
+
+.el-message-box .el-button--default {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+
+.el-message-box .el-button--default:hover {
+  border-color: var(--accent-cyan) !important;
+  color: var(--accent-cyan) !important;
+}
