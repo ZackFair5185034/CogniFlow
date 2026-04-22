@@ -121,6 +121,7 @@ data/
 .DS_Store
 Thumbs.db
 node_modules
+**/node_modules/
 
 # Playwright
 .playwright-cli/
