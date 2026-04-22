@@ -13,9 +13,9 @@
     </div>
 
     <!-- 图集表格 -->
-    <div class="vg-card">
-      <div class="table-container">
-        <el-table :data="atlases" v-loading="loading" style="width: 100%" :row-class-name="tableRowClassName">
+    <div class="vg-card" style="width: 100%; min-width: 0;">
+      <div class="table-wrapper">
+        <el-table :data="atlases" v-loading="loading" :row-class-name="tableRowClassName" table-layout="auto">
           <el-table-column prop="id" label="ID" width="100">
             <template #default="{ row }">
               <span class="id-badge">#{{ row.id }}</span>
@@ -181,10 +181,15 @@ onMounted(loadAtlases)
 <style lang="scss" scoped>
 .atlas-list {
   @apply flex flex-col gap-6;
+  width: 100%;
+  min-width: 0;
 }
 
 .page-header {
   @apply flex justify-between items-center;
+  flex-wrap: wrap;
+  gap: 16px;
+  width: 100%;
 }
 
 .header-info h2 {
@@ -195,8 +200,19 @@ onMounted(loadAtlases)
   background-clip: text;
 }
 
-.header-info .subtitle {
+.page-header .subtitle {
   @apply text-sm text-[var(--text-muted)] ml-3;
+}
+
+/* 表格包装器 - 响应式滚动 */
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  min-width: 0;
+
+  :deep(.el-table) {
+    table-layout: auto;
+  }
 }
 
 /* 表格样式覆盖 */
@@ -264,7 +280,8 @@ onMounted(loadAtlases)
 }
 
 .dialog-panel {
-  @apply w-[450px];
+  width: clamp(320px, 90vw, 450px);
+  max-width: 95vw;
   animation: dialogIn 0.3s ease;
 }
 

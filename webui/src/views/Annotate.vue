@@ -927,9 +927,11 @@ onUnmounted(() => {
 
 .category-panel {
   @apply flex flex-col;
-  width: 280px;
+  width: clamp(200px, 18vw, 300px);
+  min-width: 200px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .panel-header {
@@ -1117,9 +1119,11 @@ onUnmounted(() => {
 
 .annotation-panel {
   @apply flex flex-col;
-  width: 280px;
+  width: clamp(200px, 18vw, 300px);
+  min-width: 200px;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .annotation-list {
@@ -1186,7 +1190,8 @@ onUnmounted(() => {
 }
 
 .dialog-panel {
-  width: 380px;
+  width: clamp(320px, 90vw, 450px);
+  max-width: 95vw;
   animation: dialogIn 0.2s ease;
 }
 

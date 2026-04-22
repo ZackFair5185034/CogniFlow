@@ -360,8 +360,12 @@ onUnmounted(() => {
 /* 网格布局 */
 .training-grid {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: clamp(16px, 2vw, 32px);
+}
+
+.training-list-section {
+  min-width: 0;  // 允许收缩
 }
 
 /* 训练列表 */

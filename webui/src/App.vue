@@ -220,7 +220,7 @@ onUnmounted(() => {
 
 // 侧边栏
 .sidebar {
-  width: 240px;
+  width: clamp(180px, 12vw, 240px);
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -228,6 +228,7 @@ onUnmounted(() => {
   padding: 20px 0;
   position: relative;
   z-index: 10;
+  flex-shrink: 0;  // 防止收缩
 
   &::before {
     content: '';
@@ -463,10 +464,11 @@ onUnmounted(() => {
 
 .content-area {
   flex: 1;
-  padding: 25px 30px;
+  padding: clamp(16px, 3vw, 32px) clamp(20px, 4vw, 48px);
   overflow-y: auto;
   position: relative;
   background: var(--bg-primary);
+  min-width: 0;  // 允许收缩，防止溢出
 
   &::-webkit-scrollbar {
     width: 6px;

@@ -3,6 +3,26 @@
  * 全局样式入口
  */
 
+// ===== 响应式配置 =====
+// 使用 clamp() 实现流畅的响应式尺寸
+// clamp(min, preferred, max) 在 min 和 max 之间平滑过渡
+
+// 间距响应式
+$spacing-xs: clamp(8px, 1vw, 12px);
+$spacing-sm: clamp(12px, 1.5vw, 16px);
+$spacing-md: clamp(16px, 2.5vw, 24px);
+$spacing-lg: clamp(20px, 3vw, 32px);
+$spacing-xl: clamp(24px, 4vw, 48px);
+
+// 内边距响应式
+$padding-page: clamp(16px, 3vw, 32px);
+$padding-card: clamp(16px, 2vw, 24px);
+$padding-section: clamp(12px, 1.5vw, 20px);
+
+// 面板宽度
+$sidebar-width: clamp(200px, 15vw, 280px);
+$panel-width: clamp(200px, 18vw, 320px);
+
 // ===== CSS 变量 =====
 :root {
   // 背景色
