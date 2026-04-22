@@ -73,6 +73,21 @@ async def get_graph_detail(graph_id: int, db: Session = Depends(get_db)):
     return manager.parse_graph_data(graph)
 
 
+@router.patch("/graphs/{graph_id}/thumbnail", response_model=RuleGraphResponse)
+async def update_graph_thumbnail(
+    graph_id: int,
+    thumbnail: str,
+    db: Session = Depends(get_db),
+):
+    """更新规则图缩略图。"""
+    manager = GraphManager(db)
+    existing = manager.get_graph(graph_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="规则图不存在")
+    updated_graph = manager.update_graph(graph_id=graph_id, thumbnail=thumbnail)
+    return updated_graph
+
+
 @router.put("/graphs/{graph_id}", response_model=RuleGraphResponse)
 async def update_graph(
     graph_id: int,
@@ -95,6 +110,7 @@ async def update_graph(
         edges_json=graph_update.edges_json,
         variables_json=graph_update.variables_json,
         is_active=graph_update.is_active,
+        thumbnail=graph_update.thumbnail,
     )
     return updated_graph
 

@@ -135,7 +135,10 @@ export const ruleEngineApi = {
     edges_json?: string
     variables_json?: string
     is_active?: boolean
+    thumbnail?: string
   }) => api.put(`/rule-engine/graphs/${id}`, data),
+  updateThumbnail: (id: number, thumbnail: string) =>
+    api.patch(`/rule-engine/graphs/${id}/thumbnail`, null, { params: { thumbnail } }),
   deleteGraph: (id: number) => api.delete(`/rule-engine/graphs/${id}`),
   validateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/validate`),
   activateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/activate`),

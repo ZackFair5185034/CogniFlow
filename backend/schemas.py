@@ -227,6 +227,7 @@ class RuleGraphBase(BaseModel):
     variables_json: Optional[str] = None
     version: str = "1.0.0"
     is_active: bool = False
+    thumbnail: Optional[str] = None
 
 
 class RuleGraphCreate(RuleGraphBase):
@@ -242,6 +243,7 @@ class RuleGraphUpdate(BaseModel):
     edges_json: Optional[str] = None
     variables_json: Optional[str] = None
     is_active: Optional[bool] = None
+    thumbnail: Optional[str] = None
 
 
 class RuleGraphResponse(RuleGraphBase):

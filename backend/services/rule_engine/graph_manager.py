@@ -97,6 +97,7 @@ class GraphManager:
         edges_json: Optional[str] = None,
         variables_json: Optional[str] = None,
         is_active: Optional[bool] = None,
+        thumbnail: Optional[str] = None,
     ) -> Optional[RuleGraph]:
         """更新规则图。
 
@@ -108,6 +109,7 @@ class GraphManager:
             edges_json: 边JSON字符串
             variables_json: 变量JSON字符串
             is_active: 是否激活
+            thumbnail: 缩略图 Base64
 
         Returns:
             更新后的规则图对象，未找到返回 None
@@ -128,6 +130,8 @@ class GraphManager:
             graph.variables_json = variables_json
         if is_active is not None:
             graph.is_active = is_active
+        if thumbnail is not None:
+            graph.thumbnail = thumbnail
 
         self.db.commit()
         self.db.refresh(graph)

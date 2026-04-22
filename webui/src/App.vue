@@ -1,5 +1,9 @@
 <template>
-  <div class="app-container">
+  <!-- 规则设计器 - 顶层全屏页面，不走 App 布局 -->
+  <router-view v-if="$route.meta.layout === 'none'" />
+
+  <!-- 普通页面 - 带 App 布局 -->
+  <div v-else class="app-container">
     <!-- 背景效果 -->
     <div class="bg-grid"></div>
     <div class="bg-glow"></div>
@@ -236,7 +240,7 @@ onUnmounted(() => {
   padding: 20px 0;
   position: relative;
   z-index: 10;
-  flex-shrink: 0;  // 防止收缩
+  flex-shrink: 0;
 
   &::before {
     content: '';
@@ -476,7 +480,7 @@ onUnmounted(() => {
   overflow-y: auto;
   position: relative;
   background: var(--bg-primary);
-  min-width: 0;  // 允许收缩，防止溢出
+  min-width: 0;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -496,19 +500,18 @@ onUnmounted(() => {
   }
 }
 
-// 页面过渡动画
-.page-fade-enter-active,
-.page-fade-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
+@keyframes glowPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
-.page-fade-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
+@keyframes iconPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
-.page-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 </style>

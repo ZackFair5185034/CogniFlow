@@ -5,7 +5,8 @@ import AtlasDetail from '@/views/AtlasDetail.vue'
 import ModelList from '@/views/ModelList.vue'
 import Training from '@/views/Training.vue'
 import Launch from '@/views/Launch.vue'
-import RuleEngine from '@/views/RuleEngine.vue'
+import RuleList from '@/views/RuleList.vue'
+import RuleCanvas from '@/views/RuleCanvas.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -17,7 +18,9 @@ const router = createRouter({
     { path: '/models', name: 'model-list', component: ModelList },
     { path: '/training', name: 'training', component: Training },
     { path: '/launch', name: 'launch', component: Launch },
-    { path: '/rule-engine', name: 'rule-engine', component: RuleEngine },
+    { path: '/rule-engine', name: 'rule-list', component: RuleList },
+    // 规则设计器 - 顶层路由，隐藏 App 布局
+    { path: '/rule-engine/design/:id', name: 'rule-canvas', component: RuleCanvas, meta: { layout: 'none' } },
   ],
 })
 

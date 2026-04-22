@@ -136,6 +136,7 @@ class RuleGraph(Base):
     variables_json = Column(Text, nullable=True)  # JSON 存储变量定义
     version = Column(String(50), default="1.0.0")
     is_active = Column(Boolean, default=False)
+    thumbnail = Column(Text, nullable=True)  # Base64 缩略图快照
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
