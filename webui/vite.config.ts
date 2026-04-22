@@ -19,18 +19,18 @@ export default defineConfig(({ mode }) => {
     },
 
     server: {
-      port: Number(env.VITE_PORT) || 3001,
+      port: Number(env.VITE_PORT) || 5173,
       proxy: {
         '/api': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:3000',
+          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
           changeOrigin: true,
         },
         '/uploads': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:3000',
+          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
           changeOrigin: true,
         },
         '/ws': {
-          target: env.VITE_WS_BASE_URL || 'ws://localhost:3000',
+          target: env.VITE_WS_BASE_URL || 'ws://localhost:8000',
           ws: true,
         },
       },
