@@ -13,6 +13,14 @@ from database import get_db, Image
 router = APIRouter()
 
 
+@router.get("/", response_model=list)
+async def list_images(db: Session = Depends(get_db)):
+    """获取所有图片列表（用于统计）。"""
+    images = db.query(Image).all()
+    # 返回图片ID列表（用于统计）
+    return [{"id": img.id, "atlas_id": img.atlas_id} for img in images]
+
+
 @router.get("/{image_id}")
 async def get_image(image_id: int, db: Session = Depends(get_db)):
     """获取图片详情。"""

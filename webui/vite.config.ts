@@ -29,6 +29,10 @@ export default defineConfig(({ mode }) => {
           target: env.VITE_API_BASE_URL || 'http://localhost:8000',
           changeOrigin: true,
         },
+        '/inference_output': {
+          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
+          changeOrigin: true,
+        },
         '/ws': {
           target: env.VITE_WS_BASE_URL || 'ws://localhost:8000',
           ws: true,

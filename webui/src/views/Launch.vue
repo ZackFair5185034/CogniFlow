@@ -3,165 +3,171 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-info">
-        <h2>模型启动</h2>
-        <span class="subtitle">推理模式控制</span>
-      </div>
-      <div class="system-status">
-        <span class="status-indicator" :class="{ active: status.loaded }"></span>
-        <span class="status-text">{{ status.loaded ? '模型已就绪' : '等待加载' }}</span>
+        <h2>模型测试</h2>
+        <span class="subtitle">图片目标检测</span>
       </div>
     </div>
 
     <div class="launch-grid">
-      <!-- 主控制面板 -->
-      <div class="control-panel vg-card">
+      <!-- 左侧：配置面板 -->
+      <div class="config-panel vg-card">
         <div class="panel-header">
           <div class="header-left">
             <BrainIcon class="panel-icon" />
-            <h3>推理控制</h3>
+            <h3>检测配置</h3>
           </div>
-          <span class="mode-badge">INFERENCE MODE</span>
         </div>
 
-        <div class="control-content">
+        <div class="config-content">
           <!-- 模型选择 -->
-          <div class="control-section">
+          <div class="config-section">
             <label class="section-label">选择模型</label>
-            <div class="model-select">
-              <div class="select-wrapper">
-                <select v-model="selectedModelId" :disabled="status.inference_running">
-                  <option :value="null" disabled>选择要加载的模型</option>
-                  <option v-for="m in models" :key="m.id" :value="m.id">
-                    {{ m.name }}{{ m.version ? ` (${m.version})` : '' }}
-                  </option>
-                </select>
+            <div class="select-wrapper">
+              <select v-model="selectedModelId" :disabled="detecting">
+                <option :value="null" disabled>选择已训练的模型</option>
+                <option v-for="m in trainedModels" :key="m.id" :value="m.id">
+                  {{ m.name }}{{ m.version ? ` (${m.version})` : '' }}
+                </option>
+              </select>
+            </div>
+            <div class="model-info" v-if="selectedModel">
+              <span class="info-tag">类别: {{ getModelClasses(selectedModel) }}</span>
+              <span class="info-tag" v-if="selectedModel.metrics?.mAP50">mAP50: {{ (selectedModel.metrics.mAP50 * 100).toFixed(1) }}%</span>
+            </div>
+          </div>
+
+          <!-- 置信度阈值 -->
+          <div class="config-section">
+            <label class="section-label">置信度阈值: {{ (confThreshold * 100).toFixed(0) }}%</label>
+            <input
+              type="range"
+              v-model.number="confThreshold"
+              min="0.05"
+              max="0.95"
+              step="0.05"
+              class="range-slider"
+            />
+          </div>
+
+          <!-- 文件上传 -->
+          <div class="config-section">
+            <label class="section-label">上传图片</label>
+            <div
+              class="upload-zone"
+              :class="{ dragging: isDragging, disabled: detecting }"
+              @dragover.prevent="isDragging = true"
+              @dragleave="isDragging = false"
+              @drop.prevent="handleDrop"
+              @click="triggerFileInput"
+            >
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept="image/*"
+                @change="handleFileSelect"
+                style="display: none"
+              />
+              <div class="upload-hint">
+                <UploadIcon />
+                <span v-if="!selectedFile">拖拽或点击上传</span>
+                <span v-else class="file-name">{{ selectedFile.name }}</span>
               </div>
             </div>
           </div>
 
-          <!-- 控制按钮 -->
-          <div class="control-buttons">
-            <el-button class="control-btn" @click="handleLoad" :disabled="!selectedModelId || loading">
-              <DownloadIcon />
-              加载模型
-            </el-button>
-            <el-button class="control-btn success" @click="handleStart" :disabled="!status.loaded || status.inference_running">
-              <PlayIcon />
-              开始执行
-            </el-button>
-            <el-button class="control-btn danger" @click="handleStop" :disabled="!status.inference_running">
-              <StopIcon />
-              停止执行
-            </el-button>
-          </div>
-
-          <!-- 状态显示 -->
-          <div class="status-grid">
-            <div class="status-item">
-              <span class="status-label">模型状态</span>
-              <span class="status-value" :class="status.loaded ? 'success' : 'muted'">
-                {{ status.loaded ? '已加载' : '未加载' }}
-              </span>
-            </div>
-            <div class="status-item">
-              <span class="status-label">执行状态</span>
-              <span class="status-value" :class="status.inference_running ? 'running' : 'muted'">
-                {{ status.inference_running ? '运行中' : '已停止' }}
-              </span>
-            </div>
-            <div class="status-item full">
-              <span class="status-label">模型信息</span>
-              <span class="status-value mono">
-                {{ status.info?.model_id ? `ID: ${status.info.model_id}` : '-' }}
-              </span>
-            </div>
-          </div>
+          <!-- 检测按钮 -->
+          <el-button
+            class="detect-btn"
+            type="primary"
+            :disabled="!canDetect || detecting"
+            :loading="detecting"
+            @click="startDetection"
+          >
+            {{ detecting ? '检测中...' : '开始检测' }}
+          </el-button>
         </div>
       </div>
 
-      <!-- 实时数据面板 -->
-      <div class="realtime-panel vg-card">
+      <!-- 右侧：结果显示 -->
+      <div class="result-panel vg-card">
         <div class="panel-header">
           <div class="header-left">
-            <ActivityIcon class="panel-icon" />
-            <h3>实时推理</h3>
+            <EyeIcon class="panel-icon" />
+            <h3>检测结果</h3>
           </div>
-          <span class="live-indicator" v-if="realtimeStatus">
-            <span class="live-dot"></span>
-            LIVE
+          <span class="result-count" v-if="detections.length > 0">
+            {{ detections.length }} 个目标
           </span>
         </div>
 
-        <div class="realtime-content" v-if="realtimeStatus">
-          <div class="metrics-grid">
-            <div class="metric-card">
-              <div class="metric-icon">
-                <HashIcon />
-              </div>
-              <div class="metric-info">
-                <span class="metric-value">{{ realtimeStatus.inference_step || 0 }}</span>
-                <span class="metric-label">推理步数</span>
-              </div>
-            </div>
+        <!-- 图片检测结果（带bbox叠加层） -->
+        <div class="result-image-wrapper" v-if="resultImage">
+          <div class="image-container">
+            <img :src="resultImage" alt="检测结果" class="result-image" />
+            <!-- BBox 叠加层 -->
+            <svg class="bbox-overlay" :viewBox="`0 0 ${imageSize.width} ${imageSize.height}`">
+              <g v-for="(det, idx) in detections" :key="idx">
+                <!-- 边框矩形 -->
+                <rect
+                  :x="det.bbox[0]"
+                  :y="det.bbox[1]"
+                  :width="det.bbox[2] - det.bbox[0]"
+                  :height="det.bbox[3] - det.bbox[1]"
+                  :stroke="getClassColor(det.class_id)"
+                  stroke-width="2"
+                  fill="none"
+                />
+                <!-- 类别标签背景 -->
+                <rect
+                  :x="det.bbox[0]"
+                  :y="det.bbox[1] - 20"
+                  width="80"
+                  height="20"
+                  :fill="getClassColor(det.class_id)"
+                />
+                <!-- 类别标签文字 -->
+                <text
+                  :x="det.bbox[0] + 4"
+                  :y="det.bbox[1] - 5"
+                  fill="white"
+                  font-size="12"
+                  font-family="sans-serif"
+                >{{ det.class_name }} {{ (det.confidence * 100).toFixed(0) }}%</text>
+              </g>
+            </svg>
+          </div>
 
-            <div class="metric-card">
-              <div class="metric-icon fps">
-                <SpeedIcon />
-              </div>
-              <div class="metric-info">
-                <span class="metric-value">{{ realtimeStatus.fps || 0 }}</span>
-                <span class="metric-label">FPS</span>
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <div class="metric-icon">
-                <CheckIcon />
-              </div>
-              <div class="metric-info">
-                <span class="metric-value">{{ realtimeStatus.detections || 0 }}</span>
-                <span class="metric-label">检测数</span>
-              </div>
-            </div>
-
-            <div class="metric-card">
-              <div class="metric-icon status-icon" :class="realtimeStatus.status">
-                <ActivityIcon />
-              </div>
-              <div class="metric-info">
-                <span class="metric-value">{{ realtimeStatus.status || 'idle' }}</span>
-                <span class="metric-label">状态</span>
-              </div>
-            </div>
+          <!-- 缩放控制 -->
+          <div class="zoom-controls">
+            <button class="zoom-btn" @click="zoomLevel = Math.min(2, zoomLevel + 0.25)">+</button>
+            <span class="zoom-level">{{ (zoomLevel * 100).toFixed(0) }}%</span>
+            <button class="zoom-btn" @click="zoomLevel = Math.max(0.5, zoomLevel - 0.25)">-</button>
           </div>
         </div>
 
-        <div class="empty-realtime" v-else>
-          <div class="empty-graphic">
-            <div class="pulse-ring"></div>
-            <div class="pulse-ring delay"></div>
-            <BrainIcon class="empty-icon" />
-          </div>
-          <p>暂无实时数据</p>
-          <span>加载模型并启动推理后显示</span>
+        <!-- 加载状态 -->
+        <div class="result-loading" v-else-if="detecting">
+          <div class="loading-spinner"></div>
+          <span>图片检测中...</span>
         </div>
-      </div>
 
-      <!-- 操作指南 -->
-      <div class="guide-panel vg-card">
-        <div class="panel-header">
-          <div class="header-left">
-            <HelpIcon class="panel-icon" />
-            <h3>操作指南</h3>
+        <!-- 空状态 -->
+        <div class="empty-result" v-else>
+          <div class="empty-icon">
+            <ImageIcon />
           </div>
+          <p>暂无检测结果</p>
+          <span>上传图片开始检测</span>
         </div>
-        <div class="guide-content">
-          <div class="guide-step" v-for="(step, index) in guideSteps" :key="index">
-            <div class="step-number">{{ index + 1 }}</div>
-            <div class="step-content">
-              <span class="step-title">{{ step.title }}</span>
-              <span class="step-desc">{{ step.desc }}</span>
-            </div>
+
+        <!-- 检测详情列表 -->
+        <div class="detections-list" v-if="detections.length > 0">
+          <div class="detection-item" v-for="(det, idx) in detections" :key="idx">
+            <span class="det-class" :style="{ background: getClassColor(det.class_id) }">
+              {{ det.class_name }}
+            </span>
+            <span class="det-conf">{{ (det.confidence * 100).toFixed(1) }}%</span>
+            <span class="det-bbox">x: {{ Math.round(det.bbox[0]) }}, y: {{ Math.round(det.bbox[1]) }}, w: {{ Math.round(det.bbox[2] - det.bbox[0]) }}, h: {{ Math.round(det.bbox[3] - det.bbox[1]) }}</span>
           </div>
         </div>
       </div>
@@ -170,156 +176,144 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, onMounted, h } from 'vue'
 import { ElMessage } from 'element-plus'
-import { launchApi, modelApi } from '@/api'
+import { inferenceApi } from '@/api'
 
-const models = ref<any[]>([])
-const selectedModelId = ref<number | null>(null)
-const loading = ref(false)
-const status = ref({
-  loaded: false,
-  inference_running: false,
-  info: {} as any,
-})
-const realtimeStatus = ref<any>(null)
-
-let ws: WebSocket | null = null
-
-// 图标
+// 图标组件
 const BrainIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
   h('path', { d: 'M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44 2.5 2.5 0 01-2.96-3.08 3 3 0 01-.34-5.58 2.5 2.5 0 011.32-4.24 2.5 2.5 0 011.98-3A2.5 2.5 0 019.5 2z' }),
   h('path', { d: 'M14.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 004.96.44 2.5 2.5 0 002.96-3.08 3 3 0 00.34-5.58 2.5 2.5 0 00-1.32-4.24 2.5 2.5 0 00-1.98-3A2.5 2.5 0 0014.5 2z' })
 ])
 
-const ActivityIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '22 12 18 12 15 21 9 3 6 12 2 12' })
+const ImageIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+  h('rect', { x: '3', y: '3', width: '18', height: '18', rx: '2', ry: '2' }),
+  h('circle', { cx: '8.5', cy: '8.5', r: '1.5' }),
+  h('polyline', { points: '21 15 16 10 5 21' })
 ])
 
-const ChevronIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '6 9 12 15 18 9' })
-])
-
-const DownloadIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+const UploadIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
   h('path', { d: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4' }),
-  h('polyline', { points: '7 10 12 15 17 10' }),
-  h('line', { x1: '12', y1: '15', x2: '12', y2: '3' })
+  h('polyline', { points: '17 8 12 3 7 8' }),
+  h('line', { x1: '12', y1: '3', x2: '12', y2: '15' })
 ])
 
-const PlayIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polygon', { points: '5 3 19 12 5 21 5 3' })
+const EyeIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+  h('path', { d: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z' }),
+  h('circle', { cx: '12', cy: '12', r: '3' })
 ])
 
-const StopIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('rect', { x: '3', y: '3', width: '18', height: '18', rx: '2', ry: '2' })
-])
+// 状态
+const trainedModels = ref<any[]>([])
+const selectedModelId = ref<number | null>(null)
+const confThreshold = ref(0.25)
+const selectedFile = ref<File | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const isDragging = ref(false)
+const isLoading = ref(false)
+const detecting = ref(false)
 
-const HashIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '4', y1: '9', x2: '20', y2: '9' }),
-  h('line', { x1: '4', y1: '15', x2: '20', y2: '15' }),
-  h('line', { x1: '10', y1: '3', x2: '8', y2: '21' }),
-  h('line', { x1: '16', y1: '3', x2: '14', y2: '21' })
-])
+const resultImage = ref<string | null>(null)
+const detections = ref<any[]>([])
+const imageSize = ref({ width: 0, height: 0 })
+const zoomLevel = ref(1)
 
-const SpeedIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M12 2L2 7l10 5 10-5-10-5z' }),
-  h('path', { d: 'M2 17l10 5 10-5' }),
-  h('path', { d: 'M2 12l10 5 10-5' })
-])
+const selectedModel = computed(() => {
+  return trainedModels.value.find(m => m.id === selectedModelId.value)
+})
 
-const CheckIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '20 6 9 17 4 12' })
-])
+const canDetect = computed(() => {
+  return selectedModelId.value && selectedFile.value && !detecting.value
+})
 
-const HelpIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('circle', { cx: '12', cy: '12', r: '10' }),
-  h('path', { d: 'M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3' }),
-  h('line', { x1: '12', y1: '17', x2: '12.01', y2: '17' })
-])
+const getModelClasses = (model: any) => {
+  if (model.metrics?.categories) {
+    return model.metrics.categories.length
+  }
+  return model.metrics?.num_classes || '?'
+}
 
-const guideSteps = [
-  { title: '选择模型', desc: '从下拉列表中选择要加载的模型' },
-  { title: '加载模型', desc: '点击"加载模型"按钮等待加载完成' },
-  { title: '启动推理', desc: '模型加载后点击"开始执行"启动推理' },
-  { title: '监控状态', desc: '实时查看推理步数、FPS等指标' },
-]
+const getClassColor = (classId: number) => {
+  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F']
+  return colors[classId % colors.length]
+}
 
-const loadModels = async () => {
+// 加载已训练模型
+const loadTrainedModels = async () => {
   try {
-    const res = await modelApi.list()
-    models.value = res.data
+    const res = await inferenceApi.listTrainedModels()
+    trainedModels.value = res.data
+    if (trainedModels.value.length > 0 && !selectedModelId.value) {
+      selectedModelId.value = trainedModels.value[0].id
+    }
   } catch (error) {
     console.error('加载模型失败', error)
   }
 }
 
-const loadStatus = async () => {
-  try {
-    const res = await launchApi.status()
-    status.value = res.data
-  } catch (error) {
-    console.error('加载状态失败', error)
+// 文件选择
+const handleFileSelect = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (input.files && input.files[0]) {
+    selectedFile.value = input.files[0]
+    clearResults()
   }
 }
 
-const handleLoad = async () => {
-  if (!selectedModelId.value) return
-  loading.value = true
+const handleDrop = (event: DragEvent) => {
+  isDragging.value = false
+  if (event.dataTransfer?.files && event.dataTransfer.files[0]) {
+    selectedFile.value = event.dataTransfer.files[0]
+    clearResults()
+  }
+}
+
+const triggerFileInput = () => {
+  fileInputRef.value?.click()
+}
+
+// 清除结果
+const clearResults = () => {
+  resultImage.value = null
+  detections.value = []
+  imageSize.value = { width: 0, height: 0 }
+}
+
+// 加载图片获取尺寸
+const loadImageSize = (src: string) => {
+  const img = new Image()
+  img.onload = () => {
+    imageSize.value = { width: img.naturalWidth, height: img.naturalHeight }
+  }
+  img.src = src
+}
+
+// 开始检测
+const startDetection = async () => {
+  if (!canDetect.value || !selectedFile.value) return
+
+  isLoading.value = true
+  detecting.value = true
+  clearResults()
+
   try {
-    await launchApi.load(selectedModelId.value)
-    ElMessage.success('模型加载成功')
-    loadStatus()
+    const res = await inferenceApi.detectImage(selectedFile.value, selectedModelId.value!, confThreshold.value)
+    if (res.data.success) {
+      resultImage.value = res.data.result_image_base64
+      detections.value = res.data.detections || []
+      loadImageSize(res.data.result_image_base64)
+    }
   } catch (error: any) {
-    const msg = error.response?.data?.detail || '模型加载失败'
+    const msg = error.response?.data?.detail || '检测失败'
     ElMessage.error(msg)
   } finally {
-    loading.value = false
-  }
-}
-
-const handleStart = async () => {
-  try {
-    await launchApi.start()
-    ElMessage.success('推理已开始')
-    loadStatus()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '启动失败'
-    ElMessage.error(msg)
-  }
-}
-
-const handleStop = async () => {
-  try {
-    await launchApi.stop()
-    ElMessage.success('推理已停止')
-    loadStatus()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '停止失败'
-    ElMessage.error(msg)
-  }
-}
-
-const connectWebSocket = () => {
-  ws = new WebSocket('/ws/launch')
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-    if (data.type === 'launch_update') {
-      realtimeStatus.value = data.data
-    }
-  }
-  ws.onclose = () => {
-    setTimeout(connectWebSocket, 3000)
+    isLoading.value = false
+    detecting.value = false
   }
 }
 
 onMounted(() => {
-  loadModels()
-  loadStatus()
-  connectWebSocket()
-})
-
-onUnmounted(() => {
-  if (ws) ws.close()
+  loadTrainedModels()
 })
 </script>
 
@@ -346,58 +340,21 @@ onUnmounted(() => {
   @apply text-sm text-[var(--text-muted)] ml-3;
 }
 
-.system-status {
-  @apply flex items-center gap-2.5 px-5 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full;
-}
-
-.status-indicator {
-  @apply w-2.5 h-2.5 rounded-full bg-[var(--text-muted)];
-}
-
-.status-indicator.active {
-  @apply bg-[var(--accent-green)];
-  box-shadow: 0 0 15px var(--accent-green);
-  animation: statusGlow 2s infinite;
-}
-
-@keyframes statusGlow {
-  0%, 100% { box-shadow: 0 0 15px var(--accent-green); }
-  50% { box-shadow: 0 0 25px var(--accent-green); }
-}
-
-.status-text {
-  @apply text-sm font-medium text-[var(--text-secondary)];
-}
-
 /* 网格布局 */
 .launch-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto auto;
+  grid-template-columns: 400px 1fr;
   gap: 24px;
+  min-height: 600px;
 }
 
-.control-panel {
-  grid-row: span 2;
-  animation: fadeInUp 0.6s ease forwards;
+/* 配置面板 */
+.config-panel {
+  height: fit-content;
 }
 
-.realtime-panel,
-.guide-panel {
-  animation: fadeInUp 0.6s ease forwards;
-}
-
-.realtime-panel {
-  animation-delay: 0.1s;
-}
-
-.guide-panel {
-  animation-delay: 0.2s;
-}
-
-/* 面板头部 */
 .panel-header {
-  @apply flex justify-between items-center px-6 py-5 border-b border-[var(--border-color)];
+  @apply flex justify-between items-center px-6 py-4 border-b border-[var(--border-color)];
 }
 
 .header-left {
@@ -405,56 +362,31 @@ onUnmounted(() => {
 }
 
 .panel-icon {
-  @apply w-6 h-6 text-[var(--accent-cyan)];
+  @apply w-5 h-5 text-[var(--accent-cyan)];
 }
 
 .panel-header h3 {
   @apply text-base font-semibold;
 }
 
-.mode-badge,
-.live-indicator {
-  @apply font-mono text-xs tracking-wider px-3 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-[var(--text-muted)];
+.config-content {
+  @apply p-6 flex flex-col gap-5;
 }
 
-.live-indicator {
-  @apply flex items-center gap-1.5 text-[#ff4466];
-}
-
-.live-dot {
-  @apply w-1.5 h-1.5 rounded-full bg-[#ff4466];
-  animation: livePulse 1s infinite;
-}
-
-@keyframes livePulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
-/* 控制内容 */
-.control-content {
-  @apply p-6 flex flex-col gap-6;
+.config-section {
+  @apply flex flex-col gap-2;
 }
 
 .section-label {
-  @apply block text-xs text-[var(--text-secondary)] uppercase tracking-wide mb-2.5;
+  @apply text-xs text-[var(--text-secondary)] uppercase tracking-wide;
 }
 
-.model-select {
-  .select-wrapper {
-    @apply relative;
-  }
-
+.select-wrapper {
   select {
-    @apply w-full px-4 py-3.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-base cursor-pointer appearance-none transition-all;
+    @apply w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] cursor-pointer appearance-none;
 
     &:focus {
       @apply outline-none border-[var(--accent-cyan)];
-      box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
-    }
-
-    &:disabled {
-      @apply opacity-50 cursor-not-allowed;
     }
 
     option {
@@ -463,216 +395,153 @@ onUnmounted(() => {
   }
 }
 
-.select-wrapper::after {
-  content: '';
-  @apply absolute right-4 top-1/2 -translate-y-1/2 border-l-1.5 border-r-1.5 border-t-1.5 border-l-transparent border-r-transparent border-t-[var(--text-muted)];
-  pointer-events: none;
+.model-info {
+  @apply flex gap-2 mt-1;
 }
 
-/* 控制按钮 */
-.control-buttons {
-  @apply flex gap-3.5;
+.info-tag {
+  @apply text-xs px-2 py-1 bg-[var(--bg-secondary)] rounded text-[var(--text-muted)];
 }
 
-:deep(.control-btn) {
-  @apply flex-1 inline-flex items-center justify-center gap-2.5 px-5 py-3.5 text-sm font-medium font-sans whitespace-nowrap border border-[var(--border-color)] rounded-lg bg-[var(--bg-card)] text-[var(--text-primary)] cursor-pointer transition-all;
+.range-slider {
+  @apply w-full h-2 bg-[var(--bg-secondary)] rounded-lg appearance-none cursor-pointer;
+
+  &::-webkit-slider-thumb {
+    @apply w-4 h-4 bg-[var(--accent-cyan)] rounded-full appearance-none cursor-pointer;
+  }
+}
+
+.upload-zone {
+  @apply border-2 border-dashed border-[var(--border-color)] rounded-lg p-8 text-center cursor-pointer transition-all;
+
+  &.dragging {
+    @apply border-[var(--accent-cyan)] bg-[rgba(0,240,255,0.05)];
+  }
+
+  &.disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+}
+
+.upload-hint {
+  @apply flex flex-col items-center gap-2 text-[var(--text-muted)];
+
+  svg {
+    @apply w-8 h-8;
+  }
+}
+
+.file-name {
+  @apply text-sm text-[var(--accent-cyan)] truncate max-w-full;
+}
+
+:deep(.detect-btn) {
+  @apply w-full py-3 text-base font-medium rounded-lg;
+  background: var(--accent-cyan) !important;
+  border-color: var(--accent-cyan) !important;
+  color: black !important;
 
   &:hover:not(:disabled) {
-    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
-    background: rgba(0, 240, 255, 0.05);
+    background: #00d4e0 !important;
   }
 
   &:disabled {
-    @apply opacity-40 cursor-not-allowed;
+    @apply opacity-50 cursor-not-allowed;
   }
+}
 
-  &.success {
-    @apply border-[var(--accent-green)] text-[var(--accent-green)];
-    &:hover:not(:disabled) {
-      background: rgba(0, 255, 136, 0.08);
+/* 结果面板 */
+.result-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.result-count {
+  @apply text-sm text-[var(--accent-cyan)] px-3 py-1 bg-[rgba(0,240,255,0.1)] rounded-full;
+}
+
+.result-image-wrapper {
+  @apply flex-1 flex flex-col overflow-hidden;
+}
+
+.image-container {
+  @apply relative flex-1 overflow-auto flex items-center justify-center p-4 bg-[var(--bg-primary)];
+}
+
+.result-image {
+  @apply max-w-full max-h-full rounded;
+  transform: scale(v-bind(zoomLevel));
+  transform-origin: center;
+}
+
+.bbox-overlay {
+  @apply absolute inset-0 w-full h-full pointer-events-none;
+  overflow: visible;
+}
+
+.zoom-controls {
+  @apply flex items-center justify-center gap-4 p-3 border-t border-[var(--border-color)];
+  background: var(--bg-secondary);
+}
+
+.zoom-btn {
+  @apply w-8 h-8 flex items-center justify-center bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-lg font-bold cursor-pointer;
+  &:hover {
+    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  }
+}
+
+.zoom-level {
+  @apply font-mono text-sm text-[var(--text-secondary)] min-w-16 text-center;
+}
+
+.result-loading {
+  @apply flex-1 flex flex-col items-center justify-center gap-4 p-8;
+
+  .loading-spinner {
+    @apply w-12 h-12 border-4 border-[var(--border-color)] border-t-[var(--accent-cyan)] rounded-full animate-spin;
+  }
+}
+
+.empty-result {
+  @apply flex-1 flex flex-col items-center justify-center text-center text-[var(--text-muted)];
+
+  .empty-icon {
+    @apply w-20 h-20 mb-4 flex items-center justify-center;
+
+    svg {
+      @apply w-full h-full opacity-30;
     }
   }
 
-  &.danger {
-    @apply border-[#ff4466] text-[#ff4466];
-    &:hover:not(:disabled) {
-      background: rgba(255, 68, 102, 0.08);
-    }
+  p {
+    @apply text-base text-[var(--text-secondary)] mb-1;
   }
 
-  svg {
-    @apply w-4 h-4 shrink-0;
+  span {
+    @apply text-sm;
   }
 }
 
-/* 状态网格 */
-.status-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border-color);
+/* 检测列表 */
+.detections-list {
+  @apply max-h-60 overflow-y-auto border-t border-[var(--border-color)];
 }
 
-.status-item {
-  @apply flex flex-col gap-1.5;
-
-  &.full {
-    grid-column: span 2;
-  }
+.detection-item {
+  @apply flex items-center gap-3 px-4 py-2 text-sm border-b border-[var(--border-color)] last:border-b-0;
 }
 
-.status-label {
-  @apply text-xs text-[var(--text-muted)] uppercase tracking-wide;
+.det-class {
+  @apply px-2 py-0.5 rounded text-white text-xs;
 }
 
-.status-value {
-  @apply text-base font-semibold;
-
-  &.success {
-    @apply text-[var(--accent-green)];
-  }
-
-  &.running {
-    @apply text-[var(--accent-cyan)];
-    text-shadow: 0 0 10px var(--accent-cyan);
-  }
-
-  &.muted {
-    @apply text-[var(--text-muted)];
-  }
-
-  &.mono {
-    @apply font-mono;
-  }
+.det-conf {
+  @apply text-[var(--accent-cyan)] font-mono text-xs;
 }
 
-/* 实时内容 */
-.realtime-content {
-  @apply p-6;
-}
-
-.metrics-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.metric-card {
-  @apply flex items-center gap-3.5 p-4 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl;
-}
-
-.metric-icon {
-  @apply w-11 h-11 flex items-center justify-center bg-[rgba(0,240,255,0.1)] rounded-lg text-[var(--accent-cyan)];
-
-  &.fps {
-    @apply bg-[rgba(255,0,170,0.1)] text-[var(--accent-magenta)];
-  }
-
-  &.status-icon {
-    @apply bg-[rgba(0,255,136,0.1)] text-[var(--accent-green)];
-
-    &.running {
-      animation: iconPulse 1s infinite;
-    }
-  }
-
-  svg {
-    @apply w-5.5 h-5.5;
-  }
-}
-
-@keyframes iconPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-}
-
-.metric-info {
-  @apply flex flex-col gap-1;
-}
-
-.metric-value {
-  @apply font-mono text-xl font-bold text-[var(--text-primary)];
-}
-
-.metric-label {
-  @apply text-xs text-[var(--text-muted)] uppercase tracking-wide;
-}
-
-/* 空状态 */
-.empty-realtime {
-  @apply p-15 flex flex-col items-center text-center;
-}
-
-.empty-graphic {
-  @apply relative w-20 h-20 mb-5;
-}
-
-.pulse-ring {
-  @apply absolute inset-0 border-2 border-[var(--accent-cyan)] rounded-full opacity-0;
-  animation: pulseRing 2s infinite;
-
-  &.delay {
-    animation-delay: 1s;
-  }
-}
-
-@keyframes pulseRing {
-  0% {
-    transform: scale(0.5);
-    opacity: 0.8;
-  }
-  100% {
-    transform: scale(1.5);
-    opacity: 0;
-  }
-}
-
-.empty-icon {
-  @apply absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 text-[var(--text-muted)];
-}
-
-.empty-realtime p {
-  @apply text-base text-[var(--text-secondary)] mb-1.5;
-}
-
-.empty-realtime span {
-  @apply text-sm text-[var(--text-muted)];
-}
-
-/* 操作指南 */
-.guide-content {
-  @apply p-5 flex flex-col gap-4;
-}
-
-.guide-step {
-  @apply flex items-start gap-3.5;
-}
-
-.step-number {
-  @apply w-7 h-7 flex items-center justify-center bg-gradient-to-br from-[var(--accent-cyan)] to-[var(--accent-magenta)] rounded-lg text-xs font-bold text-[var(--bg-primary)] shrink-0;
-}
-
-.step-content {
-  @apply flex flex-col gap-1;
-}
-
-.step-title {
-  @apply text-sm font-medium text-[var(--text-primary)];
-}
-
-.step-desc {
-  @apply text-xs text-[var(--text-muted)];
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.det-bbox {
+  @apply text-[var(--text-muted)] font-mono text-[10px];
 }
 </style>

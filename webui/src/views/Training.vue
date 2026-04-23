@@ -253,7 +253,7 @@ const handleStart = async () => {
     await trainingApi.start({
       model_id: startForm.value.model_id,
       atlas_id: startForm.value.atlas_id,
-      config: { total_steps: startForm.value.total_steps },
+      config: { epochs: startForm.value.total_steps },
     })
     ElMessage.success('训练已启动')
     loadJobs()

@@ -10,9 +10,27 @@ from websocket_manager import ws_manager
 router = APIRouter()
 
 
+@router.websocket("/training")
+async def websocket_training_all(websocket: WebSocket):
+    """全局训练状态 WebSocket 连接。
+
+    客户端连接后接收所有训练任务的实时状态更新。
+    """
+    await websocket.accept()
+    job_id = 0  # 全局频道不使用特定 job_id
+    if job_id not in ws_manager._training_connections:
+        ws_manager._training_connections[job_id] = set()
+    ws_manager._training_connections[job_id].add(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager._training_connections[job_id].discard(websocket)
+
+
 @router.websocket("/training/{job_id}")
 async def websocket_training(websocket: WebSocket, job_id: int):
-    """训练状态 WebSocket 连接。
+    """特定任务训练状态 WebSocket 连接。
 
     客户端连接后接收该任务的实时训练状态更新。
     """

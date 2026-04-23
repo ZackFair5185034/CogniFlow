@@ -36,6 +36,7 @@ class WebSocketManager:
 
     async def send_training_update(self, job_id: int, data: dict):
         """向所有连接的客户端发送训练更新。"""
+        # 发送给特定 job_id 的连接
         if job_id in self._training_connections:
             disconnected = set()
             for websocket in self._training_connections[job_id]:
@@ -49,6 +50,20 @@ class WebSocketManager:
             # 清理断开的连接
             for ws in disconnected:
                 self._training_connections[job_id].discard(ws)
+
+        # 同时发送给全局频道（job_id=0）的连接
+        if 0 in self._training_connections:
+            disconnected = set()
+            for websocket in self._training_connections[0]:
+                try:
+                    await websocket.send_json({
+                        "type": "training_update",
+                        "data": data
+                    })
+                except Exception:
+                    disconnected.add(websocket)
+            for ws in disconnected:
+                self._training_connections[0].discard(ws)
 
     async def connect_launch(self, websocket: WebSocket):
         """连接模型执行状态 WebSocket。"""

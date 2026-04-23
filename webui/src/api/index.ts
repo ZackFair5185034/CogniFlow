@@ -27,6 +27,7 @@ export const atlasApi = {
 
 // Image API
 export const imageApi = {
+  list: () => api.get('/images'),
   get: (id: number) => api.get(`/images/${id}`),
   getFile: (id: number) => `/api/images/${id}/file`,
   delete: (id: number) => api.delete(`/images/${id}`),
@@ -86,4 +87,25 @@ export const launchApi = {
   start: () => api.post('/launch/start'),
   stop: () => api.post('/launch/stop'),
   status: () => api.get('/launch/status'),
+}
+
+// Inference API
+export const inferenceApi = {
+  detectImage: (file: File, modelId: number, confThreshold: number = 0.25) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/inference/detect/image?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000,
+    })
+  },
+  detectVideo: (file: File, modelId: number, confThreshold: number = 0.25) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/inference/detect/video?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    })
+  },
+  listTrainedModels: () => api.get('/inference/models'),
 }

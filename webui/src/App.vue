@@ -112,8 +112,8 @@ const navItems = [
   { path: '/', label: '控制台', icon: HomeIcon },
   { path: '/atlas', label: '图集管理', icon: FolderIcon },
   { path: '/models', label: '模型管理', icon: BoxIcon },
-  { path: '/training', label: '训练监控', icon: ChartIcon },
-  { path: '/launch', label: '模型启动', icon: RocketIcon },
+  { path: '/training', label: '模型训练', icon: ChartIcon },
+  { path: '/launch', label: '模型测试', icon: RocketIcon },
 ]
 
 const pageTitles: Record<string, string> = {
@@ -121,8 +121,8 @@ const pageTitles: Record<string, string> = {
   '/atlas': '图集管理',
   '/atlas/': '图集详情',
   '/models': '模型管理',
-  '/training': '训练监控',
-  '/launch': '模型启动',
+  '/training': '模型训练',
+  '/launch': '模型测试',
 }
 
 const currentPageTitle = computed(() => {
@@ -464,7 +464,7 @@ onUnmounted(() => {
 
 .content-area {
   flex: 1;
-  padding: clamp(16px, 3vw, 32px) clamp(20px, 4vw, 48px);
+  padding: 12px 16px;
   overflow-y: auto;
   position: relative;
   background: var(--bg-primary);

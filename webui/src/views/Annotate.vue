@@ -19,7 +19,6 @@
       </div>
       <div class="toolbar-center">
         <div class="hotkey-hints">
-          <span class="hint"><kbd>1-9</kbd> 选择类别</span>
           <span class="hint"><kbd>S</kbd> 保存</span>
           <span class="hint"><kbd>Z</kbd> 撤销</span>
           <span class="hint"><kbd>←→</kbd> 翻页</span>
@@ -34,7 +33,7 @@
     </div>
 
     <!-- 主内容区 -->
-    <div class="content-area">
+    <div class="content-area p-0">
       <!-- 左侧类别面板 -->
       <div class="category-panel">
         <div class="panel-header">
@@ -46,12 +45,18 @@
           </div>
         </div>
 
-        <!-- 路径导航 -->
-        <div class="breadcrumb" v-if="currentPath.length > 0">
+        <!-- 路径导航 + 当前选中标签 -->
+        <div class="breadcrumb" v-if="currentPath.length > 0 || selectedCategoryId">
           <span class="breadcrumb-item" @click="navigateToRoot">根目录</span>
           <template v-for="(item, idx) in currentPath" :key="item.id">
             <ChevronRightIcon class="breadcrumb-sep" />
             <span class="breadcrumb-item" @click="navigateTo(idx)">{{ item.name }}</span>
+          </template>
+          <template v-if="selectedCategoryId">
+            <ChevronRightIcon class="breadcrumb-sep" />
+            <span class="current-tag" :style="{ background: getSelectedCategoryColor }">
+              {{ getSelectedCategoryName }}
+            </span>
           </template>
         </div>
 
@@ -265,7 +270,7 @@ const imageList = ref<ImageData[]>([])
 const currentImageIndex = ref(0)
 
 const hasPrev = computed(() => currentImageIndex.value > 0)
-const hasNext = computed(() => currentImageIndex.value < imageList.value.length - 1)
+const hasNext = computed(() => currentImageIndex.value >= 0 && currentImageIndex.value < imageList.value.length - 1)
 const hasChanges = computed(() => {
   return localAnnotations.value.some(ann => !ann.id)
 })
@@ -296,6 +301,16 @@ const currentDirectories = computed(() => {
 
 const currentCategories = computed(() => {
   return currentItems.value.filter(c => !c.is_directory)
+})
+
+const getSelectedCategoryColor = computed(() => {
+  const cat = flatCategories.value.find(c => c.id === selectedCategoryId.value)
+  return cat?.color || '#ff4444'
+})
+
+const getSelectedCategoryName = computed(() => {
+  const cat = flatCategories.value.find(c => c.id === selectedCategoryId.value)
+  return cat?.name || '未选中'
 })
 
 // ============ 类别树 Methods ============
@@ -484,7 +499,8 @@ const loadAnnotations = async (imageId: number) => {
 const loadImageList = async () => {
   if (!currentImage.value) return
   try {
-    const res = await atlasApi.getImages(currentImage.value.atlas_id)
+    const directory = route.query.directory as string | undefined
+    const res = await atlasApi.getImages(currentImage.value.atlas_id, directory)
     imageList.value = res.data || []
     currentImageIndex.value = imageList.value.findIndex((img: ImageData) => img.id === currentImage.value?.id)
   } catch (error) {
@@ -754,7 +770,8 @@ const handleCreateCategory = async () => {
     })
     ElMessage.success(categoryForm.value.is_directory ? '目录创建成功' : '标签创建成功')
     closeCreateDialog()
-    await loadTree()
+    // 同时更新 categories 和 treeData
+    await loadCategories()
   } catch (error: any) {
     const msg = error.response?.data?.detail || '创建失败'
     ElMessage.error(msg)
@@ -764,32 +781,38 @@ const handleCreateCategory = async () => {
 }
 
 const goBack = () => {
-  router.back()
-}
-
-const prevImage = () => {
-  if (hasPrev.value) {
-    const newId = imageList.value[currentImageIndex.value - 1].id
-    router.push(`/annotate/${newId}`)
+  if (currentImage.value?.atlas_id) {
+    const query = route.query.directory ? { directory: route.query.directory as string } : {}
+    router.push({ path: `/atlas/${currentImage.value.atlas_id}`, query })
+  } else {
+    router.push('/atlas')
   }
 }
 
-const nextImage = () => {
-  if (hasNext.value) {
-    const newId = imageList.value[currentImageIndex.value + 1].id
-    router.push(`/annotate/${newId}`)
+const prevImage = async () => {
+  if (!hasPrev.value) return
+  // 有未保存的标注则自动保存
+  if (hasChanges.value) {
+    await saveAnnotations()
   }
+  const newId = imageList.value[currentImageIndex.value - 1].id
+  const query = route.query.directory ? { directory: route.query.directory as string } : {}
+  router.push({ path: `/annotate/${newId}`, query })
+}
+
+const nextImage = async () => {
+  if (!hasNext.value) return
+  // 有未保存的标注则自动保存
+  if (hasChanges.value) {
+    await saveAnnotations()
+  }
+  const newId = imageList.value[currentImageIndex.value + 1].id
+  const query = route.query.directory ? { directory: route.query.directory as string } : {}
+  router.push({ path: `/annotate/${newId}`, query })
 }
 
 const handleKeyDown = (e: KeyboardEvent) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-
-  if (e.key >= '1' && e.key <= '9') {
-    const index = parseInt(e.key) - 1
-    if (categories.value[index]) {
-      selectedCategoryId.value = categories.value[index].id
-    }
-  }
 
   if (e.key.toLowerCase() === 's') {
     e.preventDefault()
@@ -818,7 +841,9 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
 watch(image_id, (newId) => {
   if (newId) {
-    loadImage(newId)
+    loadImage(newId).then(() => {
+      loadImageList()
+    })
   }
 })
 
@@ -840,20 +865,20 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .annotate-page {
   @apply flex flex-col;
-  height: calc(100vh - 60px);
+  height: 100%;
   background: var(--bg-primary);
 }
 
 .toolbar {
   @apply flex justify-between items-center;
-  padding: 12px 20px;
+  padding: 8px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
 }
 
 .toolbar-left,
 .toolbar-right {
-  @apply flex items-center gap-4;
+  @apply flex items-center gap-3;
 }
 
 .toolbar-center {
@@ -861,7 +886,7 @@ onUnmounted(() => {
 }
 
 .image-nav {
-  @apply flex items-center gap-2;
+  @apply flex items-center gap-1;
 }
 
 .nav-info {
@@ -871,7 +896,7 @@ onUnmounted(() => {
 }
 
 .hotkey-hints {
-  @apply flex gap-5;
+  @apply flex gap-4;
 }
 
 .hint {
@@ -927,15 +952,15 @@ onUnmounted(() => {
 
 .category-panel {
   @apply flex flex-col;
-  width: clamp(200px, 18vw, 300px);
-  min-width: 200px;
+  width: clamp(160px, 15vw, 240px);
+  min-width: 160px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
 .panel-header {
-  @apply flex justify-between items-center p-4;
+  @apply flex justify-between items-center p-3;
   border-bottom: 1px solid var(--border-color);
 
   h3 {
@@ -976,8 +1001,9 @@ onUnmounted(() => {
 
 // 面包屑导航
 .breadcrumb {
-  @apply flex items-center gap-1 px-3 py-2 text-xs;
+  @apply flex items-center gap-1 px-3 py-1.5 text-xs;
   @apply bg-[var(--bg-primary)] border-b border-[var(--border-color)];
+  flex-wrap: wrap;
 }
 
 .breadcrumb-item {
@@ -994,13 +1020,17 @@ onUnmounted(() => {
   @apply w-3 h-3 text-[var(--text-muted)];
 }
 
+.current-tag {
+  @apply px-2 py-0.5 rounded text-white text-[11px] font-medium;
+}
+
 // 目录列表
 .dir-list {
-  @apply p-2;
+  @apply p-1.5;
 }
 
 .dir-item {
-  @apply flex items-center gap-2 p-2 rounded-md cursor-pointer;
+  @apply flex items-center gap-2 p-1.5 rounded-md cursor-pointer;
   @apply text-sm text-[var(--accent-yellow)];
 }
 
@@ -1041,7 +1071,7 @@ onUnmounted(() => {
 
 // 标签列表
 .tag-list {
-  @apply p-2;
+  @apply p-1.5;
   border-top: 1px solid var(--border-color);
 }
 
@@ -1050,7 +1080,7 @@ onUnmounted(() => {
 }
 
 .tag-item {
-  @apply flex items-center gap-2 p-2 rounded-md cursor-pointer;
+  @apply flex items-center gap-2 p-1.5 rounded-md cursor-pointer;
   @apply text-sm text-[var(--text-primary)];
   @apply border border-transparent;
 }
@@ -1082,7 +1112,6 @@ onUnmounted(() => {
   @apply flex items-center justify-center relative overflow-hidden;
   flex: 1;
   background: var(--bg-primary);
-  padding: 20px;
 }
 
 .canvas-container canvas {
@@ -1119,19 +1148,19 @@ onUnmounted(() => {
 
 .annotation-panel {
   @apply flex flex-col;
-  width: clamp(200px, 18vw, 300px);
-  min-width: 200px;
+  width: clamp(160px, 15vw, 240px);
+  min-width: 160px;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
 .annotation-list {
-  @apply flex-1 overflow-y-auto p-2;
+  @apply flex-1 overflow-y-auto p-1.5;
 }
 
 .annotation-item {
-  @apply flex items-center gap-2 p-2 rounded-md cursor-pointer transition-all border border-transparent;
+  @apply flex items-center gap-2 p-1.5 rounded-md cursor-pointer transition-all border border-transparent;
 }
 
 .annotation-item:hover {
@@ -1228,7 +1257,7 @@ onUnmounted(() => {
 }
 
 .dialog-body {
-  @apply p-5;
+  @apply p-4;
 }
 
 .form-group {
@@ -1285,7 +1314,7 @@ onUnmounted(() => {
 }
 
 .dialog-footer {
-  @apply flex justify-end gap-2.5 p-4;
+  @apply flex justify-end gap-2 p-3;
   border-top: 1px solid var(--border-color);
 }
 </style>

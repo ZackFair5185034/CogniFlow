@@ -74,9 +74,11 @@ visionGame/
 │       ├── annotation.py         # 标注管理
 │       ├── category.py          # 类别管理
 │       ├── model.py             # 模型管理
-│       ├── training.py          # 训练管理
+│       ├── training.py          # 训练管理（YOLO）
 │       ├── launch.py            # 启动管理
-│       └── websocket.py         # WebSocket
+│       ├── inference.py         # 模型测试（图片/视频检测）
+│       ├── websocket.py         # WebSocket
+│       └── yolo_training.py     # YOLO 训练工具
 ├── visiongame/                  # 核心 RL/Vision 包
 │   ├── __init__.py             # 包初始化
 │   ├── config/                  # 配置模块
@@ -106,8 +108,7 @@ visionGame/
 ├── uploads/                     # 上传文件目录
 ├── checkpoints/                 # 模型检查点
 ├── logs/                        # 日志目录
-├── requirements.txt             # 后端依赖
-└── requirements-webui.txt       # 前端依赖
+├── requirements.txt           # 项目依赖
 ```
 
 ## 4. Git 规范

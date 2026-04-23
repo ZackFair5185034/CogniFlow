@@ -136,7 +136,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, h } from 'vue'
-import { atlasApi, modelApi, trainingApi } from '@/api'
+import { atlasApi, imageApi, modelApi, trainingApi } from '@/api'
 
 // 图标定义必须在使用之前
 const FolderIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
@@ -195,10 +195,10 @@ const statusText: Record<string, string> = {
 }
 
 const quickActions = [
-  { label: '创建图集', path: '/atlas', icon: PlusIcon, color: '#00f0ff' },
-  { label: '上传数据', path: '/atlas', icon: UploadIcon, color: '#ff00aa' },
-  { label: '开始训练', path: '/training', icon: PlayIcon, color: '#ffdd00' },
-  { label: '模型推理', path: '/launch', icon: BrainIcon, color: '#00ff88' },
+  { label: '图集管理', path: '/atlas', icon: FolderIcon, color: '#00f0ff' },
+  { label: '模型管理', path: '/models', icon: BoxIcon, color: '#ff00aa' },
+  { label: '模型训练', path: '/training', icon: PlayIcon, color: '#ffdd00' },
+  { label: '模型测试', path: '/launch', icon: BrainIcon, color: '#00ff88' },
 ]
 
 // 系统状态
@@ -239,12 +239,14 @@ const getProgress = (job: any) => {
 
 onMounted(async () => {
   try {
-    const [atlasRes, modelRes, trainingRes] = await Promise.all([
+    const [atlasRes, imageRes, modelRes, trainingRes] = await Promise.all([
       atlasApi.list(),
+      imageApi.list(),
       modelApi.list(),
       trainingApi.listJobs(),
     ])
     stats.value[0].value = atlasRes.data.length
+    stats.value[1].value = imageRes.data.length
     stats.value[2].value = modelRes.data.length
     stats.value[3].value = trainingRes.data.length
     recentJobs.value = trainingRes.data.slice(0, 5)

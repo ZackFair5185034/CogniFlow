@@ -16,12 +16,12 @@
     <div class="vg-card" style="width: 100%; min-width: 0;">
       <div class="table-wrapper">
         <el-table :data="models" v-loading="loading" :row-class-name="tableRowClassName" table-layout="auto">
-          <el-table-column prop="id" label="ID" width="100">
+          <el-table-column prop="id" label="ID" width="80">
             <template #default="{ row }">
               <span class="id-badge">#{{ row.id }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="name" label="名称">
+          <el-table-column prop="name" label="名称" min-width="150">
             <template #default="{ row }">
               <div class="name-cell">
                 <BoxIcon class="model-icon" />
@@ -29,38 +29,60 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="version" label="版本" width="120">
+          <el-table-column prop="version" label="版本" width="100">
             <template #default="{ row }">
               <span class="version-badge" v-if="row.version">{{ row.version }}</span>
               <span v-else class="text-muted">-</span>
             </template>
           </el-table-column>
-          <el-table-column label="最佳" width="80">
+          <el-table-column label="状态" width="100">
             <template #default="{ row }">
-              <span class="best-badge" v-if="row.is_best">
-                <StarIcon />
-                最佳
+              <span class="status-badge" :class="row.file_path ? 'trained' : 'untrained'">
+                {{ row.file_path ? '已训练' : '未训练' }}
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="指标" width="150">
+          <el-table-column label="性能指标" width="180">
             <template #default="{ row }">
-              <span v-if="row.metrics" class="metric-value">
-                {{ row.metrics.loss || row.metrics.accuracy || '-' }}
+              <div v-if="row.metrics?.mAP50" class="metrics-cell">
+                <span class="metric-item">
+                  <span class="metric-label">mAP50:</span>
+                  <span class="metric-value">{{ (row.metrics.mAP50 * 100).toFixed(1) }}%</span>
+                </span>
+                <span class="metric-item" v-if="row.metrics?.mAP50_95">
+                  <span class="metric-label">mAP:</span>
+                  <span class="metric-value">{{ (row.metrics.mAP50_95 * 100).toFixed(1) }}%</span>
+                </span>
+              </div>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="模型文件" min-width="200">
+            <template #default="{ row }">
+              <span v-if="row.file_path" class="file-path" :title="row.file_path">
+                {{ shortenPath(row.file_path) }}
               </span>
               <span v-else class="text-muted">-</span>
             </template>
           </el-table-column>
-          <el-table-column prop="created_at" label="创建时间" width="160">
+          <el-table-column label="训练时间" width="140">
+            <template #default="{ row }">
+              <span v-if="row.metrics?.trained_at" class="time-badge">
+                {{ formatTrainedAt(row.metrics.trained_at) }}
+              </span>
+              <span v-else class="text-muted">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="created_at" label="创建时间" width="140">
             <template #default="{ row }">
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="160" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
-                <el-button type="link" @click="handleUpload(row)">上传</el-button>
-                <el-button type="link" @click="handleSetBest(row)" :disabled="row.is_best">最佳</el-button>
+                <el-button type="link" @click="handleUpload(row)" v-if="!row.file_path">上传</el-button>
+                <el-button type="link" @click="handleSetBest(row)" :disabled="row.is_best || !row.file_path">最佳</el-button>
                 <el-button type="link" @click="handleDelete(row)">删除</el-button>
               </div>
             </template>
@@ -207,6 +229,27 @@ const formatDate = (dateStr: string) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+const formatTrainedAt = (dateStr: string) => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr.replace('_', ' ').replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'))
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const shortenPath = (path: string) => {
+  if (!path) return ''
+  if (path.length <= 40) return path
+  const parts = path.split(/[/\\]/)
+  if (parts.length > 3) {
+    return `.../${parts.slice(-3).join('/')}`
+  }
+  return path
 }
 
 const tableRowClassName = ({ rowIndex }: { rowIndex: number }) => {
@@ -403,12 +446,44 @@ onMounted(() => {
   }
 }
 
+.status-badge {
+  @apply inline-flex items-center gap-1 text-xs px-2 py-1 rounded;
+
+  &.trained {
+    @apply bg-[rgba(0,255,136,0.1)] text-[var(--accent-green)] border border-[rgba(0,255,136,0.3)];
+  }
+
+  &.untrained {
+    @apply bg-[rgba(255,136,102,0.1)] text-[#ff4466] border border-[rgba(255,136,102,0.3)];
+  }
+}
+
+.metrics-cell {
+  @apply flex flex-col gap-1;
+}
+
+.metric-item {
+  @apply flex items-center gap-1;
+}
+
+.metric-label {
+  @apply text-[10px] text-[var(--text-muted)];
+}
+
+.metric-value {
+  @apply font-mono text-xs text-[var(--accent-cyan)];
+}
+
 .metric-value {
   @apply font-mono text-sm text-[var(--accent-cyan)];
 }
 
 .time-badge {
   @apply font-mono text-xs text-[var(--text-muted)];
+}
+
+.file-path {
+  @apply font-mono text-xs text-[var(--text-secondary)] truncate max-w-full block;
 }
 
 .text-muted {

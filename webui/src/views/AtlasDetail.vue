@@ -397,7 +397,8 @@ const handleDeleteDirectory = (dir: string) => {
 }
 
 const handleAnnotateImage = (img: any) => {
-  router.push(`/annotate/${img.id}`)
+  const query = selectedDirectory.value ? { directory: selectedDirectory.value } : {}
+  router.push({ path: `/annotate/${img.id}`, query })
 }
 
 const handleDeleteImage = async (img: any) => {
@@ -433,6 +434,11 @@ const getFileName = (filePath: string) => {
 }
 
 onMounted(() => {
+  // 从 URL 查询参数恢复目录筛选状态
+  const dirFromQuery = route.query.directory as string | undefined
+  if (dirFromQuery) {
+    selectedDirectory.value = dirFromQuery
+  }
   loadAtlas()
   loadImages()
   loadDirectories()

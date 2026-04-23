@@ -110,6 +110,9 @@ venv.bak/
 logs/
 checkpoints/
 data/
+datasets/
+inference_output/
+runs/
 *.pt
 *.pth
 *.ckpt
