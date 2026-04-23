@@ -125,6 +125,7 @@ class ModelBase(BaseModel):
     """模型基础模型。"""
     name: str
     version: Optional[str] = None
+    pretrained_model: Optional[str] = "yolov8n.pt"
     file_path: Optional[str] = None
 
 
@@ -137,6 +138,7 @@ class ModelUpdate(BaseModel):
     """更新模型请求。"""
     name: Optional[str] = None
     version: Optional[str] = None
+    pretrained_model: Optional[str] = None
     file_path: Optional[str] = None
     metrics: Optional[dict] = None
 

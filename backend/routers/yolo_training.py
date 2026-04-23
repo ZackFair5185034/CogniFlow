@@ -10,6 +10,42 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 
+def check_gpu_available() -> Dict:
+    """检查 GPU 是否可用。
+
+    Returns:
+        设备信息字典，包含：
+        - available: bool，是否可用
+        - device: str，'cuda' 或 'cpu'
+        - device_name: str，设备名称
+        - memory_total: int，总显存(MB)，仅 CUDA 时有效
+        - memory_free: int，可用显存(MB)，仅 CUDA 时有效
+    """
+    try:
+        import torch
+        if torch.cuda.is_available():
+            device_name = torch.cuda.get_device_name(0)
+            memory_total = torch.cuda.get_device_properties(0).total_memory // (1024 * 1024)
+            memory_free = memory_total  # 简化处理，不计算当前占用
+            return {
+                "available": True,
+                "device": "cuda",
+                "device_name": device_name,
+                "memory_total": memory_total,
+                "memory_free": memory_free,
+            }
+    except Exception as e:
+        print(f"[GPU检测] 失败: {e}")
+
+    return {
+        "available": False,
+        "device": "cpu",
+        "device_name": "CPU",
+        "memory_total": 0,
+        "memory_free": 0,
+    }
+
+
 def export_to_yolo_format(atlas_id: int, db: Session, output_dir: str) -> Dict:
     """将图集数据导出为 YOLO 格式。
 
@@ -121,7 +157,10 @@ def train_yolo(
     batch_size: int = 16,
     imgsz: int = 640,
     device: str = "cpu",
-    stop_event=None
+    pretrained_model: str = "yolov8n.pt",
+    stop_event=None,
+    on_complete=None,
+    on_progress=None,
 ) -> Dict:
     """使用 YOLO 进行训练。
 
@@ -132,15 +171,79 @@ def train_yolo(
         batch_size: 批次大小
         imgsz: 图片尺寸
         device: 训练设备
+        pretrained_model: 预训练模型名称 (yolov8n.pt, yolov8s.pt, yolov8m.pt, etc.)
         stop_event: 停止事件，用于提前终止训练
+        on_complete: 完成回调，接收结果字典
+        on_progress: 进度回调，接收 (epoch, total_epochs) 参数
 
     Returns:
         训练结果
     """
+    import os
     from ultralytics import YOLO
+    import io
+    import sys
 
-    # 加载预训练模型（使用 YOLOv8n nano 模型，快速训练）
-    model = YOLO('yolov8n.pt')
+    # 设置模型缓存目录到项目目录
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    cache_dir = os.path.join(project_root, 'model_cache')
+    os.makedirs(cache_dir, exist_ok=True)
+    os.environ['YOLO_CACHE_DIR'] = cache_dir
+
+    model_cache_path = os.path.join(cache_dir, pretrained_model)
+
+    need_download = False
+
+    # 清理损坏的模型文件
+    if os.path.exists(model_cache_path):
+        try:
+            # 尝试加载模型验证是否有效
+            model = YOLO(model_cache_path)
+        except Exception as e:
+            # 文件损坏，删除后重新下载
+            print(f"[YOLO训练] 模型文件损坏: {model_cache_path}, 错误: {e}")
+            os.remove(model_cache_path)
+            need_download = True
+            if on_progress:
+                on_progress(0, epochs, message=f"模型文件损坏，正在重新下载 {pretrained_model}...")
+    else:
+        need_download = True
+
+    if need_download:
+        # 最多重试3次下载
+        max_retries = 3
+        for attempt in range(max_retries):
+            if on_progress:
+                on_progress(0, epochs, message=f"正在下载预训练模型 {pretrained_model} ({attempt + 1}/{max_retries})...")
+
+            # 创建字符串IO来捕获输出
+            old_stdout = sys.stdout
+            old_stderr = sys.stderr
+            captured_output = io.StringIO()
+            sys.stdout = captured_output
+            sys.stderr = captured_output
+
+            try:
+                model = YOLO(pretrained_model)
+                # 验证下载的模型是否有效
+                test_model = YOLO(model.ckpt_path)
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+                break  # 下载成功，跳出重试循环
+            except Exception as e:
+                sys.stdout = old_stdout
+                sys.stderr = old_stderr
+                print(f"[YOLO训练] 下载尝试 {attempt + 1} 失败: {e}")
+                if attempt == max_retries - 1:
+                    error_msg = f"模型下载失败（已重试{max_retries}次）: {str(e)}"
+                    if on_progress:
+                        on_progress(0, epochs, message=error_msg)
+                    raise Exception(error_msg)
+                # 删除损坏的文件后重试
+                if os.path.exists(model_cache_path):
+                    os.remove(model_cache_path)
+                if on_progress:
+                    on_progress(0, epochs, message=f"下载失败，正在重试 ({attempt + 2}/{max_retries})...")
 
     # 创建保存目录
     save_dir = Path(model_save_path)
@@ -156,11 +259,15 @@ def train_yolo(
         project=str(save_dir.parent),
         name=save_dir.stem,
         exist_ok=True,
-        verbose=False,  # 减少输出
+        verbose=False,
         save=True,
-        plots=False,  # 禁用自动绘图以加快速度
-        patience=0  # 禁用早停
+        plots=False,
+        patience=0,
     )
+
+    # 更新进度
+    if on_progress:
+        on_progress(epochs, epochs, message="训练完成")
 
     # YOLO 将模型保存到 runs/detect/{project}/{name}/weights/
     # 从 results 中获取实际的保存路径
@@ -168,7 +275,7 @@ def train_yolo(
     last_model_path = str(Path(results.save_dir) / "weights" / "last.pt")
 
     # 返回训练结果
-    return {
+    result = {
         "success": True,
         "model_path": str(model_save_path),
         "best_model": best_model_path,
@@ -178,6 +285,12 @@ def train_yolo(
             "mAP50-95": float(results.results_dict.get('metrics/mAP50-95(B)', 0)),
         }
     }
+
+    # 如果提供了完成回调，调用它
+    if on_complete:
+        on_complete(result)
+
+    return result
 
 
 def load_yolo_model(model_path: str):

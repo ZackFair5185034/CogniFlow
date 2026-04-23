@@ -96,6 +96,7 @@ class Model(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     version = Column(String(50), nullable=True)
+    pretrained_model = Column(String(50), nullable=True, default='yolov8n.pt')  # 预训练模型
     file_path = Column(String(500), nullable=True)
     atlas_id = Column(Integer, ForeignKey("atlas.id", ondelete="SET NULL"), nullable=True)
     metrics = Column(Text, nullable=True)  # JSON

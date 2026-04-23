@@ -79,6 +79,8 @@ export const trainingApi = {
   deleteJob: (jobId: number) => api.delete(`/training/jobs/${jobId}`),
   clearCompleted: () => api.delete('/training/jobs'),
   getMetricsHistory: (jobId: number) => api.get(`/training/jobs/${jobId}/metrics-history`),
+  getDeviceInfo: () => api.get('/training/device-info'),
+  getProgress: () => api.get('/training/progress'),
 }
 
 // Launch API
@@ -156,5 +158,4 @@ export const ruleEngineApi = {
     api.get('/rule-engine/executions', { params: { graph_id: graphId, limit } }),
   getExecution: (id: number) => api.get(`/rule-engine/executions/${id}`),
   getExecutionLogs: (id: number) => api.get(`/rule-engine/executions/${id}/logs`),
->>>>>>> c3625f9 (feat(rule-engine): add rule engine backend + VueFlow frontend)
 }

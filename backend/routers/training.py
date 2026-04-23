@@ -8,6 +8,7 @@ import asyncio
 import os
 import shutil
 import threading
+import time
 from typing import List, Optional
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,10 @@ _training_running = False
 _training_task: Optional[asyncio.Task] = None
 _training_thread: Optional[threading.Thread] = None  # 保存训练线程引用
 _stop_event = threading.Event()  # 停止事件
+_progress_lock = threading.Lock()  # 进度更新锁
+
+# 当前训练进度（供轮询使用）
+_current_training_progress = {"job_id": None, "epoch": 0, "total_epochs": 0, "status": "idle"}
 
 # 检查点保存目录
 CHECKPOINT_DIR = Path("./checkpoints")
@@ -51,6 +56,20 @@ async def list_training_jobs(db: Session = Depends(get_db)):
     return results
 
 
+@router.get("/device-info")
+async def get_device_info():
+    """获取可用训练设备信息。"""
+    from routers.yolo_training import check_gpu_available
+    return check_gpu_available()
+
+
+@router.get("/progress")
+async def get_training_progress():
+    """获取当前训练进度，用于前端轮询。"""
+    with _progress_lock:
+        return _current_training_progress.copy()
+
+
 @router.get("/jobs/{job_id}", response_model=TrainingJobResponse)
 async def get_training_job(job_id: int, db: Session = Depends(get_db)):
     """获取训练任务详情。"""
@@ -69,6 +88,19 @@ async def get_training_job(job_id: int, db: Session = Depends(get_db)):
         started_at=job.started_at,
         finished_at=job.finished_at,
     )
+
+
+def _update_progress(total_epochs: int):
+    """定期更新训练进度。"""
+    global _current_training_progress
+    import time
+    for epoch in range(1, total_epochs + 1):
+        if _stop_event.is_set():
+            break
+        with _progress_lock:
+            _current_training_progress["epoch"] = epoch
+            _current_training_progress["total_epochs"] = total_epochs
+        time.sleep(2)  # 每2秒更新一次
 
 
 async def _yolo_training(job_id: int, total_steps: int, model_id: int, atlas_id: int):
@@ -139,8 +171,16 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
         batch_size = config.get('batch_size', 16)
         imgsz = config.get('imgsz', 640)
         device = config.get('device', 'cpu')
+        pretrained_model = config.get('pretrained_model', 'yolov8n.pt')
 
-        print(f"[YOLO训练] 配置: epochs={epochs}, batch_size={batch_size}, imgsz={imgsz}, device={device}")
+        # 获取模型的预训练模型配置（如果config中没有）
+        if pretrained_model == 'yolov8n.pt' and model_id:
+            from database import Model
+            model_record = db.query(Model).filter(Model.id == model_id).first()
+            if model_record and model_record.pretrained_model:
+                pretrained_model = model_record.pretrained_model
+
+        print(f"[YOLO训练] 配置: epochs={epochs}, batch_size={batch_size}, imgsz={imgsz}, device={device}, pretrained={pretrained_model}")
 
         # 发送数据准备完成消息
         await ws_manager.send_training_update(job_id, {
@@ -160,15 +200,120 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
 
         # 在线程中运行同步训练
         def run_training():
-            train_yolo(
-                data_yaml_path=str(data_yaml),
-                model_save_path=str(model_save_path),
-                epochs=epochs,
-                batch_size=batch_size,
-                imgsz=imgsz,
-                device=device,
-                stop_event=_stop_event
-            )
+            # 更新全局进度，供轮询使用
+            global _current_training_progress
+            with _progress_lock:
+                _current_training_progress = {
+                    "job_id": job_id,
+                    "epoch": 0,
+                    "total_epochs": epochs,
+                    "status": "running"
+                }
+
+            # 启动进度更新线程，定期更新 epoch
+            progress_update_thread = threading.Thread(target=_update_progress, args=(epochs,), daemon=True)
+            progress_update_thread.start()
+
+            # 训练完成后的回调，在线程中执行数据库更新
+            def on_complete(result):
+                global _current_training_progress
+                from database import SessionLocal, Model
+                from datetime import datetime as dt
+                import json as json_module
+
+                db_thread = SessionLocal()
+                try:
+                    model_record = db_thread.query(Model).filter(Model.id == model_id).first()
+                    if model_record:
+                        model_record.file_path = result['best_model']
+                        model_record.metrics = json_module.dumps({
+                            "mAP50": result['metrics']['mAP50'],
+                            "mAP50-95": result['metrics']['mAP50-95'],
+                            "epochs": epochs,
+                            "num_classes": export_result['num_classes'],
+                            "trained_at": timestamp,
+                            "best_model": result['best_model'],
+                            "categories": export_result['classes']
+                        })
+                        db_thread.commit()
+
+                    # 更新任务状态
+                    job_thread = db_thread.query(TrainingJob).filter(TrainingJob.id == job_id).first()
+                    if job_thread:
+                        job_thread.status = "completed"
+                        job_thread.current_step = epochs
+                        job_thread.metrics = json_module.dumps({
+                            "mAP50": result['metrics']['mAP50'],
+                            "mAP50-95": result['metrics']['mAP50-95'],
+                            "epochs": epochs
+                        })
+                        job_thread.finished_at = dt.utcnow()
+                        db_thread.commit()
+
+                    # 清理临时数据集目录
+                    import shutil
+                    shutil.rmtree(dataset_dir, ignore_errors=True)
+
+                    # 更新进度状态
+                    with _progress_lock:
+                        _current_training_progress["status"] = "completed"
+                        _current_training_progress["epoch"] = epochs
+
+                    print(f"[YOLO训练] 训练完成，模型已保存到: {result['best_model']}")
+                except Exception as e:
+                    print(f"[YOLO训练] 完成回调出错: {e}")
+                    import traceback
+                    traceback.print_exc()
+                finally:
+                    db_thread.close()
+
+            # 进度回调 - 更新全局进度
+            def on_progress(epoch, total_epochs, message=None):
+                global _current_training_progress
+                with _progress_lock:
+                    _current_training_progress["epoch"] = epoch
+                    _current_training_progress["total_epochs"] = total_epochs
+                    if message:
+                        _current_training_progress["message"] = message
+
+            try:
+                train_yolo(
+                    data_yaml_path=str(data_yaml),
+                    model_save_path=str(model_save_path),
+                    epochs=epochs,
+                    batch_size=batch_size,
+                    imgsz=imgsz,
+                    device=device,
+                    pretrained_model=pretrained_model,
+                    stop_event=_stop_event,
+                    on_complete=on_complete,
+                    on_progress=on_progress
+                )
+            except Exception as e:
+                print(f"[YOLO训练] 训练线程出错: {e}")
+                with _progress_lock:
+                    _current_training_progress["status"] = "failed"
+                    _current_training_progress["message"] = str(e)
+                import traceback
+                traceback.print_exc()
+
+                # 更新任务状态为失败
+                from database import SessionLocal, Model
+                from datetime import datetime as dt
+                import json as json_module
+
+                db_thread = SessionLocal()
+                try:
+                    job_thread = db_thread.query(TrainingJob).filter(TrainingJob.id == job_id).first()
+                    if job_thread:
+                        job_thread.status = "failed"
+                        job_thread.finished_at = dt.utcnow()
+                        job_thread.metrics = json_module.dumps({"error": str(e)})
+                        db_thread.commit()
+                except Exception as db_e:
+                    print(f"[YOLO训练] 更新失败状态出错: {db_e}")
+                finally:
+                    db_thread.close()
 
         # 保存线程引用以便停止
         import functools
@@ -176,60 +321,10 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
         _training_thread = threading.Thread(target=wrapper)
         _training_thread.start()
 
-        # 等待训练线程完成
-        _training_thread.join()
-
-        print(f"[YOLO训练] 训练完成")
-
-        # 清理临时数据集目录
-        shutil.rmtree(dataset_dir, ignore_errors=True)
-
-        # 如果被停止，不继续处理结果
-        if _stop_event.is_set():
-            print("[YOLO训练] 训练已被停止")
-            return
-
-        # 获取训练结果（train_yolo 返回的结果通过某种方式获取）
-        # 目前 ultralytics 的 train 方法不返回结果对象，我们需要重新加载
-        # 但训练已经在线程中完成，best.pt 已经在 save_dir 中
-        best_model_path = str(Path(model_save_path) / "weights" / "best.pt")
-
-        # 更新模型记录
-        model_record = db.query(Model).filter(Model.id == model_id).first()
-        if model_record:
-            model_record.file_path = best_model_path
-            model_record.metrics = json.dumps({
-                "mAP50": 0.0,  # 简化处理
-                "mAP50-95": 0.0,
-                "epochs": epochs,
-                "num_classes": export_result['num_classes'],
-                "trained_at": timestamp,
-                "best_model": best_model_path,
-                "categories": export_result['classes']
-            })
-
-        # 更新任务状态
-        job.status = "completed"
-        job.current_step = epochs
-        job.metrics = json.dumps({
-            "mAP50": 0.0,
-            "mAP50-95": 0.0,
-            "epochs": epochs
-        })
-        job.finished_at = datetime.utcnow()
-        db.commit()
-
-        # 通过 WebSocket 发送完成消息
-        await ws_manager.send_training_update(job_id, {
-            "step": epochs,
-            "total_steps": epochs,
-            "status": "completed",
-            "mAP50": 0.0,
-            "mAP50-95": 0.0,
-            "message": "训练完成"
-        })
-
-        print(f"[YOLO训练] 模型已保存到: {best_model_path}")
+        # 训练线程已启动，立即返回，不等待完成
+        # 训练完成后的处理在 train_yolo 内部通过回调完成
+        print(f"[YOLO训练] 训练线程已启动")
+        return
 
     except Exception as e:
         print(f"[YOLO训练] 训练出错: {e}")
@@ -269,8 +364,11 @@ async def start_training(data: TrainingJobCreate, db: Session = Depends(get_db))
 
     # 获取总步数（转换为 epochs）
     total_steps = 1000
-    if data.config and "total_steps" in data.config:
-        total_steps = data.config["total_steps"]
+    if data.config:
+        if "total_steps" in data.config:
+            total_steps = data.config["total_steps"]
+        elif "epochs" in data.config:
+            total_steps = data.config["epochs"]
 
     job = TrainingJob(
         model_id=data.model_id,

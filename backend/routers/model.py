@@ -28,6 +28,7 @@ async def list_models(db: Session = Depends(get_db)):
             id=m.id,
             name=m.name,
             version=m.version,
+            pretrained_model=m.pretrained_model,
             file_path=m.file_path,
             atlas_id=m.atlas_id,
             metrics=json.loads(m.metrics) if m.metrics else None,
@@ -51,6 +52,7 @@ async def create_model(data: ModelCreate, db: Session = Depends(get_db)):
     model = Model(
         name=data.name,
         version=data.version,
+        pretrained_model=data.pretrained_model,
         file_path=data.file_path,
         atlas_id=data.atlas_id,
     )
@@ -61,6 +63,7 @@ async def create_model(data: ModelCreate, db: Session = Depends(get_db)):
         id=model.id,
         name=model.name,
         version=model.version,
+        pretrained_model=model.pretrained_model,
         file_path=model.file_path,
         atlas_id=model.atlas_id,
         metrics=None,
@@ -79,6 +82,7 @@ async def get_model(model_id: int, db: Session = Depends(get_db)):
         id=m.id,
         name=m.name,
         version=m.version,
+        pretrained_model=m.pretrained_model,
         file_path=m.file_path,
         atlas_id=m.atlas_id,
         metrics=json.loads(m.metrics) if m.metrics else None,
@@ -102,6 +106,8 @@ async def update_model(
         m.name = data.name
     if data.version is not None:
         m.version = data.version
+    if data.pretrained_model is not None:
+        m.pretrained_model = data.pretrained_model
     if data.file_path is not None:
         m.file_path = data.file_path
     if data.metrics is not None:
@@ -113,6 +119,7 @@ async def update_model(
         id=m.id,
         name=m.name,
         version=m.version,
+        pretrained_model=m.pretrained_model,
         file_path=m.file_path,
         atlas_id=m.atlas_id,
         metrics=json.loads(m.metrics) if m.metrics else None,
@@ -150,6 +157,7 @@ async def set_best_model(model_id: int, db: Session = Depends(get_db)):
         id=m.id,
         name=m.name,
         version=m.version,
+        pretrained_model=m.pretrained_model,
         file_path=m.file_path,
         atlas_id=m.atlas_id,
         metrics=json.loads(m.metrics) if m.metrics else None,
@@ -187,6 +195,7 @@ async def upload_model_file(
         id=m.id,
         name=m.name,
         version=m.version,
+        pretrained_model=m.pretrained_model,
         file_path=m.file_path,
         atlas_id=m.atlas_id,
         metrics=json.loads(m.metrics) if m.metrics else None,
