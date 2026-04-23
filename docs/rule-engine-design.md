@@ -265,59 +265,61 @@ module.exports = {
 └────────────────────────────────────────────────────────────────┘
 ```
 
-### 3.2 节点详细定义
+### 3.2 节点详细定义 (实际实现)
 
-#### 3.2.1 触发器节点 (Trigger)
+#### 3.2.1 触发器节点 (Trigger) ✅ 已实现
 
-| 节点名称 | 功能描述 | 输出端口 | 配置参数 |
-|---------|---------|---------|---------|
-| `YOLO检测触发` | 当检测到指定目标时触发 | `trigger`, `detections` | `class_names`, `confidence`, `max_results` |
-| `定时触发` | 周期性触发 | `trigger` | `interval_ms`, `cron_expression` |
-| `WebSocket触发` | 接收外部消息触发 | `trigger`, `payload` | `event_type` |
-| `HTTP触发` | 接收 HTTP 请求触发 | `trigger`, `body` | `method`, `path` |
+| 节点类型标识 | 显示名称 | 功能描述 | 输出端口 | 配置参数 |
+|------------|---------|---------|---------|---------|
+| `yolo_trigger` | YOLO 触发器 | 当检测到指定目标时触发 | `triggered`, `detections` | `class_names`, `min_confidence`, `max_objects` |
+| `timer_trigger` | 定时器触发器 | 按固定时间间隔触发 | `triggered`, `timestamp` | `interval`, `enabled` |
+| `manual_trigger` | 手动触发器 | 手动触发规则执行 | `triggered` | - |
 
-#### 3.2.2 条件节点 (Condition)
+#### 3.2.2 条件节点 (Condition) ✅ 已实现
 
-| 节点名称 | 功能描述 | 输入端口 | 输出端口 | 配置参数 |
-|---------|---------|---------|---------|---------|
-| `目标存在` | 检测结果中是否存在指定目标 | `detections` | `true`, `false` | `class_name`, `min_confidence` |
-| `目标不存在` | 检测结果中是否不存在指定目标 | `detections` | `true`, `false` | `class_name`, `min_confidence` |
-| `数量判断` | 检测数量是否满足条件 | `detections` | `true`, `false` | `class_name`, `operator`, `threshold` |
-| `区域判断` | 目标是否在指定区域内 | `detections`, `region` | `true`, `false` | `class_name`, `region` |
-| `表达式` | 自定义条件表达式 | `context` | `true`, `false` | `expression` |
+| 节点类型标识 | 显示名称 | 功能描述 | 输入端口 | 输出端口 | 配置参数 |
+|------------|---------|---------|---------|---------|---------|
+| `object_exists_condition` | 目标存在 | 检查是否检测到指定目标 | `detections` | `true`, `false` | `class_names`, `min_count`, `comparison` |
+| `confidence_threshold_condition` | 置信度阈值 | 检查检测置信度是否满足要求 | `detections` | `true`, `false` | `min_confidence` |
+| `variable_condition` | 变量条件 | 检查变量的值是否满足条件 | - | `true`, `false` | `variable_name`, `expected_value`, `comparison` |
 
-#### 3.2.3 动作节点 (Action)
+#### 3.2.3 动作节点 (Action) ✅ 已实现
 
-| 节点名称 | 功能描述 | 输入端口 | 输出端口 | 配置参数 |
-|---------|---------|---------|---------|---------|
-| `键盘按键` | 模拟键盘按键 | `trigger` | `done` | `key`, `hold_ms`, `repeat` |
-| `鼠标点击` | 模拟鼠标点击 | `trigger` | `done` | `x`, `y`, `button`, `click_type` |
-| `鼠标移动` | 移动鼠标到指定位置 | `trigger` | `done` | `x`, `y`, `duration` |
-| `发送HTTP` | 发送 HTTP 请求 | `trigger` | `response`, `error` | `url`, `method`, `headers`, `body` |
-| `等待` | 等待指定时间 | `trigger` | `done` | `duration_ms` |
-| `记录日志` | 记录执行日志 | `trigger` | `done` | `message`, `level` |
-| `执行Python` | 执行自定义 Python 代码 | `trigger` | `result`, `error` | `code` |
-| `发送WebSocket` | 发送 WebSocket 消息 | `trigger` | `done` | `message`, `target` |
+| 节点类型标识 | 显示名称 | 功能描述 | 输入端口 | 输出端口 | 配置参数 |
+|------------|---------|---------|---------|---------|---------|
+| `keyboard_action` | 键盘动作 | 模拟键盘按键 | `trigger` | `next` | `keys`, `hold_duration`, `interval` |
+| `mouse_action` | 鼠标动作 | 模拟鼠标操作 | `trigger` | `next` | `action`, `x`, `y`, `button`, `scroll_amount` |
+| `wait_action` | 等待 | 等待指定时间 | `trigger` | `next` | `duration` |
+| `http_request_action` | HTTP 请求 | 发送 HTTP 请求 | `trigger` | `next`, `response` | `url`, `method`, `headers`, `body`, `timeout` |
+| `log_action` | 日志 | 记录日志信息 | `trigger` | `next` | `message`, `level` |
 
-#### 3.2.4 逻辑节点 (Logic)
+#### 3.2.4 逻辑节点 (Logic) ✅ 已实现
 
-| 节点名称 | 功能描述 | 输入端口 | 输出端口 | 配置参数 |
-|---------|---------|---------|---------|---------|
-| `分支` | 根据条件选择分支 | `input`, `condition` | `branch_a`, `branch_b` | - |
-| `并行执行` | 同时执行多个分支 | `input` | `output_1` ~ `output_n` | `branches` |
-| `循环` | 循环执行直到条件满足 | `input` | `loop_body`, `done` | `max_iterations`, `condition` |
-| `超时` | 设置节点执行超时 | `input` | `output`, `timeout` | `timeout_ms` |
-| `优先级队列` | 按优先级顺序执行 | `inputs` | `output` | `priority_field` |
+| 节点类型标识 | 显示名称 | 功能描述 | 输入端口 | 输出端口 | 配置参数 |
+|------------|---------|---------|---------|---------|---------|
+| `branch` | 分支 | 根据条件选择执行分支 | `input`, `condition` | `true`, `false` | - |
+| `parallel_branch` | 并行分支 | 同时执行多个分支 | `trigger` | `branch_1~3`, `completed` | `max_concurrent` |
+| `loop` | 循环 | 循环执行节点 | `trigger` | `iteration`, `completed` | `max_iterations`, `continue_on_error` |
+| `delay` | 延迟 | 延迟后继续执行 | `input` | `output` | `delay` |
+| `set_variable` | 设置变量 | 设置执行上下文中的变量 | `trigger` | `next` | `variable_name`, `value`, `value_type` |
 
-#### 3.2.5 工具节点 (Utility)
+#### 3.2.5 待实现节点 (规划中)
 
-| 节点名称 | 功能描述 | 输入端口 | 输出端口 | 配置参数 |
-|---------|---------|---------|---------|---------|
-| `变量设置` | 设置上下文变量 | `trigger` | `context` | `key`, `value` |
-| `变量获取` | 获取上下文变量 | `context` | `value` | `key` |
-| `数据转换` | 转换数据结构 | `input` | `output` | `transform_type` |
-| `模板渲染` | 渲染字符串模板 | `context` | `result` | `template` |
-| `坐标转换` | 转换检测框坐标 | `detections` | `regions` | `from_coord`, `to_coord` |
+| 节点类型标识 | 显示名称 | 功能描述 | 说明 |
+|------------|---------|---------|------|
+| `websocket_trigger` | WebSocket 触发器 | 接收外部消息触发 | 待实现 |
+| `http_trigger` | HTTP 触发器 | 接收 HTTP 请求触发 | 待实现 |
+| `object_not_exists_condition` | 目标不存在 | 检查是否不存在指定目标 | 待实现 |
+| `region_condition` | 区域判断 | 目标是否在指定区域内 | 待实现 |
+| `expression_condition` | 表达式条件 | 自定义条件表达式 | 待实现 |
+| `python_code_action` | 执行 Python | 执行自定义 Python 代码 | 待实现 |
+| `websocket_action` | 发送 WebSocket | 发送 WebSocket 消息 | 待实现 |
+| `timeout_logic` | 超时 | 设置节点执行超时 | 待实现 |
+| `priority_queue_logic` | 优先级队列 | 按优先级顺序执行 | 待实现 |
+| `variable_get` | 变量获取 | 获取上下文变量 | 待实现 |
+| `data_transform` | 数据转换 | 转换数据结构 | 待实现 |
+| `template_render` | 模板渲染 | 渲染字符串模板 | 待实现 |
+| `coordinate_transform` | 坐标转换 | 转换检测框坐标 | 待实现 |
 
 ### 3.3 节点数据结构
 
@@ -666,34 +668,86 @@ interface UpdateGraphRequest {
   variables?: VariableDefinition[];
 }
 
+// ============================================
+// API 请求/响应类型 (与后端 schemas.py 对应)
+// ============================================
+
 /**
- * 执行请求
+ * 创建规则图请求
  */
-interface ExecuteGraphRequest {
-  triggerType: 'yolo' | 'timer' | 'manual' | 'http';
-  triggerData?: {
-    detections?: Detection[];
-    payload?: unknown;
-  };
-  // 调试选项
-  debug?: {
-    stepMode: boolean;
-    breakpoints?: string[];
-  };
+interface CreateRuleGraphRequest {
+  name: string;
+  description?: string;
+  nodes_json?: string;      // JSON 字符串
+  edges_json?: string;      // JSON 字符串
+  variables_json?: string;  // JSON 字符串
+  version?: string;
+  is_active?: boolean;
 }
 
 /**
- * 执行响应
+ * 更新规则图请求
+ */
+interface UpdateRuleGraphRequest {
+  name?: string;
+  description?: string;
+  nodes_json?: string;
+  edges_json?: string;
+  variables_json?: string;
+  is_active?: boolean;
+  thumbnail?: string;        // Base64 缩略图 (实际实现新增)
+}
+
+/**
+ * 执行请求 (实际实现)
+ */
+interface ExecuteGraphRequest {
+  graph_id: number;
+  trigger_type?: string;      // yolo/timer/manual/http
+  trigger_data?: object;      // 触发时的数据
+}
+
+/**
+ * 执行响应 (实际实现)
  */
 interface ExecuteGraphResponse {
-  executionId: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
-  // 快速返回时包含结果
+  execution_id: number;
+  status: string;
   result?: {
     success: boolean;
     logs: ExecutionLog[];
     duration: number;
   };
+}
+
+/**
+ * 执行历史响应 (实际实现)
+ */
+interface ExecutionHistoryResponse {
+  id: number;
+  graph_id: number;
+  status: string;
+  start_time: string;
+  end_time?: string;
+  trigger_type?: string;
+  result_json?: string;
+  logs_json?: string;
+}
+
+/**
+ * 节点执行记录 (实际实现)
+ */
+interface NodeExecutionLog {
+  id: number;
+  execution_id: number;
+  node_id: string;
+  node_type: string;
+  status: string;
+  input_data_json?: string;
+  output_data_json?: string;
+  error_message?: string;
+  start_time: string;
+  end_time?: string;
 }
 
 /**
@@ -2051,29 +2105,35 @@ src/
 
 ---
 
-## 7. 后端 API 设计
+## 5. 后端 API 设计
 
-### 7.1 API 端点
+### 5.1 API 端点 (实际实现)
 
 ```
 规则图管理:
 POST   /api/rule-engine/graphs              # 创建规则图
 GET    /api/rule-engine/graphs              # 获取规则图列表
 GET    /api/rule-engine/graphs/:id         # 获取规则图详情
+GET    /api/rule-engine/graphs/:id/detail  # 获取规则图详情(含解析数据)
+PATCH  /api/rule-engine/graphs/:id/thumbnail # 更新缩略图
 PUT    /api/rule-engine/graphs/:id          # 更新规则图
 DELETE /api/rule-engine/graphs/:id          # 删除规则图
+POST   /api/rule-engine/graphs/:id/validate # 验证规则图
+POST   /api/rule-engine/graphs/:id/activate # 激活规则图
+POST   /api/rule-engine/graphs/:id/deactivate # 停用规则图
 
 节点定义:
-GET    /api/rule-engine/node-types          # 获取所有节点类型
+GET    /api/rule-engine/nodes/definitions    # 获取所有节点类型 (注意: 不是 /node-types)
 
 执行管理:
-POST   /api/rule-engine/execute/:graphId    # 手动执行图
-GET    /api/rule-engine/executions/:id     # 获取执行状态
-GET    /api/rule-engine/executions          # 获取执行历史
+POST   /api/rule-engine/execute              # 手动执行图 (注意: 不是 /execute/:graphId)
+GET    /api/rule-engine/executions           # 获取执行历史
+GET    /api/rule-engine/executions/:id     # 获取执行记录详情
+GET    /api/rule-engine/executions/:id/logs # 获取执行日志详情
+```
 
-实时通信:
-WS     /ws/rule-engine/execution/:graphId   # 执行状态 WebSocket
-WS     /ws/rule-engine/debug/:graphId       # 调试模式 WebSocket
+### 5.2 API 端点 (设计文档原始描述 - 已过时)
+
 ```
 
 ### 7.2 数据模型
@@ -2126,11 +2186,11 @@ class RuleGraphModel(BaseModel):
 
 ## 8. 数据库设计
 
-### 8.1 表结构
+### 8.1 表结构 (实际实现)
 
 ```sql
--- 规则图表
-CREATE TABLE rule_graphs (
+-- 规则图表 (表名: rule_graph)
+CREATE TABLE rule_graph (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name VARCHAR(255) NOT NULL,
     description TEXT,
@@ -2139,11 +2199,12 @@ CREATE TABLE rule_graphs (
     variables_json TEXT,                -- JSON 存储变量定义
     version VARCHAR(50) DEFAULT '1.0.0',
     is_active BOOLEAN DEFAULT FALSE,
+    thumbnail TEXT,                      -- Base64 缩略图快照 (实际实现新增)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 执行历史表
+-- 执行历史表 (表名: execution_history)
 CREATE TABLE execution_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     graph_id INTEGER NOT NULL,
@@ -2154,22 +2215,31 @@ CREATE TABLE execution_history (
     trigger_data_json TEXT,            -- 触发时的数据
     result_json TEXT,                   -- 执行结果
     logs_json TEXT,                     -- 执行日志
-    FOREIGN KEY (graph_id) REFERENCES rule_graphs(id)
+    FOREIGN KEY (graph_id) REFERENCES rule_graph(id)
 );
 
--- 节点执行记录表
-CREATE TABLE node_execution_logs (
+-- 节点执行记录表 (表名: node_execution_log)
+CREATE TABLE node_execution_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     execution_id INTEGER NOT NULL,
     node_id VARCHAR(255) NOT NULL,
     node_type VARCHAR(100) NOT NULL,
-    status VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL,        -- running, completed, failed
     input_data_json TEXT,
     output_data_json TEXT,
     error_message TEXT,
     start_time TIMESTAMP NOT NULL,
     end_time TIMESTAMP,
     FOREIGN KEY (execution_id) REFERENCES execution_history(id)
+);
+```
+
+### 8.2 表结构 (设计文档原始描述 - 已过时)
+
+```sql
+-- 规则图表 (旧: rule_graphs，多了个 s)
+CREATE TABLE rule_graphs (
+    ...
 );
 ```
 
@@ -2240,34 +2310,100 @@ class InputControlService:
 
 ## 10. 实现计划
 
-#### Phase 1: 基础框架 (2-3 周)
+> ⚠️ **最后更新**: 2026-04-23 (feature/rule-engine 分支)
+
+### 实现状态总览
+
+> ⚠️ **最后更新**: 2026-04-23 (feature/rule-engine 分支与 origin/main 合并后)
+
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| **后端 API** | ✅ 已完成 | FastAPI 完整 CRUD + 执行接口，路由前缀 `/api/rule-engine` |
+| **数据库模型** | ✅ 已完成 | `rule_graph`, `execution_history`, `node_execution_log` (表名单数) |
+| **节点基类** | ✅ 已完成 | BaseNode, ExecutionContext, NodeResult |
+| **节点注册表** | ✅ 已完成 | NodeRegistry + init_builtin_executors() |
+| **图管理器** | ✅ 已完成 | GraphManager CRUD + validate_graph |
+| **规则执行器** | ✅ 已完成 | RuleGraphExecutor 异步执行引擎 |
+| **触发器节点** | ✅ 已完成 | YOLOTrigger, TimerTrigger, ManualTrigger (3个) |
+| **条件节点** | ✅ 已完成 | ObjectExists, ConfidenceThreshold, Variable (3个) |
+| **动作节点** | ✅ 已完成 | Keyboard, Mouse, Wait, HttpRequest, Log (5个) |
+| **逻辑节点** | ✅ 已完成 | Branch, ParallelBranch, Loop, Delay, SetVariable (5个) |
+| **前端 RuleList** | ✅ 已完成 | 列表页 + 卡片 + 缩略图 |
+| **前端 RuleCanvas** | ✅ 已完成 | VueFlow 节点编辑器 |
+| **WebSocket 实时通信** | ❌ 未实现 | 设计文档有描述，但实际代码未实现 |
+| **VisionGame 集成** | 🔄 部分完成 | Keyboard/Mouse 节点有 TODO 标记待对接 core.control |
+
+### API 端点 (实际实现 vs 设计文档)
+
+| 功能 | 设计文档 | 实际实现 | 状态 |
+|------|---------|---------|------|
+| 节点定义 | `/node-types` | `/nodes/definitions` | ⚠️ 已更正 |
+| 执行图 | `/execute/:graphId` | `/execute` (POST body 传 graph_id) | ⚠️ 已更正 |
+| 规则图表名 | `rule_graphs` | `rule_graph` | ⚠️ 已更正 |
+| 节点执行日志表名 | `node_execution_logs` | `node_execution_log` | ⚠️ 已更正 |
+| WebSocket | `/ws/execution/:graphId` | ❌ 未实现 | ❌ |
+
+### 待完成工作
+
+1. **WebSocket 实时通信** - 执行状态实时推送 (代码未实现，文档有过时描述)
+2. **VisionGame Core 集成** - KeyboardActionNode, MouseActionNode 需对接 `visiongame.core.control`
+3. **循环节点完整实现** - LoopNode 需执行器支持迭代
+4. **前端节点配置面板** - 节点详情编辑 UI
+5. **执行历史页面** - 完整执行日志查看
+
+```
+backend/services/rule_engine/
+├── __init__.py              # 导出 RuleGraphExecutor, NodeRegistry, GraphManager
+├── graph_manager.py         # 图 CRUD + 验证
+├── executor.py              # 异步图执行引擎
+├── registry.py              # 节点注册表 + 内置节点初始化
+└── nodes/
+    ├── base.py              # BaseNode, NodeCategory, NodeStatus, ExecutionContext
+    ├── triggers.py           # YOLOTrigger, TimerTrigger, ManualTrigger
+    ├── conditions.py         # ObjectExists, ConfidenceThreshold, VariableCondition
+    ├── actions.py            # Keyboard, Mouse, Wait, HttpRequest, Log
+    └── logic.py              # Branch, ParallelBranch, Loop, Delay, SetVariable
+```
+
+### 待完成工作
+
+1. **VisionGame Core 集成** - KeyboardActionNode, MouseActionNode 需对接 `visiongame.core.control`
+2. **WebSocket 实时通信** - 执行状态实时推送
+3. **循环节点完整实现** - LoopNode 需执行器支持迭代
+4. **前端节点配置面板** - 节点详情编辑 UI
+5. **执行历史页面** - 完整执行日志查看
+
+---
+
+#### Phase 1: 基础框架 (2-3 周) - ✅ 已完成
 
 - [x] 后端 API 框架搭建 (FastAPI + 路由结构)
 - [x] 数据库表设计 (rule_graphs, execution_history)
 - [x] 基础节点执行器框架 (BaseNodeExecutor 基类)
 - [x] 图执行引擎核心逻辑 (RuleGraphExecutor)
 - [x] 节点定义注册表 (NodeDefinitionRegistry)
-- [ ] 单元测试基础覆盖 (pytest + pytest-asyncio)
-- [ ] 基础 API 端点 (CRUD + 执行触发)
+- [x] 单元测试基础覆盖 (pytest + pytest-asyncio)
+- [x] 基础 API 端点 (CRUD + 执行触发)
 
 **Phase 1 优化建议**:
-- 增加图验证逻辑：确保图中没有孤立节点或循环引用
-- 添加执行器注册表初始化方法 `init_builtin_executors()`
-- 实现基础的执行上下文持久化
+- 增加图验证逻辑：确保图中没有孤立节点或循环引用 ✅ 已实现
+- 添加执行器注册表初始化方法 `init_builtin_executors()` ✅ 已实现
+- 实现基础的执行上下文持久化 ✅ 已实现
 
-**交付物**: 可运行的最小化规则引擎后端服务
+**交付物**: 可运行的最小化规则引擎后端服务 ✅
 
-#### Phase 2: 前端节点编辑器 (3-4 周)
+#### Phase 2: 前端节点编辑器 (3-4 周) - 🔄 部分完成
 
-- [ ] Vue3 + Vue Flow 项目结构搭建
-- [ ] 节点画布 (Canvas) 组件实现
-- [ ] 节点面板 (Palette) 组件实现
-- [ ] 节点配置面板实现
-- [ ] 节点拖拽、连接、删除交互
-- [ ] 画布缩放、平移、小地图
-- [ ] 图的保存/加载 API 对接
-- [ ] Undo/Redo 撤销重做支持
-- [ ] 键盘快捷键支持
+前端实现情况：
+- [x] RuleList.vue - 规则图列表页 ✅
+- [x] RuleCanvas.vue - VueFlow 节点编辑器 ✅
+- [ ] 节点面板 (Palette) 组件实现 - 需检查
+- [ ] 节点配置面板实现 - 需检查
+- [x] 节点拖拽、连接、删除交互 ✅ (VueFlow 内置)
+- [x] 画布缩放、平移、小地图 ✅ (VueFlow 内置)
+- [x] 图的保存/加载 API 对接 ✅
+- [ ] Undo/Redo 撤销重做支持 - 待确认
+- [ ] 键盘快捷键支持 - 待确认
 
 **Phase 2 优化建议**:
 - 使用 `shallowRef` 存储 nodes/edges 避免深度响应式
@@ -2275,24 +2411,24 @@ class InputControlService:
 - 使用 `useMemo` 和 `useCallback` 优化组件性能
 - 添加节点搜索和过滤功能
 
-**交付物**: 功能完整的可视化节点编辑器
+**交付物**: 功能完整的可视化节点编辑器 - 🔄 进行中
 
-#### Phase 3: 核心功能 (2-3 周)
+#### Phase 3: 核心功能 (2-3 周) - 🔄 大部分完成
 
-- [ ] YOLO 触发器实现 (对接 VisionGame 检测服务)
-- [ ] 条件节点实现 (目标存在/不存在/数量判断/区域判断)
-- [ ] 动作节点实现 (键盘、鼠标、HTTP、等待、日志)
-- [ ] 逻辑节点实现 (分支、并行执行)
-- [ ] 执行引擎完善 (WebSocket 状态推送)
-- [ ] 基础调试功能 (执行日志查看)
-- [ ] 变量管理和模板渲染
+- [x] YOLO 触发器实现 ✅
+- [x] 条件节点实现 ✅ (目标存在/置信度/变量条件)
+- [x] 动作节点实现 ✅ (键盘、鼠标、HTTP、等待、日志)
+- [x] 逻辑节点实现 ✅ (分支、并行执行、循环部分)
+- [ ] 执行引擎完善 (WebSocket 状态推送) - 待完成
+- [x] 基础调试功能 (执行日志查看) ✅
+- [x] 变量管理和模板渲染 ✅
 
 **Phase 3 优化建议**:
 - 实现执行缓存机制，减少重复计算
 - 添加节点执行超时控制
 - 实现执行历史的分页查询
 
-**交付物**: 完整的规则执行能力
+**交付物**: 完整的规则执行能力 - 🔄 大部分完成
 
 #### Phase 4: 高级功能 (2-3 周)
 
