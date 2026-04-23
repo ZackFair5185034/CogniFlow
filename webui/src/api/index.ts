@@ -109,3 +109,49 @@ export const inferenceApi = {
   },
   listTrainedModels: () => api.get('/inference/models'),
 }
+
+// RuleEngine API
+export const ruleEngineApi = {
+  // 节点定义
+  getNodeDefinitions: () => api.get('/rule-engine/nodes/definitions'),
+
+  // 规则图 CRUD
+  listGraphs: () => api.get('/rule-engine/graphs'),
+  getGraph: (id: number) => api.get(`/rule-engine/graphs/${id}`),
+  getGraphDetail: (id: number) => api.get(`/rule-engine/graphs/${id}/detail`),
+  createGraph: (data: {
+    name: string
+    description?: string
+    nodes_json?: string
+    edges_json?: string
+    variables_json?: string
+    version?: string
+    is_active?: boolean
+  }) => api.post('/rule-engine/graphs', data),
+  updateGraph: (id: number, data: {
+    name?: string
+    description?: string
+    nodes_json?: string
+    edges_json?: string
+    variables_json?: string
+    is_active?: boolean
+  }) => api.put(`/rule-engine/graphs/${id}`, data),
+  deleteGraph: (id: number) => api.delete(`/rule-engine/graphs/${id}`),
+  validateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/validate`),
+  activateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/activate`),
+  deactivateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/deactivate`),
+
+  // 执行
+  execute: (data: {
+    graph_id: number
+    trigger_type?: string
+    trigger_data?: object
+  }) => api.post('/rule-engine/execute', data),
+
+  // 执行历史
+  listExecutions: (graphId?: number, limit?: number) =>
+    api.get('/rule-engine/executions', { params: { graph_id: graphId, limit } }),
+  getExecution: (id: number) => api.get(`/rule-engine/executions/${id}`),
+  getExecutionLogs: (id: number) => api.get(`/rule-engine/executions/${id}/logs`),
+>>>>>>> c3625f9 (feat(rule-engine): add rule engine backend + VueFlow frontend)
+}

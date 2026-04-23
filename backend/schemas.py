@@ -185,3 +185,97 @@ class TrainingUpdate(BaseModel):
     """训练状态更新消息。"""
     type: str = "training_update"
     data: dict
+
+
+# ============ RuleEngine Schemas ============
+
+class NodeDefinition(BaseModel):
+    """节点定义 - 描述节点的结构和配置选项。"""
+    type: str  # 节点类型唯一标识
+    category: str  # 节点分类: trigger/condition/action/logic/tool
+    label: str  # 显示名称
+    description: Optional[str] = None
+    icon: Optional[str] = None  # 图标名称
+    inputs: List[dict] = []  # 输入端口定义 [{name, type, label}]
+    outputs: List[dict] = []  # 输出端口定义 [{name, type, label}]
+    config_schema: dict = {}  # 节点配置项定义
+
+
+class GraphNode(BaseModel):
+    """规则图中的节点。"""
+    id: str
+    type: str
+    position: dict  # {x, y}
+    data: dict = {}  # 节点配置数据
+
+
+class GraphEdge(BaseModel):
+    """规则图中的连接边。"""
+    id: str
+    source: str  # 源节点ID
+    target: str  # 目标节点ID
+    source_handle: Optional[str] = None  # 源端口
+    target_handle: Optional[str] = None  # 目标端口
+
+
+class RuleGraphBase(BaseModel):
+    """规则图基础模型。"""
+    name: str
+    description: Optional[str] = None
+    nodes_json: str = "[]"
+    edges_json: str = "[]"
+    variables_json: Optional[str] = None
+    version: str = "1.0.0"
+    is_active: bool = False
+
+
+class RuleGraphCreate(RuleGraphBase):
+    """创建规则图请求。"""
+    pass
+
+
+class RuleGraphUpdate(BaseModel):
+    """更新规则图请求。"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    nodes_json: Optional[str] = None
+    edges_json: Optional[str] = None
+    variables_json: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class RuleGraphResponse(RuleGraphBase):
+    """规则图响应。"""
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExecutionHistoryResponse(BaseModel):
+    """执行历史响应。"""
+    id: int
+    graph_id: int
+    status: str
+    start_time: datetime
+    end_time: Optional[datetime]
+    trigger_type: Optional[str]
+    result_json: Optional[str]
+    logs_json: Optional[str]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExecutionTrigger(BaseModel):
+    """执行触发请求。"""
+    graph_id: int
+    trigger_type: str = "manual"  # yolo/timer/manual/http
+    trigger_data: Optional[dict] = None
+
+
+class ExecutionResponse(BaseModel):
+    """执行结果响应。"""
+    execution_id: int
+    status: str
+    result: Optional[dict] = None

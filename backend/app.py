@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 import os
 
 from database import init_db
-from routers import atlas, image, annotation, category, model, training, launch, websocket, inference
+from routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine
 
 # 上传文件存储目录
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
@@ -56,6 +56,7 @@ app.include_router(model.router, prefix="/api/models", tags=["模型管理"])
 app.include_router(training.router, prefix="/api/training", tags=["训练管理"])
 app.include_router(launch.router, prefix="/api/launch", tags=["模型启动"])
 app.include_router(inference.router, prefix="/api/inference", tags=["模型测试"])
+app.include_router(rule_engine.router, tags=["规则引擎"])
 app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
 
 # 挂载上传文件目录为静态文件服务

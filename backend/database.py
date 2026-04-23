@@ -124,6 +124,60 @@ class TrainingJob(Base):
     atlas = relationship("Atlas")
 
 
+class RuleGraph(Base):
+    """规则图模型 - 存储可视化规则配置。"""
+    __tablename__ = "rule_graph"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    nodes_json = Column(Text, nullable=False)  # JSON 存储节点列表
+    edges_json = Column(Text, nullable=False)  # JSON 存储连接列表
+    variables_json = Column(Text, nullable=True)  # JSON 存储变量定义
+    version = Column(String(50), default="1.0.0")
+    is_active = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    executions = relationship("ExecutionHistory", back_populates="graph", cascade="all, delete-orphan")
+
+
+class ExecutionHistory(Base):
+    """执行历史模型 - 记录每次规则执行的详情。"""
+    __tablename__ = "execution_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    graph_id = Column(Integer, ForeignKey("rule_graph.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(50), nullable=False)  # running/completed/failed
+    start_time = Column(DateTime, default=datetime.utcnow)
+    end_time = Column(DateTime, nullable=True)
+    trigger_type = Column(String(50), nullable=True)  # yolo/timer/manual/http
+    trigger_data_json = Column(Text, nullable=True)  # 触发时的数据
+    result_json = Column(Text, nullable=True)  # 执行结果
+    logs_json = Column(Text, nullable=True)  # 执行日志
+
+    graph = relationship("RuleGraph", back_populates="executions")
+    node_logs = relationship("NodeExecutionLog", back_populates="execution", cascade="all, delete-orphan")
+
+
+class NodeExecutionLog(Base):
+    """节点执行记录模型 - 记录每个节点的执行详情。"""
+    __tablename__ = "node_execution_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    execution_id = Column(Integer, ForeignKey("execution_history.id", ondelete="CASCADE"), nullable=False)
+    node_id = Column(String(255), nullable=False)
+    node_type = Column(String(100), nullable=False)
+    status = Column(String(50), nullable=False)  # running/completed/failed
+    input_data_json = Column(Text, nullable=True)
+    output_data_json = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+    start_time = Column(DateTime, default=datetime.utcnow)
+    end_time = Column(DateTime, nullable=True)
+
+    execution = relationship("ExecutionHistory", back_populates="node_logs")
+
+
 # 数据库引擎和会话
 DATABASE_URL = "sqlite:///./visiongame.db"
 

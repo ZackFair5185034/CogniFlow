@@ -102,6 +102,12 @@ const RocketIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 
   h('path', { d: 'M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5' })
 ])
 
+const FlowIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+  h('circle', { cx: '5', cy: '12', r: '3' }),
+  h('circle', { cx: '19', cy: '12', r: '3' }),
+  h('path', { d: 'M8 12h8M13 9l3 3-3 3' })
+])
+
 const RefreshIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
   h('polyline', { points: '23 4 23 10 17 10' }),
   h('polyline', { points: '1 20 1 14 7 14' }),
@@ -112,8 +118,9 @@ const navItems = [
   { path: '/', label: '控制台', icon: HomeIcon },
   { path: '/atlas', label: '图集管理', icon: FolderIcon },
   { path: '/models', label: '模型管理', icon: BoxIcon },
-  { path: '/training', label: '模型训练', icon: ChartIcon },
-  { path: '/launch', label: '模型测试', icon: RocketIcon },
+  { path: '/training', label: '训练监控', icon: ChartIcon },
+  { path: '/launch', label: '模型启动', icon: RocketIcon },
+  { path: '/rule-engine', label: '规则引擎', icon: FlowIcon },
 ]
 
 const pageTitles: Record<string, string> = {
@@ -121,8 +128,9 @@ const pageTitles: Record<string, string> = {
   '/atlas': '图集管理',
   '/atlas/': '图集详情',
   '/models': '模型管理',
-  '/training': '模型训练',
-  '/launch': '模型测试',
+  '/training': '训练监控',
+  '/launch': '模型启动',
+  '/rule-engine': '规则引擎',
 }
 
 const currentPageTitle = computed(() => {
