@@ -207,12 +207,12 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
                     "job_id": job_id,
                     "epoch": 0,
                     "total_epochs": epochs,
-                    "status": "running"
+                    "status": "downloading",
+                    "message": f"正在下载预训练模型 {pretrained_model}..."
                 }
 
-            # 启动进度更新线程，定期更新 epoch
+            # 启动进度更新线程，定期更新 epoch（仅在训练阶段启动）
             progress_update_thread = threading.Thread(target=_update_progress, args=(epochs,), daemon=True)
-            progress_update_thread.start()
 
             # 训练完成后的回调，在线程中执行数据库更新
             def on_complete(result):
@@ -268,11 +268,25 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
                     db_thread.close()
 
             # 进度回调 - 更新全局进度
+            # 注意：下载阶段 epoch=0，训练阶段 epoch>0
+            training_started = False
             def on_progress(epoch, total_epochs, message=None):
-                global _current_training_progress
+                global _current_training_progress, training_started
                 with _progress_lock:
-                    _current_training_progress["epoch"] = epoch
-                    _current_training_progress["total_epochs"] = total_epochs
+                    if epoch == 0:
+                        # 下载阶段
+                        _current_training_progress["status"] = "downloading"
+                        _current_training_progress["epoch"] = 0
+                        _current_training_progress["total_epochs"] = 100
+                    else:
+                        # 训练阶段
+                        _current_training_progress["status"] = "running"
+                        _current_training_progress["epoch"] = epoch
+                        _current_training_progress["total_epochs"] = total_epochs
+                        # 下载完成，训练刚开始，启动进度更新线程
+                        if not training_started:
+                            training_started = True
+                            progress_update_thread.start()
                     if message:
                         _current_training_progress["message"] = message
 

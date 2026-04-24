@@ -210,6 +210,8 @@ def train_yolo(
         need_download = True
 
     if need_download:
+        # TODO: 模型下载进度的日志输出未正确处理
+        # 当前捕获的输出被丢弃，需要解析并显示真实的下载进度
         # 最多重试3次下载
         max_retries = 3
         for attempt in range(max_retries):

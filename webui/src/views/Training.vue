@@ -163,10 +163,13 @@
             </div>
             <div class="realtime-progress">
               <div class="progress-bar large">
-                <div class="progress-fill running"
+                <div class="progress-fill" :class="currentJob.status"
                      :style="{ width: getProgress(currentJob) + '%' }"></div>
               </div>
-              <span class="progress-percent">{{ getProgress(currentJob) }}%</span>
+              <span class="progress-percent">
+                <span v-if="currentJob.status === 'downloading'">下载中</span>
+                <span v-else>{{ getProgress(currentJob) }}%</span>
+              </span>
             </div>
             <div class="realtime-message" v-if="currentJob.message">
               <span class="message-text">{{ currentJob.message }}</span>
@@ -546,12 +549,22 @@ onUnmounted(() => {
   @apply h-full rounded transition-all duration-500;
 
   &.pending { @apply bg-[var(--text-muted)]; }
+  &.downloading {
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+    box-shadow: 0 0 10px var(--accent-cyan);
+    animation: downloadPulse 1.5s ease-in-out infinite;
+  }
   &.running {
     background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
     box-shadow: 0 0 10px var(--accent-cyan);
   }
   &.completed { @apply bg-[var(--accent-green)]; }
   &.failed { @apply bg-[#ff4466]; }
+}
+
+@keyframes downloadPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 .progress-text {
