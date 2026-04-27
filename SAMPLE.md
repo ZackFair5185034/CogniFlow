@@ -1,4 +1,4 @@
-# VisionGame 示例文档
+# CogniFlow 示例文档
 
 > 生成时间：2026-04-20
 > 状态：示例文件 ✅
@@ -7,21 +7,22 @@
 
 ## 📁 项目概述
 
-**VisionGame** 是一个基于强化学习的通用视觉控制游戏框架，支持：
+**CogniFlow** 是一个通用视觉感知处理框架，集模型训练、模型测试、模型推理、规则引擎于一体，支持：
 
-- 🎮 屏幕/视频采集
+- 📷 图像/视频/屏幕采集
 - 👁️ 视觉特征提取（ResNet18/50 等骨干网络）
+- 🎯 YOLO 目标检测与模型训练
 - 🧠 RL 训练（PPO/SAC 算法）
-- ⌨️ 游戏控制输入模拟
+- 🔧 可视化规则引擎编排
 
 ---
 
 ## 🗂️ 项目结构
 
 ```
-visionGame/
+CogniFlow/
 ├── backend/          # FastAPI 后端
-├── visiongame/       # 核心 RL/Vision 包
+├── engine/       # 核心视觉感知包
 │   ├── config/       # 配置模块
 │   ├── core/
 │   │   ├── data_input/   # 数据输入
@@ -54,7 +55,7 @@ cd webui && pnpm dev
 ## ⚙️ 配置示例
 
 ```yaml
-# visiongame/config/default.yaml
+# engine/config/default.yaml
 vision:
   image_size: [224, 224]
   backbone: resnet18

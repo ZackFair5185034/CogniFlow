@@ -1,1 +1,1 @@
-"""VisionGame documentation."""
+"""CogniFlow 文档模块。"""

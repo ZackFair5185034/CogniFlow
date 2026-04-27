@@ -12,7 +12,7 @@ import sys
 # 确保项目根目录在 Python 路径中
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from visiongame.annotation.tools import LabelTool
+from engine.annotation.tools import LabelTool
 
 
 def main():
@@ -26,7 +26,7 @@ def main():
 
     # 打印快捷键说明
     print("=" * 50)
-    print("VisionGame 标注工具")
+    print("CogniFlow 标注工具")
     print("=" * 50)
     print("快捷键:")
     print("  1-9    选择类别")

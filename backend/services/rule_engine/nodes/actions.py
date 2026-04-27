@@ -58,8 +58,8 @@ class KeyboardActionNode(BaseNode):
         executed_keys = []
 
         for key in keys:
-            # TODO: 对接 VisionGame 的键盘模拟
-            # from visiongame.core.control.input_emulator import KeyboardEmulator
+            # TODO: 对接键盘模拟
+            # from engine.core.control.input_emulator import KeyboardEmulator
             # keyboard = KeyboardEmulator()
             # keyboard.press(key)
             # await asyncio.sleep(hold_duration)
@@ -137,8 +137,8 @@ class MouseActionNode(BaseNode):
         y = self.config.get("y", 0)
         button = self.config.get("button", "left")
 
-        # TODO: 对接 VisionGame 的鼠标模拟
-        # from visiongame.core.control.input_emulator import MouseEmulator
+        # TODO: 对接鼠标模拟
+        # from engine.core.control.input_emulator import MouseEmulator
         # mouse = MouseEmulator()
         # if action == "click":
         #     mouse.click(x, y, button)

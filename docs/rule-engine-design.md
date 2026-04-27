@@ -1,10 +1,10 @@
-# VisionGame 可视化规则引擎设计文档
+# CogniFlow 可视化规则引擎设计文档
 
 ## 1. 概述
 
 ### 1.1 项目目标
 
-设计一款可视化规则引擎，对接 VisionGame 项目，实现基于 YOLO 识别结果触发复杂多变的处理规则。参考 Dify、Blender Node Editor、Unity Visual Scripting、Node-RED 等成熟节点工具的设计理念。
+设计一款可视化规则引擎，对接 CogniFlow 项目，实现基于 YOLO 识别结果触发复杂多变的处理规则。参考 Dify、Blender Node Editor、Unity Visual Scripting、Node-RED 等成熟节点工具的设计理念。
 
 ### 1.2 核心需求
 
@@ -41,7 +41,7 @@
 └────────────────────────────┬────────────────────────────────────┘
                              │
 ┌────────────────────────────▼────────────────────────────────────┐
-│                     VisionGame Core                              │
+│                     CogniFlow Core                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
 │  │  YOLO 检测   │  │  输入模拟    │  │  数据输入    │          │
 │  │  (Detector)  │  │  (Control)  │  │  (Capture)  │          │
@@ -2245,7 +2245,7 @@ CREATE TABLE rule_graphs (
 
 ---
 
-## 9. 与 VisionGame 的集成
+## 9. 与 CogniFlow 的集成
 
 ### 9.1 YOLO 检测集成
 
@@ -2253,7 +2253,7 @@ CREATE TABLE rule_graphs (
 # 检测服务集成
 
 class DetectionService:
-    """检测服务 - 对接 VisionGame YOLO 检测"""
+    """检测服务 - 对接 CogniFlow YOLO 检测"""
     
     def __init__(self, detector: UIDetector):
         self.detector = detector
@@ -2261,12 +2261,12 @@ class DetectionService:
     
     async def start_listening(self, graph_id: str):
         """开始监听检测结果并触发规则"""
-        # 这里会从 VisionGame 的数据输入模块获取检测结果
+        # 这里会从 CogniFlow 的数据输入模块获取检测结果
         # 并触发对应的规则图执行
         pass
     
     def on_detection(self, detections: List[Detection], frame):
-        """检测回调 - 被 VisionGame 调用"""
+        """检测回调 - 被 CogniFlow 调用"""
         for graph_id, callback in self._callbacks.items():
             # 检查是否有规则图需要此检测结果
             graph = get_rule_graph(graph_id)
@@ -2288,7 +2288,7 @@ class DetectionService:
 # 输入模拟服务集成
 
 class InputControlService:
-    """输入控制服务 - 对接 VisionGame 输入模拟"""
+    """输入控制服务 - 对接 CogniFlow 输入模拟"""
     
     def __init__(self, controller: GameController):
         self.controller = controller
@@ -2331,7 +2331,7 @@ class InputControlService:
 | **前端 RuleList** | ✅ 已完成 | 列表页 + 卡片 + 缩略图 |
 | **前端 RuleCanvas** | ✅ 已完成 | VueFlow 节点编辑器 |
 | **WebSocket 实时通信** | ❌ 未实现 | 设计文档有描述，但实际代码未实现 |
-| **VisionGame 集成** | 🔄 部分完成 | Keyboard/Mouse 节点有 TODO 标记待对接 core.control |
+| **CogniFlow 集成** | 🔄 部分完成 | Keyboard/Mouse 节点有 TODO 标记待对接 core.control |
 
 ### API 端点 (实际实现 vs 设计文档)
 
@@ -2346,7 +2346,7 @@ class InputControlService:
 ### 待完成工作
 
 1. **WebSocket 实时通信** - 执行状态实时推送 (代码未实现，文档有过时描述)
-2. **VisionGame Core 集成** - KeyboardActionNode, MouseActionNode 需对接 `visiongame.core.control`
+2. **CogniFlow Core 集成** - KeyboardActionNode, MouseActionNode 需对接 `engine.core.control`
 3. **循环节点完整实现** - LoopNode 需执行器支持迭代
 4. **前端节点配置面板** - 节点详情编辑 UI
 5. **执行历史页面** - 完整执行日志查看
@@ -2367,7 +2367,7 @@ backend/services/rule_engine/
 
 ### 待完成工作
 
-1. **VisionGame Core 集成** - KeyboardActionNode, MouseActionNode 需对接 `visiongame.core.control`
+1. **CogniFlow Core 集成** - KeyboardActionNode, MouseActionNode 需对接 `engine.core.control`
 2. **WebSocket 实时通信** - 执行状态实时推送
 3. **循环节点完整实现** - LoopNode 需执行器支持迭代
 4. **前端节点配置面板** - 节点详情编辑 UI
@@ -2450,7 +2450,7 @@ backend/services/rule_engine/
 
 #### Phase 5: 集成与完善 (2 周)
 
-- [ ] 与 VisionGame 核心模块深度集成
+- [ ] 与 CogniFlow 核心模块深度集成
 - [ ] WebSocket 实时通信完善
 - [ ] 错误处理和重试机制
 - [ ] 节点执行统计和监控
@@ -3323,15 +3323,15 @@ class ExecutionTimeout:
 
 ---
 
-## 13. 与 VisionGame 集成的详细接口设计
+## 13. 与 CogniFlow 集成的详细接口设计
 
 ### 13.1 核心接口定义
 
 ```python
 # -*- coding: utf-8 -*-
-"""VisionGame 规则引擎集成接口。
+"""CogniFlow 规则引擎集成接口。
 
-定义规则引擎与 VisionGame 核心模块之间的接口。
+定义规则引擎与 CogniFlow 核心模块之间的接口。
 """
 
 from typing import Protocol, Optional, Callable
@@ -3343,7 +3343,7 @@ from enum import Enum
 # ============================================
 
 class DetectorProtocol(Protocol):
-    """检测器协议 - VisionGame YOLO 检测器需实现此接口"""
+    """检测器协议 - CogniFlow YOLO 检测器需实现此接口"""
 
     async def detect(self, frame: 'np.ndarray') -> list['Detection']:
         """检测画面中的目标
@@ -3362,7 +3362,7 @@ class DetectorProtocol(Protocol):
 
 
 class InputControlProtocol(Protocol):
-    """输入控制协议 - VisionGame 输入控制器需实现此接口"""
+    """输入控制协议 - CogniFlow 输入控制器需实现此接口"""
 
     async def press_key(self, key: str, duration: float = 0.1) -> None:
         """按下并释放按键
@@ -3400,7 +3400,7 @@ class InputControlProtocol(Protocol):
 
 
 class DataCaptureProtocol(Protocol):
-    """数据捕获协议 - VisionGame 数据输入模块需实现此接口"""
+    """数据捕获协议 - CogniFlow 数据输入模块需实现此接口"""
 
     async def get_current_frame(self) -> 'np.ndarray':
         """获取当前画面"""
@@ -3530,7 +3530,7 @@ async def init_rule_engine_integration(
 ) -> None:
     """初始化规则引擎集成
 
-    在 VisionGame 启动时调用此函数注册服务
+    在 CogniFlow 启动时调用此函数注册服务
 
     Args:
         detector: YOLO 检测器实例
@@ -3562,7 +3562,7 @@ async def trigger_graph_on_detection(
 ) -> None:
     """检测结果触发规则图
 
-    当 VisionGame 检测到目标时调用此函数
+    当 CogniFlow 检测到目标时调用此函数
 
     Args:
         detections: 检测结果列表
@@ -3877,7 +3877,7 @@ async def websocket_debug(websocket: WebSocket, graph_id: str):
 # -*- coding: utf-8 -*-
 """规则引擎集成测试。
 
-测试规则引擎与 VisionGame 各模块的集成。
+测试规则引擎与 CogniFlow 各模块的集成。
 """
 
 import pytest

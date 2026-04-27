@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""VisionGame WebUI - FastAPI 主入口。
+"""CogniFlow WebUI - FastAPI 主入口。
 
 提供：
 - REST API
@@ -32,8 +32,8 @@ async def lifespan(app: FastAPI):
 
 # 创建 FastAPI 应用
 app = FastAPI(
-    title="VisionGame WebUI",
-    description="VisionGame 训练图集管理、模型管理、数据标注",
+    title="CogniFlow WebUI",
+    description="CogniFlow 训练图集管理、模型管理、数据标注、规则引擎",
     version="0.1.0",
     lifespan=lifespan,
 )

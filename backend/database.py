@@ -181,7 +181,7 @@ class NodeExecutionLog(Base):
 
 
 # 数据库引擎和会话
-DATABASE_URL = "sqlite:///./visiongame.db"
+DATABASE_URL = "sqlite:///./engine.db"
 
 engine = create_engine(
     DATABASE_URL,

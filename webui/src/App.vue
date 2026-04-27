@@ -20,8 +20,8 @@
           </svg>
         </div>
         <div class="logo-text">
-          <span class="logo-title">VisionGame</span>
-          <span class="logo-sub">Neural Control</span>
+          <span class="logo-title">CogniFlow</span>
+          <span class="logo-sub">Visual Perception</span>
         </div>
       </div>
 
@@ -142,7 +142,7 @@ const currentPageTitle = computed(() => {
   if (path.endsWith('/') && path !== '/') {
     return pageTitles[path.slice(0, -1)] || '详情'
   }
-  return pageTitles[path] || 'VisionGame'
+  return pageTitles[path] || 'CogniFlow'
 })
 
 const isNavActive = (path: string) => {
