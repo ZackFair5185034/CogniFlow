@@ -189,7 +189,26 @@
             </div>
             <div class="meta-row">
               <span class="meta-label">目录</span>
-              <span class="meta-value">{{ selectedImage.directory || '根目录' }}</span>
+              <div class="meta-value dir-edit" v-if="editingDirectory">
+                <div class="dir-select-wrap">
+                  <select v-model="editDirectoryValue" @change="onDirectorySelect">
+                    <option value="">根目录</option>
+                    <option v-for="dir in directories" :key="dir" :value="dir">{{ dir }}</option>
+                  </select>
+                  <input type="text" v-model="editDirectoryValue" placeholder="或输入新目录名"
+                         class="dir-text-input" />
+                </div>
+                <div class="dir-edit-actions">
+                  <button class="save-btn" @click="handleSaveDirectory" :disabled="savingDirectory">保存</button>
+                  <button class="cancel-btn" @click="cancelEditDirectory">取消</button>
+                </div>
+              </div>
+              <span class="meta-value" v-else>
+                {{ selectedImage.directory || '根目录' }}
+                <button class="edit-dir-btn" @click="startEditDirectory" title="修改目录">
+                  <EditIcon />
+                </button>
+              </span>
             </div>
             <div class="meta-row">
               <span class="meta-label">标注状态</span>
@@ -228,6 +247,43 @@ const selectedImage = ref<any>(null)
 const newDirectoryName = ref('')
 
 const annotatedCount = computed(() => images.value.filter(img => img.annotated).length)
+
+// 目录编辑状态
+const editingDirectory = ref(false)
+const editDirectoryValue = ref('')
+const savingDirectory = ref(false)
+
+const startEditDirectory = () => {
+  editDirectoryValue.value = selectedImage.value?.directory || ''
+  editingDirectory.value = true
+}
+
+const onDirectorySelect = () => {
+  // select 改变时同步到 input（用户可继续手动编辑）
+}
+
+const cancelEditDirectory = () => {
+  editingDirectory.value = false
+  editDirectoryValue.value = ''
+}
+
+const handleSaveDirectory = async () => {
+  if (!selectedImage.value) return
+  savingDirectory.value = true
+  try {
+    await imageApi.updateDirectory(selectedImage.value.id, editDirectoryValue.value)
+    ElMessage.success('目录已更新')
+    selectedImage.value.directory = editDirectoryValue.value || null
+    editingDirectory.value = false
+    loadImages()
+    loadDirectories()
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '修改目录失败'
+    ElMessage.error(msg)
+  } finally {
+    savingDirectory.value = false
+  }
+}
 
 // 图标组件
 const BackIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
@@ -294,6 +350,11 @@ const CloseIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: '
 const TagIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
   h('path', { d: 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z' }),
   h('line', { x1: '7', y1: '7', x2: '7.01', y2: '7' })
+])
+
+const EditIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+  h('path', { d: 'M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7' }),
+  h('path', { d: 'M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z' })
 ])
 
 const LightbulbIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
@@ -593,10 +654,12 @@ onMounted(() => {
 .image-wrapper {
   @apply relative overflow-hidden;
   aspect-ratio: 1;
+  background: var(--bg-secondary);  /* 占位暗色，避免图片加载前闪白 */
 }
 
 .image-wrapper img {
   @apply w-full h-full object-cover;
+  background: var(--bg-secondary);  /* 图片加载完成前不闪白 */
 }
 
 .image-overlay {
@@ -905,5 +968,66 @@ onMounted(() => {
 .status-tag.pending {
   background: rgba(136, 136, 170, 0.15);
   @apply text-[var(--text-muted)];
+}
+
+/* 目录编辑 */
+.dir-edit {
+  @apply flex flex-col gap-2 w-full max-w-[280px];
+}
+
+.dir-select-wrap {
+  @apply flex flex-col gap-2;
+}
+
+.dir-select-wrap select {
+  @apply w-full px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-sm appearance-none cursor-pointer;
+}
+
+.dir-select-wrap select:focus {
+  @apply outline-none border-[var(--accent-cyan)];
+}
+
+.dir-text-input {
+  @apply w-full px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-sm;
+}
+
+.dir-text-input:focus {
+  @apply outline-none border-[var(--accent-cyan)];
+}
+
+.dir-edit-actions {
+  @apply flex gap-2 justify-end;
+}
+
+.save-btn {
+  @apply px-4 py-1.5 bg-[var(--accent-cyan)] border-none rounded-md text-black text-xs font-semibold cursor-pointer transition-all;
+}
+
+.save-btn:hover {
+  @apply opacity-80;
+}
+
+.save-btn:disabled {
+  @apply opacity-40 cursor-not-allowed;
+}
+
+.cancel-btn {
+  @apply px-4 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md text-[var(--text-secondary)] text-xs cursor-pointer transition-all;
+}
+
+.cancel-btn:hover {
+  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+}
+
+.edit-dir-btn {
+  @apply inline-flex items-center justify-center w-6 h-6 ml-2 bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded align-middle transition-all;
+}
+
+.edit-dir-btn:hover {
+  @apply text-[var(--accent-cyan)] bg-[var(--bg-hover)];
+}
+
+.edit-dir-btn svg {
+  @apply w-3.5 h-3.5;
 }
 </style>

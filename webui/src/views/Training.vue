@@ -158,7 +158,8 @@
             </div>
             <div class="realtime-stat">
               <span class="stat-label">状态</span>
-              <span class="stat-value status-running" v-if="currentJob.status === 'running'">进行中</span>
+              <span class="stat-value status-running" v-if="currentJob._displayStatus === 'running'">进行中</span>
+              <span class="stat-value status-downloading" v-else-if="currentJob._displayStatus === 'downloading'">下载中</span>
               <span class="stat-value" v-else>{{ statusText[currentJob.status] }}</span>
             </div>
             <div class="realtime-progress">
@@ -167,7 +168,7 @@
                      :style="{ width: getProgress(currentJob) + '%' }"></div>
               </div>
               <span class="progress-percent">
-                <span v-if="currentJob.status === 'downloading'">下载中</span>
+                <span v-if="currentJob._displayStatus === 'downloading'">下载中</span>
                 <span v-else>{{ getProgress(currentJob) }}%</span>
               </span>
             </div>
@@ -212,6 +213,7 @@ let ws: WebSocket | null = null
 
 const statusText: Record<string, string> = {
   pending: '等待中',
+  downloading: '下载中',
   running: '进行中',
   completed: '已完成',
   failed: '失败',
@@ -362,6 +364,7 @@ const startProgressPolling = () => {
           runningJob.current_step = progress.epoch
           runningJob.total_steps = progress.total_epochs
           runningJob.message = progress.message
+          runningJob._displayStatus = progress.status  // 用于实时卡片显示下载中/训练中
         }
         progressPollingTimer = window.setTimeout(poll, 2000)
       } else if (progress.status === 'completed' || progress.status === 'failed') {
@@ -716,6 +719,11 @@ onUnmounted(() => {
   .stat-value.status-running {
     @apply text-[var(--accent-cyan)];
     text-shadow: 0 0 10px var(--accent-cyan);
+  }
+
+  .stat-value.status-downloading {
+    @apply text-[var(--accent-orange)];
+    text-shadow: 0 0 10px var(--accent-orange);
   }
 }
 

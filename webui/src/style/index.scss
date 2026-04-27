@@ -388,6 +388,19 @@ body {
 }
 
 // ===== Element Plus 主题覆盖 =====
+
+// v-loading 遮罩 — 深色主题下默认白底会很刺眼
+.el-loading-mask {
+  background-color: rgba(10, 10, 15, 0.75) !important;
+}
+
+.el-loading-spinner .el-loading-text {
+  color: var(--text-secondary) !important;
+}
+
+.el-loading-spinner .circular {
+  color: var(--accent-cyan) !important;
+}
 .el-message-box {
   background: var(--bg-card) !important;
   border: 1px solid var(--border-color) !important;

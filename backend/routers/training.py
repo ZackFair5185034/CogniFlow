@@ -90,17 +90,23 @@ async def get_training_job(job_id: int, db: Session = Depends(get_db)):
     )
 
 
-def _update_progress(total_epochs: int):
-    """定期更新训练进度。"""
-    global _current_training_progress
-    import time
-    for epoch in range(1, total_epochs + 1):
-        if _stop_event.is_set():
-            break
-        with _progress_lock:
-            _current_training_progress["epoch"] = epoch
-            _current_training_progress["total_epochs"] = total_epochs
-        time.sleep(2)  # 每2秒更新一次
+def _send_progress_via_ws(job_id: int, progress: dict):
+    """通过 WebSocket 发送进度更新（异步安全）。"""
+    try:
+        import asyncio
+        loop = None
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        if loop and loop.is_running():
+            # 从线程中安全地创建异步任务
+            asyncio.run_coroutine_threadsafe(
+                ws_manager.send_training_update(job_id, progress),
+                loop,
+            )
+    except Exception as e:
+        print(f"[训练] WebSocket 发送失败: {e}")
 
 
 async def _yolo_training(job_id: int, total_steps: int, model_id: int, atlas_id: int):
@@ -211,9 +217,6 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
                     "message": f"正在下载预训练模型 {pretrained_model}..."
                 }
 
-            # 启动进度更新线程，定期更新 epoch（仅在训练阶段启动）
-            progress_update_thread = threading.Thread(target=_update_progress, args=(epochs,), daemon=True)
-
             # 训练完成后的回调，在线程中执行数据库更新
             def on_complete(result):
                 global _current_training_progress
@@ -259,6 +262,14 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
                         _current_training_progress["status"] = "completed"
                         _current_training_progress["epoch"] = epochs
 
+                    # WebSocket 通知完成
+                    _send_progress_via_ws(job_id, {
+                        "step": epochs,
+                        "total_steps": epochs,
+                        "status": "completed",
+                        "message": "训练完成",
+                    })
+
                     print(f"[YOLO训练] 训练完成，模型已保存到: {result['best_model']}")
                 except Exception as e:
                     print(f"[YOLO训练] 完成回调出错: {e}")
@@ -267,28 +278,29 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
                 finally:
                     db_thread.close()
 
-            # 进度回调 - 更新全局进度
-            # 注意：下载阶段 epoch=0，训练阶段 epoch>0
-            training_started = False
+            # 进度回调 - 由 train_yolo 在真实 epoch 结束时调用
             def on_progress(epoch, total_epochs, message=None):
-                global _current_training_progress, training_started
+                global _current_training_progress
                 with _progress_lock:
                     if epoch == 0:
                         # 下载阶段
                         _current_training_progress["status"] = "downloading"
-                        _current_training_progress["epoch"] = 0
-                        _current_training_progress["total_epochs"] = 100
                     else:
                         # 训练阶段
                         _current_training_progress["status"] = "running"
-                        _current_training_progress["epoch"] = epoch
-                        _current_training_progress["total_epochs"] = total_epochs
-                        # 下载完成，训练刚开始，启动进度更新线程
-                        if not training_started:
-                            training_started = True
-                            progress_update_thread.start()
+                    _current_training_progress["epoch"] = epoch
+                    _current_training_progress["total_epochs"] = total_epochs
                     if message:
                         _current_training_progress["message"] = message
+
+                # 训练阶段通过 WebSocket 推送真实进度
+                if epoch > 0:
+                    _send_progress_via_ws(job_id, {
+                        "step": epoch,
+                        "total_steps": total_epochs,
+                        "status": "running",
+                        "message": message or f"训练中 {epoch}/{total_epochs}",
+                    })
 
             try:
                 train_yolo(
@@ -310,6 +322,14 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
                     _current_training_progress["message"] = str(e)
                 import traceback
                 traceback.print_exc()
+
+                # WebSocket 通知失败
+                _send_progress_via_ws(job_id, {
+                    "step": 0,
+                    "total_steps": epochs,
+                    "status": "failed",
+                    "error": str(e),
+                })
 
                 # 更新任务状态为失败
                 from database import SessionLocal, Model

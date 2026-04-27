@@ -4,9 +4,10 @@
 import os
 import json
 import shutil
+import time
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Callable
 from sqlalchemy.orm import Session
 
 
@@ -44,6 +45,79 @@ def check_gpu_available() -> Dict:
         "memory_total": 0,
         "memory_free": 0,
     }
+
+
+def _download_model_with_progress(
+    pretrained_model: str,
+    save_path: str,
+    on_progress: Optional[Callable] = None,
+    total_epochs: int = 100,
+    stop_event=None,
+):
+    """下载预训练模型并报告实时进度（百分比）。
+
+    Args:
+        pretrained_model: 模型名称，如 yolov8s.pt
+        save_path: 本地保存路径
+        on_progress: 进度回调 on_progress(epoch, total_epochs, message)
+        total_epochs: 用于进度显示的总轮数
+        stop_event: 停止事件，可中断下载
+    """
+    import requests
+
+    if stop_event and stop_event.is_set():
+        return
+
+    # Ultralytics 官方资产下载地址
+    url = f"https://github.com/ultralytics/assets/releases/download/v0.0.0/{pretrained_model}"
+
+    if on_progress:
+        on_progress(0, total_epochs, message=f"正在下载预训练模型 {pretrained_model}... 0%")
+
+    # 流式下载，实时计算百分比
+    response = requests.get(url, stream=True, timeout=120)
+    response.raise_for_status()
+
+    total_size = int(response.headers.get("content-length", 0))
+    downloaded = 0
+    block_size = 8192
+    last_report_percent = -1  # 避免过于频繁回调
+    start_time = time.time()
+    last_chunk_time = start_time
+
+    with open(save_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=block_size):
+            # 检查停止信号
+            if stop_event and stop_event.is_set():
+                f.close()
+                os.remove(save_path)
+                if on_progress:
+                    on_progress(0, total_epochs, message="下载已取消")
+                return
+
+            if chunk:
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total_size > 0 and on_progress:
+                    percent = int(downloaded / total_size * 100)
+                    # 每变化至少 2% 回调一次，避免高频刷新
+                    now = time.time()
+                    if percent - last_report_percent >= 2 or percent == 100 or (now - last_chunk_time > 3):
+                        last_report_percent = percent
+                        last_chunk_time = now
+                        elapsed = now - start_time
+                        speed = downloaded / elapsed / 1024 if elapsed > 0 else 0
+                        on_progress(
+                            0, total_epochs,
+                            message=f"正在下载预训练模型 {pretrained_model}... {percent}% ({speed:.0f} KB/s)"
+                        )
+
+    # 验证文件完整性
+    if os.path.getsize(save_path) == 0:
+        raise Exception(f"下载的文件为空: {save_path}")
+
+    if on_progress:
+        on_progress(0, total_epochs, message=f"预训练模型 {pretrained_model} 下载完成")
 
 
 def export_to_yolo_format(atlas_id: int, db: Session, output_dir: str) -> Dict:
@@ -174,15 +248,13 @@ def train_yolo(
         pretrained_model: 预训练模型名称 (yolov8n.pt, yolov8s.pt, yolov8m.pt, etc.)
         stop_event: 停止事件，用于提前终止训练
         on_complete: 完成回调，接收结果字典
-        on_progress: 进度回调，接收 (epoch, total_epochs) 参数
+        on_progress: 进度回调，接收 (epoch, total_epochs, message) 参数
 
     Returns:
         训练结果
     """
     import os
     from ultralytics import YOLO
-    import io
-    import sys
 
     # 设置模型缓存目录到项目目录
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -210,31 +282,36 @@ def train_yolo(
         need_download = True
 
     if need_download:
-        # TODO: 模型下载进度的日志输出未正确处理
-        # 当前捕获的输出被丢弃，需要解析并显示真实的下载进度
-        # 最多重试3次下载
+        # 检查是否已被用户停止
+        if stop_event and stop_event.is_set():
+            if on_progress:
+                on_progress(0, epochs, message="训练已取消")
+            raise Exception("训练已取消")
+
+        # 使用带真实进度报告的流式下载
         max_retries = 3
         for attempt in range(max_retries):
             if on_progress:
                 on_progress(0, epochs, message=f"正在下载预训练模型 {pretrained_model} ({attempt + 1}/{max_retries})...")
 
-            # 创建字符串IO来捕获输出
-            old_stdout = sys.stdout
-            old_stderr = sys.stderr
-            captured_output = io.StringIO()
-            sys.stdout = captured_output
-            sys.stderr = captured_output
-
             try:
-                model = YOLO(pretrained_model)
+                _download_model_with_progress(
+                    pretrained_model, model_cache_path,
+                    on_progress=on_progress, total_epochs=epochs,
+                    stop_event=stop_event,
+                )
+                # 如果下载被取消，模型文件已被删除，直接退出
+                if stop_event and stop_event.is_set():
+                    if on_progress:
+                        on_progress(0, epochs, message="训练已取消")
+                    raise Exception("训练已取消")
                 # 验证下载的模型是否有效
-                test_model = YOLO(model.ckpt_path)
-                sys.stdout = old_stdout
-                sys.stderr = old_stderr
+                model = YOLO(model_cache_path)
                 break  # 下载成功，跳出重试循环
             except Exception as e:
-                sys.stdout = old_stdout
-                sys.stderr = old_stderr
+                err_msg = str(e)
+                if "训练已取消" in err_msg:
+                    raise  # 用户取消，不重试
                 print(f"[YOLO训练] 下载尝试 {attempt + 1} 失败: {e}")
                 if attempt == max_retries - 1:
                     error_msg = f"模型下载失败（已重试{max_retries}次）: {str(e)}"
@@ -251,21 +328,59 @@ def train_yolo(
     save_dir = Path(model_save_path)
     save_dir.mkdir(parents=True, exist_ok=True)
 
+    # 注册训练进度回调，获得真实 epoch 进度
+    _training_stopped = False
+
+    def on_epoch_end(trainer):
+        """每个 epoch 结束时的回调。"""
+        nonlocal _training_stopped
+        # 检查停止信号
+        if stop_event and stop_event.is_set():
+            _training_stopped = True
+            raise Exception("训练被用户停止")
+
+        current_epoch = trainer.epoch + 1  # trainer.epoch 从 0 开始
+        if on_progress:
+            message = f"训练中... Epoch {current_epoch}/{epochs}"
+            # trainer.loss 是 tensor，直接取 item
+            try:
+                loss_val = trainer.loss.item() if hasattr(trainer.loss, 'item') else float(trainer.loss)
+                message += f", 损失: {loss_val:.4f}"
+            except (TypeError, ValueError, RuntimeError):
+                pass
+            on_progress(current_epoch, epochs, message=message)
+
+    model.add_callback('on_train_epoch_end', on_epoch_end)
+
     # 开始训练
-    results = model.train(
-        data=data_yaml_path,
-        epochs=epochs,
-        batch=batch_size,
-        imgsz=imgsz,
-        device=device,
-        project=str(save_dir.parent),
-        name=save_dir.stem,
-        exist_ok=True,
-        verbose=False,
-        save=True,
-        plots=False,
-        patience=0,
-    )
+    try:
+        results = model.train(
+            data=data_yaml_path,
+            epochs=epochs,
+            batch=batch_size,
+            imgsz=imgsz,
+            device=device,
+            project=str(save_dir.parent),
+            name=save_dir.stem,
+            exist_ok=True,
+            verbose=False,
+            save=True,
+            plots=False,
+            patience=0,
+        )
+    except Exception as e:
+        if _training_stopped:
+            # 用户主动停止，不视为失败
+            print(f"[YOLO训练] 训练被用户停止")
+            if on_progress:
+                on_progress(0, epochs, message="训练已停止")
+            return {
+                "success": False,
+                "stopped": True,
+                "model_path": str(model_save_path),
+                "metrics": {},
+            }
+        raise
 
     # 更新进度
     if on_progress:

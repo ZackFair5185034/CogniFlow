@@ -16,6 +16,21 @@
             <ChevronRightIcon />
           </button>
         </div>
+        <div class="progress-stats" v-if="totalImages > 0">
+          <div class="stat-item">
+            <span class="stat-label">标注</span>
+            <span class="stat-value done">{{ annotatedImages }}</span>
+          </div>
+          <span class="stat-sep">/</span>
+          <div class="stat-item">
+            <span class="stat-label">共</span>
+            <span class="stat-value">{{ totalImages }}</span>
+          </div>
+          <div class="stat-bar">
+            <div class="stat-fill" :style="{ width: progressPercent + '%' }"></div>
+          </div>
+          <span class="stat-pct" :class="{ done: progressPercent === 100 }">{{ progressPercent }}%</span>
+        </div>
       </div>
       <div class="toolbar-center">
         <div class="hotkey-hints">
@@ -244,6 +259,7 @@ interface ImageData {
   atlas_id: number
   width?: number
   height?: number
+  annotated?: boolean
 }
 
 const route = useRoute()
@@ -274,6 +290,11 @@ const hasNext = computed(() => currentImageIndex.value >= 0 && currentImageIndex
 const hasChanges = computed(() => {
   return localAnnotations.value.some(ann => !ann.id)
 })
+
+// 标注进度统计
+const totalImages = computed(() => imageList.value.length)
+const annotatedImages = computed(() => imageList.value.filter(img => img.annotated).length)
+const progressPercent = computed(() => totalImages.value > 0 ? Math.round(annotatedImages.value / totalImages.value * 100) : 0)
 
 // ============ 类别树 Computed ============
 const flatCategories = computed(() => {
@@ -745,6 +766,7 @@ const saveAnnotations = async () => {
     }
     ElMessage.success('保存成功')
     await loadAnnotations(currentImage.value.id)
+    await loadImageList()  // 刷新标注进度
     drawAllBboxes()
   } catch (error: any) {
     const msg = error.response?.data?.detail || '保存失败'
@@ -897,6 +919,53 @@ onUnmounted(() => {
 
 .hotkey-hints {
   @apply flex gap-4;
+}
+
+/* 标注进度 */
+.progress-stats {
+  @apply flex items-center gap-2 ml-4 pl-4;
+  border-left: 1px solid var(--border-color);
+}
+
+.stat-item {
+  @apply flex items-center gap-1;
+}
+
+.stat-label {
+  @apply text-xs text-[var(--text-muted)];
+}
+
+.stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  @apply text-sm font-bold text-[var(--text-primary)];
+}
+
+.stat-value.done {
+  @apply text-[var(--accent-green)];
+}
+
+.stat-sep {
+  @apply text-xs text-[var(--text-muted)];
+}
+
+.stat-bar {
+  @apply w-16 h-1.5 rounded-full overflow-hidden;
+  background: var(--bg-primary);
+}
+
+.stat-fill {
+  @apply h-full rounded-full transition-all duration-500;
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+}
+
+.stat-pct {
+  @apply text-xs font-mono font-semibold min-w-[2.5em] text-right;
+  @apply text-[var(--accent-cyan)];
+  transition: color 0.3s;
+}
+
+.stat-pct.done {
+  @apply text-[var(--accent-green)];
 }
 
 .hint {

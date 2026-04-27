@@ -31,6 +31,7 @@ export const imageApi = {
   get: (id: number) => api.get(`/images/${id}`),
   getFile: (id: number) => `/api/images/${id}/file`,
   delete: (id: number) => api.delete(`/images/${id}`),
+  updateDirectory: (id: number, directory: string) => api.put(`/images/${id}/directory`, null, { params: { directory } }),
 }
 
 // Category API
@@ -106,9 +107,11 @@ export const inferenceApi = {
     formData.append('file', file)
     return api.post(`/inference/detect/video?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 300000,
+      timeout: 30000, // 上传超时 30s，检测在后台进行
     })
   },
+  getVideoJobStatus: (jobId: string) => api.get(`/inference/video/status/${jobId}`),
+  getVideoResultUrl: (jobId: string) => `/api/inference/video/result/${jobId}`,
   listTrainedModels: () => api.get('/inference/models'),
 }
 
