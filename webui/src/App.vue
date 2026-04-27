@@ -20,8 +20,8 @@
           </svg>
         </div>
         <div class="logo-text">
-          <span class="logo-title">VisionGame</span>
-          <span class="logo-sub">Neural Control</span>
+          <span class="logo-title">CogniFlow</span>
+          <span class="logo-sub">Visual Perception</span>
         </div>
       </div>
 
@@ -122,8 +122,8 @@ const navItems = [
   { path: '/', label: '控制台', icon: HomeIcon },
   { path: '/atlas', label: '图集管理', icon: FolderIcon },
   { path: '/models', label: '模型管理', icon: BoxIcon },
-  { path: '/training', label: '训练监控', icon: ChartIcon },
-  { path: '/launch', label: '模型启动', icon: RocketIcon },
+  { path: '/training', label: '模型训练', icon: ChartIcon },
+  { path: '/launch', label: '模型测试', icon: RocketIcon },
   { path: '/rule-engine', label: '规则引擎', icon: FlowIcon },
 ]
 
@@ -132,8 +132,8 @@ const pageTitles: Record<string, string> = {
   '/atlas': '图集管理',
   '/atlas/': '图集详情',
   '/models': '模型管理',
-  '/training': '训练监控',
-  '/launch': '模型启动',
+  '/training': '模型训练',
+  '/launch': '模型测试',
   '/rule-engine': '规则引擎',
 }
 
@@ -142,7 +142,7 @@ const currentPageTitle = computed(() => {
   if (path.endsWith('/') && path !== '/') {
     return pageTitles[path.slice(0, -1)] || '详情'
   }
-  return pageTitles[path] || 'VisionGame'
+  return pageTitles[path] || 'CogniFlow'
 })
 
 const isNavActive = (path: string) => {

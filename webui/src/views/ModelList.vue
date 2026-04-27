@@ -35,6 +35,12 @@
               <span v-else class="text-muted">-</span>
             </template>
           </el-table-column>
+          <el-table-column prop="pretrained_model" label="预训练" width="120">
+            <template #default="{ row }">
+              <span class="text-muted" v-if="!row.pretrained_model">-</span>
+              <span v-else>{{ row.pretrained_model.replace('.pt', '') }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="状态" width="100">
             <template #default="{ row }">
               <span class="status-badge" :class="row.file_path ? 'trained' : 'untrained'">
@@ -81,9 +87,9 @@
           <el-table-column label="操作" width="160" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
-                <el-button type="link" @click="handleUpload(row)" v-if="!row.file_path">上传</el-button>
-                <el-button type="link" @click="handleSetBest(row)" :disabled="row.is_best || !row.file_path">最佳</el-button>
-                <el-button type="link" @click="handleDelete(row)">删除</el-button>
+                <el-button type="text" @click="handleUpload(row)" v-if="!row.file_path">上传</el-button>
+                <el-button type="text" @click="handleSetBest(row)" :disabled="row.is_best || !row.file_path">最佳</el-button>
+                <el-button type="text" @click="handleDelete(row)">删除</el-button>
               </div>
             </template>
           </el-table-column>
@@ -125,6 +131,18 @@
                 <option v-for="atlas in atlases" :key="atlas.id" :value="atlas.id">
                   {{ atlas.name }}
                 </option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>预训练模型</label>
+            <div class="select-wrapper">
+              <select v-model="createForm.pretrained_model">
+                <option value="yolov8n.pt">YOLOv8n (最小最快)</option>
+                <option value="yolov8s.pt">YOLOv8s (小，推荐)</option>
+                <option value="yolov8m.pt">YOLOv8m (中)</option>
+                <option value="yolov8l.pt">YOLOv8l (大)</option>
+                <option value="yolov8x.pt">YOLOv8x (最大最准)</option>
               </select>
             </div>
           </div>
@@ -184,7 +202,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedModel = ref<any>(null)
 const uploadFile = ref<File | null>(null)
 
-const createForm = ref({ name: '', version: '', atlas_id: null as number | null })
+const createForm = ref({ name: '', version: '', pretrained_model: 'yolov8s.pt', atlas_id: null as number | null })
 
 // 图标组件
 const PlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
@@ -287,7 +305,7 @@ const handleCreate = async () => {
     await modelApi.create(createForm.value)
     ElMessage.success('注册成功')
     showCreateDialog.value = false
-    createForm.value = { name: '', version: '', atlas_id: null }
+    createForm.value = { name: '', version: '', pretrained_model: 'yolov8s.pt', atlas_id: null }
     loadModels()
   } catch (error: any) {
     const msg = error.response?.data?.detail || '注册失败'

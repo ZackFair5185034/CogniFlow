@@ -210,6 +210,7 @@ const systemStats = ref({
 
 // WebSocket
 let wsSystem: WebSocket | null = null
+let wsTraining: WebSocket | null = null
 
 const formatBytes = (bytes: number) => {
   if (bytes === 0) return '0 B'
@@ -229,6 +230,65 @@ const connectSystemWs = () => {
   }
   wsSystem.onclose = () => {
     setTimeout(connectSystemWs, 3000)
+  }
+}
+
+const connectTrainingWs = () => {
+  wsTraining = new WebSocket('/ws/training')
+  wsTraining.onmessage = (event) => {
+    const data = JSON.parse(event.data)
+    if (data.type === 'training_update') {
+      loadTrainingJobs()
+    }
+  }
+  wsTraining.onclose = () => {
+    setTimeout(connectTrainingWs, 3000)
+  }
+}
+
+const loadTrainingJobs = async () => {
+  try {
+    const res = await trainingApi.listJobs()
+    recentJobs.value = res.data.slice(0, 5)
+    stats.value[3].value = res.data.length
+  } catch (error) {
+    console.error('Failed to load training jobs:', error)
+  }
+}
+
+// 训练进度轮询
+let trainingProgressTimer: number | null = null
+
+const startTrainingProgressPolling = () => {
+  if (trainingProgressTimer) return
+  const poll = async () => {
+    try {
+      const res = await trainingApi.getProgress()
+      const progress = res.data
+      if (progress.status === 'running' || progress.status === 'downloading') {
+        // 更新 running 任务的进度
+        const runningJob = recentJobs.value.find(j => j.status === 'running')
+        if (runningJob) {
+          runningJob.current_step = progress.epoch
+          runningJob.total_steps = progress.total_epochs
+        }
+        trainingProgressTimer = window.setTimeout(poll, 2000)
+      } else if (progress.status === 'completed' || progress.status === 'failed') {
+        loadTrainingJobs()
+        stopTrainingProgressPolling()
+      }
+    } catch (e) {
+      console.error('轮询训练进度失败', e)
+      trainingProgressTimer = window.setTimeout(poll, 5000)
+    }
+  }
+  poll()
+}
+
+const stopTrainingProgressPolling = () => {
+  if (trainingProgressTimer) {
+    clearTimeout(trainingProgressTimer)
+    trainingProgressTimer = null
   }
 }
 
@@ -255,12 +315,20 @@ onMounted(async () => {
   }
   // 连接系统状态 WebSocket
   connectSystemWs()
+  // 连接训练状态 WebSocket
+  connectTrainingWs()
+  // 启动训练进度轮询
+  startTrainingProgressPolling()
 })
 
 onUnmounted(() => {
   if (wsSystem) {
     wsSystem.close()
   }
+  if (wsTraining) {
+    wsTraining.close()
+  }
+  stopTrainingProgressPolling()
 })
 </script>
 

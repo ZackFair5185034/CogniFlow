@@ -1,11 +1,11 @@
-"""VisionGame 训练示例脚本。"""
+"""CogniFlow 训练示例脚本。"""
 
 import numpy as np
 import torch
-from visiongame.config import Config, RLConfig, VisionConfig
-from visiongame.core.rl.algorithms.ppo import PPO
-from visiongame.core.rl.environment.game_env import GameEnv, GameAdapter
-from visiongame.core.rl.trainer import Trainer
+from engine.config import Config, RLConfig, VisionConfig
+from engine.core.rl.algorithms.ppo import PPO
+from engine.core.rl.environment.game_env import GameEnv, GameAdapter
+from engine.core.rl.trainer import Trainer
 
 
 class DummyGameAdapter(GameAdapter):
@@ -47,7 +47,7 @@ class DummyGameAdapter(GameAdapter):
 
 def main():
     """主训练函数。"""
-    print("VisionGame 训练示例")
+    print("CogniFlow 训练示例")
     print("=" * 40)
 
     # 创建配置

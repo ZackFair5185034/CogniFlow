@@ -1,8 +1,8 @@
-# VisionGame 项目规范
+# CogniFlow 项目规范
 
 ## 1. 项目概述
 
-VisionGame 是一个基于强化学习的通用视觉控制游戏框架，支持屏幕/视频采集、视觉特征提取、RL训练和游戏控制输入模拟。
+CogniFlow 是一个通用视觉感知处理框架，集模型训练、模型测试、模型推理、规则引擎于一体，支持图像/视频采集、视觉特征提取、目标检测、模型训练部署和可视化规则编排。
 
 ## 2. 代码规范
 
@@ -62,7 +62,7 @@ class ClassName:
 ## 3. 项目结构
 
 ```
-visionGame/
+CogniFlow/
 ├── backend/                      # FastAPI 后端
 │   ├── app.py                   # 应用入口
 │   ├── database.py              # 数据库配置
@@ -79,7 +79,7 @@ visionGame/
 │       ├── inference.py         # 模型测试（图片/视频检测）
 │       ├── websocket.py         # WebSocket
 │       └── yolo_training.py     # YOLO 训练工具
-├── visiongame/                  # 核心 RL/Vision 包
+├── engine/                     # 核心视觉感知包
 │   ├── __init__.py             # 包初始化
 │   ├── config/                  # 配置模块
 │   │   ├── schema.py           # 配置数据类
@@ -87,7 +87,7 @@ visionGame/
 │   │   └── __init__.py
 │   ├── core/                    # 核心模块
 │   │   ├── data_input/         # 数据输入
-│   │   │   ├── capture/        # 屏幕捕获
+│   │   │   ├── capture/        # 屏幕/视频捕获
 │   │   │   └── storage/        # 数据存储
 │   │   ├── vision/             # 视觉处理
 │   │   │   ├── features/       # 特征提取
@@ -150,6 +150,12 @@ feat(vision): 添加ResNet50骨干网络支持
 
 Closes #123
 ```
+
+### 4.4 项目名称
+
+- 项目全称：CogniFlow
+- Python 包名：`engine`（历史原因保留）
+- 文档中一律使用 **CogniFlow** 作为项目名称
 
 ### 4.3 Gitignore 规则
 

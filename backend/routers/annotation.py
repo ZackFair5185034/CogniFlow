@@ -99,6 +99,15 @@ async def delete_annotation(annotation_id: int, db: Session = Depends(get_db)):
     if not ann:
         raise HTTPException(status_code=404, detail="标注不存在")
 
+    image_id = ann.image_id
     db.delete(ann)
+
+    # 检查图片是否还有其他标注，没有则取消 annotated 标记
+    remaining = db.query(Annotation).filter(Annotation.image_id == image_id).count()
+    if remaining == 0:
+        image = db.query(Image).filter(Image.id == image_id).first()
+        if image:
+            image.annotated = False
+
     db.commit()
     return None

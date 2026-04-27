@@ -1,13 +1,13 @@
-# VisionGame WebUI 升级设计方案
+# CogniFlow WebUI 升级设计方案
 
 **日期**: 2026-04-11
-**项目**: VisionGame WebUI + 训练图集管理 + 模型管理 + 数据标注
+**项目**: CogniFlow WebUI + 训练图集管理 + 模型管理 + 数据标注
 
 ---
 
 ## 1. 需求概述
 
-对 VisionGame 项目进行 WebUI 升级，实现以下功能：
+对 CogniFlow 项目进行 WebUI 升级，实现以下功能：
 
 1. **WebUI**: FastAPI + Vue3 全栈界面
 2. **训练图集管理**: 按目录管理图片分组
@@ -251,8 +251,8 @@
 ## 7. 项目结构
 
 ```
-visiongame/
-├── visiongame/                    # 主包（现有代码）
+engine/
+├── engine/                    # 主包（现有代码）
 │   ├── core/                      # 核心模块
 │   └── annotation/               # 标注模块
 ├── webui/                         # Vue3 前端

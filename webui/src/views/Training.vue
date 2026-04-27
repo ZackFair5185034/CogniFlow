@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-info">
-        <h2>训练监控</h2>
+        <h2>模型训练</h2>
         <span class="subtitle">实时监控训练进度</span>
       </div>
       <div class="header-actions">
@@ -17,7 +17,7 @@
             {{ completedCount }} 已完成
           </div>
         </div>
-        <el-button type="link" @click="handleClearCompleted" :disabled="completedCount === 0">
+        <el-button type="text" @click="handleClearCompleted" :disabled="completedCount === 0">
           清理记录
         </el-button>
       </div>
@@ -52,7 +52,7 @@
               <span class="meta-tag">Atlas #{{ job.atlas_id }}</span>
             </div>
             <div class="job-actions" v-if="job.status === 'running'">
-              <el-button type="link" @click="handleStop(job)">停止</el-button>
+              <el-button type="text" @click="handleStop(job)">停止</el-button>
             </div>
           </div>
 
@@ -98,11 +98,40 @@
             </div>
 
             <div class="form-group">
-              <label>总步数</label>
+              <label>训练轮数</label>
               <div class="number-input">
-                <button @click="startForm.total_steps = Math.max(100, startForm.total_steps - 100)">-</button>
-                <input type="number" v-model="startForm.total_steps" min="100" max="100000" />
-                <button @click="startForm.total_steps += 100">+</button>
+                <button @click="startForm.total_steps = Math.max(10, startForm.total_steps - 10)">-</button>
+                <input type="number" v-model="startForm.total_steps" min="10" max="1000" />
+                <button @click="startForm.total_steps = Math.min(1000, startForm.total_steps + 10)">+</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>训练设备</label>
+              <div class="select-wrapper">
+                <select v-model="startForm.device">
+                  <option value="cpu">CPU</option>
+                  <option value="cuda" v-if="deviceInfo.available">GPU ({{ deviceInfo.device_name }})</option>
+                </select>
+              </div>
+              <span class="device-hint" v-if="deviceInfo.available">
+                检测到 {{ deviceInfo.device_name }}，推荐使用 GPU 加速训练
+              </span>
+              <span class="device-hint" v-else>
+                未检测到 GPU，将使用 CPU 训练
+              </span>
+            </div>
+
+            <div class="form-group">
+              <label>预训练模型</label>
+              <div class="select-wrapper">
+                <select v-model="startForm.pretrained_model">
+                  <option value="yolov8n.pt">YOLOv8n (最小最快)</option>
+                  <option value="yolov8s.pt">YOLOv8s (小，推荐)</option>
+                  <option value="yolov8m.pt">YOLOv8m (中)</option>
+                  <option value="yolov8l.pt">YOLOv8l (大)</option>
+                  <option value="yolov8x.pt">YOLOv8x (最大最准)</option>
+                </select>
               </div>
             </div>
 
@@ -129,15 +158,22 @@
             </div>
             <div class="realtime-stat">
               <span class="stat-label">状态</span>
-              <span class="stat-value status-running" v-if="currentJob.status === 'running'">进行中</span>
+              <span class="stat-value status-running" v-if="currentJob._displayStatus === 'running'">进行中</span>
+              <span class="stat-value status-downloading" v-else-if="currentJob._displayStatus === 'downloading'">下载中</span>
               <span class="stat-value" v-else>{{ statusText[currentJob.status] }}</span>
             </div>
             <div class="realtime-progress">
               <div class="progress-bar large">
-                <div class="progress-fill running"
+                <div class="progress-fill" :class="currentJob.status"
                      :style="{ width: getProgress(currentJob) + '%' }"></div>
               </div>
-              <span class="progress-percent">{{ getProgress(currentJob) }}%</span>
+              <span class="progress-percent">
+                <span v-if="currentJob._displayStatus === 'downloading'">下载中</span>
+                <span v-else>{{ getProgress(currentJob) }}%</span>
+              </span>
+            </div>
+            <div class="realtime-message" v-if="currentJob.message">
+              <span class="message-text">{{ currentJob.message }}</span>
             </div>
           </div>
         </div>
@@ -156,6 +192,11 @@ const models = ref<any[]>([])
 const atlases = ref<any[]>([])
 const loading = ref(false)
 const starting = ref(false)
+const deviceInfo = ref<{ available: boolean; device: string; device_name: string }>({
+  available: false,
+  device: 'cpu',
+  device_name: 'CPU',
+})
 const currentJob = computed(() => jobs.value.find(j => j.status === 'running') || null)
 const runningCount = computed(() => jobs.value.filter(j => j.status === 'running').length)
 const completedCount = computed(() => jobs.value.filter(j => j.status === 'completed' || j.status === 'failed').length)
@@ -163,13 +204,16 @@ const completedCount = computed(() => jobs.value.filter(j => j.status === 'compl
 const startForm = ref({
   model_id: null as number | null,
   atlas_id: null as number | null,
-  total_steps: 1000,
+  total_steps: 100,
+  device: 'cpu',
+  pretrained_model: 'yolov8s.pt',
 })
 
 let ws: WebSocket | null = null
 
 const statusText: Record<string, string> = {
   pending: '等待中',
+  downloading: '下载中',
   running: '进行中',
   completed: '已完成',
   failed: '失败',
@@ -243,6 +287,16 @@ const loadAtlases = async () => {
   }
 }
 
+const loadDeviceInfo = async () => {
+  try {
+    const res = await trainingApi.getDeviceInfo()
+    deviceInfo.value = res.data
+    startForm.value.device = res.data.available ? 'cuda' : 'cpu'
+  } catch (error) {
+    console.error('获取设备信息失败', error)
+  }
+}
+
 const handleStart = async () => {
   if (!startForm.value.model_id || !startForm.value.atlas_id) {
     ElMessage.warning('请选择模型和图集')
@@ -253,10 +307,15 @@ const handleStart = async () => {
     await trainingApi.start({
       model_id: startForm.value.model_id,
       atlas_id: startForm.value.atlas_id,
-      config: { epochs: startForm.value.total_steps },
+      config: {
+        epochs: startForm.value.total_steps,
+        device: startForm.value.device,
+        pretrained_model: startForm.value.pretrained_model,
+      },
     })
     ElMessage.success('训练已启动')
     loadJobs()
+    startProgressPolling()
   } catch (error: any) {
     const msg = error.response?.data?.detail || '启动失败'
     ElMessage.error(msg)
@@ -289,13 +348,56 @@ const connectWebSocket = () => {
   }
 }
 
+// 轮询进度
+let progressPollingTimer: number | null = null
+
+const startProgressPolling = () => {
+  if (progressPollingTimer) return
+  const poll = async () => {
+    try {
+      const res = await trainingApi.getProgress()
+      const progress = res.data
+      if (progress.status === 'running' || progress.status === 'downloading') {
+        // 更新 running 任务的进度
+        const runningJob = jobs.value.find(j => j.status === 'running')
+        if (runningJob) {
+          runningJob.current_step = progress.epoch
+          runningJob.total_steps = progress.total_epochs
+          runningJob.message = progress.message
+          runningJob._displayStatus = progress.status  // 用于实时卡片显示下载中/训练中
+        }
+        progressPollingTimer = window.setTimeout(poll, 2000)
+      } else if (progress.status === 'completed' || progress.status === 'failed') {
+        loadJobs() // 重新加载以获取最终状态
+        stopProgressPolling()
+        if (progress.status === 'failed' && progress.message) {
+          ElMessage.error(progress.message)
+        }
+      }
+    } catch (e) {
+      console.error('轮询进度失败', e)
+    }
+  }
+  poll()
+}
+
+const stopProgressPolling = () => {
+  if (progressPollingTimer) {
+    clearTimeout(progressPollingTimer)
+    progressPollingTimer = null
+  }
+}
+
 onMounted(() => {
-  Promise.all([loadJobs(), loadModels(), loadAtlases()])
+  Promise.all([loadJobs(), loadModels(), loadAtlases(), loadDeviceInfo()])
   connectWebSocket()
+  // 启动轮询
+  startProgressPolling()
 })
 
 onUnmounted(() => {
   if (ws) ws.close()
+  stopProgressPolling()
 })
 </script>
 
@@ -450,12 +552,22 @@ onUnmounted(() => {
   @apply h-full rounded transition-all duration-500;
 
   &.pending { @apply bg-[var(--text-muted)]; }
+  &.downloading {
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+    box-shadow: 0 0 10px var(--accent-cyan);
+    animation: downloadPulse 1.5s ease-in-out infinite;
+  }
   &.running {
     background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
     box-shadow: 0 0 10px var(--accent-cyan);
   }
   &.completed { @apply bg-[var(--accent-green)]; }
   &.failed { @apply bg-[#ff4466]; }
+}
+
+@keyframes downloadPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 .progress-text {
@@ -570,6 +682,10 @@ onUnmounted(() => {
   }
 }
 
+.device-hint {
+  @apply text-xs text-[var(--text-muted)] mt-1;
+}
+
 /* 实时状态 */
 .live-badge {
   @apply flex items-center gap-1.5 font-mono text-xs text-[#ff4466] tracking-wider;
@@ -604,6 +720,11 @@ onUnmounted(() => {
     @apply text-[var(--accent-cyan)];
     text-shadow: 0 0 10px var(--accent-cyan);
   }
+
+  .stat-value.status-downloading {
+    @apply text-[var(--accent-orange)];
+    text-shadow: 0 0 10px var(--accent-orange);
+  }
 }
 
 .realtime-progress {
@@ -612,6 +733,14 @@ onUnmounted(() => {
 
 .progress-percent {
   @apply font-mono text-2xl font-bold text-[var(--accent-cyan)] min-w-15 text-right;
+}
+
+.realtime-message {
+  @apply mt-3 pt-3 border-t border-[var(--border-color)];
+}
+
+.message-text {
+  @apply text-sm text-[var(--text-secondary)];
 }
 
 @keyframes fadeInUp {

@@ -1,16 +1,16 @@
-"""VisionGame 推理示例脚本。"""
+"""CogniFlow 推理示例脚本。"""
 
 import numpy as np
 import torch
 from pathlib import Path
-from visiongame.config import Config
-from visiongame.core.rl.algorithms.ppo import PPO
-from visiongame.core.control.controller import GameController, ActionMapper
+from engine.config import Config
+from engine.core.rl.algorithms.ppo import PPO
+from engine.core.control.controller import GameController, ActionMapper
 
 
 def main():
     """主推理函数。"""
-    print("VisionGame 推理示例")
+    print("CogniFlow 推理示例")
     print("=" * 40)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"

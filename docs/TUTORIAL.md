@@ -1,8 +1,8 @@
-# VisionGame 使用教程
+# CogniFlow 使用教程
 
 ## 1. 项目概述
 
-VisionGame 是一个基于视觉的智能控制框架，核心流程：
+CogniFlow 是一个通用视觉感知处理框架，集模型训练、模型测试、模型推理、规则引擎于一体，核心流程：
 
 ```
 图集管理 → 图片标注 → YOLO训练 → 模型推理 → 规则引擎 → 自动控制
@@ -102,7 +102,7 @@ npm run dev
 ## 3. 目录结构
 
 ```
-visionGame/
+CogniFlow/
 ├── backend/                 # FastAPI 后端
 │   ├── app.py              # 主入口
 │   ├── database.py         # SQLAlchemy 模型
@@ -145,7 +145,7 @@ visionGame/
 │   │   │   └── index.ts    # API 调用
 │   │   └── router/
 │   └── package.json
-├── visiongame/             # Python 核心包
+├── engine/             # Python 核心包
 │   ├── core/
 │   │   ├── data_input/     # 数据输入
 │   │   │   ├── capture/    # 屏幕/视频采集
