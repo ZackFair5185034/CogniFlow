@@ -89,3 +89,84 @@ async def delete_image(image_id: int, db: Session = Depends(get_db)):
     db.delete(image)
     db.commit()
     return None
+
+
+@router.post("/batch-update-directory")
+async def batch_update_directory(
+    image_ids: List[int],
+    directory: str,
+    db: Session = Depends(get_db)
+):
+    """批量修改图片目录。
+
+    Args:
+        image_ids: 图片ID列表
+        directory: 目标目录名，传空字符串表示移回根目录
+    """
+    if not image_ids:
+        raise HTTPException(status_code=400, detail="图片ID列表不能为空")
+
+    # 空字符串视为移回根目录
+    new_directory = directory if directory else None
+
+    # 查询所有图片
+    images = db.query(Image).filter(Image.id.in_(image_ids)).all()
+    if len(images) != len(image_ids):
+        found_ids = {img.id for img in images}
+        missing_ids = set(image_ids) - found_ids
+        raise HTTPException(status_code=404, detail=f"部分图片不存在，缺失ID: {missing_ids}")
+
+    # 批量更新
+    for image in images:
+        old_directory = image.directory
+        image.directory = new_directory
+        print(f"[图片] 批量修改目录: image_id={image.id}, {old_directory} -> {new_directory}")
+
+    db.commit()
+
+    return {
+        "message": f"成功修改 {len(images)} 张图片的目录",
+        "image_ids": image_ids,
+        "directory": new_directory,
+    }
+
+
+@router.post("/batch-delete")
+async def batch_delete_images(
+    image_ids: List[int],
+    db: Session = Depends(get_db)
+):
+    """批量删除图片。
+
+    Args:
+        image_ids: 图片ID列表
+    """
+    if not image_ids:
+        raise HTTPException(status_code=400, detail="图片ID列表不能为空")
+
+    # 查询所有图片
+    images = db.query(Image).filter(Image.id.in_(image_ids)).all()
+    if len(images) != len(image_ids):
+        found_ids = {img.id for img in images}
+        missing_ids = set(image_ids) - found_ids
+        raise HTTPException(status_code=404, detail=f"部分图片不存在，缺失ID: {missing_ids}")
+
+    deleted_count = 0
+    for image in images:
+        # 删除物理文件
+        if image.file_path and os.path.exists(image.file_path):
+            try:
+                os.remove(image.file_path)
+                deleted_count += 1
+            except Exception:
+                pass
+        # 删除数据库记录
+        db.delete(image)
+
+    db.commit()
+
+    return {
+        "message": f"成功删除 {len(images)} 张图片",
+        "deleted_count": len(images),
+        "deleted_file_count": deleted_count,
+    }

@@ -17,6 +17,31 @@
       <input ref="fileInputRef" type="file" accept="image/*" multiple style="display: none" @change="handleFileSelect" />
     </div>
 
+    <!-- 批量操作工具栏 -->
+    <div class="batch-toolbar" v-if="selectedImages.length > 0">
+      <div class="batch-info">
+        <span class="selected-count">已选择 {{ selectedImages.length }} 张图片</span>
+        <button class="text-btn" @click="selectAllImages">全选全部</button>
+        <button class="text-btn" @click="clearSelection">取消选择</button>
+      </div>
+      <div class="batch-actions">
+        <div class="batch-dir-action">
+          <select v-model="batchTargetDirectory" class="batch-dir-select">
+            <option value="">移动到根目录</option>
+            <option v-for="dir in directories" :key="dir" :value="dir">{{ dir }}</option>
+          </select>
+          <button class="vg-btn" @click="handleBatchMoveDirectory" :disabled="!batchTargetDirectory && selectedImages.length === 0">
+            <FolderIcon />
+            移动
+          </button>
+        </div>
+        <button class="vg-btn danger" @click="handleBatchDelete">
+          <TrashIcon />
+          批量删除
+        </button>
+      </div>
+    </div>
+
     <div class="content-grid">
       <!-- 主内容区 -->
       <div class="main-panel vg-card">
@@ -50,8 +75,16 @@
         <div class="images-content" v-if="activeTab === 'images'">
           <div class="images-grid" v-loading="loadingImages">
             <div class="image-card" v-for="img in images" :key="img.id">
-              <div class="image-wrapper" @click="openImageDialog(img)">
-                <img :src="getImageUrl(img.file_path)" :alt="getFileName(img.file_path)" />
+              <div class="image-wrapper" :class="{ selected: isImageSelected(img.id) }">
+                <!-- 复选框 -->
+                <label class="checkbox-wrapper" @click.stop>
+                  <input
+                    type="checkbox"
+                    :checked="isImageSelected(img.id)"
+                    @change="toggleImageSelection(img.id)"
+                  />
+                </label>
+                <img :src="getImageUrl(img.file_path)" :alt="getFileName(img.file_path)" @click="openImageDialog(img)" />
                 <div class="image-overlay">
                   <span class="overlay-icon">
                     <EyeIcon />
@@ -481,6 +514,88 @@ const handleDeleteImage = async (img: any) => {
   }
 }
 
+// ============ 批量操作逻辑 ============
+
+// 选中的图片ID列表
+const selectedImages = ref<number[]>([])
+const batchTargetDirectory = ref('')
+
+// 判断图片是否被选中
+const isImageSelected = (imageId: number) => {
+  return selectedImages.value.includes(imageId)
+}
+
+// 切换图片选中状态
+const toggleImageSelection = (imageId: number) => {
+  const index = selectedImages.value.indexOf(imageId)
+  if (index === -1) {
+    selectedImages.value.push(imageId)
+  } else {
+    selectedImages.value.splice(index, 1)
+  }
+}
+
+// 全选当前显示的图片
+const selectAllImages = () => {
+  selectedImages.value = images.value.map(img => img.id)
+}
+
+// 清除选中状态
+const clearSelection = () => {
+  selectedImages.value = []
+}
+
+// 批量移动到指定目录
+const handleBatchMoveDirectory = async () => {
+  if (selectedImages.value.length === 0) {
+    ElMessage.warning('请先选择图片')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定将选中的 ${selectedImages.value.length} 张图片移动到 ${batchTargetDirectory.value || '根目录'} 吗？`,
+      '批量移动',
+      { type: 'warning', confirmButtonText: '确认', cancelButtonText: '取消' }
+    )
+    await imageApi.batchUpdateDirectory(selectedImages.value, batchTargetDirectory.value)
+    ElMessage.success(`成功移动 ${selectedImages.value.length} 张图片`)
+    clearSelection()
+    batchTargetDirectory.value = ''
+    loadImages()
+    loadDirectories()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      const msg = error.response?.data?.detail || '批量移动失败'
+      ElMessage.error(msg)
+    }
+  }
+}
+
+// 批量删除图片
+const handleBatchDelete = async () => {
+  if (selectedImages.value.length === 0) {
+    ElMessage.warning('请先选择图片')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定删除选中的 ${selectedImages.value.length} 张图片吗？此操作不可撤销。`,
+      '批量删除',
+      { type: 'warning', confirmButtonText: '确认', cancelButtonText: '取消' }
+    )
+    await imageApi.batchDelete(selectedImages.value)
+    ElMessage.success(`成功删除 ${selectedImages.value.length} 张图片`)
+    clearSelection()
+    loadImages()
+    loadDirectories()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      const msg = error.response?.data?.detail || '批量删除失败'
+      ElMessage.error(msg)
+    }
+  }
+}
+
 const getImageUrl = (filePath: string) => {
   const uploadsIndex = filePath.indexOf('uploads')
   if (uploadsIndex !== -1) {
@@ -509,6 +624,43 @@ onMounted(() => {
 <style lang="scss" scoped>
 .atlas-detail {
   @apply flex flex-col gap-6;
+}
+
+/* 批量操作工具栏 */
+.batch-toolbar {
+  @apply flex justify-between items-center p-4 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg;
+}
+
+.batch-info {
+  @apply flex items-center gap-4;
+}
+
+.selected-count {
+  @apply text-sm font-medium text-[var(--accent-cyan)];
+}
+
+.text-btn {
+  @apply text-xs text-[var(--text-muted)] bg-transparent border-none cursor-pointer transition-all;
+}
+
+.text-btn:hover {
+  @apply text-[var(--accent-cyan)];
+}
+
+.batch-actions {
+  @apply flex items-center gap-4;
+}
+
+.batch-dir-action {
+  @apply flex items-center gap-2;
+}
+
+.batch-dir-select {
+  @apply px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-sm;
+}
+
+.batch-dir-select:focus {
+  @apply outline-none border-[var(--accent-cyan)];
 }
 
 .page-header {
@@ -655,6 +807,20 @@ onMounted(() => {
   @apply relative overflow-hidden;
   aspect-ratio: 1;
   background: var(--bg-secondary);  /* 占位暗色，避免图片加载前闪白 */
+}
+
+/* 选中状态 */
+.image-wrapper.selected {
+  @apply ring-2 ring-[var(--accent-cyan)] ring-offset-2 ring-offset-[var(--bg-card)];
+}
+
+/* 复选框样式 */
+.checkbox-wrapper {
+  @apply absolute top-2 left-2 z-10 cursor-pointer;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+  @apply w-5 h-5 cursor-pointer accent-[var(--accent-cyan)];
 }
 
 .image-wrapper img {
