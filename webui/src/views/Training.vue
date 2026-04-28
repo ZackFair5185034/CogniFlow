@@ -404,7 +404,9 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .training {
   @apply flex flex-col gap-3;
-  height: 100%;
+  height: 100vh;
+  padding: 16px;
+  box-sizing: border-box;
   min-height: 0;
   overflow: hidden;
 }
