@@ -8,38 +8,41 @@
       </button>
       <div class="atlas-info">
         <h2>{{ atlas?.name }}</h2>
-        <span class="atlas-desc">{{ atlas?.description || '无描述' }}</span>
+        <span class="atlas-desc" v-if="atlas?.description">{{ atlas?.description }}</span>
       </div>
-      <button class="vg-btn vg-btn-primary" @click="triggerUpload">
-        <UploadIcon />
-        上传图片
-      </button>
-      <input ref="fileInputRef" type="file" accept="image/*" multiple style="display: none" @change="handleFileSelect" />
-    </div>
-
-    <!-- 批量操作工具栏 -->
-    <div class="batch-toolbar" v-if="selectedImages.length > 0">
-      <div class="batch-info">
-        <span class="selected-count">已选择 {{ selectedImages.length }} 张图片</span>
-        <button class="text-btn" @click="selectAllImages">全选全部</button>
-        <button class="text-btn" @click="clearSelection">取消选择</button>
-      </div>
-      <div class="batch-actions">
-        <div class="batch-dir-action">
+      <div class="header-operations">
+        <!-- 批量模式下显示操作按钮 -->
+        <template v-if="batchMode || selectedImages.length > 0">
+          <span class="selected-count">已选 {{ selectedImages.length }}</span>
+          <button class="vg-btn vg-btn-sm" @click="selectAllImages">全选</button>
+          <button class="vg-btn vg-btn-sm" @click="clearSelection">取消</button>
+          <div class="batch-divider"></div>
           <select v-model="batchTargetDirectory" class="batch-dir-select">
-            <option value="">移动到根目录</option>
+            <option value="">根目录</option>
             <option v-for="dir in directories" :key="dir" :value="dir">{{ dir }}</option>
           </select>
-          <button class="vg-btn" @click="handleBatchMoveDirectory" :disabled="!batchTargetDirectory && selectedImages.length === 0">
+          <button class="vg-btn vg-btn-sm" @click="handleBatchMoveDirectory" :disabled="selectedImages.length === 0">
             <FolderIcon />
             移动
           </button>
-        </div>
-        <button class="vg-btn danger" @click="handleBatchDelete">
-          <TrashIcon />
-          批量删除
+          <button class="vg-btn vg-btn-sm danger" @click="handleBatchDelete" :disabled="selectedImages.length === 0">
+            <TrashIcon />
+            删除
+          </button>
+        </template>
+        <button class="vg-btn vg-btn-sm" v-if="batchMode" @click="exitBatchMode">
+          退出批量
+        </button>
+        <button class="vg-btn vg-btn-sm" v-if="!batchMode" @click="enterBatchMode">
+          <CheckSquareIcon />
+          批量
+        </button>
+        <button class="vg-btn vg-btn-primary vg-btn-sm" @click="triggerUpload">
+          <UploadIcon />
+          上传
         </button>
       </div>
+      <input ref="fileInputRef" type="file" accept="image/*" multiple style="display: none" @change="handleFileSelect" />
     </div>
 
     <div class="content-grid">
@@ -50,7 +53,7 @@
             <button class="tab-btn" :class="{ active: activeTab === 'images' }" @click="activeTab = 'images'">
               <ImageIcon />
               图片列表
-              <span class="count">{{ images.length }}</span>
+              <span class="count">{{ pagination.total }}</span>
             </button>
             <button class="tab-btn" :class="{ active: activeTab === 'directories' }" @click="activeTab = 'directories'">
               <FolderIcon />
@@ -60,7 +63,7 @@
           </div>
           <div class="header-actions" v-if="activeTab === 'images'">
             <div class="select-wrapper">
-              <select v-model="selectedDirectory" @change="loadImages">
+              <select v-model="selectedDirectory" @change="onDirectoryChange">
                 <option value="">全部目录</option>
                 <option v-for="dir in directories" :key="dir" :value="dir">{{ dir }}</option>
               </select>
@@ -71,45 +74,58 @@
           </div>
         </div>
 
-        <!-- 图片列表 -->
+        <!-- 图片列表 - 内部滚动 -->
         <div class="images-content" v-if="activeTab === 'images'">
-          <div class="images-grid" v-loading="loadingImages">
-            <div class="image-card" v-for="img in images" :key="img.id">
-              <div class="image-wrapper" :class="{ selected: isImageSelected(img.id) }">
-                <!-- 复选框 -->
-                <label class="checkbox-wrapper" @click.stop>
-                  <input
-                    type="checkbox"
-                    :checked="isImageSelected(img.id)"
-                    @change="toggleImageSelection(img.id)"
-                  />
-                </label>
-                <img :src="getImageUrl(img.file_path)" :alt="getFileName(img.file_path)" @click="openImageDialog(img)" />
-                <div class="image-overlay">
-                  <span class="overlay-icon">
-                    <EyeIcon />
-                  </span>
+          <div class="images-grid-wrapper" v-loading="loadingImages">
+            <div class="images-grid">
+              <div class="image-card" v-for="img in images" :key="img.id">
+                <div class="image-wrapper" :class="{ selected: batchMode && isImageSelected(img.id) }">
+                  <!-- 复选框 - 仅在批量模式下显示 -->
+                  <label class="checkbox-wrapper" v-if="batchMode" @click.stop>
+                    <input
+                      type="checkbox"
+                      :checked="isImageSelected(img.id)"
+                      @change="toggleImageSelection(img.id)"
+                    />
+                  </label>
+                  <img :src="getImageUrl(img.file_path)" :alt="getFileName(img.file_path)" @click="openImageDialog(img)" />
+                  <div class="image-overlay">
+                    <span class="overlay-icon">
+                      <EyeIcon />
+                    </span>
+                  </div>
+                  <span class="annotated-badge" v-if="img.annotated"></span>
+                  <button class="annotate-btn" @click.stop="handleAnnotateImage(img)" title="标注图片">
+                    <TagIcon />
+                  </button>
+                  <button class="delete-btn" @click.stop="handleDeleteImage(img)" title="删除图片">
+                    <TrashIcon />
+                  </button>
                 </div>
-                <span class="annotated-badge" v-if="img.annotated">已标注</span>
-                <button class="annotate-btn" @click.stop="handleAnnotateImage(img)" title="标注图片">
-                  <TagIcon />
-                </button>
-                <button class="delete-btn" @click.stop="handleDeleteImage(img)" title="删除图片">
-                  <TrashIcon />
-                </button>
+                <div class="image-info">
+                  <span class="image-name">{{ getFileName(img.file_path) }}</span>
+                  <span class="image-dir" v-if="img.directory">{{ img.directory }}</span>
+                </div>
               </div>
-              <div class="image-info">
-                <span class="image-name">{{ getFileName(img.file_path) }}</span>
-                <span class="image-dir" v-if="img.directory">{{ img.directory }}</span>
+            </div>
+            <div class="empty-state" v-if="!loadingImages && images.length === 0">
+              <div class="empty-icon">
+                <ImageIcon />
               </div>
+              <p>暂无图片</p>
+              <span>上传图片开始标注</span>
             </div>
           </div>
-          <div class="empty-state" v-if="!loadingImages && images.length === 0">
-            <div class="empty-icon">
-              <ImageIcon />
+          <!-- 分页器 -->
+          <div class="pagination-wrapper" v-if="pagination.total_pages > 1">
+            <div class="pagination-info">共 {{ pagination.total }} 张图片</div>
+            <div class="pagination-controls">
+              <button class="page-btn" :disabled="pagination.page <= 1" @click="goToPage(1)">«</button>
+              <button class="page-btn" :disabled="pagination.page <= 1" @click="goToPage(pagination.page - 1)">‹</button>
+              <span class="page-current">{{ pagination.page }} / {{ pagination.total_pages }}</span>
+              <button class="page-btn" :disabled="pagination.page >= pagination.total_pages" @click="goToPage(pagination.page + 1)">›</button>
+              <button class="page-btn" :disabled="pagination.page >= pagination.total_pages" @click="goToPage(pagination.total_pages)">»</button>
             </div>
-            <p>暂无图片</p>
-            <span>上传图片开始标注</span>
           </div>
         </div>
 
@@ -166,7 +182,7 @@
             </div>
             <div class="info-item">
               <span class="info-label">图片数</span>
-              <span class="info-value">{{ images.length }}</span>
+              <span class="info-value">{{ pagination.total }}</span>
             </div>
             <div class="info-item">
               <span class="info-label">目录数</span>
@@ -279,6 +295,26 @@ const showImageDialog = ref(false)
 const selectedImage = ref<any>(null)
 const newDirectoryName = ref('')
 
+// 分页状态
+const pagination = ref({
+  page: 1,
+  page_size: 50,
+  total: 0,
+  total_pages: 1,
+})
+
+// 批量操作模式
+const batchMode = ref(false)
+
+const enterBatchMode = () => {
+  batchMode.value = true
+}
+
+const exitBatchMode = () => {
+  batchMode.value = false
+  clearSelection()
+}
+
 const annotatedCount = computed(() => images.value.filter(img => img.annotated).length)
 
 // 目录编辑状态
@@ -328,6 +364,11 @@ const UploadIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 
   h('path', { d: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4' }),
   h('polyline', { points: '17 8 12 3 7 8' }),
   h('line', { x1: '12', y1: '3', x2: '12', y2: '15' })
+])
+
+const CheckSquareIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+  h('polyline', { points: '9 11 12 14 22 4' }),
+  h('path', { d: 'M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11' })
 ])
 
 const ImageIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
@@ -409,16 +450,28 @@ const loadImages = async () => {
   loadingImages.value = true
   try {
     const directory = selectedDirectory.value || undefined
-    console.log('[DEBUG] loadImages called, directory:', directory)
-    const res = await atlasApi.getImages(id, directory)
-    console.log('[DEBUG] getImages response, count:', res.data.length)
-    images.value = res.data
+    console.log('[DEBUG] loadImages called, directory:', directory, 'page:', pagination.value.page)
+    const res = await atlasApi.getImages(id, directory, pagination.value.page, pagination.value.page_size)
+    console.log('[DEBUG] getImages response, total:', res.data.total)
+    images.value = res.data.items
+    pagination.value.total = res.data.total
+    pagination.value.total_pages = res.data.total_pages
   } catch (error) {
     ElMessage.error('加载图片失败')
     console.error('[DEBUG] loadImages error:', error)
   } finally {
     loadingImages.value = false
   }
+}
+
+const onDirectoryChange = () => {
+  pagination.value.page = 1
+  loadImages()
+}
+
+const goToPage = (page: number) => {
+  pagination.value.page = page
+  loadImages()
 }
 
 const loadDirectories = async () => {
@@ -623,52 +676,18 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .atlas-detail {
-  @apply flex flex-col gap-6;
-}
-
-/* 批量操作工具栏 */
-.batch-toolbar {
-  @apply flex justify-between items-center p-4 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg;
-}
-
-.batch-info {
-  @apply flex items-center gap-4;
-}
-
-.selected-count {
-  @apply text-sm font-medium text-[var(--accent-cyan)];
-}
-
-.text-btn {
-  @apply text-xs text-[var(--text-muted)] bg-transparent border-none cursor-pointer transition-all;
-}
-
-.text-btn:hover {
-  @apply text-[var(--accent-cyan)];
-}
-
-.batch-actions {
-  @apply flex items-center gap-4;
-}
-
-.batch-dir-action {
-  @apply flex items-center gap-2;
-}
-
-.batch-dir-select {
-  @apply px-3 py-1.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-sm;
-}
-
-.batch-dir-select:focus {
-  @apply outline-none border-[var(--accent-cyan)];
+  @apply flex flex-col gap-3;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .page-header {
-  @apply flex items-center gap-5;
+  @apply flex items-center gap-3 flex-shrink-0 flex-wrap;
 }
 
 .back-btn {
-  @apply inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] text-sm cursor-pointer transition-all;
+  @apply inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded text-[var(--text-secondary)] text-xs cursor-pointer transition-all;
 }
 
 .back-btn:hover {
@@ -676,15 +695,15 @@ onMounted(() => {
 }
 
 .back-btn svg {
-  @apply w-4.5 h-4.5;
+  @apply w-3.5 h-3.5;
 }
 
 .atlas-info {
-  @apply flex-1;
+  @apply flex-1 min-w-0;
 }
 
 .atlas-info h2 {
-  @apply text-2xl font-semibold;
+  @apply text-xl font-semibold truncate;
   background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -692,22 +711,71 @@ onMounted(() => {
 }
 
 .atlas-desc {
-  @apply text-sm text-[var(--text-muted)] ml-3;
+  @apply text-xs text-[var(--text-muted)] ml-2;
+}
+
+.header-operations {
+  @apply flex items-center gap-2 flex-wrap;
+}
+
+.selected-count {
+  @apply text-xs font-medium text-[var(--accent-cyan)] mr-1;
+}
+
+.batch-divider {
+  @apply w-px h-5 bg-[var(--border-color)] mx-1;
+}
+
+.batch-dir-select {
+  @apply px-2 py-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-xs text-[var(--text-primary)];
 }
 
 .vg-btn {
-  @apply inline-flex items-center gap-2;
+  @apply inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded text-[var(--text-secondary)] text-xs cursor-pointer transition-all;
+}
+
+.vg-btn:hover {
+  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
 }
 
 .vg-btn svg {
-  @apply w-4.5 h-4.5;
+  @apply w-3.5 h-3.5;
+}
+
+.vg-btn-sm {
+  @apply px-2 py-1;
+}
+
+.vg-btn-primary {
+  @apply bg-[var(--accent-cyan)] border-[var(--accent-cyan)] text-black font-medium;
+}
+
+.vg-btn-primary:hover {
+  @apply opacity-80;
+}
+
+.vg-btn.danger {
+  @apply text-[#ff4466];
+}
+
+.vg-btn.danger:hover {
+  @apply border-[#ff4466];
 }
 
 /* 内容网格 */
 .content-grid {
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 24px;
+  @apply flex gap-6;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 主面板 */
+.main-panel {
+  @apply flex flex-col;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* 面板头部 */
@@ -784,13 +852,52 @@ onMounted(() => {
 
 /* 图片网格 */
 .images-content {
-  @apply p-5;
+  @apply flex flex-col;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.images-grid-wrapper {
+  @apply flex-1 overflow-y-auto;
+  min-height: 0;
 }
 
 .images-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 16px;
+  padding: 16px;
+}
+
+/* 分页器 */
+.pagination-wrapper {
+  @apply flex items-center justify-between p-4 border-t border-[var(--border-color)];
+  flex-shrink: 0;
+}
+
+.pagination-info {
+  @apply text-sm text-[var(--text-muted)];
+}
+
+.pagination-controls {
+  @apply flex items-center gap-2;
+}
+
+.page-btn {
+  @apply px-3 py-1.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md text-sm text-[var(--text-secondary)] cursor-pointer transition-all;
+}
+
+.page-btn:hover:not(:disabled) {
+  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+}
+
+.page-btn:disabled {
+  @apply opacity-40 cursor-not-allowed;
+}
+
+.page-current {
+  @apply px-3 py-1.5 font-mono text-sm text-[var(--accent-cyan)];
 }
 
 .image-card {
@@ -829,7 +936,7 @@ onMounted(() => {
 }
 
 .image-overlay {
-  @apply absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 transition-opacity duration-200;
+  @apply absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 transition-opacity duration-200 pointer-events-none;
 }
 
 .image-card:hover .image-overlay {
@@ -845,7 +952,7 @@ onMounted(() => {
 }
 
 .annotated-badge {
-  @apply absolute top-2 left-2 px-2 py-1 bg-[var(--accent-green)] rounded text-[10px] font-semibold text-[var(--bg-primary)];
+  @apply absolute bottom-2 left-2 w-2 h-2 rounded-full bg-[var(--accent-green)] shadow-[0_0_6px_var(--accent-green)];
 }
 
 .delete-btn {
@@ -949,9 +1056,20 @@ onMounted(() => {
   @apply flex gap-2;
 }
 
+/* 主面板 */
+.main-panel {
+  @apply flex flex-col;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 /* 侧边栏 */
 .side-panel {
-  @apply flex flex-col gap-5;
+  @apply flex flex-col gap-4;
+  width: 280px;
+  flex-shrink: 0;
+  overflow-y: auto;
 }
 
 .info-card .card-header {

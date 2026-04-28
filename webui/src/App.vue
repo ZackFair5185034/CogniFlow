@@ -400,15 +400,15 @@ onUnmounted(() => {
 }
 
 .top-bar {
-  height: 64px;
+  height: 56px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 20px;
   position: relative;
-  backdrop-filter: blur(10px);
+  flex-shrink: 0;
 
   &::after {
     content: '';

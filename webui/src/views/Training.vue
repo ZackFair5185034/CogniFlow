@@ -10,140 +10,140 @@
         <div class="header-stats">
           <div class="stat-pill running">
             <span class="dot"></span>
-            {{ runningCount }} 运行中
+            {{ runningCount }} 运行
           </div>
           <div class="stat-pill completed">
             <span class="dot"></span>
-            {{ completedCount }} 已完成
+            {{ completedCount }} 完成
           </div>
         </div>
-        <el-button type="text" @click="handleClearCompleted" :disabled="completedCount === 0">
-          清理记录
+        <el-button type="text" size="small" @click="handleClearCompleted" :disabled="completedCount === 0">
+          清理
         </el-button>
       </div>
     </div>
 
-    <div class="training-grid">
-      <!-- 左侧：训练列表 -->
-      <div class="training-list-section vg-card">
+    <div class="training-layout">
+      <!-- 左侧：参数配置 -->
+      <div class="config-panel vg-card">
         <div class="section-header">
-          <h3>训练任务</h3>
-          <button class="refresh-btn" @click="loadJobs">
-            <RefreshIcon />
-          </button>
+          <h3>参数配置</h3>
         </div>
-
-        <div class="jobs-list" v-loading="loading">
-          <div class="job-item" v-for="job in jobs" :key="job.id"
-               :class="{ active: job.status === 'running' }">
-            <div class="job-header">
-              <span class="job-id">TASK #{{ job.id.toString().padStart(4, '0') }}</span>
-              <span class="job-status" :class="job.status">{{ statusText[job.status] }}</span>
-            </div>
-            <div class="job-progress">
-              <div class="progress-bar">
-                <div class="progress-fill" :class="job.status"
-                     :style="{ width: getProgress(job) + '%' }"></div>
-              </div>
-              <span class="progress-text">{{ job.current_step }} / {{ job.total_steps || '?' }}</span>
-            </div>
-            <div class="job-meta">
-              <span class="meta-tag">Model #{{ job.model_id }}</span>
-              <span class="meta-tag">Atlas #{{ job.atlas_id }}</span>
-            </div>
-            <div class="job-actions" v-if="job.status === 'running'">
-              <el-button type="text" @click="handleStop(job)">停止</el-button>
+        <div class="config-form">
+          <div class="form-group">
+            <label>选择模型</label>
+            <div class="select-wrapper">
+              <select v-model="startForm.model_id">
+                <option :value="null" disabled>选择模型</option>
+                <option v-for="m in models" :key="m.id" :value="m.id">
+                  {{ m.name }}{{ m.version ? ` (${m.version})` : '' }}
+                </option>
+              </select>
             </div>
           </div>
 
-          <div class="empty-jobs" v-if="!loading && jobs.length === 0">
-            <div class="empty-icon">
-              <ChartIcon />
+          <div class="form-group">
+            <label>选择图集</label>
+            <div class="select-wrapper">
+              <select v-model="startForm.atlas_id">
+                <option :value="null" disabled>选择图集</option>
+                <option v-for="a in atlases" :key="a.id" :value="a.id">
+                  {{ a.name }}
+                </option>
+              </select>
             </div>
-            <p>暂无训练任务</p>
-            <span>开始一个新训练来监控进度</span>
           </div>
+
+          <div class="form-group">
+            <label>训练轮数</label>
+            <div class="number-input">
+              <button @click="startForm.total_steps = Math.max(10, startForm.total_steps - 10)">-</button>
+              <input type="number" v-model="startForm.total_steps" min="10" max="1000" />
+              <button @click="startForm.total_steps = Math.min(1000, startForm.total_steps + 10)">+</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>训练设备</label>
+            <div class="select-wrapper">
+              <select v-model="startForm.device">
+                <option value="cpu">CPU</option>
+                <option value="cuda" v-if="deviceInfo.available">GPU ({{ deviceInfo.device_name }})</option>
+              </select>
+            </div>
+            <span class="device-hint" v-if="deviceInfo.available">
+              推荐使用 GPU
+            </span>
+            <span class="device-hint" v-else>
+              将使用 CPU 训练
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label>预训练模型</label>
+            <div class="select-wrapper">
+              <select v-model="startForm.pretrained_model">
+                <option value="yolov8n.pt">YOLOv8n (最小)</option>
+                <option value="yolov8s.pt">YOLOv8s (推荐)</option>
+                <option value="yolov8m.pt">YOLOv8m (中)</option>
+                <option value="yolov8l.pt">YOLOv8l (大)</option>
+                <option value="yolov8x.pt">YOLOv8x (最大)</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="vg-btn vg-btn-primary start-btn" @click="handleStart" :disabled="starting">
+            <PlayIcon />
+            {{ starting ? '启动中...' : '启动训练' }}
+          </button>
         </div>
       </div>
 
-      <!-- 右侧：启动训练 -->
-      <div class="control-section">
-        <div class="vg-card start-training-card">
+      <!-- 右侧：训练列表和实时状态 -->
+      <div class="main-panel">
+        <!-- 训练任务列表 -->
+        <div class="training-list-section vg-card">
           <div class="section-header">
-            <h3>启动训练</h3>
-          </div>
-          <div class="start-form">
-            <div class="form-group">
-              <label>选择模型</label>
-              <div class="select-wrapper">
-                <select v-model="startForm.model_id">
-                  <option :value="null" disabled>选择模型</option>
-                  <option v-for="m in models" :key="m.id" :value="m.id">
-                    {{ m.name }}{{ m.version ? ` (${m.version})` : '' }}
-                  </option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>选择图集</label>
-              <div class="select-wrapper">
-                <select v-model="startForm.atlas_id">
-                  <option :value="null" disabled>选择图集</option>
-                  <option v-for="a in atlases" :key="a.id" :value="a.id">
-                    {{ a.name }}
-                  </option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>训练轮数</label>
-              <div class="number-input">
-                <button @click="startForm.total_steps = Math.max(10, startForm.total_steps - 10)">-</button>
-                <input type="number" v-model="startForm.total_steps" min="10" max="1000" />
-                <button @click="startForm.total_steps = Math.min(1000, startForm.total_steps + 10)">+</button>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>训练设备</label>
-              <div class="select-wrapper">
-                <select v-model="startForm.device">
-                  <option value="cpu">CPU</option>
-                  <option value="cuda" v-if="deviceInfo.available">GPU ({{ deviceInfo.device_name }})</option>
-                </select>
-              </div>
-              <span class="device-hint" v-if="deviceInfo.available">
-                检测到 {{ deviceInfo.device_name }}，推荐使用 GPU 加速训练
-              </span>
-              <span class="device-hint" v-else>
-                未检测到 GPU，将使用 CPU 训练
-              </span>
-            </div>
-
-            <div class="form-group">
-              <label>预训练模型</label>
-              <div class="select-wrapper">
-                <select v-model="startForm.pretrained_model">
-                  <option value="yolov8n.pt">YOLOv8n (最小最快)</option>
-                  <option value="yolov8s.pt">YOLOv8s (小，推荐)</option>
-                  <option value="yolov8m.pt">YOLOv8m (中)</option>
-                  <option value="yolov8l.pt">YOLOv8l (大)</option>
-                  <option value="yolov8x.pt">YOLOv8x (最大最准)</option>
-                </select>
-              </div>
-            </div>
-
-            <button class="vg-btn vg-btn-primary start-btn" @click="handleStart" :disabled="starting">
-              <PlayIcon />
-              {{ starting ? '启动中...' : '启动训练' }}
+            <h3>训练任务</h3>
+            <button class="refresh-btn" @click="loadJobs">
+              <RefreshIcon />
             </button>
+          </div>
+
+          <div class="jobs-list" v-loading="loading">
+            <div class="job-item" v-for="job in jobs" :key="job.id"
+                 :class="{ active: job.status === 'running' }">
+              <div class="job-header">
+                <span class="job-id">#{{ job.id.toString().padStart(4, '0') }}</span>
+                <span class="job-status" :class="job.status">{{ statusText[job.status] }}</span>
+              </div>
+              <div class="job-progress">
+                <div class="progress-bar">
+                  <div class="progress-fill" :class="job.status"
+                       :style="{ width: getProgress(job) + '%' }"></div>
+                </div>
+                <span class="progress-text">{{ job.current_step }} / {{ job.total_steps || '?' }}</span>
+              </div>
+              <div class="job-meta">
+                <span class="meta-tag">M#{{ job.model_id }}</span>
+                <span class="meta-tag">A#{{ job.atlas_id }}</span>
+              </div>
+              <div class="job-actions" v-if="job.status === 'running'">
+                <el-button type="text" size="small" @click="handleStop(job)">停止</el-button>
+              </div>
+            </div>
+
+            <div class="empty-jobs" v-if="!loading && jobs.length === 0">
+              <div class="empty-icon">
+                <ChartIcon />
+              </div>
+              <p>暂无训练任务</p>
+            </div>
           </div>
         </div>
 
         <!-- 实时状态 -->
-        <div class="vg-card realtime-card" v-if="currentJob">
+        <div class="realtime-card vg-card" v-if="currentJob">
           <div class="section-header">
             <h3>实时状态</h3>
             <span class="live-badge">
@@ -153,14 +153,14 @@
           </div>
           <div class="realtime-content">
             <div class="realtime-stat">
-              <span class="stat-label">当前任务</span>
+              <span class="stat-label">任务</span>
               <span class="stat-value">#{{ currentJob.id }}</span>
             </div>
             <div class="realtime-stat">
               <span class="stat-label">状态</span>
-              <span class="stat-value status-running" v-if="currentJob._displayStatus === 'running'">进行中</span>
-              <span class="stat-value status-downloading" v-else-if="currentJob._displayStatus === 'downloading'">下载中</span>
-              <span class="stat-value" v-else>{{ statusText[currentJob.status] }}</span>
+              <span class="stat-value" :class="'status-' + currentJob._displayStatus">
+                {{ currentJob._displayStatus === 'downloading' ? '下载中' : currentJob._displayStatus === 'running' ? '进行中' : statusText[currentJob.status] }}
+              </span>
             </div>
             <div class="realtime-progress">
               <div class="progress-bar large">
@@ -403,12 +403,14 @@ onUnmounted(() => {
 
 <style lang="scss" scoped>
 .training {
-  @apply flex flex-col gap-6;
+  @apply flex flex-col gap-3;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .page-header {
-  @apply flex justify-between items-center;
-  gap: 20px;
+  @apply flex justify-between items-center gap-3 flex-shrink-0;
 }
 
 .header-info {
@@ -416,7 +418,7 @@ onUnmounted(() => {
 }
 
 .header-info h2 {
-  @apply text-2xl font-semibold;
+  @apply text-xl font-semibold;
   background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -424,33 +426,33 @@ onUnmounted(() => {
 }
 
 .header-info .subtitle {
-  @apply text-sm text-[var(--text-muted)] ml-3;
+  @apply text-xs text-[var(--text-muted)] ml-2;
 }
 
 .header-actions {
-  @apply flex items-center gap-4;
+  @apply flex items-center gap-3;
 }
 
 .header-stats {
-  @apply flex gap-3;
+  @apply flex gap-2;
 }
 
 .stat-pill {
-  @apply flex items-center gap-2 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full text-sm font-medium;
+  @apply flex items-center gap-1.5 px-2.5 py-1 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-full text-xs font-medium;
 
   .dot {
-    @apply w-2 h-2 rounded-full;
+    @apply w-1.5 h-1.5 rounded-full;
   }
 
   &.running .dot {
     @apply bg-[var(--accent-cyan)];
-    box-shadow: 0 0 10px var(--accent-cyan);
+    box-shadow: 0 0 8px var(--accent-cyan);
     animation: pulse 2s infinite;
   }
 
   &.completed .dot {
     @apply bg-[var(--accent-green)];
-    box-shadow: 0 0 10px var(--accent-green);
+    box-shadow: 0 0 8px var(--accent-green);
   }
 }
 
@@ -459,44 +461,63 @@ onUnmounted(() => {
   50% { opacity: 0.4; }
 }
 
-/* 网格布局 */
-.training-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: clamp(16px, 2vw, 32px);
+/* 布局 - 左侧参数配置，右侧上下布局 */
+.training-layout {
+  @apply flex gap-4 flex-1 min-h-0 overflow-hidden;
 }
 
-.training-list-section {
-  min-width: 0;  // 允许收缩
+/* 左侧配置面板 */
+.config-panel {
+  @apply flex flex-col w-64 flex-shrink-0 overflow-hidden;
+}
+
+.config-form {
+  @apply p-4 flex flex-col gap-4 overflow-y-auto flex-1;
+}
+
+.start-btn {
+  @apply w-full justify-center py-2.5 mt-2;
+  svg {
+    @apply w-3.5 h-3.5;
+  }
+}
+
+/* 右侧主面板 - 上下布局 */
+.main-panel {
+  @apply flex flex-col gap-4 flex-1 min-w-0 overflow-hidden;
 }
 
 /* 训练列表 */
+.training-list-section {
+  @apply flex flex-col flex-1 min-h-0 overflow-hidden;
+}
+
 .section-header {
-  @apply flex justify-between items-center px-6 py-5 border-b border-[var(--border-color)];
+  @apply flex justify-between items-center px-4 py-3 border-b border-[var(--border-color)] flex-shrink-0;
 
   h3 {
-    @apply text-base font-semibold;
+    @apply text-sm font-semibold;
   }
 }
 
 .refresh-btn {
-  @apply w-9 h-9 flex items-center justify-center bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] cursor-pointer transition-all;
+  @apply w-7 h-7 flex items-center justify-center bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-[var(--text-secondary)] cursor-pointer transition-all;
 
   &:hover {
     @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
   }
 
   svg {
-    @apply w-4.5 h-4.5;
+    @apply w-3.5 h-3.5;
   }
 }
 
 .jobs-list {
-  @apply p-4 flex flex-col gap-3 min-h-[400px];
+  @apply p-3 flex flex-col gap-2 overflow-y-auto flex-1;
 }
 
 .job-item {
-  @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-4 transition-all;
+  @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-3 transition-all;
 
   &:hover {
     @apply border-[var(--accent-cyan)];
@@ -504,20 +525,20 @@ onUnmounted(() => {
 
   &.active {
     @apply border-[var(--accent-cyan)];
-    box-shadow: 0 0 20px rgba(0, 240, 255, 0.2);
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
   }
 }
 
 .job-header {
-  @apply flex justify-between items-center mb-3;
+  @apply flex justify-between items-center mb-2;
 }
 
 .job-id {
-  @apply font-mono text-sm font-semibold text-[var(--accent-cyan)];
+  @apply font-mono text-xs font-semibold text-[var(--accent-cyan)];
 }
 
 .job-status {
-  @apply text-xs px-2 py-1 rounded;
+  @apply text-[10px] px-1.5 py-0.5 rounded;
 
   &.pending {
     @apply bg-[rgba(136,136,170,0.2)] text-[var(--text-secondary)];
@@ -537,14 +558,14 @@ onUnmounted(() => {
 }
 
 .job-progress {
-  @apply flex items-center gap-3 mb-3;
+  @apply flex items-center gap-2 mb-2;
 }
 
 .progress-bar {
-  @apply flex-1 h-1.5 bg-[var(--bg-primary)] rounded overflow-hidden;
+  @apply flex-1 h-1 bg-[var(--bg-primary)] rounded overflow-hidden;
 
   &.large {
-    @apply h-2.5 rounded-lg;
+    @apply h-2 rounded-lg;
   }
 }
 
@@ -554,12 +575,12 @@ onUnmounted(() => {
   &.pending { @apply bg-[var(--text-muted)]; }
   &.downloading {
     background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
-    box-shadow: 0 0 10px var(--accent-cyan);
+    box-shadow: 0 0 8px var(--accent-cyan);
     animation: downloadPulse 1.5s ease-in-out infinite;
   }
   &.running {
     background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
-    box-shadow: 0 0 10px var(--accent-cyan);
+    box-shadow: 0 0 8px var(--accent-cyan);
   }
   &.completed { @apply bg-[var(--accent-green)]; }
   &.failed { @apply bg-[#ff4466]; }
@@ -571,25 +592,25 @@ onUnmounted(() => {
 }
 
 .progress-text {
-  @apply font-mono text-xs text-[var(--text-muted)] min-w-20 text-right;
+  @apply font-mono text-[10px] text-[var(--text-muted)] min-w-16 text-right;
 }
 
 .job-meta {
-  @apply flex gap-2;
+  @apply flex gap-1.5;
 }
 
 .meta-tag {
-  @apply text-xs px-2 py-1 bg-[var(--bg-primary)] rounded text-[var(--text-muted)];
+  @apply text-[10px] px-1.5 py-0.5 bg-[var(--bg-primary)] rounded text-[var(--text-muted)];
 }
 
 .job-actions {
-  @apply mt-3 pt-3 border-t border-[var(--border-color)];
+  @apply mt-2 pt-2 border-t border-[var(--border-color)];
 }
 
 :deep(.el-button--text) {
-  @apply p-1 border-none bg-transparent text-[#ff4466] text-sm;
+  @apply p-0.5 border-none bg-transparent text-[#ff4466] text-xs;
   &:hover {
-    @apply bg-transparent border-none text-[#ff4466];
+    @apply bg-transparent border-none text-[#ff4466)];
   }
 }
 
@@ -598,7 +619,7 @@ onUnmounted(() => {
 }
 
 .empty-icon {
-  @apply w-16 h-16 mb-4 opacity-30;
+  @apply w-12 h-12 mb-3 opacity-30;
 
   svg {
     @apply w-full h-full;
@@ -606,32 +627,80 @@ onUnmounted(() => {
 }
 
 .empty-jobs p {
-  @apply text-base text-[var(--text-secondary)] mb-2;
+  @apply text-sm text-[var(--text-secondary)] mb-1;
 }
 
 .empty-jobs span {
-  @apply text-sm;
+  @apply text-xs;
 }
 
-/* 控制区 */
-.control-section {
-  @apply flex flex-col gap-6;
-}
-
-.start-training-card,
+/* 实时状态卡片 */
 .realtime-card {
-  animation: fadeInUp 0.6s ease forwards;
+  @apply flex flex-col flex-shrink-0 max-h-[40%] overflow-hidden;
 }
 
-.start-form {
-  @apply p-6 flex flex-col gap-5;
+.live-badge {
+  @apply flex items-center gap-1 font-mono text-[10px] text-[#ff4466] tracking-wider;
 }
 
+.live-dot {
+  @apply w-1 h-1 rounded-full bg-[#ff4466];
+  animation: livePulse 1s infinite;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.realtime-content {
+  @apply p-4 flex flex-col gap-3 overflow-y-auto;
+}
+
+.realtime-stat {
+  @apply flex justify-between items-center;
+
+  .stat-label {
+    @apply text-xs text-[var(--text-secondary)];
+  }
+
+  .stat-value {
+    @apply font-mono text-xs font-semibold;
+  }
+
+  .stat-value.status-running {
+    @apply text-[var(--accent-cyan)];
+    text-shadow: 0 0 8px var(--accent-cyan);
+  }
+
+  .stat-value.status-downloading {
+    @apply text-[var(--accent-orange)];
+    text-shadow: 0 0 8px var(--accent-orange);
+  }
+}
+
+.realtime-progress {
+  @apply flex items-center gap-3;
+}
+
+.progress-percent {
+  @apply font-mono text-lg font-bold text-[var(--accent-cyan)] min-w-12 text-right;
+}
+
+.realtime-message {
+  @apply mt-2 pt-2 border-t border-[var(--border-color)];
+}
+
+.message-text {
+  @apply text-xs text-[var(--text-secondary)];
+}
+
+/* 表单元素 */
 .form-group {
-  @apply flex flex-col gap-2;
+  @apply flex flex-col gap-1.5;
 
   label {
-    @apply text-xs text-[var(--text-secondary)] uppercase tracking-wide;
+    @apply text-[11px] text-[var(--text-secondary)] uppercase tracking-wide;
   }
 }
 
@@ -639,7 +708,7 @@ onUnmounted(() => {
   @apply relative;
 
   select {
-    @apply w-full px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-sm cursor-pointer appearance-none transition-all;
+    @apply w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-xs text-[var(--text-primary)] cursor-pointer appearance-none transition-all;
 
     &:focus {
       @apply outline-none border-[var(--accent-cyan)];
@@ -652,105 +721,50 @@ onUnmounted(() => {
 
   &::after {
     content: '';
-    @apply absolute right-4 top-1/2 -translate-y-1/2 border-l-1.5 border-r-1.5 border-t-1.5 border-l-transparent border-r-transparent border-t-[var(--text-muted)];
+    @apply absolute right-3 top-1/2 -translate-y-1/2 border-l-1 border-r-1 border-t-1 border-l-transparent border-r-transparent border-t-[var(--text-muted)];
     pointer-events: none;
   }
 }
 
 .number-input {
-  @apply flex items-center bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg overflow-hidden;
+  @apply flex items-center bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded overflow-hidden;
 
   button {
-    @apply w-11 h-11 bg-transparent border-none text-[var(--text-secondary)] text-lg cursor-pointer transition-all;
+    @apply w-8 h-8 bg-transparent border-none text-[var(--text-secondary)] text-base cursor-pointer transition-all;
     &:hover {
       @apply bg-[var(--bg-hover)] text-[var(--accent-cyan)];
     }
   }
 
   input {
-    @apply flex-1 px-3 py-3 bg-transparent border-none text-[var(--text-primary)] text-sm font-mono text-center;
+    @apply flex-1 px-2 py-2 bg-transparent border-none text-[var(--text-primary)] text-xs font-mono text-center;
     &:focus {
       @apply outline-none;
     }
   }
 }
 
-.start-btn {
-  @apply w-full justify-center py-3.5 text-base mt-2;
-  svg {
-    @apply w-4.5 h-4.5;
-  }
-}
-
 .device-hint {
-  @apply text-xs text-[var(--text-muted)] mt-1;
+  @apply text-[10px] text-[var(--text-muted)] mt-1;
 }
 
-/* 实时状态 */
-.live-badge {
-  @apply flex items-center gap-1.5 font-mono text-xs text-[#ff4466] tracking-wider;
+.vg-btn {
+  @apply inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded text-[var(--text-secondary)] text-xs cursor-pointer transition-all;
 }
 
-.live-dot {
-  @apply w-1.5 h-1.5 rounded-full bg-[#ff4466];
-  animation: livePulse 1s infinite;
+.vg-btn:hover {
+  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
 }
 
-@keyframes livePulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.8); }
+.vg-btn svg {
+  @apply w-3.5 h-3.5;
 }
 
-.realtime-content {
-  @apply p-6 flex flex-col gap-4;
+.vg-btn-primary {
+  @apply bg-[var(--accent-cyan)] border-[var(--accent-cyan)] text-black font-medium;
 }
 
-.realtime-stat {
-  @apply flex justify-between items-center;
-
-  .stat-label {
-    @apply text-sm text-[var(--text-secondary)];
-  }
-
-  .stat-value {
-    @apply font-mono text-sm font-semibold;
-  }
-
-  .stat-value.status-running {
-    @apply text-[var(--accent-cyan)];
-    text-shadow: 0 0 10px var(--accent-cyan);
-  }
-
-  .stat-value.status-downloading {
-    @apply text-[var(--accent-orange)];
-    text-shadow: 0 0 10px var(--accent-orange);
-  }
-}
-
-.realtime-progress {
-  @apply flex items-center gap-4 mt-2;
-}
-
-.progress-percent {
-  @apply font-mono text-2xl font-bold text-[var(--accent-cyan)] min-w-15 text-right;
-}
-
-.realtime-message {
-  @apply mt-3 pt-3 border-t border-[var(--border-color)];
-}
-
-.message-text {
-  @apply text-sm text-[var(--text-secondary)];
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.vg-btn-primary:hover {
+  @apply opacity-80;
 }
 </style>

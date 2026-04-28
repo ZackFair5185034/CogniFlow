@@ -4,6 +4,7 @@
 提供图片的读取、删除和目录修改功能。
 """
 import os
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session

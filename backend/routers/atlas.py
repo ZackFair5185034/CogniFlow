@@ -97,19 +97,20 @@ async def delete_atlas(atlas_id: int, db: Session = Depends(get_db)):
 async def list_atlas_images(
     atlas_id: int,
     directory: str = None,
+    page: int = 1,
+    page_size: int = 50,
     db: Session = Depends(get_db)
 ):
-    """获取图集图片列表，支持按目录筛选。
+    """获取图集图片列表，支持按目录筛选和分页。
 
     Args:
         atlas_id: 图集 ID
         directory: 可选，按目录名筛选
+        page: 页码，从 1 开始
+        page_size: 每页数量，默认 50
     """
     import sys
-    print(f"[DEBUG] list_atlas_images called with atlas_id={atlas_id}, directory={directory}", flush=True)
-    print(f"[DEBUG] directory type: {type(directory)}, repr: {repr(directory)}", flush=True)
-    if directory:
-        print(f"[DEBUG] directory encoding: {directory.encode('utf-8')}", flush=True)
+    print(f"[DEBUG] list_atlas_images called with atlas_id={atlas_id}, directory={directory}, page={page}, page_size={page_size}", flush=True)
 
     atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
     if not atlas:
@@ -117,21 +118,22 @@ async def list_atlas_images(
 
     query = db.query(Image).filter(Image.atlas_id == atlas_id)
 
-    # Debug: check what directories are stored
-    all_images = query.all()
-    print(f"[DEBUG] Total images for atlas {atlas_id}: {len(all_images)}", flush=True)
-
     if directory is not None:
-        print(f"[DEBUG] Filtering by directory: '{directory}'", flush=True)
-        # Try direct string comparison
-        matching = [img for img in all_images if img.directory == directory]
-        print(f"[DEBUG] Direct Python comparison matches: {len(matching)}", flush=True)
-
         query = query.filter(Image.directory == directory)
 
-    images = query.all()
-    print(f"[DEBUG] Final query result: {len(images)} images", flush=True)
-    return images
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+
+    offset = (page - 1) * page_size
+    images = query.order_by(Image.created_at.desc()).offset(offset).limit(page_size).all()
+
+    return {
+        "items": images,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
 
 
 @router.get("/{atlas_id}/directories")
