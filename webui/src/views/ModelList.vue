@@ -390,6 +390,10 @@ onMounted(() => {
   gap: 16px;
 }
 
+.header-info {
+  @apply flex items-baseline;
+}
+
 .header-info h2 {
   @apply text-2xl font-semibold;
   background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));

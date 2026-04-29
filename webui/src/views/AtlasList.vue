@@ -192,6 +192,10 @@ onMounted(loadAtlases)
   width: 100%;
 }
 
+.header-info {
+  @apply flex items-baseline;
+}
+
 .header-info h2 {
   @apply text-2xl font-semibold;
   background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
@@ -200,7 +204,7 @@ onMounted(loadAtlases)
   background-clip: text;
 }
 
-.page-header .subtitle {
+.header-info .subtitle {
   @apply text-sm text-[var(--text-muted)] ml-3;
 }
 

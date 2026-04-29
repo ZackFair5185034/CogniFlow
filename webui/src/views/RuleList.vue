@@ -266,10 +266,13 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   margin-bottom: 24px;
 
   .header-info {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
     h2 {
       font-size: 20px;
       font-weight: 600;
-      margin-bottom: 4px;
+      margin-bottom: 0;
     }
 
     .subtitle {

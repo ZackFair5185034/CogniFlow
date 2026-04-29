@@ -404,8 +404,7 @@ onUnmounted(() => {
 <style lang="scss" scoped>
 .training {
   @apply flex flex-col gap-3;
-  height: 100vh;
-  padding: 16px;
+  height: 100%;
   box-sizing: border-box;
   min-height: 0;
   overflow: hidden;
@@ -612,7 +611,7 @@ onUnmounted(() => {
 :deep(.el-button--text) {
   @apply p-0.5 border-none bg-transparent text-[#ff4466] text-xs;
   &:hover {
-    @apply bg-transparent border-none text-[#ff4466)];
+    @apply bg-transparent border-none text-[#ff4466];
   }
 }
 
@@ -751,7 +750,7 @@ onUnmounted(() => {
 }
 
 .vg-btn {
-  @apply inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded text-[var(--text-secondary)] text-xs cursor-pointer transition-all;
+  @apply inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-sm text-[var(--text-primary)] cursor-pointer transition-all;
 }
 
 .vg-btn:hover {
@@ -759,6 +758,14 @@ onUnmounted(() => {
 }
 
 .vg-btn svg {
+  @apply w-4 h-4;
+}
+
+.vg-btn-sm {
+  @apply px-3 py-1.5 text-xs;
+}
+
+.vg-btn-sm svg {
   @apply w-3.5 h-3.5;
 }
 

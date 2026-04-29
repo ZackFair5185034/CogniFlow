@@ -731,7 +731,7 @@ onMounted(() => {
 }
 
 .vg-btn {
-  @apply inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded text-[var(--text-secondary)] text-xs cursor-pointer transition-all;
+  @apply inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-sm text-[var(--text-primary)] cursor-pointer transition-all;
 }
 
 .vg-btn:hover {
@@ -739,11 +739,15 @@ onMounted(() => {
 }
 
 .vg-btn svg {
-  @apply w-3.5 h-3.5;
+  @apply w-4 h-4;
 }
 
 .vg-btn-sm {
-  @apply px-2 py-1;
+  @apply px-3 py-1.5 text-xs;
+}
+
+.vg-btn-sm svg {
+  @apply w-3.5 h-3.5;
 }
 
 .vg-btn-primary {

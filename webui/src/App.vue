@@ -10,7 +10,7 @@
     <div class="scanline"></div>
 
     <!-- 侧边导航 -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ collapsed }">
       <div class="logo">
         <div class="logo-icon">
           <svg viewBox="0 0 40 40" fill="none">
@@ -24,6 +24,12 @@
           <span class="logo-sub">Visual Perception</span>
         </div>
       </div>
+
+      <button class="collapse-btn" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ rotated: collapsed }">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
 
       <nav class="nav-menu">
         <router-link
@@ -48,9 +54,6 @@
     <!-- 主内容区 -->
     <main class="main-content">
       <header class="top-bar">
-        <div class="page-title">
-          <h1>{{ currentPageTitle }}</h1>
-        </div>
         <div class="top-actions">
           <span class="time-display">{{ currentTime }}</span>
           <button class="action-btn" @click="refreshData">
@@ -77,6 +80,11 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 const isOnline = ref(true)
 const currentTime = ref('')
+const collapsed = ref(false)
+
+const toggleSidebar = () => {
+  collapsed.value = !collapsed.value
+}
 
 const HomeIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
   h('path', { d: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z' }),
@@ -241,6 +249,8 @@ onUnmounted(() => {
   position: relative;
   z-index: 10;
   flex-shrink: 0;
+  transition: width 0.3s ease;
+  overflow: visible;
 
   &::before {
     content: '';
@@ -251,6 +261,65 @@ onUnmounted(() => {
     height: 100%;
     background: linear-gradient(180deg, var(--accent-cyan), var(--accent-magenta));
     opacity: 0.5;
+  }
+
+  &.collapsed {
+    width: 64px;
+
+    .logo-text,
+    .nav-text,
+    .nav-indicator {
+      display: none;
+    }
+
+    .logo {
+      justify-content: center;
+      padding: 0 12px 30px;
+    }
+
+    .nav-item {
+      justify-content: center;
+      padding: 14px;
+    }
+
+    .sidebar-footer {
+      padding: 15px 12px;
+      justify-content: center;
+    }
+  }
+}
+
+.collapse-btn {
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 20;
+
+  &:hover {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.3s ease;
+
+    &.rotated {
+      transform: rotate(180deg);
+    }
   }
 }
 
@@ -344,11 +413,14 @@ onUnmounted(() => {
 .nav-icon {
   width: 20px;
   height: 20px;
+  flex-shrink: 0;
 }
 
 .nav-text {
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
+  transition: opacity 0.3s ease;
 }
 
 .nav-indicator {
@@ -364,9 +436,15 @@ onUnmounted(() => {
 .sidebar-footer {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 15px 20px;
+  padding: 15px 12px;
   border-top: 1px solid var(--border-color);
+  transition: padding 0.3s ease;
+
+  .status-text {
+    display: none;
+  }
 }
 
 .status-dot {
@@ -405,7 +483,7 @@ onUnmounted(() => {
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 0 20px;
   position: relative;
   flex-shrink: 0;
@@ -422,17 +500,10 @@ onUnmounted(() => {
   }
 }
 
-.page-title {
+.top-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
-
-  h1 {
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--text-primary);
-    letter-spacing: 0.5px;
-  }
+  gap: 12px;
 }
 
 .time-display {
