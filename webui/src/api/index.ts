@@ -35,9 +35,9 @@ export const imageApi = {
   updateDirectory: (id: number, directory: string) => api.put(`/images/${id}/directory`, null, { params: { directory } }),
   // 批量操作
   batchUpdateDirectory: (imageIds: number[], directory: string) =>
-    api.post('/images/batch-update-directory', null, { params: { image_ids: imageIds, directory } }),
+    api.post('/images/batch-update-directory', { image_ids: imageIds, directory }),
   batchDelete: (imageIds: number[]) =>
-    api.post('/images/batch-delete', null, { params: { image_ids: imageIds } }),
+    api.post('/images/batch-delete', { image_ids: imageIds }),
 }
 
 // Category API

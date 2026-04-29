@@ -8,10 +8,22 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from database import get_db, Image
 
 router = APIRouter()
+
+
+class BatchUpdateDirectoryRequest(BaseModel):
+    """批量修改目录请求体"""
+    image_ids: list[int]
+    directory: str
+
+
+class BatchDeleteRequest(BaseModel):
+    """批量删除请求体"""
+    image_ids: list[int]
 
 
 @router.get("/", response_model=list)
@@ -94,27 +106,25 @@ async def delete_image(image_id: int, db: Session = Depends(get_db)):
 
 @router.post("/batch-update-directory")
 async def batch_update_directory(
-    image_ids: List[int],
-    directory: str,
+    req: BatchUpdateDirectoryRequest,
     db: Session = Depends(get_db)
 ):
     """批量修改图片目录。
 
     Args:
-        image_ids: 图片ID列表
-        directory: 目标目录名，传空字符串表示移回根目录
+        req: 请求体，包含 image_ids 和 directory
     """
-    if not image_ids:
+    if not req.image_ids:
         raise HTTPException(status_code=400, detail="图片ID列表不能为空")
 
     # 空字符串视为移回根目录
-    new_directory = directory if directory else None
+    new_directory = req.directory if req.directory else None
 
     # 查询所有图片
-    images = db.query(Image).filter(Image.id.in_(image_ids)).all()
-    if len(images) != len(image_ids):
+    images = db.query(Image).filter(Image.id.in_(req.image_ids)).all()
+    if len(images) != len(req.image_ids):
         found_ids = {img.id for img in images}
-        missing_ids = set(image_ids) - found_ids
+        missing_ids = set(req.image_ids) - found_ids
         raise HTTPException(status_code=404, detail=f"部分图片不存在，缺失ID: {missing_ids}")
 
     # 批量更新
@@ -127,29 +137,29 @@ async def batch_update_directory(
 
     return {
         "message": f"成功修改 {len(images)} 张图片的目录",
-        "image_ids": image_ids,
+        "image_ids": req.image_ids,
         "directory": new_directory,
     }
 
 
 @router.post("/batch-delete")
 async def batch_delete_images(
-    image_ids: List[int],
+    req: BatchDeleteRequest,
     db: Session = Depends(get_db)
 ):
     """批量删除图片。
 
     Args:
-        image_ids: 图片ID列表
+        req: 请求体，包含 image_ids
     """
-    if not image_ids:
+    if not req.image_ids:
         raise HTTPException(status_code=400, detail="图片ID列表不能为空")
 
     # 查询所有图片
-    images = db.query(Image).filter(Image.id.in_(image_ids)).all()
-    if len(images) != len(image_ids):
+    images = db.query(Image).filter(Image.id.in_(req.image_ids)).all()
+    if len(images) != len(req.image_ids):
         found_ids = {img.id for img in images}
-        missing_ids = set(image_ids) - found_ids
+        missing_ids = set(req.image_ids) - found_ids
         raise HTTPException(status_code=404, detail=f"部分图片不存在，缺失ID: {missing_ids}")
 
     deleted_count = 0

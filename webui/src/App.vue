@@ -247,7 +247,7 @@ onUnmounted(() => {
   flex-direction: column;
   padding: 20px 0;
   position: relative;
-  z-index: 10;
+  z-index: 11;
   flex-shrink: 0;
   transition: width 0.3s ease;
   overflow: visible;
@@ -292,7 +292,7 @@ onUnmounted(() => {
 .collapse-btn {
   position: absolute;
   top: 50%;
-  right: -12px;
+  right: -14px;
   transform: translateY(-50%);
   width: 24px;
   height: 24px;
@@ -443,7 +443,7 @@ onUnmounted(() => {
   transition: padding 0.3s ease;
 
   .status-text {
-    display: none;
+    white-space: nowrap;
   }
 }
 

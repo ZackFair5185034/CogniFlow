@@ -910,8 +910,7 @@ onMounted(() => {
 
 .image-card:hover {
   @apply border-[var(--accent-cyan)];
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 240, 255, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.12);
 }
 
 .image-wrapper {
@@ -1169,6 +1168,9 @@ onMounted(() => {
 .dialog-panel {
   width: 600px;
   @apply max-w-[90vw];
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   animation: dialogIn 0.3s ease;
 }
 
@@ -1217,6 +1219,8 @@ onMounted(() => {
 
 .dialog-content {
   @apply p-6;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .image-preview {
@@ -1225,7 +1229,7 @@ onMounted(() => {
 
 .image-preview img {
   @apply w-full object-contain;
-  max-height: 400px;
+  max-height: min(400px, 60vh);
 }
 
 .image-meta {
