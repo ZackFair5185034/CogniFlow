@@ -18,6 +18,7 @@ export const atlasApi = {
     api.get(`/atlas/${id}/images`, { params: { directory, page, page_size: pageSize } }),
   getDirectories: (id: number) => api.get(`/atlas/${id}/directories`),
   createDirectory: (id: number, directory: string) => api.post(`/atlas/${id}/directories`, null, { params: { directory } }),
+  deleteDirectory: (id: number, directory: string) => api.delete(`/atlas/${id}/directories`, { params: { directory } }),
   uploadImages: (id: number, files: FormData, directory?: string) => {
     return api.post(`/atlas/${id}/images`, files, {
       params: directory ? { directory } : {},

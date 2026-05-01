@@ -522,7 +522,7 @@ const loadImageList = async () => {
   try {
     const directory = route.query.directory as string | undefined
     const res = await atlasApi.getImages(currentImage.value.atlas_id, directory)
-    imageList.value = res.data || []
+    imageList.value = res.data.items || []
     currentImageIndex.value = imageList.value.findIndex((img: ImageData) => img.id === currentImage.value?.id)
   } catch (error) {
     console.error('加载图片列表失败', error)

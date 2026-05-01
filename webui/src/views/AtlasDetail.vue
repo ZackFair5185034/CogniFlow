@@ -539,8 +539,22 @@ const handleCreateDirectory = async () => {
   }
 }
 
-const handleDeleteDirectory = (dir: string) => {
-  ElMessage.warning(`删除目录 "${dir}" 功能待实现`)
+const handleDeleteDirectory = async (dir: string) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除目录 "${dir}" 吗？该目录下的所有图片将被永久删除，此操作不可撤销。`,
+      '删除目录',
+      { type: 'warning', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+    )
+    await atlasApi.deleteDirectory(id, dir)
+    ElMessage.success(`目录 "${dir}" 已删除`)
+    loadDirectories()
+    loadImages()
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('删除目录失败')
+    }
+  }
 }
 
 const handleAnnotateImage = (img: any) => {

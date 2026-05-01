@@ -180,6 +180,48 @@ async def create_atlas_directory(
     return {"message": f"目录 '{directory}' 已创建", "directory": directory}
 
 
+@router.delete("/{atlas_id}/directories", status_code=204)
+async def delete_atlas_directory(
+    atlas_id: int,
+    directory: str,
+    db: Session = Depends(get_db)
+):
+    """删除目录及其包含的所有图片。
+
+    删除指定目录下的所有图片（物理文件和数据库记录），并移除物理目录。
+    """
+    atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
+    if not atlas:
+        raise HTTPException(status_code=404, detail="图集不存在")
+
+    # 查询该目录下的所有图片
+    images = db.query(Image).filter(
+        Image.atlas_id == atlas_id,
+        Image.directory == directory
+    ).all()
+
+    # 删除所有图片（物理文件 + 数据库记录，注解通过 cascade 自动删除）
+    for image in images:
+        if image.file_path and os.path.exists(image.file_path):
+            try:
+                os.remove(image.file_path)
+            except Exception:
+                pass
+        db.delete(image)
+
+    # 删除物理目录
+    dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), directory)
+    if os.path.exists(dir_path):
+        try:
+            shutil.rmtree(dir_path)
+        except Exception:
+            pass
+
+    db.commit()
+
+    return None
+
+
 @router.post("/{atlas_id}/images", status_code=201)
 async def upload_images(
     atlas_id: int,
