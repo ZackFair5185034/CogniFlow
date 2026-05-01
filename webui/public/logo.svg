@@ -1,17 +1,36 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <defs>
-    <!-- 紫蓝对角渐变：左下紫到右上蓝 -->
-    <linearGradient id="cfGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#8B5CF6"/>
-      <stop offset="100%" stop-color="#00D4FF"/>
+    <!-- C 形渐变：紫色系 -->
+    <linearGradient id="cGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A78BFA"/>
+      <stop offset="50%" stop-color="#8B5CF6"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
     </linearGradient>
+
+    <!-- F 形渐变：青蓝色系 -->
+    <linearGradient id="fGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22D3EE"/>
+      <stop offset="50%" stop-color="#00D4FF"/>
+      <stop offset="100%" stop-color="#0891B2"/>
+    </linearGradient>
+
+    <!-- 节点渐变 -->
+    <radialGradient id="nodeGradient1" cx="30%" cy="30%">
+      <stop offset="0%" stop-color="#C4B5FD"/>
+      <stop offset="100%" stop-color="#8B5CF6"/>
+    </radialGradient>
+
+    <radialGradient id="nodeGradient2" cx="30%" cy="30%">
+      <stop offset="0%" stop-color="#A5F3FC"/>
+      <stop offset="100%" stop-color="#00D4FF"/>
+    </radialGradient>
   </defs>
 
   <!-- C 形（左侧半圆环） -->
   <path d="M 80 48
            A 80 80 0 1 0 80 208"
         fill="none"
-        stroke="url(#cfGradient)"
+        stroke="url(#cGradient)"
         stroke-width="24"
         stroke-linecap="round"/>
 
@@ -26,13 +45,13 @@
            L 112 192
            L 176 192"
         fill="none"
-        stroke="url(#cfGradient)"
+        stroke="url(#fGradient)"
         stroke-width="24"
         stroke-linecap="round"
         stroke-linejoin="round"/>
 
   <!-- 连接节点（中心交叠处） -->
-  <circle cx="128" cy="128" r="12" fill="#00D4FF"/>
-  <circle cx="108" cy="108" r="8" fill="#8B5CF6"/>
-  <circle cx="148" cy="148" r="8" fill="#00D4FF"/>
+  <circle cx="128" cy="128" r="12" fill="url(#nodeGradient2)"/>
+  <circle cx="108" cy="108" r="8" fill="url(#nodeGradient1)"/>
+  <circle cx="148" cy="148" r="8" fill="url(#nodeGradient2)"/>
 </svg>
