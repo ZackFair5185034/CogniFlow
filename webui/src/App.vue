@@ -12,24 +12,12 @@
     <!-- 侧边导航 -->
     <aside class="sidebar" :class="{ collapsed }">
       <div class="logo">
-        <div class="logo-icon">
-          <svg viewBox="0 0 40 40" fill="none">
-            <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="2"/>
-            <circle cx="20" cy="20" r="8" fill="currentColor"/>
-            <path d="M20 2 L20 10 M20 30 L20 38 M2 20 L10 20 M30 20 L38 20" stroke="currentColor" stroke-width="2"/>
-          </svg>
-        </div>
+        <img class="logo-icon" src="/logo.svg" alt="CogniFlow">
         <div class="logo-text">
           <span class="logo-title">CogniFlow</span>
           <span class="logo-sub">Visual Perception</span>
         </div>
       </div>
-
-      <button class="collapse-btn" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ rotated: collapsed }">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </button>
 
       <nav class="nav-menu">
         <router-link
@@ -50,6 +38,12 @@
         <span class="status-text">{{ isOnline ? '系统在线' : '离线' }}</span>
       </div>
     </aside>
+
+    <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ rotated: collapsed }">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
 
     <!-- 主内容区 -->
     <main class="main-content">
@@ -250,7 +244,7 @@ onUnmounted(() => {
   z-index: 11;
   flex-shrink: 0;
   transition: width 0.3s ease;
-  overflow: visible;
+  overflow: hidden;
 
   &::before {
     content: '';
@@ -285,14 +279,18 @@ onUnmounted(() => {
     .sidebar-footer {
       padding: 15px 12px;
       justify-content: center;
+
+      .status-text {
+        display: none;
+      }
     }
   }
 }
 
 .collapse-btn {
-  position: absolute;
+  position: fixed;
   top: 50%;
-  right: -14px;
+  left: 236px;
   transform: translateY(-50%);
   width: 24px;
   height: 24px;
@@ -304,8 +302,12 @@ onUnmounted(() => {
   border-radius: 50%;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s ease, left 0.3s ease;
   z-index: 20;
+
+  &.collapsed {
+    left: 64px;
+  }
 
   &:hover {
     border-color: var(--accent-cyan);
@@ -334,8 +336,6 @@ onUnmounted(() => {
 .logo-icon {
   width: 40px;
   height: 40px;
-  color: var(--accent-cyan);
-  filter: drop-shadow(var(--glow-cyan));
   animation: iconPulse 3s ease-in-out infinite;
 }
 
@@ -440,10 +440,11 @@ onUnmounted(() => {
   gap: 8px;
   padding: 15px 12px;
   border-top: 1px solid var(--border-color);
-  transition: padding 0.3s ease;
 
   .status-text {
+    transition: opacity 0.3s ease, width 0.3s ease;
     white-space: nowrap;
+    overflow: hidden;
   }
 }
 

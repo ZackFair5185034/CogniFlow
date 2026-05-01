@@ -157,7 +157,7 @@
               <span class="stat-value">#{{ currentJob.id }}</span>
             </div>
             <div class="realtime-stat">
-              <span class="stat-label">状态</span>
+              <span class="stat-label whitespace-nowrap">状态</span>
               <span class="stat-value" :class="'status-' + currentJob._displayStatus">
                 {{ currentJob._displayStatus === 'downloading' ? '下载中' : currentJob._displayStatus === 'running' ? '进行中' : statusText[currentJob.status] }}
               </span>
@@ -168,7 +168,7 @@
                      :style="{ width: getProgress(currentJob) + '%' }"></div>
               </div>
               <span class="progress-percent">
-                <span v-if="currentJob._displayStatus === 'downloading'">下载中</span>
+                <span v-if="currentJob._displayStatus === 'downloading'">{{ getProgress(currentJob) }}%</span>
                 <span v-else>{{ getProgress(currentJob) }}%</span>
               </span>
             </div>
