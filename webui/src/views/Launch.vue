@@ -17,26 +17,18 @@
         </button>
         <button
           class="mode-tab"
-          :class="{ active: mode === 'video' }"
-          @click="mode = 'video'"
-        >
-          <VideoIcon />
-          视频检测
-        </button>
-        <button
-          class="mode-tab"
           :class="{ active: mode === 'stream' }"
           @click="mode = 'stream'"
         >
           <StreamIcon />
-          实时流
+          视频检测
         </button>
       </div>
     </div>
 
     <div class="launch-body">
       <!-- 左侧：配置面板 -->
-      <div class="config-panel vg-card">
+      <div class="config-panel ui-card">
         <div class="panel-header">
           <div class="header-left">
             <BrainIcon class="panel-icon" />
@@ -103,38 +95,10 @@
             </div>
           </template>
 
-          <!-- 视频模式（批量处理） -->
-          <template v-else-if="mode === 'video'">
-            <div class="config-section">
-              <label class="section-label">上传视频</label>
-              <div
-                class="upload-zone"
-                :class="{ dragging: isDragging, disabled: detecting }"
-                @dragover.prevent="isDragging = true"
-                @dragleave="isDragging = false"
-                @drop.prevent="handleVideoDrop"
-                @click="triggerVideoInput"
-              >
-                <input
-                  ref="videoInputRef"
-                  type="file"
-                  accept="video/*"
-                  @change="handleVideoSelect"
-                  style="display: none"
-                />
-                <div class="upload-hint">
-                  <VideoUploadIcon />
-                  <span v-if="!selectedVideoFile">拖拽或点击上传视频</span>
-                  <span v-else class="file-name">{{ selectedVideoFile.name }}</span>
-                </div>
-              </div>
-            </div>
-          </template>
-
-          <!-- 实时流模式 -->
+          <!-- 视频检测模式 -->
           <template v-else-if="mode === 'stream'">
             <div class="config-section">
-              <label class="section-label">上传视频（实时流）</label>
+              <label class="section-label">上传视频</label>
               <div
                 class="upload-zone"
                 :class="{ dragging: isDragging, disabled: streamConnected }"
@@ -158,7 +122,7 @@
               </div>
             </div>
 
-            <!-- 实时流状态 -->
+            <!-- 视频状态 -->
             <div class="stream-stats" v-if="streamConnected">
               <div class="stat-item">
                 <span class="stat-label">帧率</span>
@@ -177,16 +141,17 @@
 
           <!-- 检测按钮 -->
           <el-button
+            v-if="mode === 'image'"
             class="detect-btn"
             type="primary"
             :disabled="!canDetect || detecting"
             :loading="detecting"
             @click="startDetection"
           >
-            {{ detecting ? (mode === 'video' ? '上传中...' : '检测中...') : (videoJobProcessing ? '处理中...' : '开始检测') }}
+            {{ detecting ? '检测中...' : '开始检测' }}
           </el-button>
 
-          <!-- 实时流按钮 -->
+          <!-- 视频检测按钮 -->
           <template v-if="mode === 'stream'">
             <el-button
               v-if="!streamConnected"
@@ -194,15 +159,15 @@
               type="primary"
               :disabled="!canStreamDetect || streamUploading"
               :loading="streamUploading"
-              @click="startStreamDetection"
+              @click="startVideoDetection"
             >
-              {{ streamUploading ? '上传中...' : '开始实时检测' }}
+              {{ streamUploading ? '上传中...' : '开始视频检测' }}
             </el-button>
             <el-button
               v-else
               class="detect-btn"
               type="danger"
-              @click="stopStreamDetection"
+              @click="stopVideoDetection"
             >
               停止检测
             </el-button>
@@ -211,7 +176,7 @@
       </div>
 
       <!-- 右侧：结果显示 -->
-      <div class="result-panel vg-card">
+      <div class="result-panel ui-card">
         <div class="panel-header">
           <div class="header-left">
             <EyeIcon class="panel-icon" />
@@ -261,14 +226,7 @@
           </div>
         </div>
 
-        <!-- 视频检测结果 -->
-        <div v-else-if="videoResultPath" class="result-video-wrapper">
-          <div class="video-container">
-            <video :src="videoResultPath" controls class="result-video"></video>
-          </div>
-        </div>
-
-        <!-- 实时流检测结果 - Canvas 渲染 -->
+        <!-- 视频检测结果 - Canvas 渲染 -->
         <div v-else-if="mode === 'stream' && (streamConnected || streamComplete)" class="result-stream-wrapper">
           <div class="stream-container">
             <canvas ref="streamCanvasRef" class="stream-canvas"></canvas>
@@ -284,32 +242,6 @@
           </div>
         </div>
 
-        <!-- 视频处理进度 -->
-        <div v-else-if="videoJobProcessing" class="video-progress-wrapper">
-          <div class="progress-indicator">
-            <div class="progress-ring">
-              <svg viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="42" class="progress-track" />
-                <circle
-                  cx="50" cy="50" r="42"
-                  class="progress-fill"
-                  :style="{ strokeDashoffset: 264 - (264 * videoProgress.progress / 100) }"
-                />
-              </svg>
-              <span class="progress-value">{{ videoProgress.progress }}%</span>
-            </div>
-            <div class="progress-detail">
-              <span class="progress-label">视频检测中</span>
-              <span class="progress-frames">
-                帧 {{ videoProgress.current_frame }} / {{ videoProgress.total_frames }}
-              </span>
-              <span class="progress-detections" v-if="videoProgress.detections_count > 0">
-                已检测 {{ videoProgress.detections_count }} 个目标
-              </span>
-            </div>
-          </div>
-        </div>
-
         <!-- 加载状态（图片检测用） -->
         <div v-else-if="detecting" class="result-loading">
           <div class="loading-spinner"></div>
@@ -320,11 +252,10 @@
         <div v-else class="empty-result">
           <div class="empty-icon">
             <ImageIcon v-if="mode === 'image'" />
-            <VideoIcon v-else-if="mode === 'video'" />
             <StreamIcon v-else />
           </div>
           <p>暂无检测结果</p>
-          <span>{{ mode === 'image' ? '上传图片开始检测' : mode === 'video' ? '上传视频开始检测' : '上传视频开始实时检测' }}</span>
+          <span>{{ mode === 'image' ? '上传图片开始检测' : '上传视频开始检测' }}</span>
         </div>
 
         <!-- 检测详情列表 -->
@@ -389,31 +320,23 @@ const StreamIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 
 ])
 
 // 状态
-const mode = ref<'image' | 'video'>('image')
+const mode = ref<'image' | 'stream'>('image')
 const trainedModels = ref<any[]>([])
 const selectedModelId = ref<number | null>(null)
 const confThreshold = ref(0.25)
 const selectedFile = ref<File | null>(null)
-const selectedVideoFile = ref<File | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
-const videoInputRef = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
 const isLoading = ref(false)
 const detecting = ref(false)
 
 const resultImage = ref<string | null>(null)
-const videoResultPath = ref<string | null>(null)
 const detections = ref<any[]>([])
 const imageSize = ref({ width: 0, height: 0 })
 const zoomLevel = ref(1)
 
-// 视频检测任务状态
-const videoJobId = ref<string | null>(null)
-const videoProgress = ref({ progress: 0, current_frame: 0, total_frames: 0, detections_count: 0, status: 'pending' })
-let videoPollingTimer: number | null = null
-
-// 实时流检测状态
-const streamClient = ref<StreamClient | null>(null)
+// 视频检测状态
+const videoClient = ref<StreamClient | null>(null)
 const streamJobId = ref<string | null>(null)
 const streamCanvasRef = ref<HTMLCanvasElement | null>(null)
 const streamInputRef = ref<HTMLInputElement | null>(null)
@@ -430,10 +353,6 @@ const streamStats = ref<StreamStats>({
   status: 'pending',
 })
 
-const videoJobProcessing = computed(() => {
-  return mode.value === 'video' && videoJobId.value !== null && videoProgress.value.status !== 'completed' && videoProgress.value.status !== 'failed'
-})
-
 const canStreamDetect = computed(() => {
   return selectedModelId.value && selectedStreamFile.value && !streamConnected.value
 })
@@ -443,10 +362,7 @@ const selectedModel = computed(() => {
 })
 
 const canDetect = computed(() => {
-  if (mode.value === 'image') {
-    return selectedModelId.value && selectedFile.value && !detecting.value
-  }
-  return selectedModelId.value && selectedVideoFile.value && !detecting.value && !videoJobProcessing.value
+  return selectedModelId.value && selectedFile.value && !detecting.value
 })
 
 const getModelClasses = (model: any) => {
@@ -498,39 +414,11 @@ const triggerFileInput = () => {
   fileInputRef.value?.click()
 }
 
-// 文件选择 - 视频
-const handleVideoSelect = (event: Event) => {
-  const input = event.target as HTMLInputElement
-  if (input.files && input.files[0]) {
-    selectedVideoFile.value = input.files[0]
-    clearResults()
-  }
-}
-
-const handleVideoDrop = (event: DragEvent) => {
-  isDragging.value = false
-  if (event.dataTransfer?.files && event.dataTransfer.files[0]) {
-    const file = event.dataTransfer.files[0]
-    if (file.type.startsWith('video/')) {
-      selectedVideoFile.value = file
-      clearResults()
-    }
-  }
-}
-
-const triggerVideoInput = () => {
-  videoInputRef.value?.click()
-}
-
 // 清除结果
 const clearResults = () => {
   resultImage.value = null
-  videoResultPath.value = null
   detections.value = []
   imageSize.value = { width: 0, height: 0 }
-  stopVideoPolling()
-  videoJobId.value = null
-  videoProgress.value = { progress: 0, current_frame: 0, total_frames: 0, detections_count: 0, status: 'pending' }
 }
 
 // 加载图片获取尺寸
@@ -540,43 +428,6 @@ const loadImageSize = (src: string) => {
     imageSize.value = { width: img.naturalWidth, height: img.naturalHeight }
   }
   img.src = src
-}
-
-// 轮询视频检测进度
-const startVideoPolling = () => {
-  stopVideoPolling()
-  const poll = async () => {
-    if (!videoJobId.value) return
-    try {
-      const res = await inferenceApi.getVideoJobStatus(videoJobId.value)
-      const status = res.data
-      videoProgress.value = status
-
-      if (status.status === 'completed') {
-        videoPollingTimer = null
-        videoResultPath.value = inferenceApi.getVideoResultUrl(videoJobId.value)
-        detections.value = []  // 视频检测暂不返回详细列表
-        videoJobId.value = null
-      } else if (status.status === 'failed') {
-        videoPollingTimer = null
-        ElMessage.error(status.error || '视频检测失败')
-        videoJobId.value = null
-      } else {
-        videoPollingTimer = window.setTimeout(poll, 1500)
-      }
-    } catch (e) {
-      console.error('轮询视频进度失败', e)
-      videoPollingTimer = window.setTimeout(poll, 3000)
-    }
-  }
-  poll()
-}
-
-const stopVideoPolling = () => {
-  if (videoPollingTimer !== null) {
-    clearTimeout(videoPollingTimer)
-    videoPollingTimer = null
-  }
 }
 
 // 开始检测
@@ -594,18 +445,10 @@ const startDetection = async () => {
         detections.value = res.data.detections || []
         loadImageSize(res.data.result_image_base64)
       }
-    } else if (mode.value === 'video' && selectedVideoFile.value) {
-      const res = await inferenceApi.detectVideo(selectedVideoFile.value, selectedModelId.value!, confThreshold.value)
-      if (res.data.success) {
-        videoJobId.value = res.data.job_id
-        // 开始轮询进度
-        startVideoPolling()
-      }
     }
   } catch (error: any) {
     const msg = error.response?.data?.detail || '检测失败'
     ElMessage.error(msg)
-    videoJobId.value = null
   } finally {
     detecting.value = false
   }
@@ -615,13 +458,13 @@ const startDetection = async () => {
 const handleModeChange = () => {
   clearResults()
   if (mode.value !== 'stream') {
-    stopStreamDetection()
+    stopVideoDetection()
   }
 }
 
-// ===== 实时流检测 =====
+// ===== 视频检测 =====
 
-// 文件选择 - 实时流
+// 文件选择 - 视频
 const handleStreamSelect = (event: Event) => {
   const input = event.target as HTMLInputElement
   if (input.files && input.files[0]) {
@@ -682,8 +525,8 @@ const renderFrame = (frame: StreamFrame) => {
   img.src = `data:image/jpeg;base64,${frame.image}`
 }
 
-// 开始实时流检测
-const startStreamDetection = async () => {
+// 开始视频检测
+const startVideoDetection = async () => {
   if (!canStreamDetect.value || !selectedStreamFile.value) return
 
   streamUploading.value = true
@@ -713,42 +556,48 @@ const startStreamDetection = async () => {
       // 创建 StreamClient 并连接
       const client = new StreamClient()
       client.onFrame((frame) => {
-        streamStats.value.current_frame = frame.frame_id
-        streamStats.value.total_detections += frame.stats.total_detections
-        streamStats.value.progress = Math.min(99, Math.round((frame.frame_id / (streamStats.value.total_frames || 1)) * 100))
+        streamStats.value = {
+          ...streamStats.value,
+          current_frame: frame.frame_id,
+          total_detections: frame.stats.total_detections,
+          progress: Math.min(99, Math.ceil((frame.frame_id / (videoInfo.total_frames || 1)) * 100)),
+        }
         renderFrame(frame)
       })
       client.onComplete((totalFrames, totalDetections) => {
         streamComplete.value = true
         streamConnected.value = false
-        streamStats.value.progress = 100
-        streamStats.value.current_frame = totalFrames
-        streamStats.value.total_detections = totalDetections
-        streamStats.value.status = 'completed'
+        streamStats.value = {
+          ...streamStats.value,
+          progress: 100,
+          current_frame: totalFrames,
+          total_detections: totalDetections,
+          status: 'completed',
+        }
       })
       client.onError((error) => {
-        ElMessage.error(`实时流错误: ${error}`)
+        ElMessage.error(`视频检测错误: ${error}`)
         streamConnected.value = false
       })
 
       client.connect(jobId, streamUrl)
-      streamClient.value = client
+      videoClient.value = client
       streamConnected.value = true
       streamComplete.value = false
     }
   } catch (error: any) {
-    const msg = error.response?.data?.detail || '启动实时流检测失败'
+    const msg = error.response?.data?.detail || '启动视频检测失败'
     ElMessage.error(msg)
   } finally {
     streamUploading.value = false
   }
 }
 
-// 停止实时流检测
-const stopStreamDetection = () => {
-  if (streamClient.value) {
-    streamClient.value.disconnect()
-    streamClient.value = null
+// 停止视频检测
+const stopVideoDetection = () => {
+  if (videoClient.value) {
+    videoClient.value.disconnect()
+    videoClient.value = null
   }
   if (streamJobId.value) {
     inferenceApi.stopVideoStream(streamJobId.value).catch(() => {})
@@ -773,8 +622,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  stopVideoPolling()
-  stopStreamDetection()
+  stopVideoDetection()
 })
 </script>
 
@@ -951,20 +799,6 @@ onUnmounted(() => {
 
 .result-image-wrapper {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.result-video-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.image-container {
-  flex: 1;
   overflow: auto;
   display: flex;
   align-items: center;
@@ -1020,86 +854,7 @@ onUnmounted(() => {
   }
 }
 
-/* 视频处理进度 */
-.video-progress-wrapper {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.progress-indicator {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-}
-
-.progress-ring {
-  position: relative;
-  width: 120px;
-  height: 120px;
-
-  svg {
-    width: 100%;
-    height: 100%;
-    transform: rotate(-90deg);
-  }
-
-  .progress-track {
-    fill: none;
-    stroke: var(--border-color);
-    stroke-width: 6;
-  }
-
-  .progress-fill {
-    fill: none;
-    stroke: var(--accent-cyan);
-    stroke-width: 6;
-    stroke-linecap: round;
-    stroke-dasharray: 264;
-    stroke-dashoffset: 264;
-    transition: stroke-dashoffset 0.5s ease;
-  }
-
-  .progress-value {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
-    color: var(--accent-cyan);
-  }
-}
-
-.progress-detail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.progress-label {
-  font-size: 14px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
-.progress-frames {
-  font-size: 12px;
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--text-muted);
-}
-
-.progress-detections {
-  font-size: 12px;
-  color: var(--accent-green);
-}
-
+/* 视频检测样式 */
 .empty-result {
   flex: 1;
   display: flex;
@@ -1148,7 +903,7 @@ onUnmounted(() => {
   @apply text-[var(--text-muted)] font-mono text-[10px];
 }
 
-/* 实时流检测样式 */
+/* 视频检测样式 */
 .result-stream-wrapper {
   flex: 1;
   display: flex;
@@ -1183,11 +938,15 @@ onUnmounted(() => {
   background: var(--border-color);
   border-radius: 3px;
   overflow: hidden;
+  position: relative;
 }
 
 .progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+  background: var(--accent-cyan);
   border-radius: 3px;
   transition: width 0.3s ease;
 }

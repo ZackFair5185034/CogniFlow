@@ -6,14 +6,14 @@
         <h2>模型管理</h2>
         <span class="subtitle">管理训练模型</span>
       </div>
-      <button class="vg-btn vg-btn-primary" @click="showCreateDialog = true">
+      <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
         <PlusIcon />
         注册模型
       </button>
     </div>
 
     <!-- 模型列表 -->
-    <div class="vg-card" style="width: 100%; min-width: 0;">
+    <div class="ui-card" style="width: 100%; min-width: 0;">
       <div class="table-wrapper">
         <el-table :data="models" v-loading="loading" :row-class-name="tableRowClassName" table-layout="auto">
           <el-table-column prop="id" label="ID" width="80">
@@ -107,7 +107,7 @@
 
     <!-- 创建对话框 -->
     <div class="dialog-overlay" v-if="showCreateDialog" @click.self="showCreateDialog = false">
-      <div class="dialog-panel vg-card">
+      <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>注册模型</h3>
           <button class="close-btn" @click="showCreateDialog = false">
@@ -148,8 +148,8 @@
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="vg-btn" @click="showCreateDialog = false">取消</button>
-          <button class="vg-btn vg-btn-primary" @click="handleCreate" :disabled="creating">
+          <button class="ui-btn" @click="showCreateDialog = false">取消</button>
+          <button class="ui-btn ui-btn-primary" @click="handleCreate" :disabled="creating">
             {{ creating ? '注册中...' : '注册' }}
           </button>
         </div>
@@ -158,7 +158,7 @@
 
     <!-- 上传对话框 -->
     <div class="dialog-overlay" v-if="showUploadDialog" @click.self="showUploadDialog = false">
-      <div class="dialog-panel vg-card">
+      <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>上传模型文件</h3>
           <button class="close-btn" @click="showUploadDialog = false">
@@ -176,8 +176,8 @@
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="vg-btn" @click="showUploadDialog = false">取消</button>
-          <button class="vg-btn vg-btn-primary" @click="handleUploadSubmit" :disabled="!uploadFile || uploading">
+          <button class="ui-btn" @click="showUploadDialog = false">取消</button>
+          <button class="ui-btn ui-btn-primary" @click="handleUploadSubmit" :disabled="!uploadFile || uploading">
             {{ uploading ? '上传中...' : '上传' }}
           </button>
         </div>

@@ -3,16 +3,16 @@
     <!-- 顶部工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <button class="vg-btn" @click="goBack">
+        <button class="ui-btn" @click="goBack">
           <ArrowLeftIcon />
           返回
         </button>
         <div class="image-nav" v-if="currentImage">
-          <button class="vg-btn" @click="prevImage" :disabled="!hasPrev">
+          <button class="ui-btn" @click="prevImage" :disabled="!hasPrev">
             <ChevronLeftIcon />
           </button>
           <span class="nav-info">#{{ currentImage.id }}</span>
-          <button class="vg-btn" @click="nextImage" :disabled="!hasNext">
+          <button class="ui-btn" @click="nextImage" :disabled="!hasNext">
             <ChevronRightIcon />
           </button>
         </div>
@@ -40,7 +40,7 @@
         </div>
       </div>
       <div class="toolbar-right">
-        <button class="vg-btn vg-btn-primary" @click="saveAnnotations" :disabled="!hasChanges || saving">
+        <button class="ui-btn ui-btn-primary" @click="saveAnnotations" :disabled="!hasChanges || saving">
           <SaveIcon />
           {{ saving ? '保存中...' : '保存 (S)' }}
         </button>
@@ -54,7 +54,7 @@
         <div class="panel-header">
           <h3>类别库</h3>
           <div class="header-actions">
-            <button class="vg-btn vg-btn-small" @click="openCreateDialog">
+            <button class="ui-btn ui-btn-small" @click="openCreateDialog">
               <PlusIcon />
             </button>
           </div>
@@ -169,7 +169,7 @@
 
     <!-- 创建类别对话框 -->
     <div class="dialog-overlay" v-if="showCategoryDialog" @click.self="closeCreateDialog">
-      <div class="dialog-panel vg-card">
+      <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>{{ categoryForm.is_directory ? '创建目录' : '创建标签' }}</h3>
           <button class="close-btn" @click="closeCreateDialog">
@@ -221,8 +221,8 @@
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="vg-btn" @click="closeCreateDialog">取消</button>
-          <button class="vg-btn vg-btn-primary" @click="handleCreateCategory" :disabled="creatingCategory">
+          <button class="ui-btn" @click="closeCreateDialog">取消</button>
+          <button class="ui-btn ui-btn-primary" @click="handleCreateCategory" :disabled="creatingCategory">
             {{ creatingCategory ? '创建中...' : '创建' }}
           </button>
         </div>
@@ -980,38 +980,38 @@ onUnmounted(() => {
   @apply text-[11px] text-[var(--text-secondary)] mr-1;
 }
 
-.vg-btn {
+.ui-btn {
   @apply inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-sm cursor-pointer transition-all;
 }
 
-.vg-btn:hover:not(:disabled) {
+.ui-btn:hover:not(:disabled) {
   @apply bg-[var(--bg-hover)] border-[var(--accent-cyan)];
 }
 
-.vg-btn:disabled {
+.ui-btn:disabled {
   @apply opacity-50 cursor-not-allowed;
 }
 
-.vg-btn svg {
+.ui-btn svg {
   @apply w-4 h-4;
 }
 
-.vg-btn-primary {
+.ui-btn-primary {
   background: var(--accent-cyan);
   border-color: var(--accent-cyan);
   @apply text-black;
 }
 
-.vg-btn-primary:hover:not(:disabled) {
+.ui-btn-primary:hover:not(:disabled) {
   background: #00d4e0;
   border-color: #00d4e0;
 }
 
-.vg-btn-small {
+.ui-btn-small {
   @apply px-2 py-1;
 }
 
-.vg-btn-small svg {
+.ui-btn-small svg {
   @apply w-3.5 h-3.5;
 }
 
