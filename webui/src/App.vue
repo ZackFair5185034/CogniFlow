@@ -10,15 +10,9 @@
     <div class="scanline"></div>
 
     <!-- 侧边导航 -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ collapsed }">
       <div class="logo">
-        <div class="logo-icon">
-          <svg viewBox="0 0 40 40" fill="none">
-            <circle cx="20" cy="20" r="18" stroke="currentColor" stroke-width="2"/>
-            <circle cx="20" cy="20" r="8" fill="currentColor"/>
-            <path d="M20 2 L20 10 M20 30 L20 38 M2 20 L10 20 M30 20 L38 20" stroke="currentColor" stroke-width="2"/>
-          </svg>
-        </div>
+        <img class="logo-icon" src="/logo.svg" alt="CogniFlow">
         <div class="logo-text">
           <span class="logo-title">CogniFlow</span>
           <span class="logo-sub">Visual Perception</span>
@@ -45,12 +39,15 @@
       </div>
     </aside>
 
+    <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ rotated: collapsed }">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+
     <!-- 主内容区 -->
     <main class="main-content">
       <header class="top-bar">
-        <div class="page-title">
-          <h1>{{ currentPageTitle }}</h1>
-        </div>
         <div class="top-actions">
           <span class="time-display">{{ currentTime }}</span>
           <button class="action-btn" @click="refreshData">
@@ -77,6 +74,11 @@ import { useRoute } from 'vue-router'
 const route = useRoute()
 const isOnline = ref(true)
 const currentTime = ref('')
+const collapsed = ref(false)
+
+const toggleSidebar = () => {
+  collapsed.value = !collapsed.value
+}
 
 const HomeIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
   h('path', { d: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z' }),
@@ -239,8 +241,10 @@ onUnmounted(() => {
   flex-direction: column;
   padding: 20px 0;
   position: relative;
-  z-index: 10;
+  z-index: 11;
   flex-shrink: 0;
+  transition: width 0.3s ease;
+  overflow: hidden;
 
   &::before {
     content: '';
@@ -251,6 +255,73 @@ onUnmounted(() => {
     height: 100%;
     background: linear-gradient(180deg, var(--accent-cyan), var(--accent-magenta));
     opacity: 0.5;
+  }
+
+  &.collapsed {
+    width: 64px;
+
+    .logo-text,
+    .nav-text,
+    .nav-indicator {
+      display: none;
+    }
+
+    .logo {
+      justify-content: center;
+      padding: 0 12px 30px;
+    }
+
+    .nav-item {
+      justify-content: center;
+      padding: 14px;
+    }
+
+    .sidebar-footer {
+      padding: 15px 12px;
+      justify-content: center;
+
+      .status-text {
+        display: none;
+      }
+    }
+  }
+}
+
+.collapse-btn {
+  position: fixed;
+  top: 50%;
+  left: 236px;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease, left 0.3s ease;
+  z-index: 20;
+
+  &.collapsed {
+    left: 64px;
+  }
+
+  &:hover {
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+  }
+
+  svg {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.3s ease;
+
+    &.rotated {
+      transform: rotate(180deg);
+    }
   }
 }
 
@@ -265,8 +336,6 @@ onUnmounted(() => {
 .logo-icon {
   width: 40px;
   height: 40px;
-  color: var(--accent-cyan);
-  filter: drop-shadow(var(--glow-cyan));
   animation: iconPulse 3s ease-in-out infinite;
 }
 
@@ -344,11 +413,14 @@ onUnmounted(() => {
 .nav-icon {
   width: 20px;
   height: 20px;
+  flex-shrink: 0;
 }
 
 .nav-text {
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
+  transition: opacity 0.3s ease;
 }
 
 .nav-indicator {
@@ -364,9 +436,16 @@ onUnmounted(() => {
 .sidebar-footer {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  padding: 15px 20px;
+  padding: 15px 12px;
   border-top: 1px solid var(--border-color);
+
+  .status-text {
+    transition: opacity 0.3s ease, width 0.3s ease;
+    white-space: nowrap;
+    overflow: hidden;
+  }
 }
 
 .status-dot {
@@ -400,15 +479,15 @@ onUnmounted(() => {
 }
 
 .top-bar {
-  height: 64px;
+  height: 56px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
+  justify-content: flex-end;
+  padding: 0 20px;
   position: relative;
-  backdrop-filter: blur(10px);
+  flex-shrink: 0;
 
   &::after {
     content: '';
@@ -422,17 +501,10 @@ onUnmounted(() => {
   }
 }
 
-.page-title {
+.top-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
-
-  h1 {
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--text-primary);
-    letter-spacing: 0.5px;
-  }
+  gap: 12px;
 }
 
 .time-display {

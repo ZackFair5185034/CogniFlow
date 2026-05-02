@@ -14,9 +14,11 @@ export const atlasApi = {
   create: (data: { name: string; description?: string }) => api.post('/atlas', data),
   update: (id: number, data: { name?: string; description?: string }) => api.put(`/atlas/${id}`, data),
   delete: (id: number) => api.delete(`/atlas/${id}`),
-  getImages: (id: number, directory?: string) => api.get(`/atlas/${id}/images`, { params: directory ? { directory } : {} }),
+  getImages: (id: number, directory?: string, page: number = 1, pageSize: number = 50) =>
+    api.get(`/atlas/${id}/images`, { params: { directory, page, page_size: pageSize } }),
   getDirectories: (id: number) => api.get(`/atlas/${id}/directories`),
   createDirectory: (id: number, directory: string) => api.post(`/atlas/${id}/directories`, null, { params: { directory } }),
+  deleteDirectory: (id: number, directory: string) => api.delete(`/atlas/${id}/directories`, { params: { directory } }),
   uploadImages: (id: number, files: FormData, directory?: string) => {
     return api.post(`/atlas/${id}/images`, files, {
       params: directory ? { directory } : {},
@@ -32,6 +34,11 @@ export const imageApi = {
   getFile: (id: number) => `/api/images/${id}/file`,
   delete: (id: number) => api.delete(`/images/${id}`),
   updateDirectory: (id: number, directory: string) => api.put(`/images/${id}/directory`, null, { params: { directory } }),
+  // 批量操作
+  batchUpdateDirectory: (imageIds: number[], directory: string) =>
+    api.post('/images/batch-update-directory', { image_ids: imageIds, directory }),
+  batchDelete: (imageIds: number[]) =>
+    api.post('/images/batch-delete', { image_ids: imageIds }),
 }
 
 // Category API

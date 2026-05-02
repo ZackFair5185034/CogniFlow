@@ -36,7 +36,7 @@
         <div class="hotkey-hints">
           <span class="hint"><kbd>S</kbd> 保存</span>
           <span class="hint"><kbd>Z</kbd> 撤销</span>
-          <span class="hint"><kbd>←→</kbd> 翻页</span>
+          <span class="hint"><kbd>← A</kbd> 上一页 <kbd>D →</kbd> 下一页</span>
         </div>
       </div>
       <div class="toolbar-right">
@@ -522,7 +522,7 @@ const loadImageList = async () => {
   try {
     const directory = route.query.directory as string | undefined
     const res = await atlasApi.getImages(currentImage.value.atlas_id, directory)
-    imageList.value = res.data || []
+    imageList.value = res.data.items || []
     currentImageIndex.value = imageList.value.findIndex((img: ImageData) => img.id === currentImage.value?.id)
   } catch (error) {
     console.error('加载图片列表失败', error)
@@ -852,11 +852,11 @@ const handleKeyDown = (e: KeyboardEvent) => {
     }
   }
 
-  if (e.key === 'ArrowLeft') {
+  if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') {
     prevImage()
   }
 
-  if (e.key === 'ArrowRight') {
+  if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
     nextImage()
   }
 }

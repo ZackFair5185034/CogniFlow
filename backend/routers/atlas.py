@@ -97,19 +97,20 @@ async def delete_atlas(atlas_id: int, db: Session = Depends(get_db)):
 async def list_atlas_images(
     atlas_id: int,
     directory: str = None,
+    page: int = 1,
+    page_size: int = 50,
     db: Session = Depends(get_db)
 ):
-    """获取图集图片列表，支持按目录筛选。
+    """获取图集图片列表，支持按目录筛选和分页。
 
     Args:
         atlas_id: 图集 ID
         directory: 可选，按目录名筛选
+        page: 页码，从 1 开始
+        page_size: 每页数量，默认 50
     """
     import sys
-    print(f"[DEBUG] list_atlas_images called with atlas_id={atlas_id}, directory={directory}", flush=True)
-    print(f"[DEBUG] directory type: {type(directory)}, repr: {repr(directory)}", flush=True)
-    if directory:
-        print(f"[DEBUG] directory encoding: {directory.encode('utf-8')}", flush=True)
+    print(f"[DEBUG] list_atlas_images called with atlas_id={atlas_id}, directory={directory}, page={page}, page_size={page_size}", flush=True)
 
     atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
     if not atlas:
@@ -117,21 +118,22 @@ async def list_atlas_images(
 
     query = db.query(Image).filter(Image.atlas_id == atlas_id)
 
-    # Debug: check what directories are stored
-    all_images = query.all()
-    print(f"[DEBUG] Total images for atlas {atlas_id}: {len(all_images)}", flush=True)
-
     if directory is not None:
-        print(f"[DEBUG] Filtering by directory: '{directory}'", flush=True)
-        # Try direct string comparison
-        matching = [img for img in all_images if img.directory == directory]
-        print(f"[DEBUG] Direct Python comparison matches: {len(matching)}", flush=True)
-
         query = query.filter(Image.directory == directory)
 
-    images = query.all()
-    print(f"[DEBUG] Final query result: {len(images)} images", flush=True)
-    return images
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+
+    offset = (page - 1) * page_size
+    images = query.order_by(Image.created_at.desc()).offset(offset).limit(page_size).all()
+
+    return {
+        "items": images,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
 
 
 @router.get("/{atlas_id}/directories")
@@ -176,6 +178,48 @@ async def create_atlas_directory(
     os.makedirs(dir_path, exist_ok=True)
 
     return {"message": f"目录 '{directory}' 已创建", "directory": directory}
+
+
+@router.delete("/{atlas_id}/directories", status_code=204)
+async def delete_atlas_directory(
+    atlas_id: int,
+    directory: str,
+    db: Session = Depends(get_db)
+):
+    """删除目录及其包含的所有图片。
+
+    删除指定目录下的所有图片（物理文件和数据库记录），并移除物理目录。
+    """
+    atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
+    if not atlas:
+        raise HTTPException(status_code=404, detail="图集不存在")
+
+    # 查询该目录下的所有图片
+    images = db.query(Image).filter(
+        Image.atlas_id == atlas_id,
+        Image.directory == directory
+    ).all()
+
+    # 删除所有图片（物理文件 + 数据库记录，注解通过 cascade 自动删除）
+    for image in images:
+        if image.file_path and os.path.exists(image.file_path):
+            try:
+                os.remove(image.file_path)
+            except Exception:
+                pass
+        db.delete(image)
+
+    # 删除物理目录
+    dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), directory)
+    if os.path.exists(dir_path):
+        try:
+            shutil.rmtree(dir_path)
+        except Exception:
+            pass
+
+    db.commit()
+
+    return None
 
 
 @router.post("/{atlas_id}/images", status_code=201)

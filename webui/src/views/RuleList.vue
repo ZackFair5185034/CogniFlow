@@ -266,10 +266,13 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   margin-bottom: 24px;
 
   .header-info {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
     h2 {
       font-size: 20px;
       font-weight: 600;
-      margin-bottom: 4px;
+      margin-bottom: 0;
     }
 
     .subtitle {
@@ -344,8 +347,9 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
 
 .rules-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
+  padding: 4px 2px 4px 2px;
 }
 
 .rule-card {
@@ -355,19 +359,20 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.2s;
-  min-height: 180px;
+  transition: all 0.25s ease;
+  min-height: 160px;
 
   &:hover {
-    border-color: rgba(0, 240, 255, 0.3);
+    border-color: rgba(0, 240, 255, 0.35);
     transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 240, 255, 0.12);
   }
 }
 
 .card-placeholder-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.03), rgba(0, 170, 136, 0.03));
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.04), rgba(0, 170, 136, 0.02));
   z-index: 0;
 }
 
@@ -376,13 +381,11 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   inset: 0;
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.1) 0%,
-    rgba(0, 0, 0, 0.5) 60%,
-    rgba(0, 0, 0, 0.85) 100%
+    rgba(0, 0, 0, 0.05) 0%,
+    rgba(0, 0, 0, 0.35) 50%,
+    rgba(0, 0, 0, 0.75) 100%
   );
   z-index: 1;
-  background-size: cover;
-  background-position: center;
 }
 
 .card-content {
@@ -393,35 +396,40 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   flex-direction: column;
   justify-content: flex-end;
   padding: 20px;
-  box-sizing: border-box;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .card-title {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  flex: 1;
 
   h3 {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     color: #fff;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .card-version {
     font-size: 10px;
     padding: 2px 8px;
-    background: rgba(0, 240, 255, 0.15);
+    background: rgba(0, 240, 255, 0.2);
     color: #00f0ff;
     border-radius: 4px;
     font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
   }
 }
 
@@ -461,9 +469,9 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
 
 .card-desc {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.7);
   line-height: 1.5;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -475,6 +483,8 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .card-meta {
@@ -486,7 +496,7 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
     align-items: center;
     gap: 6px;
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.5);
 
     svg {
       width: 14px;
@@ -500,7 +510,7 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: rgba(0, 240, 255, 0.8);
+  color: rgba(0, 240, 255, 0.7);
 
   svg {
     width: 12px;

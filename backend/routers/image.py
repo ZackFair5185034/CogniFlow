@@ -4,13 +4,26 @@
 提供图片的读取、删除和目录修改功能。
 """
 import os
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 
 from database import get_db, Image
 
 router = APIRouter()
+
+
+class BatchUpdateDirectoryRequest(BaseModel):
+    """批量修改目录请求体"""
+    image_ids: list[int]
+    directory: str
+
+
+class BatchDeleteRequest(BaseModel):
+    """批量删除请求体"""
+    image_ids: list[int]
 
 
 @router.get("/", response_model=list)
@@ -89,3 +102,82 @@ async def delete_image(image_id: int, db: Session = Depends(get_db)):
     db.delete(image)
     db.commit()
     return None
+
+
+@router.post("/batch-update-directory")
+async def batch_update_directory(
+    req: BatchUpdateDirectoryRequest,
+    db: Session = Depends(get_db)
+):
+    """批量修改图片目录。
+
+    Args:
+        req: 请求体，包含 image_ids 和 directory
+    """
+    if not req.image_ids:
+        raise HTTPException(status_code=400, detail="图片ID列表不能为空")
+
+    # 空字符串视为移回根目录
+    new_directory = req.directory if req.directory else None
+
+    # 查询所有图片
+    images = db.query(Image).filter(Image.id.in_(req.image_ids)).all()
+    if len(images) != len(req.image_ids):
+        found_ids = {img.id for img in images}
+        missing_ids = set(req.image_ids) - found_ids
+        raise HTTPException(status_code=404, detail=f"部分图片不存在，缺失ID: {missing_ids}")
+
+    # 批量更新
+    for image in images:
+        old_directory = image.directory
+        image.directory = new_directory
+        print(f"[图片] 批量修改目录: image_id={image.id}, {old_directory} -> {new_directory}")
+
+    db.commit()
+
+    return {
+        "message": f"成功修改 {len(images)} 张图片的目录",
+        "image_ids": req.image_ids,
+        "directory": new_directory,
+    }
+
+
+@router.post("/batch-delete")
+async def batch_delete_images(
+    req: BatchDeleteRequest,
+    db: Session = Depends(get_db)
+):
+    """批量删除图片。
+
+    Args:
+        req: 请求体，包含 image_ids
+    """
+    if not req.image_ids:
+        raise HTTPException(status_code=400, detail="图片ID列表不能为空")
+
+    # 查询所有图片
+    images = db.query(Image).filter(Image.id.in_(req.image_ids)).all()
+    if len(images) != len(req.image_ids):
+        found_ids = {img.id for img in images}
+        missing_ids = set(req.image_ids) - found_ids
+        raise HTTPException(status_code=404, detail=f"部分图片不存在，缺失ID: {missing_ids}")
+
+    deleted_count = 0
+    for image in images:
+        # 删除物理文件
+        if image.file_path and os.path.exists(image.file_path):
+            try:
+                os.remove(image.file_path)
+                deleted_count += 1
+            except Exception:
+                pass
+        # 删除数据库记录
+        db.delete(image)
+
+    db.commit()
+
+    return {
+        "message": f"成功删除 {len(images)} 张图片",
+        "deleted_count": len(images),
+        "deleted_file_count": deleted_count,
+    }

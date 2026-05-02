@@ -517,7 +517,8 @@ onUnmounted(() => {
 }
 
 .page-header {
-  @apply flex justify-between items-center flex-shrink-0;
+  @apply flex justify-between items-center;
+  flex-shrink: 0;
 }
 
 .header-info h2 {
@@ -561,8 +562,9 @@ onUnmounted(() => {
 
 /* 配置面板 */
 .config-panel {
-  height: fit-content;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .panel-header {
@@ -583,6 +585,8 @@ onUnmounted(() => {
 
 .config-content {
   @apply p-5 flex flex-col gap-4;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .config-section {

@@ -13,7 +13,22 @@
       "mcp__plugin_playwright_playwright__browser_snapshot",
       "mcp__plugin_playwright_playwright__browser_click",
       "mcp__plugin_playwright_playwright__browser_type",
-      "mcp__plugin_playwright_playwright__browser_press_key"
+      "mcp__plugin_playwright_playwright__browser_press_key",
+      "Bash(npx vue-tsc *)",
+      "Bash(curl -s http://localhost:8000/api/inference/models)",
+      "Bash(npx vite *)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(curl *)",
+      "Bash(tasklist)",
+      "Bash(taskkill /F /PID 10896)",
+      "Bash(taskkill /F /PID 10332)",
+      "Bash(taskkill /F /PID 22196)",
+      "Bash(taskkill /F /PID 19044)",
+      "Bash(taskkill /F /IM python.exe)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill.exe *)",
+      "Bash(git diff *)",
+      "Bash(git commit -m ' *)"
     ],
     "deny": [
       "Bash(rm -rf *)",
