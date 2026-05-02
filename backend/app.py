@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 import os
 
 from database import init_db
-from routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine
+from routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
 
 # 上传文件存储目录
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
@@ -27,6 +27,13 @@ async def lifespan(app: FastAPI):
     # 确保上传目录存在
     os.makedirs(os.path.join(UPLOAD_DIR, "images"), exist_ok=True)
     os.makedirs(os.path.join(UPLOAD_DIR, "models"), exist_ok=True)
+    # 设置事件循环给流式推理 WebSocket 管理器
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        ws_stream.stream_conn_manager.set_loop(loop)
+    except RuntimeError:
+        pass
     yield
 
 
@@ -58,6 +65,7 @@ app.include_router(launch.router, prefix="/api/launch", tags=["模型启动"])
 app.include_router(inference.router, prefix="/api/inference", tags=["模型测试"])
 app.include_router(rule_engine.router, tags=["规则引擎"])
 app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
+app.include_router(ws_stream.router, prefix="/ws", tags=["流式推理WebSocket"])
 
 # 挂载上传文件目录为静态文件服务
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")

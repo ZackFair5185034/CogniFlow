@@ -117,6 +117,17 @@ export const inferenceApi = {
       timeout: 30000, // 上传超时 30s，检测在后台进行
     })
   },
+  // 流式视频检测
+  detectVideoStream: (file: File, modelId: number, confThreshold: number = 0.25) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/inference/detect/video/stream?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60000, // 上传视频需要更长超时
+    })
+  },
+  // 停止流式推理
+  stopVideoStream: (jobId: string) => api.post(`/inference/detect/stop/${jobId}`),
   getVideoJobStatus: (jobId: string) => api.get(`/inference/video/status/${jobId}`),
   getVideoResultUrl: (jobId: string) => `/api/inference/video/result/${jobId}`,
   listTrainedModels: () => api.get('/inference/models'),
