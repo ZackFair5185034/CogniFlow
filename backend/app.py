@@ -93,6 +93,10 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 os.makedirs(INFERENCE_OUTPUT_DIR, exist_ok=True)
 app.mount("/inference_output", StaticFiles(directory=INFERENCE_OUTPUT_DIR), name="inference_output")
 
+# 挂载 Vue 前端静态文件（__file__ 在 /app/backend/app.py）
+_WEBUI_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "webui", "dist")
+app.mount("/", StaticFiles(directory=_WEBUI_DIST, html=True), name="frontend")
+
 
 @app.get("/")
 async def root():
