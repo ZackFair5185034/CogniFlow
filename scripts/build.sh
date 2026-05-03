@@ -1,6 +1,6 @@
 #!/bin/bash
 # CogniFlow 构建脚本 - Linux/macOS
-# 用法: ./scripts/build.sh [backend|frontend|all|docker|clean]
+# 用法: ./scripts/build.sh [backend|frontend|binary|all|docker|clean]
 #
 # 环境变量:
 #   USE_VENV=1           - 使用虚拟环境
@@ -167,6 +167,38 @@ build_docker() {
     log "运行: docker run -p 8000:8000 $IMAGE:$VERSION"
 }
 
+# ========== PyInstaller 原生二进制打包 ==========
+build_binary() {
+    log "========== PyInstaller 原生二进制打包 =========="
+
+    need $PYTHON_BIN
+    need $PIP_BIN
+
+    cd "$PROJECT_ROOT"
+
+    # 构建前端（二进制需要 dist/）
+    if [[ ! -d "$WEBUI_DIR/dist" ]]; then
+        log "前端 dist/ 不存在，先构建前端..."
+        build_frontend
+    fi
+
+    # 安装 PyInstaller
+    log "安装 PyInstaller..."
+    $PIP_BIN install pyinstaller pyinstaller-hooks-contrib
+
+    # 检查 spec 文件
+    if [[ ! -f cogniflow.spec ]]; then
+        err "未找到 cogniflow.spec，请确认项目完整性"
+    fi
+
+    # PyInstaller 打包
+    log "PyInstaller 打包中（这可能需要 5-10 分钟）..."
+    $PYTHON_BIN -m PyInstaller cogniflow.spec --clean --noconfirm
+
+    ok "原生二进制打包完成！"
+    log "输出: $PROJECT_ROOT/dist/cogniflow/"
+}
+
 # ========== 全量构建（后端 + 前端）==========
 build_all() {
     log "========== 全量构建 =========="
@@ -213,6 +245,7 @@ help() {
     echo "命令:"
     echo "  backend   构建后端（+ 可选 Cython 编译）"
     echo "  frontend  构建前端"
+    echo "  binary    使用 PyInstaller 打包原生二进制（Linux/macOS 可执行文件）"
     echo "  all       构建后端 + 前端"
     echo "  docker    构建 Docker 镜像"
     echo "  clean     清理构建产物"
@@ -236,6 +269,7 @@ CMD="${1:-help}"
 case "$CMD" in
     backend)  build_backend ;;
     frontend) build_frontend ;;
+    binary)   build_binary ;;
     all)      build_all ;;
     docker)   build_docker ;;
     clean)    clean ;;

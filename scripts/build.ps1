@@ -73,9 +73,9 @@ function Build-Backend {
 
     # 打包
     Log "PyInstaller 打包中（这可能需要 5-10 分钟）..."
-    $env:PYINSTALLER_OPTS = $env:PYINSTALLER_OPTS ?? ""
+    $env:PYINSTALLER_OPTS = if ($env:PYINSTALLER_OPTS) { $env:PYINSTALLER_OPTS } else { "" }
 
-    & pyinstaller cogniflow.spec --clean --noconfirm $env:PYINSTALLER_OPTS.Split(" ")
+    & python -m PyInstaller cogniflow.spec --clean --noconfirm $env:PYINSTALLER_OPTS.Split(" ")
 
     if ($LASTEXITCODE -ne 0) {
         Err "PyInstaller 打包失败"
@@ -96,67 +96,7 @@ function Build-Backend {
 }
 
 # ========== 生成 PyInstaller spec 内容 ==========
-function Make-SpecContent {
-    @"
-# CogniFlow PyInstaller Spec File
-# -*- coding: utf-8 -*-
-
-block_cipher = None
-
-a = Analysis(
-    ['backend/app.py'],
-    pathex=[],
-    binaries=[],
-    datas=[
-        ('uploads', 'uploads'),
-    ],
-    hiddenimports=[
-        'uvicorn',
-        'fastapi',
-        'pydantic',
-        'sqlalchemy',
-        'aiosqlite',
-        'torch',
-        'torchvision',
-        'ultralytics',
-        'cv2',
-        'PIL',
-        'numpy',
-    ],
-    hookspath=[],
-    hooksconfig={},
-    runtime_hooks=[],
-    excludes=[],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
-    cipher=block_cipher,
-    noarchive=False,
-)
-
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
-    name='cogniflow',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=True,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=None,
-)
-"@
-}
+function Make-SpecContent {}
 
 # ========== 前端构建 ==========
 function Build-Frontend {
@@ -234,7 +174,7 @@ function Clear-Build {
 # ========== 帮助 ==========
 function Show-Help {
     Write-Host @"
-${GREEN}CogniFlow 构建脚本 (Windows)${NC}
+CogniFlow 构建脚本 (Windows)
 
 用法: .\scripts\build.ps1 <命令>
 
@@ -255,7 +195,7 @@ ${GREEN}CogniFlow 构建脚本 (Windows)${NC}
   .\build.ps1 frontend   # 前端
 
 输出:
-  exe:  dist\backend\cogniflow.exe
+  exe:  dist\cogniflow\cogniflow.exe
   前端: webui\dist
 
 "@
