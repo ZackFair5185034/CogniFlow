@@ -9,8 +9,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
-from database import get_db, Model
-from schemas import ModelCreate, ModelUpdate, ModelResponse
+from backend.database import get_db, Model
+from backend.schemas import ModelCreate, ModelUpdate, ModelResponse
 
 router = APIRouter()
 
@@ -209,7 +209,7 @@ async def upload_model_file(
 @router.get("/{model_id}/training-history")
 async def get_model_training_history(model_id: int, db: Session = Depends(get_db)):
     """获取模型的训练历史。"""
-    from database import TrainingJob
+    from backend.database import TrainingJob
 
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:

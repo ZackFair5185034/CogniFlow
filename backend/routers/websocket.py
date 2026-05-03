@@ -5,7 +5,7 @@
 """
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from websocket_manager import ws_manager
+from backend.websocket_manager import ws_manager
 
 router = APIRouter()
 

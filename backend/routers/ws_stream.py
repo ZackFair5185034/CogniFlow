@@ -13,7 +13,7 @@ from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
-from utils.frame_buffer import stream_job_manager, FrameBuffer
+from backend.utils.frame_buffer import stream_job_manager, FrameBuffer
 
 router = APIRouter()
 

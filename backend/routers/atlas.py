@@ -12,9 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from PIL import Image as PILImage
 
-from database import get_db, Atlas, Image
-from schemas import AtlasCreate, AtlasUpdate, AtlasResponse
-from utils.frame_extract_manager import frame_extract_manager
+from backend.database import get_db, Atlas, Image
+from backend.schemas import AtlasCreate, AtlasUpdate, AtlasResponse
+from backend.utils.frame_extract_manager import frame_extract_manager
 
 router = APIRouter()
 
@@ -438,7 +438,7 @@ def _extract_frames_background(
 ):
     """后台线程执行帧提取（内部函数，供 threadPoolExecutor 调用）。"""
     import cv2
-    from database import SessionLocal
+    from backend.database import SessionLocal
 
     db = SessionLocal()
     frames_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), f"video_{job_id}")

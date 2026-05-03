@@ -7,8 +7,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from database import get_db, Category
-from schemas import CategoryCreate, CategoryUpdate, CategoryResponse
+from backend.database import get_db, Category
+from backend.schemas import CategoryCreate, CategoryUpdate, CategoryResponse
 
 router = APIRouter()
 

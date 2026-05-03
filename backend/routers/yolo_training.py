@@ -135,7 +135,7 @@ def export_to_yolo_format(atlas_id: int, db: Session, output_dir: str) -> Dict:
     Returns:
         导出统计信息
     """
-    from database import Image, Annotation, Category
+    from backend.database import Image, Annotation, Category
 
     # 创建目录结构
     images_dir = Path(output_dir) / "images"

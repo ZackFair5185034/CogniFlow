@@ -13,8 +13,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
 
-from database import init_db
-from routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
+from backend.database import init_db
+from backend.routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
 
 # 统一数据目录（所有持久化数据都放这里）
 # 本地开发: ./data, Docker: /app/data

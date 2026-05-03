@@ -66,17 +66,14 @@ COPY backend/ ./backend/
 # 复制前端构建产物（到 /app/webui/dist/）
 COPY --from=frontend-builder /app/frontend/dist ./webui/dist
 
-# 创建数据目录结构（运行时由 docker volume 持久化）
-RUN mkdir -p /app/data/{data,uploads/images,uploads/videos,uploads/models,inference_output,model_cache,checkpoints,datasets,runs,logs}
-
 # 环境变量
 ENV PYTHONUNBUFFERED=1
 ENV LOG_LEVEL=INFO
 ENV DATA_DIR=/app/data
 ENV PYTHONPATH=/app
 
-# 切换到非 root 用户
-USER cogniflow
+# 切换到 root（开发环境简化权限处理）
+# USER cogniflow
 
 # 暴露端口
 EXPOSE 8000 5173

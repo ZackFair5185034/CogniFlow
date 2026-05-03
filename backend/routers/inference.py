@@ -11,8 +11,8 @@ from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.orm import Session
 
-from database import get_db, Model
-from utils.frame_buffer import stream_job_manager
+from backend.database import get_db, Model
+from backend.utils.frame_buffer import stream_job_manager
 
 router = APIRouter()
 
@@ -48,7 +48,7 @@ async def detect_image(
         shutil.copyfileobj(file.file, buffer)
 
     try:
-        from routers.yolo_training import load_yolo_model, inference_yolo
+        from backend.routers.yolo_training import load_yolo_model, inference_yolo
 
         detector = load_yolo_model(model.file_path)
         result = inference_yolo(detector, str(file_path), conf_threshold)
@@ -137,8 +137,8 @@ def process_video_stream_background(
     """
     import cv2
     import time
-    from utils.frame_buffer import FrameResult
-    from routers.yolo_training import load_yolo_model
+    from backend.utils.frame_buffer import FrameResult
+    from backend.routers.yolo_training import load_yolo_model
 
     frame_buffer = stream_job_manager.get_job_frame_buffer(job_id)
     if frame_buffer is None:

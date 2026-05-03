@@ -15,9 +15,9 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from database import get_db, TrainingJob, Model, Atlas
-from schemas import TrainingJobCreate, TrainingJobResponse
-from websocket_manager import ws_manager
+from backend.database import get_db, TrainingJob, Model, Atlas
+from backend.schemas import TrainingJobCreate, TrainingJobResponse
+from backend.websocket_manager import ws_manager
 
 router = APIRouter()
 
@@ -62,7 +62,7 @@ async def list_training_jobs(db: Session = Depends(get_db)):
 @router.get("/device-info")
 async def get_device_info():
     """获取可用训练设备信息。"""
-    from routers.yolo_training import check_gpu_available
+    from backend.routers.yolo_training import check_gpu_available
     return check_gpu_available()
 
 
@@ -120,7 +120,7 @@ async def _yolo_training(job_id: int, total_steps: int, model_id: int, atlas_id:
     job = None
 
     try:
-        from database import SessionLocal
+        from backend.database import SessionLocal
         db = SessionLocal()
 
         job = db.query(TrainingJob).filter(TrainingJob.id == job_id).first()
@@ -149,7 +149,7 @@ async def _yolo_training(job_id: int, total_steps: int, model_id: int, atlas_id:
         dataset_dir.mkdir(parents=True, exist_ok=True)
 
         # 导出数据到 YOLO 格式
-        from routers.yolo_training import export_to_yolo_format
+        from backend.routers.yolo_training import export_to_yolo_format
         export_result = export_to_yolo_format(atlas_id, db, str(dataset_dir))
 
         print(f"[YOLO训练] 数据导出完成: {export_result['exported']} 张图片, {export_result['num_classes']} 个类别")
@@ -184,7 +184,7 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
 
         # 获取模型的预训练模型配置（如果config中没有）
         if pretrained_model == 'yolov8n.pt' and model_id:
-            from database import Model
+            from backend.database import Model
             model_record = db.query(Model).filter(Model.id == model_id).first()
             if model_record and model_record.pretrained_model:
                 pretrained_model = model_record.pretrained_model
@@ -203,7 +203,7 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
         _stop_event.clear()
 
         # 训练 YOLO 模型（在独立线程中运行以避免阻塞事件循环）
-        from routers.yolo_training import train_yolo
+        from backend.routers.yolo_training import train_yolo
         model_save_path = CHECKPOINT_DIR / f"model_{model_id}_{timestamp}"
         model_save_path.mkdir(parents=True, exist_ok=True)
 
@@ -223,7 +223,7 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
             # 训练完成后的回调，在线程中执行数据库更新
             def on_complete(result):
                 global _current_training_progress
-                from database import SessionLocal, Model
+                from backend.database import SessionLocal, Model
                 from datetime import datetime as dt
                 import json as json_module
 
@@ -335,7 +335,7 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
                 })
 
                 # 更新任务状态为失败
-                from database import SessionLocal, Model
+                from backend.database import SessionLocal, Model
                 from datetime import datetime as dt
                 import json as json_module
 
