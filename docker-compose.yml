@@ -16,9 +16,7 @@ services:
         PYTHON_VERSION: "3.10"
     container_name: cogniflow-app
     restart: unless-stopped
-    ports:
-      - "8000:8000"    # 后端 API
-      - "5173:5173"    # 前端开发服务器（仅开发模式）
+    network_mode: host
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -44,8 +42,7 @@ services:
         PYTHON_VERSION: "3.10"
     container_name: cogniflow-app-gpu
     restart: unless-stopped
-    ports:
-      - "8001:8000"
+    network_mode: host
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -69,9 +66,7 @@ services:
       dockerfile: Dockerfile.dev
     container_name: cogniflow-app-dev
     restart: unless-stopped
-    ports:
-      - "8000:8000"
-      - "5173:5173"
+    network_mode: host
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=DEBUG
