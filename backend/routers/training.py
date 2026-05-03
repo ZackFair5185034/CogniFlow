@@ -31,8 +31,10 @@ _progress_lock = threading.Lock()  # 进度更新锁
 # 当前训练进度（供轮询使用）
 _current_training_progress = {"job_id": None, "epoch": 0, "total_epochs": 0, "status": "idle"}
 
-# 检查点保存目录
-CHECKPOINT_DIR = Path("./checkpoints")
+# 检查点保存目录（统一使用 DATA_DIR）
+_DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
+CHECKPOINT_DIR = Path(os.path.join(_DATA_DIR, "checkpoints"))
+CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @router.get("/jobs", response_model=List[TrainingJobResponse])
@@ -140,9 +142,9 @@ async def _yolo_training(job_id: int, total_steps: int, model_id: int, atlas_id:
             "message": "准备数据集..."
         })
 
-        # 创建临时数据集目录
+        # 创建临时数据集目录（统一到 DATA_DIR/datasets/ 下）
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        dataset_dir = Path(f"./datasets/yolo_atlas_{atlas_id}_{timestamp}")
+        dataset_dir = Path(os.path.join(_DATA_DIR, "datasets", f"yolo_atlas_{atlas_id}_{timestamp}"))
         dataset_dir.mkdir(parents=True, exist_ok=True)
 
         # 导出数据到 YOLO 格式

@@ -16,17 +16,36 @@ import os
 from database import init_db
 from routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
 
+# 统一数据目录（所有持久化数据都放这里）
+DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
+
 # 上传文件存储目录
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
+MODEL_DIR = os.path.join(UPLOAD_DIR, "models")
+
+# 推理输出目录
+INFERENCE_OUTPUT_DIR = os.path.join(DATA_DIR, "inference_output")
+
+# 日志目录
+LOGS_DIR = os.path.join(DATA_DIR, "logs")
+
+# YOLO 训练输出目录（YOLO 默认 runs/detect/，我们统一放这里）
+YOLO_RUNS_DIR = os.path.join(DATA_DIR, "runs")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理。"""
-    init_db()
-    # 确保上传目录存在
+    # 确保所有数据目录存在
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(os.path.join(UPLOAD_DIR, "images"), exist_ok=True)
-    os.makedirs(os.path.join(UPLOAD_DIR, "models"), exist_ok=True)
+    os.makedirs(os.path.join(UPLOAD_DIR, "videos"), exist_ok=True)
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    os.makedirs(INFERENCE_OUTPUT_DIR, exist_ok=True)
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    os.makedirs(YOLO_RUNS_DIR, exist_ok=True)
+
+    init_db()
     # 设置事件循环给流式推理 WebSocket 管理器
     import asyncio
     try:
@@ -71,7 +90,6 @@ app.include_router(ws_stream.router, prefix="/ws", tags=["流式推理WebSocket"
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # 挂载推理输出目录为静态文件服务
-INFERENCE_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "inference_output")
 os.makedirs(INFERENCE_OUTPUT_DIR, exist_ok=True)
 app.mount("/inference_output", StaticFiles(directory=INFERENCE_OUTPUT_DIR), name="inference_output")
 

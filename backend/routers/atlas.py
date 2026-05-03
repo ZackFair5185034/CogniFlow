@@ -18,10 +18,13 @@ from utils.frame_extract_manager import frame_extract_manager
 
 router = APIRouter()
 
+# 统一数据目录（与 app.py 保持一致）
+_DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
+
 # 图片存储根目录
-IMAGE_STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "uploads", "images")
+IMAGE_STORAGE_DIR = os.path.join(_DATA_DIR, "uploads", "images")
 # 视频存储根目录
-VIDEO_STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "uploads", "videos")
+VIDEO_STORAGE_DIR = os.path.join(_DATA_DIR, "uploads", "videos")
 
 
 def get_image_storage_path(atlas_id: int, filename: str) -> tuple[str, str]:

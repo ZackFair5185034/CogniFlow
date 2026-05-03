@@ -89,8 +89,17 @@ COPY --from=backend-builder /usr/local/lib/python${PYTHON_VERSION}/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
 COPY backend/ ./backend/
 
-# 上传目录（空目录，用于用户数据持久化）
-COPY uploads/ ./uploads/
+# 运行时用户数据目录（由 docker volume 持久化）
+RUN mkdir -p /app/data/uploads/images \
+             /app/data/uploads/videos \
+             /app/data/uploads/models \
+             /app/data/inference_output \
+             /app/data/model_cache \
+             /app/data/checkpoints \
+             /app/data/datasets \
+             /app/data/runs \
+             /app/data/logs \
+             /app/data/data
 
 # 复制前端构建产物
 COPY --from=frontend-builder /app/frontend/dist ./webui/dist

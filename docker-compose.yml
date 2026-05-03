@@ -23,13 +23,10 @@ services:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKERS=1
+      - DATA_DIR=/app/data
     volumes:
-      # 挂载上传目录（持久化用户数据）
-      - cogniflow-uploads:/app/uploads
-      # 挂载检查点目录（持久化模型权重）
-      - cogniflow-checkpoints:/app/checkpoints
-      # 挂载日志目录
-      - cogniflow-logs:/app/logs
+      # 统一数据卷（所有持久化数据）
+      - cogniflow-data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
       interval: 30s
@@ -52,10 +49,9 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DATA_DIR=/app/data
     volumes:
-      - cogniflow-uploads:/app/uploads
-      - cogniflow-checkpoints:/app/checkpoints
-      - cogniflow-logs:/app/logs
+      - cogniflow-data:/app/data
     deploy:
       resources:
         reservations:
@@ -80,21 +76,18 @@ services:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=DEBUG
       - DEV_MODE=true
+      - DATA_DIR=/app/data
     volumes:
+      # 源码挂载（开发时实时修改）
       - ./backend:/app/backend
       - ./engine:/app/engine
       - ./webui:/app/webui
-      - ./uploads:/app/uploads
-      - cogniflow-checkpoints:/app/checkpoints
-      - cogniflow-logs:/app/logs
+      # 数据目录（持久化）
+      - cogniflow-data:/app/data
     profiles:
       - dev  # 需要手动: docker compose --profile dev up
 
 # ========== 数据卷 ==========
 volumes:
-  cogniflow-uploads:
-    driver: local
-  cogniflow-checkpoints:
-    driver: local
-  cogniflow-logs:
+  cogniflow-data:
     driver: local

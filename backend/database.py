@@ -181,7 +181,11 @@ class NodeExecutionLog(Base):
 
 
 # 数据库引擎和会话
-DATABASE_URL = "sqlite:///./engine.db"
+import os
+
+DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
+os.makedirs(os.path.join(DATA_DIR, "data"), exist_ok=True)
+DATABASE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'data', 'engine.db')}"
 
 engine = create_engine(
     DATABASE_URL,

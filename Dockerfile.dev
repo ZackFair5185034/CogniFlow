@@ -43,10 +43,13 @@ RUN pnpm install
 # 回到项目根目录
 WORKDIR /app
 
+# 创建数据目录结构（运行时由 docker volume 持久化）
+RUN mkdir -p /app/data/{data,uploads/images,uploads/videos,uploads/models,inference_output,model_cache,checkpoints,datasets,runs,logs}
+
 EXPOSE 8000 5173
 
 # 启动命令：后端热重载 + 前端开发服务器
-# 后端用 uvicorn --reload，前端用 vite
+# DATA_DIR 默认 /app/data（docker-compose 中已挂载卷）
 CMD ["sh", "-c", "uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload & \
      cd webui && pnpm dev --host 0.0.0.0 --port 5173 & \
      wait"]
