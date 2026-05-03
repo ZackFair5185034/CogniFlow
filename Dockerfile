@@ -10,7 +10,7 @@ ARG TARGET=cpu
 ARG PYTHON_VERSION=3.10
 
 # ========== 阶段1: 前端构建 ==========
-FROM node:18-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -36,11 +36,11 @@ WORKDIR /app
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libgomp1 \
     ffmpeg \
     git \
@@ -70,11 +70,11 @@ LABEL description="CogniFlow - 通用视觉感知处理框架"
 
 # 安装运行时依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libgomp1 \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
