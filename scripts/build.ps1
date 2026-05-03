@@ -62,9 +62,7 @@ function Build-Backend {
     & pip install --upgrade pip
     & pip install -r requirements.txt
 
-    # 安装 engine 包
-    Log-Info "安装 CogniFlow engine 包..."
-    & pip install -e .
+    # 注意：不安装 engine 源码包，只安装运行时依赖
 
     Log-Success "后端构建完成！"
 }

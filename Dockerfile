@@ -61,11 +61,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     fi && \
     pip install --no-cache-dir -r requirements.txt
 
-# 安装 engine 包
-COPY setup.py .
-COPY engine/ ./engine/
-RUN pip install --no-cache-dir -e .
-
+# engine 已通过 requirements.txt 安装，无需复制源码
 # ========== 阶段3: 运行镜像 ==========
 FROM python:${PYTHON_VERSION}-slim AS runtime
 
@@ -88,13 +84,13 @@ RUN groupadd -r cogniflow && useradd -r -g cogniflow cogniflow
 
 WORKDIR /app
 
-# 复制后端代码
+# 复制后端代码（仅 backend/，无源码泄露）
 COPY --from=backend-builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
 COPY --from=backend-builder /usr/local/bin /usr/local/bin
 COPY backend/ ./backend/
-COPY engine/ ./engine/
+
+# 上传目录（空目录，用于用户数据持久化）
 COPY uploads/ ./uploads/
-COPY docs/ ./docs/
 
 # 复制前端构建产物
 COPY --from=frontend-builder /app/frontend/dist ./webui/dist

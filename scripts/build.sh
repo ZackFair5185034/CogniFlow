@@ -66,9 +66,7 @@ build_backend() {
     $PIP_BIN install --upgrade pip
     $PIP_BIN install -r requirements.txt
 
-    # 安装 engine 包（开发模式）
-    log_info "安装 CogniFlow engine 包..."
-    $PIP_BIN install -e .
+    # 注意：不安装 engine 源码包，只安装运行时依赖
 
     log_success "后端构建完成！"
 }
