@@ -73,6 +73,7 @@ RUN mkdir -p /app/data/{data,uploads/images,uploads/videos,uploads/models,infere
 ENV PYTHONUNBUFFERED=1
 ENV LOG_LEVEL=INFO
 ENV DATA_DIR=/app/data
+ENV PYTHONPATH=/app
 
 # 切换到非 root 用户
 USER cogniflow
