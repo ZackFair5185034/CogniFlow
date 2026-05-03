@@ -1,41 +1,42 @@
-# CogniFlow Dockerfile
-# 支持 CPU 和 GPU (CUDA) 构建
+# CogniFlow Dockerfile - 单阶段构建 + pip 缓存
+# 支持 CPU / GPU (CUDA)
+#
+# 构建参数:
+#   TARGET=cpu|gpu
+#   PYTHON_VERSION=3.10
+#
+# 构建示例:
+#   docker build -t cogniflow/cogniflow:latest-cpu --build-arg TARGET=cpu .
+#   docker build -t cogniflow/cogniflow:latest-gpu --build-arg TARGET=gpu .
 
-# ========== 构建参数 ==========
-# 构建时传入: docker build --build-arg TARGET=cpu ..
-# TARGET: cpu | gpu
 ARG TARGET=cpu
-
-# Python 版本
 ARG PYTHON_VERSION=3.10
 
-# ========== 阶段1: 前端构建 ==========
+# ========== 前端构建阶段 ==========
 FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
-# 复制前端代码
 COPY webui/package*.json ./
-
-# 安装 pnpm
 RUN npm install -g pnpm
-
-# 安装依赖
 RUN pnpm install
 
-# 复制源码
 COPY webui/ ./
-
-# 构建前端
 RUN pnpm run build
 
-# ========== 阶段2: 后端构建 ==========
-FROM python:${PYTHON_VERSION}-slim AS backend-builder
+# ========== 运行阶段 ==========
+FROM python:${PYTHON_VERSION}-slim
+
+LABEL maintainer="CogniFlow Team"
+LABEL description="CogniFlow - 通用视觉感知处理框架"
 
 WORKDIR /app
 
+# 先复制 requirements.txt（需要它在 pip install 之前存在）
+COPY requirements.txt .
+
 # 安装系统依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     libsm6 \
@@ -43,17 +44,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     libgomp1 \
     ffmpeg \
-    git \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制 requirements.txt
-COPY requirements.txt .
-
-# 安装 Python 依赖（CPU 版 PyTorch）
-ARG TARGET
-ENV TARGET=${TARGET}
-
-RUN pip install --no-cache-dir --upgrade pip && \
+# 安装 Python 依赖（使用 buildkit cache 加速后续构建）
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir --upgrade pip && \
     if [ "$TARGET" = "gpu" ]; then \
         pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu118; \
     else \
@@ -61,83 +57,32 @@ RUN pip install --no-cache-dir --upgrade pip && \
     fi && \
     pip install --no-cache-dir -r requirements.txt
 
-# engine 已通过 requirements.txt 安装，无需复制源码
-# ========== 阶段3: 运行镜像 ==========
-FROM python:${PYTHON_VERSION}-slim AS runtime
-
-LABEL maintainer="CogniFlow Team"
-LABEL description="CogniFlow - 通用视觉感知处理框架"
-
-# 安装运行时依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    libgomp1 \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
 # 创建非 root 用户
 RUN groupadd -r cogniflow && useradd -r -g cogniflow cogniflow
 
-WORKDIR /app
-
-# 复制后端代码（仅 backend/，无源码泄露）
-COPY --from=backend-builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
-COPY --from=backend-builder /usr/local/bin /usr/local/bin
+# 复制后端代码
 COPY backend/ ./backend/
 
-# 运行时用户数据目录（由 docker volume 持久化）
-RUN mkdir -p /app/data/uploads/images \
-             /app/data/uploads/videos \
-             /app/data/uploads/models \
-             /app/data/inference_output \
-             /app/data/model_cache \
-             /app/data/checkpoints \
-             /app/data/datasets \
-             /app/data/runs \
-             /app/data/logs \
-             /app/data/data
+# 创建数据目录结构（运行时由 docker volume 持久化）
+RUN mkdir -p /app/data/{data,uploads/images,uploads/videos,uploads/models,inference_output,model_cache,checkpoints,datasets,runs,logs}
 
 # 复制前端构建产物
 COPY --from=frontend-builder /app/frontend/dist ./webui/dist
 
-# 暴露端口
-EXPOSE 8000 5173
-
 # 环境变量
 ENV PYTHONUNBUFFERED=1
 ENV LOG_LEVEL=INFO
+ENV DATA_DIR=/app/data
 
 # 切换到非 root 用户
 USER cogniflow
+
+# 暴露端口
+EXPOSE 8000 5173
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" || exit 1
 
 # 启动命令
-# 默认启动后端（前端静态文件由后端托管）
 CMD ["python", "-m", "uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
-
-# ========== 多架构支持说明 ==========
-# 构建示例:
-#
-#   # CPU 版本
-#   docker build -t cogniflow/cogniflow:latest-cpu --build-arg TARGET=cpu .
-#
-#   # GPU 版本 (需要 CUDA)
-#   docker build -t cogniflow/cogniflow:latest-gpu --build-arg TARGET=gpu .
-#
-#   # 推送到 Docker Hub
-#   docker push cogniflow/cogniflow:latest-cpu
-#   docker push cogniflow/cogniflow:latest-gpu
-#
-#   # 多架构构建 (需要 docker buildx)
-#   docker buildx create --use
-#   docker buildx build --platform linux/amd64,linux/arm64 \
-#       -t cogniflow/cogniflow:latest \
-#       --build-arg TARGET=cpu \
-#       --push .
