@@ -32,7 +32,8 @@ _progress_lock = threading.Lock()  # 进度更新锁
 _current_training_progress = {"job_id": None, "epoch": 0, "total_epochs": 0, "status": "idle"}
 
 # 检查点保存目录（统一使用 DATA_DIR）
-_DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
+_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+_DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
 CHECKPOINT_DIR = Path(os.path.join(_DATA_DIR, "checkpoints"))
 CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 

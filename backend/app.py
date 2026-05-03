@@ -17,7 +17,9 @@ from database import init_db
 from routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
 
 # 统一数据目录（所有持久化数据都放这里）
-DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
+# 本地开发: ./data, Docker: /app/data
+_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
 
 # 上传文件存储目录
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
@@ -87,21 +89,28 @@ app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
 app.include_router(ws_stream.router, prefix="/ws", tags=["流式推理WebSocket"])
 
 # 挂载上传文件目录为静态文件服务
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_DIR, "images"), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_DIR, "videos"), exist_ok=True)
+os.makedirs(MODEL_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # 挂载推理输出目录为静态文件服务
 os.makedirs(INFERENCE_OUTPUT_DIR, exist_ok=True)
 app.mount("/inference_output", StaticFiles(directory=INFERENCE_OUTPUT_DIR), name="inference_output")
 
-# 挂载 Vue 前端静态文件（__file__ 在 /app/backend/app.py）
+# 挂载 Vue 前端静态文件（开发时若无 dist 目录则跳过）
 _WEBUI_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "webui", "dist")
-app.mount("/", StaticFiles(directory=_WEBUI_DIST, html=True), name="frontend")
+if os.path.exists(_WEBUI_DIST):
+    app.mount("/", StaticFiles(directory=_WEBUI_DIST, html=True), name="frontend")
 
 
 @app.get("/")
 async def root():
     """根路径重定向到前端。"""
-    return RedirectResponse(url="/index.html")
+    if os.path.exists(_WEBUI_DIST):
+        return RedirectResponse(url="/index.html")
+    return {"message": "CogniFlow API running", "docs": "/docs"}
 
 
 @app.get("/api/health")

@@ -183,9 +183,10 @@ class NodeExecutionLog(Base):
 # 数据库引擎和会话
 import os
 
-DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
-os.makedirs(os.path.join(DATA_DIR, "data"), exist_ok=True)
-DATABASE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'data', 'engine.db')}"
+_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
+os.makedirs(os.path.join(DATA_DIR, "database"), exist_ok=True)
+DATABASE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'database', 'engine.db')}"
 
 engine = create_engine(
     DATABASE_URL,
