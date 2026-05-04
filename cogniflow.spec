@@ -1,23 +1,85 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_submodules
+try:
+    from PyInstaller.hooks.hookutils import collect_data_files
+except ImportError:
+    from PyInstaller.utils.hooks import collect_data_files
 
-datas = [('webui/dist', 'webui/dist'), ('engine/config/default.yaml', 'engine/config')]
+datas = [('webui/dist', 'webui/dist')]
 binaries = []
-hiddenimports = ['uvicorn.logging', 'uvicorn.loops', 'uvicorn.protocols', 'uvicorn.lifespan', 'python_multipart']
-tmp_ret = collect_all('uvicorn')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('fastapi')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('sqlalchemy')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('ultralytics')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('torch')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('cv2')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('PIL')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+hiddenimports = [
+    # FastAPI 核心
+    'fastapi',
+    'fastapi.applications',
+    'fastapi.runtime',
+    'starlette',
+    'starlette.applications',
+    'starlette.routing',
+    'starlette.middleware',
+    'starlette.responses',
+    'starlette.staticfiles',
+    'python_multipart',
+    # Uvicorn
+    'uvicorn',
+    'uvicorn.logging',
+    'uvicorn.loops',
+    'uvicorn.loops.auto',
+    'uvicorn.protocols',
+    'uvicorn.protocols.http',
+    'uvicorn.protocols.http.auto',
+    'uvicorn.protocols.websockets',
+    'uvicorn.protocols.websockets.auto',
+    'uvicorn.lifespan',
+    'uvicorn.lifespan.on',
+    # SQLAlchemy
+    'sqlalchemy',
+    'sqlalchemy.orm',
+    'sqlalchemy.ext',
+    'sqlalchemy.ext.declarative',
+    # OpenCV
+    'cv2',
+    # PIL
+    'PIL',
+    'PIL.Image',
+    # Ultralytics
+    'ultralytics',
+    'ultralytics.models',
+    'ultralytics.utils',
+    # Torch
+    'torch',
+    'torch.nn',
+    # 后端模块
+    'backend.database',
+    'backend.schemas',
+    'backend.websocket_manager',
+    'backend.routers.atlas',
+    'backend.routers.image',
+    'backend.routers.annotation',
+    'backend.routers.category',
+    'backend.routers.model',
+    'backend.routers.training',
+    'backend.routers.launch',
+    'backend.routers.inference',
+    'backend.routers.websocket',
+    'backend.routers.ws_stream',
+    'backend.routers.rule_engine',
+]
+
+# 收集子模块
+for pkg in ['fastapi', 'starlette', 'uvicorn', 'sqlalchemy', 'PIL', 'cv2', 'ultralytics']:
+    try:
+        submods = collect_submodules(pkg)
+        hiddenimports.extend(submods)
+    except Exception:
+        pass
+
+# 收集数据文件
+for pkg in ['fastapi', 'starlette', 'uvicorn']:
+    try:
+        tmp = collect_data_files(pkg)
+        datas.extend(tmp)
+    except Exception:
+        pass
 
 
 a = Analysis(

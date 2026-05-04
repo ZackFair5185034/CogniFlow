@@ -176,15 +176,31 @@ build_binary() {
 
     cd "$PROJECT_ROOT"
 
+    # 使用虚拟环境隔离依赖
+    if [[ "${USE_VENV:-1}" == "1" ]]; then
+        log "创建/更新虚拟环境..."
+        [[ ! -d "venv" ]] && $PYTHON_BIN -m venv venv
+        source venv/bin/activate
+        PYTHON_BIN="python"; PIP_BIN="pip"
+    fi
+
     # 构建前端（二进制需要 dist/）
     if [[ ! -d "$WEBUI_DIR/dist" ]]; then
         log "前端 dist/ 不存在，先构建前端..."
         build_frontend
     fi
 
-    # 安装 PyInstaller
+    # 安装项目依赖（避免 PyInstaller 打包时缺模块）
+    log "安装项目依赖到虚拟环境..."
+    $PIP_BIN install --upgrade pip
+    $PIP_BIN install -r requirements.txt
+
+    # 安装 PyInstaller 及常用隐藏导入依赖
     log "安装 PyInstaller..."
-    $PIP_BIN install pyinstaller pyinstaller-hooks-contrib
+    $PIP_BIN install pyinstaller pyinstaller-hooks-contrib \
+        fastapi uvicorn starlette python-multipart sqlalchemy \
+        pillow numpy opencv-python-headless psutil pyyaml \
+        mss pyautogui ffmpeg-python pygetwindow aiosqlite
 
     # 检查 spec 文件
     if [[ ! -f cogniflow.spec ]]; then
