@@ -193,6 +193,8 @@ build_binary() {
     # 安装项目依赖（避免 PyInstaller 打包时缺模块）
     log "安装项目依赖到虚拟环境..."
     $PIP_BIN install --upgrade pip
+    # CPU-only torch（避免下载数 GB 的 CUDA 依赖）
+    $PIP_BIN install torch torchvision --index-url https://download.pytorch.org/whl/cpu
     $PIP_BIN install -r requirements.txt
 
     # 安装 PyInstaller 及常用隐藏导入依赖

@@ -17,11 +17,20 @@ import sys
 import threading
 import ctypes
 
+# Windows 平台标识（定义在 import 之前，供条件导入使用）
+is_windows = sys.platform.startswith("win")
+
 from backend.database import init_db
 from backend.routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
 
-# 系统托盘支持
-from system_tray import TrayManager, open_browser
+# 系统托盘支持（仅 Windows）
+if is_windows:
+    from system_tray import TrayManager, open_browser
+else:
+    TrayManager = None
+    def open_browser(*args, **kwargs):  # type: ignore
+        """Linux 平台：空实现"""
+        pass
 
 # ===== 控制台管理（仅 Windows）=====
 _console_handler_cb = None  # 保持回调引用，防止被 GC
@@ -172,9 +181,6 @@ async def health_check():
 def start_with_tray() -> None:
     """启动应用并集成系统托盘（仅 Windows）。"""
     import uvicorn
-
-    # 判断是否为 Windows 平台
-    is_windows = sys.platform.startswith("win")
 
     # 注册控制台事件处理器（console=False 时无窗口，用于后续 AllocConsole 的窗口关闭处理）
     if is_windows:

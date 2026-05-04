@@ -1,15 +1,13 @@
 # CogniFlow Dockerfile - 单阶段构建 + pip 缓存
-# 支持 CPU / GPU (CUDA)
+# 仅支持 CPU 版本
+# GPU 版本暂未启用（构建参数保留，待后续开启）
 #
 # 构建参数:
-#   TARGET=cpu|gpu
 #   PYTHON_VERSION=3.10
 #
 # 构建示例:
-#   docker build -t cogniflow/cogniflow:latest-cpu --build-arg TARGET=cpu .
-#   docker build -t cogniflow/cogniflow:latest-gpu --build-arg TARGET=gpu .
+#   docker build -t cogniflow/cogniflow:latest .
 
-ARG TARGET=cpu
 ARG PYTHON_VERSION=3.10
 
 # ========== 前端构建阶段 ==========
@@ -48,13 +46,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 
 # 安装 Python 依赖（使用 buildkit cache 加速后续构建）
+# TODO: GPU 版本后续启用，取消注释并修改 torch 安装命令
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir --upgrade pip && \
-    if [ "$TARGET" = "gpu" ]; then \
-        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cu118; \
-    else \
-        pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu; \
-    fi && \
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir -r requirements.txt
 
 # 创建非 root 用户
