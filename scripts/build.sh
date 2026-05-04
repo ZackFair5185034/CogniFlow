@@ -147,20 +147,16 @@ build_docker() {
 
     cd "$PROJECT_ROOT"
 
-    local TARGET="${TARGET:-cpu}"
     local VERSION="${VERSION:-latest}"
     local IMAGE="${IMAGE_NAME:-cogniflow/cogniflow}"
 
-    log "目标: $IMAGE:$VERSION (TARGET=$TARGET)"
+    log "目标: $IMAGE:$VERSION"
 
     [[ ! -f Dockerfile ]] && err "未找到 Dockerfile"
 
     docker build \
-        --build-arg TARGET="$TARGET" \
         --build-arg PYTHON_VERSION=3.10 \
         -t "$IMAGE:$VERSION" \
-        -t "$IMAGE:${TARGET}-latest" \
-        -t "$IMAGE:latest" \
         .
 
     ok "Docker 镜像构建完成！"
@@ -193,6 +189,8 @@ build_binary() {
     # 安装项目依赖（避免 PyInstaller 打包时缺模块）
     log "安装项目依赖到虚拟环境..."
     $PIP_BIN install --upgrade pip
+    # CPU-only torch（避免下载数 GB 的 CUDA 依赖）
+    $PIP_BIN install torch torchvision --index-url https://download.pytorch.org/whl/cpu
     $PIP_BIN install -r requirements.txt
 
     # 安装 PyInstaller 及常用隐藏导入依赖
