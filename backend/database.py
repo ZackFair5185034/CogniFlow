@@ -183,6 +183,7 @@ class NodeExecutionLog(Base):
 # 数据库引擎和会话
 import os
 
+# 统一数据目录（所有持久化数据都放项目根目录下的 data/）
 _DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
 os.makedirs(os.path.join(DATA_DIR, "database"), exist_ok=True)
