@@ -5,6 +5,7 @@
 - REST API
 - WebSocket 实时通信
 - Vue3 前端静态文件托管
+- Windows 系统托盘支持
 """
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -12,9 +13,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
+import sys
+import threading
 
 from backend.database import init_db
 from backend.routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
+
+# 系统托盘支持
+from system_tray import TrayManager, open_browser
 
 # 统一数据目录（所有持久化数据都放这里）
 # 本地开发: ./data, Docker: /app/data
@@ -120,6 +126,36 @@ async def health_check():
     return {"status": "ok"}
 
 
-if __name__ == "__main__":
+def start_with_tray() -> None:
+    """启动应用并集成系统托盘（仅 Windows）。"""
     import uvicorn
+
+    # 判断是否为 Windows 平台
+    is_windows = sys.platform.startswith("win")
+
+    if is_windows:
+        # Windows 平台：启动托盘 + 自动打开浏览器
+        tray_manager = TrayManager()
+
+        # 在独立线程中启动托盘
+        tray_thread = threading.Thread(target=tray_manager.start, daemon=True)
+        tray_thread.start()
+
+        # 等待一小段时间确保托盘启动
+        import time
+        time.sleep(0.5)
+
+        # 自动打开浏览器
+        print("[CogniFlow] 正在打开浏览器...")
+        open_browser()
+    else:
+        # 非 Windows 平台：直接打开浏览器
+        open_browser()
+
+    # 启动 FastAPI 应用
+    print("[CogniFlow] 启动 WebUI 服务...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+if __name__ == "__main__":
+    start_with_tray()

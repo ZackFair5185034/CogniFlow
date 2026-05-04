@@ -63,6 +63,15 @@ hiddenimports = [
     'backend.routers.websocket',
     'backend.routers.ws_stream',
     'backend.routers.rule_engine',
+    # 系统托盘模块
+    'system_tray',
+    'system_tray.tray_manager',
+    'system_tray.browser',
+    # 托盘依赖
+    'pystray',
+    'PIL',
+    'PIL.Image',
+    'PIL.ImageDraw',
 ]
 
 # 收集子模块
