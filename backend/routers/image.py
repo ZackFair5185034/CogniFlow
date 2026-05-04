@@ -4,6 +4,7 @@
 提供图片的读取、删除和目录修改功能。
 """
 import os
+import shutil
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
@@ -13,6 +14,11 @@ from pydantic import BaseModel
 from backend.database import get_db, Image
 
 router = APIRouter()
+
+# 图片存储根目录（与 atlas.py 保持一致）
+_IMAGE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_IMAGE_DIR = os.path.join(_IMAGE_DIR, "data")
+IMAGE_STORAGE_DIR = os.path.join(_IMAGE_DIR, "uploads", "images")
 
 
 class BatchUpdateDirectoryRequest(BaseModel):
@@ -72,7 +78,29 @@ async def update_image_directory(image_id: int, directory: str, db: Session = De
     new_directory = directory if directory else None
     old_directory = image.directory
 
+    if new_directory == old_directory:
+        return {"message": "目录未变化", "image_id": image_id, "directory": new_directory}
+
+    # 计算旧文件路径和新文件路径
+    old_file_path = image.file_path
+    atlas_id = image.atlas_id
+    filename = os.path.basename(old_file_path)
+
+    if new_directory:
+        new_dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), new_directory)
+        new_file_path = os.path.join(new_dir_path, filename)
+    else:
+        new_dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id))
+        new_file_path = os.path.join(new_dir_path, filename)
+
+    # 移动物理文件
+    os.makedirs(new_dir_path, exist_ok=True)
+    if os.path.exists(old_file_path) and old_file_path != new_file_path:
+        shutil.move(old_file_path, new_file_path)
+
+    # 更新数据库记录
     image.directory = new_directory
+    image.file_path = new_file_path
     db.commit()
 
     print(f"[图片] 修改目录: image_id={image_id}, {old_directory} -> {new_directory}")
@@ -127,16 +155,42 @@ async def batch_update_directory(
         missing_ids = set(req.image_ids) - found_ids
         raise HTTPException(status_code=404, detail=f"部分图片不存在，缺失ID: {missing_ids}")
 
-    # 批量更新
+    # 批量移动文件并更新记录
+    moved = 0
+    errors = 0
     for image in images:
-        old_directory = image.directory
+        if new_directory == image.directory:
+            continue
+
+        atlas_id = image.atlas_id
+        filename = os.path.basename(image.file_path)
+
+        if new_directory:
+            new_dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), new_directory)
+            new_file_path = os.path.join(new_dir_path, filename)
+        else:
+            new_dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id))
+            new_file_path = os.path.join(new_dir_path, filename)
+
+        # 移动物理文件
+        if os.path.exists(image.file_path):
+            os.makedirs(new_dir_path, exist_ok=True)
+            try:
+                shutil.move(image.file_path, new_file_path)
+            except Exception:
+                errors += 1
+                continue
+
+        # 更新数据库记录
         image.directory = new_directory
-        print(f"[图片] 批量修改目录: image_id={image.id}, {old_directory} -> {new_directory}")
+        image.file_path = new_file_path
+        moved += 1
+        print(f"[图片] 批量修改目录: image_id={image.id}, {image.directory} -> {new_directory}")
 
     db.commit()
 
     return {
-        "message": f"成功修改 {len(images)} 张图片的目录",
+        "message": f"成功修改 {moved} 张图片的目录" + (f"，{errors} 张移动失败" if errors else ""),
         "image_ids": req.image_ids,
         "directory": new_directory,
     }
