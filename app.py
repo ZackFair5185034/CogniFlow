@@ -15,64 +15,35 @@ from fastapi.responses import RedirectResponse
 import os
 import sys
 import threading
-import ctypes
-
-# Windows 平台标识（定义在 import 之前，供条件导入使用）
-is_windows = sys.platform.startswith("win")
+import logging
+import logging.handlers
 
 from backend.database import init_db
 from backend.routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
 
-# 系统托盘支持（仅 Windows）
-if is_windows:
-    from system_tray import TrayManager, open_browser
-else:
-    TrayManager = None
-    def open_browser(*args, **kwargs):  # type: ignore
-        """Linux 平台：空实现"""
-        pass
-
-# ===== 控制台管理（仅 Windows）=====
-_console_handler_cb = None  # 保持回调引用，防止被 GC
-
-def _init_console():
-    """初始化控制台：阻止关闭窗口时退出。
-
-    console=False 时 PyInstaller 使用 pythonw 启动，无控制台窗口。
-    后续可通过托盘菜单 AllocConsole() 创建新控制台。
-    关闭该控制台窗口时，SetConsoleCtrlHandler 拦截信号，
-    调用 FreeConsole() 断开连接，程序不退出。
-    """
-    global _console_handler_cb
-    try:
-        kernel32 = ctypes.windll.kernel32
-
-        # 注册控制台事件处理器
-        HandlerRoutine = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_uint)
-        def _ctrl_handler(dwCtrlType):
-            if dwCtrlType == 0:  # CTRL_CLOSE_EVENT
-                kernel32.FreeConsole()
-                return True
-            return False
-
-        cb = HandlerRoutine(_ctrl_handler)
-        _console_handler_cb = cb
-        kernel32.SetConsoleCtrlHandler(cb, 1)
-    except Exception:
-        pass
+# 系统托盘支持
+from system_tray import TrayManager, open_browser
 
 
-def show_console_window():
-    """打开控制台窗口（供托盘菜单调用）。"""
-    try:
-        kernel32 = ctypes.windll.kernel32
-        # 如果已有控制台则显示，否则创建新控制台
-        kernel32.AllocConsole()
-        sys.stdout = open('CONOUT$', 'w')
-        sys.stderr = open('CONOUT$', 'w')
-        print("[CogniFlow] 控制台已打开，关闭窗口不会退出程序")
-    except Exception:
-        pass
+# ===== 日志配置 =====
+def _setup_logging():
+    """配置日志输出到文件。"""
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    log_file = os.path.join(LOGS_DIR, "cogniflow.log")
+
+    logger = logging.getLogger("cogniflow")
+    logger.setLevel(logging.INFO)
+
+    # 日志轮转：最大 5MB，保留 3 个备份
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_file, maxBytes=5*1024*1024, backupCount=3, encoding="utf-8"
+    )
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+
+    logger.addHandler(file_handler)
+    return logger
+
 
 # 统一数据目录（所有持久化数据都放这里）
 # 本地开发: ./data, Docker: /app/data
@@ -182,24 +153,30 @@ def start_with_tray() -> None:
     """启动应用并集成系统托盘（仅 Windows）。"""
     import uvicorn
 
-    # 注册控制台事件处理器（console=False 时无窗口，用于后续 AllocConsole 的窗口关闭处理）
-    if is_windows:
-        _init_console()
+    is_windows = sys.platform.startswith("win")
+
+    # 确保标准流有效（console=False 时 sys.stdout/sys.stderr 可能为 None，uvicorn 会崩溃）
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, 'w')
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, 'w')
+
+    # 配置日志（写入 data/logs/cogniflow.log）
+    logger = _setup_logging()
+    logger.info("CogniFlow 启动中...")
 
     # 用于存储 uvicorn 服务器实例
     server_config = {"server": None}
 
     def stop_server() -> None:
         """停止 uvicorn 服务器。"""
+        logger.info("正在关闭服务器...")
         if server_config["server"]:
             server_config["server"].should_exit = True
 
     if is_windows:
         # Windows 平台：启动托盘 + 自动打开浏览器
-        tray_manager = TrayManager(
-            on_quit_callback=stop_server,
-            on_show_console_callback=show_console_window,
-        )
+        tray_manager = TrayManager(on_quit_callback=stop_server)
 
         # 在独立线程中启动托盘
         tray_thread = threading.Thread(target=tray_manager.start, daemon=True)
@@ -210,18 +187,18 @@ def start_with_tray() -> None:
         time.sleep(0.5)
 
         # 自动打开浏览器
-        print("[CogniFlow] 正在打开浏览器...")
+        logger.info("正在打开浏览器...")
         open_browser()
+        logger.info("CogniFlow WebUI 已启动 http://localhost:8000")
 
-        # 启动 FastAPI 应用
-        print("[CogniFlow] 启动 WebUI 服务...")
-        config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
+        # 启动 FastAPI 应用（阻塞）
+        config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
         server_config["server"] = uvicorn.Server(config)
         server_config["server"].run()
     else:
-        # 非 Windows 平台：直接打开浏览器
+        # 非 Windows 平台：直接启动
         open_browser()
-        print("[CogniFlow] 启动 WebUI 服务...")
+        logger.info("CogniFlow WebUI 已启动 http://localhost:8000")
         uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
