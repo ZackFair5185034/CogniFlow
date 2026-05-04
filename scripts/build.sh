@@ -147,20 +147,16 @@ build_docker() {
 
     cd "$PROJECT_ROOT"
 
-    local TARGET="${TARGET:-cpu}"
     local VERSION="${VERSION:-latest}"
     local IMAGE="${IMAGE_NAME:-cogniflow/cogniflow}"
 
-    log "目标: $IMAGE:$VERSION (TARGET=$TARGET)"
+    log "目标: $IMAGE:$VERSION"
 
     [[ ! -f Dockerfile ]] && err "未找到 Dockerfile"
 
     docker build \
-        --build-arg TARGET="$TARGET" \
         --build-arg PYTHON_VERSION=3.10 \
         -t "$IMAGE:$VERSION" \
-        -t "$IMAGE:${TARGET}-latest" \
-        -t "$IMAGE:latest" \
         .
 
     ok "Docker 镜像构建完成！"

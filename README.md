@@ -125,7 +125,6 @@ pnpm dev
 |------|------|--------|
 | `USE_VENV=1` | 使用虚拟环境隔离依赖 | `1` |
 | `CYTHONIZE=1` | 用 Cython 编译 `engine/` 为 `.so`（源码保护） | `0` |
-| `TARGET=cpu\|gpu` | Docker 构建目标 | `cpu` |
 | `VERSION=xxx` | Docker 镜像版本 | `latest` |
 
 **示例：**
