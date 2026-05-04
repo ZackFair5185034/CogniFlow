@@ -100,7 +100,8 @@ os.makedirs(INFERENCE_OUTPUT_DIR, exist_ok=True)
 app.mount("/inference_output", StaticFiles(directory=INFERENCE_OUTPUT_DIR), name="inference_output")
 
 # 挂载 Vue 前端静态文件（开发时若无 dist 目录则跳过）
-_WEBUI_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "webui", "dist")
+# Docker 环境: WEBUI_DIST=/app/webui/dist
+_WEBUI_DIST = os.environ.get("WEBUI_DIST", os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui", "dist"))
 if os.path.exists(_WEBUI_DIST):
     app.mount("/", StaticFiles(directory=_WEBUI_DIST, html=True), name="frontend")
 

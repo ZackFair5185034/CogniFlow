@@ -60,7 +60,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # 创建非 root 用户
 RUN groupadd -r cogniflow && useradd -r -g cogniflow cogniflow
 
-# 复制后端代码（到 /app/backend/）
+# 复制主入口和后端代码
+COPY app.py ./
 COPY backend/ ./backend/
 
 # 复制前端构建产物（到 /app/webui/dist/）
@@ -83,4 +84,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')" || exit 1
 
 # 启动命令（WORKDIR=/app，backend/ 在 /app/backend/，uvicorn 启动目录相对于 PYTHONPATH）
-CMD ["python", "-m", "uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
