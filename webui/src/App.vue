@@ -37,13 +37,16 @@
         <div class="status-dot" :class="{ online: isOnline }"></div>
         <span class="status-text">{{ isOnline ? '系统在线' : '离线' }}</span>
       </div>
-    </aside>
 
-    <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ rotated: collapsed }">
-        <polyline points="15 18 9 12 15 6"></polyline>
-      </svg>
-    </button>
+      <!-- 折叠按钮：放在侧边栏内部，绝对定位 -->
+      <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6" class="top-line"></line>
+          <line x1="3" y1="12" x2="21" y2="12" class="mid-line"></line>
+          <line x1="3" y1="18" x2="21" y2="18" class="bot-line"></line>
+        </svg>
+      </button>
+    </aside>
 
     <!-- 主内容区 -->
     <main class="main-content">
@@ -288,39 +291,55 @@ onUnmounted(() => {
 }
 
 .collapse-btn {
-  position: fixed;
+  position: absolute;
   top: 50%;
-  left: 236px;
+  right: 8px;
   transform: translateY(-50%);
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
+  background: transparent;
+  border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease, left 0.3s ease;
+  transition: color 0.2s ease;
   z-index: 20;
 
-  &.collapsed {
-    left: 64px;
-  }
-
   &:hover {
-    border-color: var(--accent-cyan);
     color: var(--accent-cyan);
   }
 
   svg {
-    width: 14px;
-    height: 14px;
-    transition: transform 0.3s ease;
+    width: 20px;
+    height: 20px;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
 
-    &.rotated {
-      transform: rotate(180deg);
+  line {
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    transform-origin: center;
+  }
+
+  &.collapsed {
+    svg {
+      transform: translateX(4px);
+    }
+
+    .top-line {
+      transform: translateX(3px);
+      opacity: 0.6;
+    }
+
+    .mid-line {
+      transform: translateX(6px);
+      opacity: 0.4;
+    }
+
+    .bot-line {
+      transform: translateX(3px);
+      opacity: 0.6;
     }
   }
 }
@@ -537,7 +556,6 @@ onUnmounted(() => {
     background: var(--bg-hover);
     border-color: var(--accent-cyan);
     color: var(--accent-cyan);
-    transform: translateY(-1px);
   }
 
   svg {

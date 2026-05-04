@@ -84,9 +84,10 @@
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="160" fixed="right">
+          <el-table-column label="操作" width="230" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
+                <el-button type="text" @click="handleRename(row)">重命名</el-button>
                 <el-button type="text" @click="handleUpload(row)" v-if="!row.file_path">上传</el-button>
                 <el-button type="text" @click="handleSetBest(row)" :disabled="row.is_best || !row.file_path">最佳</el-button>
                 <el-button type="text" @click="handleDelete(row)">删除</el-button>
@@ -183,6 +184,34 @@
         </div>
       </div>
     </div>
+
+    <!-- 重命名对话框 -->
+    <div class="dialog-overlay" v-if="showRenameDialog" @click.self="showRenameDialog = false">
+      <div class="dialog-panel ui-card">
+        <div class="dialog-header">
+          <h3>重命名模型</h3>
+          <button class="close-btn" @click="showRenameDialog = false">
+            <CloseIcon />
+          </button>
+        </div>
+        <div class="dialog-body">
+          <div class="form-group">
+            <label>模型名称</label>
+            <input type="text" v-model="renameForm.name" placeholder="输入模型名称" />
+          </div>
+          <div class="form-group">
+            <label>版本</label>
+            <input type="text" v-model="renameForm.version" placeholder="如 v1, v2" />
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="ui-btn" @click="showRenameDialog = false">取消</button>
+          <button class="ui-btn ui-btn-primary" @click="handleRenameSubmit" :disabled="renaming">
+            {{ renaming ? '保存中...' : '保存' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -203,6 +232,12 @@ const selectedModel = ref<any>(null)
 const uploadFile = ref<File | null>(null)
 
 const createForm = ref({ name: '', version: '', pretrained_model: 'yolov8s.pt', atlas_id: null as number | null })
+
+// 重命名状态
+const showRenameDialog = ref(false)
+const renaming = ref(false)
+const renameTarget = ref<any>(null)
+const renameForm = ref({ name: '', version: '' })
 
 // 图标组件
 const PlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
@@ -370,6 +405,34 @@ const handleDelete = async (row: any) => {
     if (error !== 'cancel') {
       ElMessage.error('删除失败')
     }
+  }
+}
+
+const handleRename = (row: any) => {
+  renameTarget.value = row
+  renameForm.value = { name: row.name, version: row.version || '' }
+  showRenameDialog.value = true
+}
+
+const handleRenameSubmit = async () => {
+  if (!renameForm.value.name) {
+    ElMessage.warning('请输入模型名称')
+    return
+  }
+  renaming.value = true
+  try {
+    await modelApi.update(renameTarget.value.id, {
+      name: renameForm.value.name,
+      version: renameForm.value.version || undefined,
+    })
+    ElMessage.success('重命名成功')
+    showRenameDialog.value = false
+    loadModels()
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '重命名失败'
+    ElMessage.error(msg)
+  } finally {
+    renaming.value = false
   }
 }
 

@@ -35,9 +35,10 @@
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="160" fixed="right">
+          <el-table-column label="操作" width="210" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
+                <el-button type="text" @click="handleRename(row)">重命名</el-button>
                 <el-button type="text" @click="$router.push(`/atlas/${row.id}`)">查看</el-button>
                 <el-button type="text" @click="handleDelete(row)">删除</el-button>
               </div>
@@ -74,6 +75,34 @@
         </div>
       </div>
     </div>
+
+    <!-- 重命名对话框 -->
+    <div class="dialog-overlay" v-if="showRenameDialog" @click.self="showRenameDialog = false">
+      <div class="dialog-panel ui-card">
+        <div class="dialog-header">
+          <h3>重命名图集</h3>
+          <button class="close-btn" @click="showRenameDialog = false">
+            <CloseIcon />
+          </button>
+        </div>
+        <div class="dialog-body">
+          <div class="form-group">
+            <label>图集名称</label>
+            <input type="text" v-model="renameForm.name" placeholder="输入图集名称" />
+          </div>
+          <div class="form-group">
+            <label>描述</label>
+            <textarea v-model="renameForm.description" rows="3" placeholder="输入描述（可选）"></textarea>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="ui-btn" @click="showRenameDialog = false">取消</button>
+          <button class="ui-btn ui-btn-primary" @click="handleRenameSubmit" :disabled="renaming">
+            {{ renaming ? '保存中...' : '保存' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -87,6 +116,12 @@ const loading = ref(false)
 const showCreateDialog = ref(false)
 const creating = ref(false)
 const createForm = ref({ name: '', description: '' })
+
+// 重命名状态
+const showRenameDialog = ref(false)
+const renaming = ref(false)
+const renameTarget = ref<any>(null)
+const renameForm = ref({ name: '', description: '' })
 
 // 图标组件
 const PlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
@@ -155,6 +190,31 @@ const handleCreate = async () => {
     ElMessage.error(msg)
   } finally {
     creating.value = false
+  }
+}
+
+const handleRename = (row: any) => {
+  renameTarget.value = row
+  renameForm.value = { name: row.name, description: row.description || '' }
+  showRenameDialog.value = true
+}
+
+const handleRenameSubmit = async () => {
+  if (!renameForm.value.name) {
+    ElMessage.warning('请输入图集名称')
+    return
+  }
+  renaming.value = true
+  try {
+    await atlasApi.update(renameTarget.value.id, renameForm.value)
+    ElMessage.success('重命名成功')
+    showRenameDialog.value = false
+    loadAtlases()
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '重命名失败'
+    ElMessage.error(msg)
+  } finally {
+    renaming.value = false
   }
 }
 

@@ -187,7 +187,6 @@ body {
 
 .ui-btn-primary:hover:not(:disabled) {
   box-shadow: var(--glow-cyan);
-  transform: translateY(-2px);
 }
 
 .ui-btn-success {
@@ -198,7 +197,6 @@ body {
 
 .ui-btn-success:hover:not(:disabled) {
   box-shadow: var(--glow-green);
-  transform: translateY(-2px);
 }
 
 .ui-btn-danger {
@@ -209,7 +207,6 @@ body {
 
 .ui-btn-danger:hover:not(:disabled) {
   box-shadow: 0 0 20px rgba(255, 68, 102, 0.5);
-  transform: translateY(-2px);
 }
 
 .ui-btn-small {

@@ -28,7 +28,21 @@
       "Bash(netstat -ano)",
       "Bash(taskkill.exe *)",
       "Bash(git diff *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(taskkill *)",
+      "Bash(pnpm build *)",
+      "Bash(pwsh -File scripts/build.ps1 help)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"& { ./scripts/build.ps1 help }\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"./scripts/build.ps1\" frontend)",
+      "Bash(pnpm run *)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -Command \"& { ./scripts/build.ps1 backend }\")",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"./scripts/build.ps1\" -Command \"frontend\")",
+      "Bash(iconv -f gbk -t utf-8)",
+      "Bash(cmd.exe /c \"powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\\\\\\\\build.ps1 backend\")",
+      "Bash(powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"Start-Process powershell -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File scripts\\\\\\\\build.ps1 backend' -Wait -NoNewWindow\")",
+      "Bash(xxd scripts/build.ps1)",
+      "Bash(where pwsh *)",
+      "Bash(powershell.exe *)"
     ],
     "deny": [
       "Bash(rm -rf *)",

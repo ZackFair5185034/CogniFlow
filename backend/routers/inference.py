@@ -17,7 +17,7 @@ from backend.utils.frame_buffer import stream_job_manager
 router = APIRouter()
 
 # 推理结果保存目录（统一使用 DATA_DIR）
-_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 _DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
 INFERENCE_OUTPUT_DIR = Path(os.path.join(_DATA_DIR, "inference_output"))
 INFERENCE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

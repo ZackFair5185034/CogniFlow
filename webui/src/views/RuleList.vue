@@ -302,7 +302,6 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   }
 
   &:hover {
-    transform: translateY(-1px);
     box-shadow: 0 4px 20px rgba(0, 240, 255, 0.3);
   }
 }
@@ -653,7 +652,6 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
     color: #000;
 
     &:hover:not(:disabled) {
-      transform: translateY(-1px);
       box-shadow: 0 4px 20px rgba(0, 240, 255, 0.3);
     }
   }

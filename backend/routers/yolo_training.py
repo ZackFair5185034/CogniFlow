@@ -257,7 +257,7 @@ def train_yolo(
     from ultralytics import YOLO
 
     # 统一数据目录
-    _DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+    _DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
     _DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
 
     # 模型缓存目录（YOLO 预训练权重，~100MB/模型）

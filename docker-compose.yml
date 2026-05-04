@@ -6,13 +6,12 @@
 #   docker compose up -d --build  # 重新构建并启动
 
 services:
-  # ========== 主服务（后端 + 前端）==========
+  # ========== 主服务（后端 + 前端，CPU 版本）==========
   app:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        TARGET: ${TARGET:-cpu}          # cpu 或 gpu
         PYTHON_VERSION: "3.10"
     container_name: cogniflow-app
     restart: unless-stopped
@@ -23,8 +22,8 @@ services:
       - WORKERS=1
       - DATA_DIR=/app/data
     volumes:
-      # 统一数据卷（所有持久化数据）
-      - cogniflow-data:/app/data
+      # 数据目录（持久化到主机 ./data 目录，升级时保留）
+      - ./data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
       interval: 30s
@@ -33,56 +32,57 @@ services:
       start_period: 10s
 
   # ========== GPU 加速版本（需要 NVIDIA Docker）==========
-  app-gpu:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        TARGET: gpu
-        PYTHON_VERSION: "3.10"
-    container_name: cogniflow-app-gpu
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - DATA_DIR=/app/data
-    volumes:
-      - cogniflow-data:/app/data
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    profiles:
-      - gpu  # 需要手动: docker compose --profile gpu up
+  # TODO: GPU 版本后续启用，取消注释即可
+  # app-gpu:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     args:
+  #       TARGET: gpu
+  #       PYTHON_VERSION: "3.10"
+  #   container_name: cogniflow-app-gpu
+  #   restart: unless-stopped
+  #   network_mode: host
+  #   environment:
+  #     - PYTHONUNBUFFERED=1
+  #     - LOG_LEVEL=${LOG_LEVEL:-INFO}
+  #     - DATA_DIR=/app/data
+  #   volumes:
+  #     - cogniflow-data:/app/data
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: all
+  #             capabilities: [gpu]
+  #   profiles:
+  #     - gpu  # 需要手动: docker compose --profile gpu up
 
   # ========== 开发模式（挂载源码，热重载）==========
-  app-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    container_name: cogniflow-app-dev
-    restart: unless-stopped
-    network_mode: host
-    environment:
-      - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=DEBUG
-      - DEV_MODE=true
-      - DATA_DIR=/app/data
-    volumes:
-      # 源码挂载（开发时实时修改）
-      - ./backend:/app/backend
-      - ./engine:/app/engine
-      - ./webui:/app/webui
-      # 数据目录（持久化）
-      - cogniflow-data:/app/data
-    profiles:
-      - dev  # 需要手动: docker compose --profile dev up
+  # TODO: 开发模式暂时禁用，启用时取消注释
+  # app-dev:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.dev
+  #   container_name: cogniflow-app-dev
+  #   restart: unless-stopped
+  #   network_mode: host
+  #   environment:
+  #     - PYTHONUNBUFFERED=1
+  #     - LOG_LEVEL=DEBUG
+  #     - DEV_MODE=true
+  #     - DATA_DIR=/app/data
+  #   volumes:
+  #     # 源码挂载（开发时实时修改）
+  #     - ./backend:/app/backend
+  #     - ./engine:/app/engine
+  #     - ./webui:/app/webui
+  #     # 数据目录（持久化）
+  #     - cogniflow-data:/app/data
+  #   profiles:
+  #     - dev  # 需要手动: docker compose --profile dev up
 
-# ========== 数据卷 ==========
-volumes:
-  cogniflow-data:
-    driver: local
+# ========== 数据目录 ==========
+# ./data 目录需要在首次启动前创建：
+#   mkdir -p data
