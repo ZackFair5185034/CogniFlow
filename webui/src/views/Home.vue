@@ -25,7 +25,7 @@
     <!-- 主功能区 -->
     <div class="main-grid">
       <!-- 快速操作 -->
-      <div class="quick-actions vg-card">
+      <div class="quick-actions ui-card">
         <div class="card-header">
           <span class="header-line"></span>
           <h3>快速操作</h3>
@@ -49,7 +49,7 @@
       </div>
 
       <!-- 系统状态 -->
-      <div class="system-status vg-card">
+      <div class="system-status ui-card">
         <div class="card-header">
           <span class="header-line"></span>
           <h3>系统状态</h3>
@@ -91,7 +91,7 @@
     </div>
 
     <!-- 训练进度 -->
-    <div class="training-section vg-card">
+    <div class="training-section ui-card">
       <div class="card-header">
         <span class="header-line"></span>
         <h3>训练进度</h3>

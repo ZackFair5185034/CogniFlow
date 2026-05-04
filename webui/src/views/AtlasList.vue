@@ -6,14 +6,14 @@
         <h2>图集管理</h2>
         <span class="subtitle">管理训练数据集</span>
       </div>
-      <button class="vg-btn vg-btn-primary" @click="showCreateDialog = true">
+      <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
         <PlusIcon />
         创建图集
       </button>
     </div>
 
     <!-- 图集表格 -->
-    <div class="vg-card" style="width: 100%; min-width: 0;">
+    <div class="ui-card" style="width: 100%; min-width: 0;">
       <div class="table-wrapper">
         <el-table :data="atlases" v-loading="loading" :row-class-name="tableRowClassName" table-layout="auto">
           <el-table-column prop="id" label="ID" width="100">
@@ -49,7 +49,7 @@
 
     <!-- 创建对话框 -->
     <div class="dialog-overlay" v-if="showCreateDialog" @click.self="showCreateDialog = false">
-      <div class="dialog-panel vg-card">
+      <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>创建新图集</h3>
           <button class="close-btn" @click="showCreateDialog = false">
@@ -67,8 +67,8 @@
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="vg-btn" @click="showCreateDialog = false">取消</button>
-          <button class="vg-btn vg-btn-primary" @click="handleCreate" :disabled="creating">
+          <button class="ui-btn" @click="showCreateDialog = false">取消</button>
+          <button class="ui-btn ui-btn-primary" @click="handleCreate" :disabled="creating">
             {{ creating ? '创建中...' : '创建' }}
           </button>
         </div>

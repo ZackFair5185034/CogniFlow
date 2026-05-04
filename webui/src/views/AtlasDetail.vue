@@ -14,40 +14,45 @@
         <!-- 批量模式下显示操作按钮 -->
         <template v-if="batchMode || selectedImages.length > 0">
           <span class="selected-count">已选 {{ selectedImages.length }}</span>
-          <button class="vg-btn vg-btn-sm" @click="selectAllImages">全选</button>
-          <button class="vg-btn vg-btn-sm" @click="clearSelection">取消</button>
+          <button class="ui-btn ui-btn-sm" @click="selectAllImages">全选</button>
+          <button class="ui-btn ui-btn-sm" @click="clearSelection">取消</button>
           <div class="batch-divider"></div>
           <select v-model="batchTargetDirectory" class="batch-dir-select">
             <option value="">根目录</option>
             <option v-for="dir in directories" :key="dir" :value="dir">{{ dir }}</option>
           </select>
-          <button class="vg-btn vg-btn-sm" @click="handleBatchMoveDirectory" :disabled="selectedImages.length === 0">
+          <button class="ui-btn ui-btn-sm" @click="handleBatchMoveDirectory" :disabled="selectedImages.length === 0">
             <FolderIcon />
             移动
           </button>
-          <button class="vg-btn vg-btn-sm danger" @click="handleBatchDelete" :disabled="selectedImages.length === 0">
+          <button class="ui-btn ui-btn-sm danger" @click="handleBatchDelete" :disabled="selectedImages.length === 0">
             <TrashIcon />
             删除
           </button>
         </template>
-        <button class="vg-btn vg-btn-sm" v-if="batchMode" @click="exitBatchMode">
+        <button class="ui-btn ui-btn-sm" v-if="batchMode" @click="exitBatchMode">
           退出批量
         </button>
-        <button class="vg-btn vg-btn-sm" v-if="!batchMode" @click="enterBatchMode">
+        <button class="ui-btn ui-btn-sm" v-if="!batchMode" @click="enterBatchMode">
           <CheckSquareIcon />
           批量
         </button>
-        <button class="vg-btn vg-btn-primary vg-btn-sm" @click="triggerUpload">
+        <button class="ui-btn ui-btn-secondary ui-btn-sm" @click="triggerVideoUpload">
+          <VideoIcon />
+          解析视频
+        </button>
+        <button class="ui-btn ui-btn-primary ui-btn-sm" @click="triggerUpload">
           <UploadIcon />
-          上传
+          上传图片
         </button>
       </div>
       <input ref="fileInputRef" type="file" accept="image/*" multiple style="display: none" @change="handleFileSelect" />
+      <input ref="videoInputRef" type="file" accept="video/*" style="display: none" @change="handleVideoSelect" />
     </div>
 
     <div class="content-grid">
       <!-- 主内容区 -->
-      <div class="main-panel vg-card">
+      <div class="main-panel ui-card">
         <div class="panel-header">
           <div class="tabs">
             <button class="tab-btn" :class="{ active: activeTab === 'images' }" @click="activeTab = 'images'">
@@ -137,7 +142,7 @@
               <input type="text" v-model="newDirectoryName" placeholder="输入新目录名称"
                      @keyup.enter="handleCreateDirectory" />
             </div>
-            <button class="vg-btn vg-btn-primary" @click="handleCreateDirectory">
+            <button class="ui-btn ui-btn-primary" @click="handleCreateDirectory">
               <PlusIcon />
               创建目录
             </button>
@@ -171,7 +176,7 @@
 
       <!-- 侧边信息 -->
       <div class="side-panel">
-        <div class="vg-card info-card">
+        <div class="ui-card info-card">
           <div class="card-header">
             <h4>图集信息</h4>
           </div>
@@ -195,7 +200,7 @@
           </div>
         </div>
 
-        <div class="vg-card upload-tip">
+        <div class="ui-card upload-tip">
           <div class="tip-header">
             <LightbulbIcon />
             <span>上传提示</span>
@@ -212,7 +217,7 @@
 
     <!-- 图片详情对话框 -->
     <div class="dialog-overlay" v-if="showImageDialog" @click.self="showImageDialog = false">
-      <div class="dialog-panel vg-card">
+      <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>图片详情</h3>
           <div class="dialog-actions">
@@ -271,6 +276,69 @@
         </div>
       </div>
     </div>
+    <!-- 视频提取对话框 -->
+    <div class="dialog-overlay" v-if="showVideoDialog" @click.self="showVideoDialog = false">
+      <div class="dialog-panel ui-card">
+        <div class="dialog-header">
+          <h3>从视频提取帧</h3>
+          <button class="close-btn" @click="showVideoDialog = false">
+            <CloseIcon />
+          </button>
+        </div>
+        <div class="dialog-content">
+          <div class="video-meta" v-if="videoMeta">
+            <div class="meta-row">
+              <span class="meta-label">时长</span>
+              <span class="meta-value">{{ videoMeta.duration }}s</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">帧率</span>
+              <span class="meta-value">{{ videoMeta.fps }} fps</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">总帧数</span>
+              <span class="meta-value">{{ videoMeta.total_frames }}</span>
+            </div>
+          </div>
+          <div class="extract-config">
+            <label class="section-label">提取张数</label>
+            <input type="number" v-model.number="extractCount" min="1" :max="videoMeta?.total_frames" class="extract-input" />
+            <span class="extract-hint" v-if="videoMeta && extractCount">
+              均匀采样，间隔约 {{ Math.max(1, Math.round(videoMeta.total_frames / extractCount)) }} 帧
+            </span>
+          </div>
+          <div class="dialog-footer">
+            <button class="ui-btn" @click="showVideoDialog = false">取消</button>
+            <button class="ui-btn ui-btn-primary" @click="confirmExtract" :disabled="!extractCount">
+              开始提取
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 提取进度对话框 -->
+    <div class="dialog-overlay" v-if="showExtractProgress" @click.self="() => {}">
+      <div class="dialog-panel ui-card extract-progress-dialog">
+        <div class="dialog-header">
+          <h3>正在提取帧...</h3>
+        </div>
+        <div class="dialog-content">
+          <div class="progress-info">
+            <span class="progress-status" :class="extractProgress.status">
+              {{ extractProgress.status === 'pending' ? '等待开始...' : extractProgress.status === 'processing' ? '提取中...' : extractProgress.status === 'completed' ? '完成' : '失败' }}
+            </span>
+            <span class="progress-count">{{ extractProgress.extracted_count }} / {{ extractProgress.total_frames }}</span>
+          </div>
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: extractProgress.progress + '%' }"></div>
+            </div>
+          </div>
+          <p class="progress-hint" v-if="extractProgress.status === 'processing'">正在从视频提取帧，请稍候...</p>
+          <p class="progress-error" v-if="extractProgress.error">{{ extractProgress.error }}</p>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -284,6 +352,7 @@ const route = useRoute()
 const router = useRouter()
 const id = Number(route.params.id)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const videoInputRef = ref<HTMLInputElement | null>(null)
 
 const atlas = ref<any>(null)
 const images = ref<any[]>([])
@@ -294,6 +363,24 @@ const selectedDirectory = ref('')
 const showImageDialog = ref(false)
 const selectedImage = ref<any>(null)
 const newDirectoryName = ref('')
+
+// 视频提取相关
+const showVideoDialog = ref(false)
+const videoMeta = ref<{ fps: number; total_frames: number; duration: number } | null>(null)
+const extractCount = ref(0)
+const pendingVideoPath = ref('')
+
+// 异步提取进度相关
+const showExtractProgress = ref(false)
+const extractJobId = ref('')
+const extractProgress = ref({
+  status: '',
+  progress: 0,
+  extracted_count: 0,
+  total_frames: 0,
+  error: null as string | null,
+})
+const extractPollingTimer = ref<number | null>(null)
 
 // 分页状态
 const pagination = ref({
@@ -364,6 +451,11 @@ const UploadIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 
   h('path', { d: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4' }),
   h('polyline', { points: '17 8 12 3 7 8' }),
   h('line', { x1: '12', y1: '3', x2: '12', y2: '15' })
+])
+
+const VideoIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
+  h('polygon', { points: '23 7 16 12 23 17 23 7' }),
+  h('rect', { x: '1', y: '5', width: '15', height: '14', rx: '2', ry: '2' })
 ])
 
 const CheckSquareIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
@@ -517,6 +609,88 @@ const handleFileSelect = async (event: Event) => {
   }
 
   input.value = ''
+}
+
+const triggerVideoUpload = () => {
+  videoInputRef.value?.click()
+}
+
+const handleVideoSelect = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (!input.files || input.files.length === 0) return
+  const file = input.files[0]
+
+  try {
+    const res = await atlasApi.uploadVideo(id, file)
+    videoMeta.value = res.data.metadata
+    extractCount.value = res.data.metadata.total_frames
+    pendingVideoPath.value = res.data.video_path
+    showVideoDialog.value = true
+  } catch (error) {
+    ElMessage.error('视频上传失败')
+  }
+
+  input.value = ''
+}
+
+const confirmExtract = async () => {
+  if (!extractCount.value || extractCount.value <= 0) {
+    ElMessage.warning('请输入有效的提取张数')
+    return
+  }
+
+  showVideoDialog.value = false
+  showExtractProgress.value = true
+  extractProgress.value = { status: 'pending', progress: 0, extracted_count: 0, total_frames: videoMeta.value?.total_frames || 0, error: null }
+
+  try {
+    const res = await atlasApi.extractVideoFramesAsync(id, pendingVideoPath.value, extractCount.value)
+    extractJobId.value = res.data.job_id
+    extractProgress.value.status = 'processing'
+    startExtractPolling()
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '提交提取任务失败'
+    extractProgress.value.status = 'failed'
+    extractProgress.value.error = msg
+  }
+}
+
+const startExtractPolling = () => {
+  stopExtractPolling()
+  extractPollingTimer.value = window.setInterval(async () => {
+    if (!extractJobId.value) return
+    try {
+      const res = await atlasApi.getExtractJobStatus(id, extractJobId.value)
+      const data = res.data
+      extractProgress.value = {
+        status: data.status,
+        progress: data.progress * 100,
+        extracted_count: data.extracted_count,
+        total_frames: data.total_frames,
+        error: data.error,
+      }
+      if (data.status === 'completed' || data.status === 'failed') {
+        stopExtractPolling()
+        if (data.status === 'completed') {
+          ElMessage.success(`成功提取 ${data.extracted_count} 张图片`)
+          showExtractProgress.value = false
+          // 自动切换到新提取的目录
+          selectedDirectory.value = data.directory
+          loadImages()
+          loadDirectories()
+        }
+      }
+    } catch (error) {
+      stopExtractPolling()
+    }
+  }, 1000)
+}
+
+const stopExtractPolling = () => {
+  if (extractPollingTimer.value !== null) {
+    clearInterval(extractPollingTimer.value)
+    extractPollingTimer.value = null
+  }
 }
 
 const handleCreateDirectory = async () => {
@@ -744,39 +918,39 @@ onMounted(() => {
   @apply px-2 py-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-xs text-[var(--text-primary)];
 }
 
-.vg-btn {
+.ui-btn {
   @apply inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-sm text-[var(--text-primary)] cursor-pointer transition-all;
 }
 
-.vg-btn:hover {
+.ui-btn:hover {
   @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
 }
 
-.vg-btn svg {
+.ui-btn svg {
   @apply w-4 h-4;
 }
 
-.vg-btn-sm {
+.ui-btn-sm {
   @apply px-3 py-1.5 text-xs;
 }
 
-.vg-btn-sm svg {
+.ui-btn-sm svg {
   @apply w-3.5 h-3.5;
 }
 
-.vg-btn-primary {
+.ui-btn-primary {
   @apply bg-[var(--accent-cyan)] border-[var(--accent-cyan)] text-black font-medium;
 }
 
-.vg-btn-primary:hover {
+.ui-btn-primary:hover {
   @apply opacity-80;
 }
 
-.vg-btn.danger {
+.ui-btn.danger {
   @apply text-[#ff4466];
 }
 
-.vg-btn.danger:hover {
+.ui-btn.danger:hover {
   @apply border-[#ff4466];
 }
 
@@ -1335,5 +1509,92 @@ onMounted(() => {
 
 .edit-dir-btn svg {
   @apply w-3.5 h-3.5;
+}
+
+/* 视频提取对话框 */
+.video-meta {
+  @apply flex flex-col gap-2 mb-5;
+}
+
+.video-meta .meta-row {
+  @apply flex justify-between items-center p-3 bg-[var(--bg-secondary)] rounded-lg;
+}
+
+.video-meta .meta-label {
+  @apply text-sm text-[var(--text-muted)];
+}
+
+.video-meta .meta-value {
+  @apply text-sm font-medium font-mono text-[var(--accent-cyan)];
+}
+
+.extract-config {
+  @apply flex flex-col gap-3 mb-5;
+}
+
+.section-label {
+  @apply text-xs text-[var(--text-secondary)] uppercase tracking-wide;
+}
+
+.extract-input {
+  @apply px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] font-mono;
+}
+
+.extract-input:focus {
+  @apply outline-none border-[var(--accent-cyan)];
+}
+
+.extract-hint {
+  @apply text-xs text-[var(--text-muted)];
+}
+
+.ui-btn-secondary {
+  @apply bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)];
+}
+
+.ui-btn-secondary:hover {
+  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+}
+
+/* 提取进度对话框 */
+.extract-progress-dialog .dialog-content {
+  @apply flex flex-col gap-5;
+}
+
+.progress-info {
+  @apply flex justify-between items-center;
+}
+
+.progress-status {
+  @apply text-sm font-medium;
+}
+
+.progress-status.pending { @apply text-[var(--text-muted)]; }
+.progress-status.processing { @apply text-[var(--accent-cyan)]; }
+.progress-status.completed { @apply text-[var(--accent-green)]; }
+.progress-status.failed { @apply text-[#ff4466]; }
+
+.progress-count {
+  @apply text-sm font-mono text-[var(--text-secondary)];
+}
+
+.progress-bar-wrapper {
+  @apply w-full;
+}
+
+.progress-bar {
+  @apply w-full h-2.5 bg-[var(--bg-secondary)] rounded-full overflow-hidden relative;
+}
+
+.progress-fill {
+  @apply h-full bg-gradient-to-r from-[var(--accent-cyan)] to-[var(--accent-magenta)] rounded-full transition-all duration-300 ease-out;
+}
+
+.progress-hint {
+  @apply text-xs text-[var(--text-muted)] text-center;
+}
+
+.progress-error {
+  @apply text-xs text-[#ff4466] text-center;
 }
 </style>

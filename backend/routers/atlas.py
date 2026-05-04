@@ -5,18 +5,27 @@
 """
 import os
 import shutil
+import threading
+import time
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from PIL import Image as PILImage
 
-from database import get_db, Atlas, Image
-from schemas import AtlasCreate, AtlasUpdate, AtlasResponse
+from backend.database import get_db, Atlas, Image
+from backend.schemas import AtlasCreate, AtlasUpdate, AtlasResponse
+from backend.utils.frame_extract_manager import frame_extract_manager
 
 router = APIRouter()
 
+# 统一数据目录（与 app.py 保持一致）
+_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+_DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
+
 # 图片存储根目录
-IMAGE_STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "uploads", "images")
+IMAGE_STORAGE_DIR = os.path.join(_DATA_DIR, "uploads", "images")
+# 视频存储根目录
+VIDEO_STORAGE_DIR = os.path.join(_DATA_DIR, "uploads", "videos")
 
 
 def get_image_storage_path(atlas_id: int, filename: str) -> tuple[str, str]:
@@ -289,3 +298,292 @@ async def upload_images(
 
     db.commit()
     return {"message": f"成功上传 {len(uploaded_images)} 个文件", "files": uploaded_images}
+
+
+# ===== 视频导入 =====
+
+@router.post("/{atlas_id}/video/upload", status_code=201)
+async def upload_video(
+    atlas_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """上传视频文件并返回元数据。"""
+    atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
+    if not atlas:
+        raise HTTPException(status_code=404, detail="图集不存在")
+
+    # 验证视频格式
+    allowed_exts = {"mp4", "avi", "mov", "mkv", "wmv", "flv", "webm"}
+    ext = file.filename.split(".")[-1].lower() if file.filename else ""
+    if ext not in allowed_exts:
+        raise HTTPException(status_code=400, detail=f"不支持的视频格式，支持：{', '.join(allowed_exts)}")
+
+    # 保存视频到 uploads/videos/{atlas_id}/
+    atlas_video_dir = os.path.join(VIDEO_STORAGE_DIR, str(atlas_id))
+    os.makedirs(atlas_video_dir, exist_ok=True)
+
+    # 避免文件名冲突
+    filename = file.filename or f"video_{int(time.time())}.mp4"
+    if os.path.exists(os.path.join(atlas_video_dir, filename)):
+        name, ext = os.path.splitext(filename)
+        filename = f"{name}_{int(time.time())}{ext}"
+
+    video_path = os.path.join(atlas_video_dir, filename)
+    with open(video_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # 获取视频元数据
+    import cv2
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    duration = round(total_frames / fps) if fps and fps > 0 else 0
+    cap.release()
+
+    return {
+        "video_path": video_path,
+        "metadata": {
+            "fps": round(fps) if fps else 24,
+            "total_frames": total_frames,
+            "duration": duration
+        }
+    }
+
+
+@router.post("/{atlas_id}/video/extract-frames", status_code=201)
+async def extract_video_frames(
+    atlas_id: int,
+    video_path: str = Query(...),
+    extract_count: int = Query(default=None),
+    directory: str = Query(default="video"),
+    db: Session = Depends(get_db)
+):
+    """从视频中均匀采样提取帧，存入图集。"""
+    atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
+    if not atlas:
+        raise HTTPException(status_code=404, detail="图集不存在")
+
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=400, detail="视频文件不存在")
+
+    import cv2
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+
+    # 确定提取数量：默认 total_frames（即每帧都提取）
+    if extract_count is None or extract_count <= 0:
+        extract_count = total_frames
+    extract_count = min(extract_count, total_frames) if total_frames > 0 else 1
+
+    # 间隔计算
+    interval = max(1, total_frames / extract_count) if total_frames > 0 else 1
+
+    # 创建帧存储目录
+    frames_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), directory)
+    os.makedirs(frames_dir, exist_ok=True)
+
+    # 重新打开视频读帧
+    cap = cv2.VideoCapture(video_path)
+    extracted_images = []
+    extracted_idx = 0
+
+    while extracted_idx < extract_count:
+        target_frame = int(extracted_idx * interval)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        output_filename = f"frame_{extracted_idx:04d}.jpg"
+        output_path = os.path.join(frames_dir, output_filename)
+        cv2.imwrite(output_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+
+        img_height, img_width = frame.shape[:2]
+
+        image = Image(
+            atlas_id=atlas_id,
+            file_path=output_path,
+            directory=directory,
+            width=img_width,
+            height=img_height,
+        )
+        db.add(image)
+        extracted_images.append(image)
+        extracted_idx += 1
+
+    cap.release()
+    db.commit()
+
+    return {
+        "success": True,
+        "extracted_count": len(extracted_images),
+        "images": [
+            {"id": img.id, "file_path": img.file_path, "frame_index": idx}
+            for idx, img in enumerate(extracted_images)
+        ]
+    }
+
+
+# ===== 异步帧提取 =====
+
+def _extract_frames_background(
+    job_id: str,
+    atlas_id: int,
+    video_path: str,
+    extract_count: int,
+    total_frames: int,
+):
+    """后台线程执行帧提取（内部函数，供 threadPoolExecutor 调用）。"""
+    import cv2
+    from backend.database import SessionLocal
+
+    db = SessionLocal()
+    frames_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), f"video_{job_id}")
+    os.makedirs(frames_dir, exist_ok=True)
+
+    interval = max(1, total_frames / extract_count) if total_frames > 0 else 1
+
+    cap = cv2.VideoCapture(video_path)
+    extracted_idx = 0
+    current_frame = 0
+    frame_paths = []  # 收集所有帧路径，最后批量入库
+
+    try:
+        while extracted_idx < extract_count:
+            # 检查任务是否被停止
+            job = frame_extract_manager.get_job(job_id)
+            if job and job["status"] == "stopped":
+                break
+
+            target_frame = int(extracted_idx * interval)
+            cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            output_filename = f"frame_{extracted_idx:04d}.jpg"
+            output_path = os.path.join(frames_dir, output_filename)
+            cv2.imwrite(output_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+
+            img_height, img_width = frame.shape[:2]
+            frame_paths.append((output_path, img_width, img_height))
+
+            extracted_idx += 1
+            current_frame = target_frame
+
+            # 每提取 5 帧更新一次进度
+            if extracted_idx % 5 == 0 or extracted_idx == extract_count:
+                frame_extract_manager.update_progress(job_id, current_frame, extracted_idx)
+
+        # 批量创建 Image 记录
+        for idx, (file_path, img_width, img_height) in enumerate(frame_paths):
+            image = Image(
+                atlas_id=atlas_id,
+                file_path=file_path,
+                directory=f"video_{job_id}",
+                width=img_width,
+                height=img_height,
+            )
+            db.add(image)
+        db.commit()
+
+        frame_extract_manager.complete_job(job_id)
+    except Exception as e:
+        frame_extract_manager.fail_job(job_id, str(e))
+        db.rollback()
+    finally:
+        cap.release()
+        db.close()
+
+
+@router.post("/{atlas_id}/video/extract-frames/async", status_code=201)
+async def extract_video_frames_async(
+    atlas_id: int,
+    video_path: str = Query(...),
+    extract_count: int = Query(default=None),
+    db: Session = Depends(get_db)
+):
+    """异步提取视频帧，立即返回 job_id。
+
+    前端通过 GET /{{atlas_id}}/video/extract-frames/{{job_id}}/status 轮询进度。
+    """
+    atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
+    if not atlas:
+        raise HTTPException(status_code=404, detail="图集不存在")
+
+    if not os.path.exists(video_path):
+        raise HTTPException(status_code=400, detail="视频文件不存在")
+
+    import cv2
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+
+    if extract_count is None or extract_count <= 0:
+        extract_count = total_frames
+    extract_count = min(extract_count, total_frames) if total_frames > 0 else 1
+
+    job_id = frame_extract_manager.submit_job(
+        atlas_id=atlas_id,
+        video_path=video_path,
+        extract_count=extract_count,
+        total_frames=total_frames,
+    )
+
+    # 启动后台线程执行提取
+    thread = threading.Thread(
+        target=_extract_frames_background,
+        args=(job_id, atlas_id, video_path, extract_count, total_frames),
+        daemon=True,
+    )
+    thread.start()
+
+    return {"job_id": job_id, "message": "任务已提交"}
+
+
+@router.get("/{atlas_id}/video/extract-frames/{job_id}/status")
+async def get_extract_job_status(
+    atlas_id: int,
+    job_id: str,
+    db: Session = Depends(get_db)
+):
+    """轮询帧提取任务状态。"""
+    atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
+    if not atlas:
+        raise HTTPException(status_code=404, detail="图集不存在")
+
+    job = frame_extract_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    return {
+        "status": job["status"],
+        "progress": job["progress"],
+        "extracted_count": job["extracted_count"],
+        "total_frames": job["total_frames"],
+        "directory": job["directory"],
+        "error": job["error"],
+    }
+
+
+@router.delete("/{atlas_id}/video/extract-frames/{job_id}", status_code=204)
+async def cancel_extract_job(
+    atlas_id: int,
+    job_id: str,
+    db: Session = Depends(get_db)
+):
+    """取消进行中的帧提取任务。"""
+    atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
+    if not atlas:
+        raise HTTPException(status_code=404, detail="图集不存在")
+
+    job = frame_extract_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    frame_extract_manager.set_status(job_id, "stopped")
+    return None

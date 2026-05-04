@@ -4,8 +4,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
-from database import get_db
-from schemas import (
+from backend.database import get_db
+from backend.schemas import (
     RuleGraphCreate,
     RuleGraphUpdate,
     RuleGraphResponse,
@@ -14,8 +14,8 @@ from schemas import (
     ExecutionHistoryResponse,
     NodeDefinition,
 )
-from services.rule_engine import GraphManager, RuleGraphExecutor
-from services.rule_engine.registry import init_builtin_executors
+from backend.services.rule_engine import GraphManager, RuleGraphExecutor
+from backend.services.rule_engine.registry import init_builtin_executors
 
 router = APIRouter(prefix="/api/rule-engine", tags=["规则引擎"])
 
@@ -213,7 +213,7 @@ async def list_executions(
     db: Session = Depends(get_db),
 ):
     """获取执行历史列表。"""
-    from database import ExecutionHistory
+    from backend.database import ExecutionHistory
 
     query = db.query(ExecutionHistory)
     if graph_id is not None:
@@ -226,7 +226,7 @@ async def list_executions(
 @router.get("/executions/{execution_id}", response_model=ExecutionHistoryResponse)
 async def get_execution(execution_id: int, db: Session = Depends(get_db)):
     """获取指定执行记录详情。"""
-    from database import ExecutionHistory
+    from backend.database import ExecutionHistory
 
     execution = db.query(ExecutionHistory).filter(
         ExecutionHistory.id == execution_id
@@ -241,7 +241,7 @@ async def get_execution(execution_id: int, db: Session = Depends(get_db)):
 @router.get("/executions/{execution_id}/logs")
 async def get_execution_logs(execution_id: int, db: Session = Depends(get_db)):
     """获取执行日志详情。"""
-    from database import ExecutionHistory, NodeExecutionLog
+    from backend.database import ExecutionHistory, NodeExecutionLog
 
     # 获取执行记录
     execution = db.query(ExecutionHistory).filter(

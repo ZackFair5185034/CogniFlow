@@ -7,7 +7,7 @@ import asyncio
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 
-from websocket_manager import ws_manager
+from backend.websocket_manager import ws_manager
 
 router = APIRouter()
 

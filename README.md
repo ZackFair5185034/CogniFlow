@@ -93,6 +93,74 @@ pnpm dev
 
 打开浏览器访问 http://localhost:5173
 
+## 构建与打包
+
+### 环境要求
+
+- Python 3.10+
+- Node.js 18+ (前端构建)
+- pnpm (推荐) / yarn / npm
+- 磁盘空间 5GB+ (含虚拟环境和构建产物)
+
+### 脚本构建 (`scripts/build.sh`)
+
+项目提供统一的构建脚本，支持以下构建目标：
+
+```bash
+./scripts/build.sh <命令>
+```
+
+| 命令 | 说明 |
+|------|------|
+| `backend` | 构建后端（安装依赖、可选 Cython 编译） |
+| `frontend` | 构建前端（生产环境） |
+| `binary` | PyInstaller 原生二进制打包（Linux/macOS） |
+| `all` | 后端 + 前端 |
+| `docker` | Docker 镜像 |
+| `clean` | 清理构建产物 |
+
+**环境变量：**
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `USE_VENV=1` | 使用虚拟环境隔离依赖 | `1` |
+| `CYTHONIZE=1` | 用 Cython 编译 `engine/` 为 `.so`（源码保护） | `0` |
+| `TARGET=cpu\|gpu` | Docker 构建目标 | `cpu` |
+| `VERSION=xxx` | Docker 镜像版本 | `latest` |
+
+**示例：**
+
+```bash
+# 构建原生二进制（Linux 可执行文件）
+./scripts/build.sh binary
+
+# 使用 Cython 保护源码后打包
+CYTHONIZE=1 ./scripts/build.sh binary
+
+# 构建 Docker 镜像
+./scripts/build.sh docker
+```
+
+### 构建产物
+
+| 类型 | 路径 |
+|------|------|
+| 前端dist | `webui/dist/` |
+| PyInstaller输出 | `dist/cogniflow/cogniflow` |
+| Docker镜像 | `cogniflow/cogniflow:latest` |
+
+### PyInstaller 打包详情
+
+`cogniflow.spec` 文件配置了完整的隐藏导入，包括：
+
+- **Web框架**: fastapi, uvicorn, starlette, python-multipart
+- **数据库**: sqlalchemy, aiosqlite
+- **图像处理**: pillow, numpy, opencv-python-headless
+- **系统工具**: psutil, pyyaml, mss, pyautogui, pygetwindow
+- **其他**: ffmpeg-python
+
+打包时自动使用虚拟环境 `venv/` 安装所有依赖，确保二进制文件完整运行。
+
 ## WebUI 功能
 
 | 页面 | 功能 |

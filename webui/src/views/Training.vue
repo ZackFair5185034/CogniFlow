@@ -25,7 +25,7 @@
 
     <div class="training-layout">
       <!-- 左侧：参数配置 -->
-      <div class="config-panel vg-card">
+      <div class="config-panel ui-card">
         <div class="section-header">
           <h3>参数配置</h3>
         </div>
@@ -92,7 +92,7 @@
             </div>
           </div>
 
-          <button class="vg-btn vg-btn-primary start-btn" @click="handleStart" :disabled="starting">
+          <button class="ui-btn ui-btn-primary start-btn" @click="handleStart" :disabled="starting">
             <PlayIcon />
             {{ starting ? '启动中...' : '启动训练' }}
           </button>
@@ -102,7 +102,7 @@
       <!-- 右侧：训练列表和实时状态 -->
       <div class="main-panel">
         <!-- 训练任务列表 -->
-        <div class="training-list-section vg-card">
+        <div class="training-list-section ui-card">
           <div class="section-header">
             <h3>训练任务</h3>
             <button class="refresh-btn" @click="loadJobs">
@@ -143,7 +143,7 @@
         </div>
 
         <!-- 实时状态 -->
-        <div class="realtime-card vg-card" v-if="currentJob">
+        <div class="realtime-card ui-card" v-if="currentJob">
           <div class="section-header">
             <h3>实时状态</h3>
             <span class="live-badge">
@@ -749,31 +749,31 @@ onUnmounted(() => {
   @apply text-[10px] text-[var(--text-muted)] mt-1;
 }
 
-.vg-btn {
+.ui-btn {
   @apply inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-sm text-[var(--text-primary)] cursor-pointer transition-all;
 }
 
-.vg-btn:hover {
+.ui-btn:hover {
   @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
 }
 
-.vg-btn svg {
+.ui-btn svg {
   @apply w-4 h-4;
 }
 
-.vg-btn-sm {
+.ui-btn-sm {
   @apply px-3 py-1.5 text-xs;
 }
 
-.vg-btn-sm svg {
+.ui-btn-sm svg {
   @apply w-3.5 h-3.5;
 }
 
-.vg-btn-primary {
+.ui-btn-primary {
   @apply bg-[var(--accent-cyan)] border-[var(--accent-cyan)] text-black font-medium;
 }
 
-.vg-btn-primary:hover {
+.ui-btn-primary:hover {
   @apply opacity-80;
 }
 </style>

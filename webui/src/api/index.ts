@@ -25,11 +25,31 @@ export const atlasApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
+  uploadVideo: (id: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post(`/atlas/${id}/video/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    })
+  },
+  extractVideoFrames: (id: number, videoPath: string, extractCount: number, directory?: string) =>
+    api.post(`/atlas/${id}/video/extract-frames`, null, {
+      params: { video_path: videoPath, extract_count: extractCount, directory }
+    }),
+  extractVideoFramesAsync: (id: number, videoPath: string, extractCount: number) =>
+    api.post(`/atlas/${id}/video/extract-frames/async`, null, {
+      params: { video_path: videoPath, extract_count: extractCount }
+    }),
+  getExtractJobStatus: (id: number, jobId: string) =>
+    api.get(`/atlas/${id}/video/extract-frames/${jobId}/status`),
+  cancelExtractJob: (id: number, jobId: string) =>
+    api.delete(`/atlas/${id}/video/extract-frames/${jobId}`),
 }
 
 // Image API
 export const imageApi = {
-  list: () => api.get('/images'),
+  list: () => api.get('/images/'),
   get: (id: number) => api.get(`/images/${id}`),
   getFile: (id: number) => `/api/images/${id}/file`,
   delete: (id: number) => api.delete(`/images/${id}`),
@@ -109,16 +129,17 @@ export const inferenceApi = {
       timeout: 60000,
     })
   },
-  detectVideo: (file: File, modelId: number, confThreshold: number = 0.25) => {
+  // 流式视频检测
+  detectVideoStream: (file: File, modelId: number, confThreshold: number = 0.25) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post(`/inference/detect/video?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
+    return api.post(`/inference/detect/video/stream?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 30000, // 上传超时 30s，检测在后台进行
+      timeout: 60000, // 上传视频需要更长超时
     })
   },
-  getVideoJobStatus: (jobId: string) => api.get(`/inference/video/status/${jobId}`),
-  getVideoResultUrl: (jobId: string) => `/api/inference/video/result/${jobId}`,
+  // 停止流式推理
+  stopVideoStream: (jobId: string) => api.post(`/inference/detect/stop/${jobId}`),
   listTrainedModels: () => api.get('/inference/models'),
 }
 

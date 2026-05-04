@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
-from database import get_db, Image
+from backend.database import get_db, Image
 
 router = APIRouter()
 

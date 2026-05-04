@@ -3,223 +3,24 @@
 
 import os
 import json
-import asyncio
 import base64
 import shutil
 import threading
-import uuid
 from pathlib import Path
-from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from database import get_db, Model
-from websocket_manager import ws_manager
+from backend.database import get_db, Model
+from backend.utils.frame_buffer import stream_job_manager
 
 router = APIRouter()
 
-# 推理结果保存目录
-INFERENCE_OUTPUT_DIR = Path("./inference_output")
+# 推理结果保存目录（统一使用 DATA_DIR）
+_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+_DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
+INFERENCE_OUTPUT_DIR = Path(os.path.join(_DATA_DIR, "inference_output"))
 INFERENCE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-
-# ===== 视频检测任务管理器 =====
-
-class VideoJobManager:
-    """视频检测任务管理器（线程安全）。"""
-
-    def __init__(self):
-        self._jobs: dict = {}
-        self._lock = threading.Lock()
-
-    def create_job(self, input_path: str, model_id: int, conf_threshold: float, categories: list) -> str:
-        """创建视频检测任务，返回 job_id。"""
-        job_id = str(uuid.uuid4())[:8]
-        with self._lock:
-            self._jobs[job_id] = {
-                "id": job_id,
-                "status": "pending",            # pending -> processing -> completed / failed
-                "progress": 0,                   # 0-100
-                "current_frame": 0,
-                "total_frames": 0,
-                "input_path": input_path,
-                "result_path": None,
-                "error": None,
-                "model_id": model_id,
-                "conf_threshold": conf_threshold,
-                "categories": categories,
-                "detections_count": 0,
-                "fps": 0,
-                "created_at": datetime.utcnow().isoformat(),
-            }
-        return job_id
-
-    def update_job(self, job_id: str, **kwargs):
-        """更新任务状态（线程安全）。"""
-        with self._lock:
-            if job_id in self._jobs:
-                self._jobs[job_id].update(kwargs)
-
-    def get_job(self, job_id: str) -> Optional[dict]:
-        """获取任务状态。"""
-        with self._lock:
-            job = self._jobs.get(job_id)
-            return job.copy() if job else None
-
-    def cleanup_old_jobs(self, max_age_hours: int = 2):
-        """清理超过 max_age_hours 的旧任务及其结果文件。"""
-        with self._lock:
-            now = datetime.utcnow()
-            to_remove = []
-            for job_id, job in self._jobs.items():
-                created = datetime.fromisoformat(job["created_at"])
-                if (now - created).total_seconds() > max_age_hours * 3600:
-                    to_remove.append(job_id)
-            for job_id in to_remove:
-                job = self._jobs.pop(job_id)
-                # 清理结果文件
-                if job.get("result_path") and os.path.exists(job["result_path"]):
-                    try:
-                        os.unlink(job["result_path"])
-                    except OSError:
-                        pass
-                # 清理输入文件
-                if job.get("input_path") and os.path.exists(job["input_path"]):
-                    try:
-                        os.unlink(job["input_path"])
-                    except OSError:
-                        pass
-
-
-video_job_manager = VideoJobManager()
-
-
-def _send_ws_update(data: dict, loop: asyncio.AbstractEventLoop):
-    """从后台线程通过主事件循环发送 WebSocket 更新。"""
-    try:
-        asyncio.run_coroutine_threadsafe(
-            ws_manager.send_launch_update(data), loop
-        )
-    except Exception:
-        pass
-
-
-def process_video_background(
-    job_id: str,
-    model_file_path: str,
-    conf_threshold: float,
-    categories: list,
-    input_path: str,
-    loop: asyncio.AbstractEventLoop,
-):
-    """后台线程：逐帧处理视频检测。"""
-    import cv2
-    from routers.yolo_training import load_yolo_model
-
-    try:
-        video_job_manager.update_job(job_id, status="processing")
-
-        # 加载 YOLO 模型
-        detector = load_yolo_model(model_file_path)
-
-        # 获取视频信息
-        cap = cv2.VideoCapture(input_path)
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        video_job_manager.update_job(job_id, total_frames=total_frames, fps=fps)
-
-        # 输出视频
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        output_path = INFERENCE_OUTPUT_DIR / f"video_result_{job_id}_{timestamp}.mp4"
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
-
-        frame_count = 0
-        total_detections = 0
-
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            frame_count += 1
-
-            # 保存临时帧进行 YOLO 推理
-            temp_path = str(INFERENCE_OUTPUT_DIR / f"temp_{job_id}_{frame_count}.jpg")
-            cv2.imwrite(temp_path, frame)
-
-            try:
-                results = detector(temp_path, conf=conf_threshold, verbose=False)
-                for result in results:
-                    boxes = result.boxes
-                    if boxes is not None:
-                        for box in boxes:
-                            x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-                            conf = float(box.conf[0])
-                            cls_id = int(box.cls[0])
-                            cls_name = result.names[cls_id] if cls_id < len(result.names) else f'Class {cls_id}'
-
-                            # 绘制检测框
-                            color = (0, 255, 0)
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-                            label = f"{cls_name} {conf:.2f}"
-                            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-                            total_detections += 1
-            finally:
-                if os.path.exists(temp_path):
-                    os.unlink(temp_path)
-
-            # 写入输出视频
-            out.write(frame)
-
-            # 每 5 帧或最后一帧时更新进度
-            if frame_count % 5 == 0 or frame_count == total_frames:
-                progress = int((frame_count / total_frames) * 100) if total_frames > 0 else 0
-                video_job_manager.update_job(
-                    job_id,
-                    current_frame=frame_count,
-                    progress=min(progress, 99),
-                    detections_count=total_detections,
-                )
-                _send_ws_update({
-                    "type": "video_progress",
-                    "job_id": job_id,
-                    "frame": frame_count,
-                    "total_frames": total_frames,
-                    "progress": min(progress, 99),
-                    "detections_count": total_detections,
-                }, loop)
-
-        cap.release()
-        out.release()
-
-        video_job_manager.update_job(
-            job_id,
-            status="completed",
-            progress=100,
-            current_frame=total_frames,
-            result_path=str(output_path),
-        )
-
-        _send_ws_update({
-            "type": "video_complete",
-            "job_id": job_id,
-            "total_frames": total_frames,
-            "detections_count": total_detections,
-        }, loop)
-
-    except Exception as e:
-        video_job_manager.update_job(job_id, status="failed", error=str(e))
-        _send_ws_update({
-            "type": "video_error",
-            "job_id": job_id,
-            "error": str(e),
-        }, loop)
 
 
 # ===== API 端点 =====
@@ -247,7 +48,7 @@ async def detect_image(
         shutil.copyfileobj(file.file, buffer)
 
     try:
-        from routers.yolo_training import load_yolo_model, inference_yolo
+        from backend.routers.yolo_training import load_yolo_model, inference_yolo
 
         detector = load_yolo_model(model.file_path)
         result = inference_yolo(detector, str(file_path), conf_threshold)
@@ -290,93 +91,6 @@ async def detect_image(
             file_path.unlink()
 
 
-@router.post("/detect/video", status_code=202)
-async def detect_video(
-    file: UploadFile = File(...),
-    model_id: int = None,
-    conf_threshold: float = 0.25,
-    db: Session = Depends(get_db)
-):
-    """提交视频检测任务（异步）。返回 job_id，前端轮询进度。"""
-    # 验证模型
-    model = db.query(Model).filter(Model.id == model_id).first()
-    if not model:
-        raise HTTPException(status_code=404, detail="模型不存在")
-    if not model.file_path or not os.path.exists(model.file_path):
-        raise HTTPException(status_code=400, detail="模型文件不存在")
-
-    # 获取类别信息
-    categories = []
-    if model.metrics:
-        try:
-            metrics = json.loads(model.metrics)
-            categories = metrics.get('categories', [])
-        except json.JSONDecodeError:
-            pass
-
-    # 保存上传的视频
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    input_path = INFERENCE_OUTPUT_DIR / f"video_{timestamp}_{file.filename}"
-    with open(input_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
-    # 创建检测任务
-    job_id = video_job_manager.create_job(
-        input_path=str(input_path),
-        model_id=model_id,
-        conf_threshold=conf_threshold,
-        categories=categories,
-    )
-
-    # 获取当前事件循环，传递给后台线程用于 WebSocket 推送
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    # 后台线程处理（daemon 确保主进程退出时自动终止）
-    thread = threading.Thread(
-        target=process_video_background,
-        args=(job_id, model.file_path, conf_threshold, categories, str(input_path), loop),
-        daemon=True,
-    )
-    thread.start()
-
-    return {
-        "success": True,
-        "job_id": job_id,
-        "message": "视频检测任务已创建",
-    }
-
-
-@router.get("/video/status/{job_id}")
-async def get_video_job_status(job_id: str):
-    """获取视频检测任务状态。"""
-    job = video_job_manager.get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    return job
-
-
-@router.get("/video/result/{job_id}")
-async def get_video_result(job_id: str):
-    """获取视频检测结果文件。"""
-    job = video_job_manager.get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="任务不存在")
-    if job["status"] != "completed":
-        raise HTTPException(status_code=400, detail="任务未完成，当前状态: " + job["status"])
-    if not job["result_path"] or not os.path.exists(job["result_path"]):
-        raise HTTPException(status_code=404, detail="结果文件不存在")
-
-    filename = os.path.basename(job["result_path"])
-    return FileResponse(
-        job["result_path"],
-        media_type="video/mp4",
-        filename=filename,
-    )
-
-
 @router.get("/models")
 async def list_trained_models(db: Session = Depends(get_db)):
     """获取所有有文件路径的模型（可用的训练好的模型）。"""
@@ -403,3 +117,211 @@ async def list_trained_models(db: Session = Depends(get_db)):
         })
 
     return result
+
+
+# ===== 流式视频检测（实时推送模式）=====
+
+
+def process_video_stream_background(
+    job_id: str,
+    model_file_path: str,
+    conf_threshold: float,
+    categories: list,
+    input_path: str,
+):
+    """后台线程：流式处理视频，边推理边将结果放入帧缓冲队列。
+
+    生产者-消费者模式：
+    - 本函数为生产者，将推理结果放入 FrameBuffer
+    - ws_stream.py 的推送协程为消费者，从 FrameBuffer 取数据推送给前端
+    """
+    import cv2
+    import time
+    from backend.utils.frame_buffer import FrameResult
+    from backend.routers.yolo_training import load_yolo_model
+
+    frame_buffer = stream_job_manager.get_job_frame_buffer(job_id)
+    if frame_buffer is None:
+        return
+
+    try:
+        stream_job_manager.update_job(job_id, status="processing")
+
+        # 加载 YOLO 模型
+        detector = load_yolo_model(model_file_path)
+
+        # 获取视频信息
+        cap = cv2.VideoCapture(input_path)
+        fps = round(cap.get(cv2.CAP_PROP_FPS)) or 24
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+        stream_job_manager.update_job(job_id,
+            total_frames=total_frames,
+            fps=fps,
+        )
+
+        frame_count = 0
+        total_detections = 0
+        start_time = time.time()
+
+        while True:
+            # 检查是否被停止
+            if stream_job_manager.is_job_stopped(job_id):
+                break
+
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            frame_count += 1
+            frame_start = time.time()
+
+            # BGR -> RGB，用于 YOLO 推理
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            try:
+                # YOLO 推理
+                results = detector(rgb_frame, conf=conf_threshold, verbose=False)
+
+                detections = []
+                for result in results:
+                    boxes = result.boxes
+                    if boxes is not None:
+                        for box in boxes:
+                            x1, y1, x2, y2 = box.xyxy[0].tolist()
+                            conf = float(box.conf[0])
+                            cls_id = int(box.cls[0])
+                            cls_name = result.names[cls_id] if cls_id < len(result.names) else f'Class {cls_id}'
+
+                            detections.append({
+                                "bbox": [int(x1), int(y1), int(x2), int(y2)],
+                                "class_id": cls_id,
+                                "class_name": cls_name,
+                                "confidence": round(conf, 4),
+                            })
+                            total_detections += 1
+            except Exception:
+                detections = []
+
+            inference_ms = int((time.time() - frame_start) * 1000)
+
+            # JPEG 压缩并转为 base64
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 85]
+            _, buffer = cv2.imencode('.jpg', frame, encode_param)
+            image_base64 = base64.b64encode(buffer).decode('utf-8')
+
+            # 构建帧结果，放入队列
+            frame_result = FrameResult(
+                frame_id=frame_count,
+                timestamp=frame_count / fps,
+                image_base64=image_base64,
+                detections=detections,
+                inference_ms=inference_ms,
+            )
+            frame_buffer.put(frame_result)
+
+            # 更新进度
+            if frame_count % 10 == 0 or frame_count == total_frames:
+                progress = int((frame_count / total_frames) * 100) if total_frames > 0 else 0
+                stream_job_manager.update_job(job_id,
+                    current_frame=frame_count,
+                    progress=progress,
+                    total_detections=total_detections,
+                )
+
+        cap.release()
+
+        # 标记完成
+        stream_job_manager.update_job(job_id,
+            status="completed",
+            progress=100,
+            current_frame=total_frames,
+            total_detections=total_detections,
+        )
+
+    except Exception as e:
+        stream_job_manager.update_job(job_id, status="failed", error=str(e))
+
+
+@router.post("/detect/video/stream", status_code=202)
+async def detect_video_stream(
+    file: UploadFile = File(...),
+    model_id: int = None,
+    conf_threshold: float = 0.25,
+    db: Session = Depends(get_db)
+):
+    """提交流式视频检测任务。
+
+    边推理边通过 WebSocket 推送实时帧给前端。
+    前端需连接 WS /ws/inference/stream/{job_id} 接收帧数据。
+    """
+    # 验证模型
+    model = db.query(Model).filter(Model.id == model_id).first()
+    if not model:
+        raise HTTPException(status_code=404, detail="模型不存在")
+    if not model.file_path or not os.path.exists(model.file_path):
+        raise HTTPException(status_code=400, detail="模型文件不存在")
+
+    # 获取类别信息
+    categories = []
+    if model.metrics:
+        try:
+            metrics = json.loads(model.metrics)
+            categories = metrics.get('categories', [])
+        except json.JSONDecodeError:
+            pass
+
+    # 保存上传的视频
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    input_path = INFERENCE_OUTPUT_DIR / f"stream_{timestamp}_{file.filename}"
+    with open(input_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # 获取视频基本信息（用于立即返回）
+    import cv2
+    cap = cv2.VideoCapture(str(input_path))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+
+    # 创建流式推理任务
+    job_id, frame_buffer = stream_job_manager.create_job(
+        input_path=str(input_path),
+        model_id=model_id,
+        conf_threshold=conf_threshold,
+        categories=categories,
+        fps=fps,
+        total_frames=total_frames,
+    )
+
+    # 后台线程执行推理
+    thread = threading.Thread(
+        target=process_video_stream_background,
+        args=(job_id, model.file_path, conf_threshold, categories, str(input_path)),
+        daemon=True,
+    )
+    thread.start()
+
+    return {
+        "success": True,
+        "job_id": job_id,
+        "stream_url": f"/ws/inference/stream/{job_id}",
+        "video_info": {
+            "fps": int(fps),
+            "total_frames": total_frames,
+            "duration": round(total_frames / fps) if fps > 0 else 0,
+        }
+    }
+
+
+@router.post("/detect/stop/{job_id}")
+async def stop_video_job(job_id: str):
+    """停止流式视频检测任务。"""
+    job = stream_job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="任务不存在")
+
+    stream_job_manager.stop_job(job_id)
+    return {"success": True, "message": "推理已停止"}
