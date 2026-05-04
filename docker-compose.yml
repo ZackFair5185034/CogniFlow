@@ -22,8 +22,8 @@ services:
       - WORKERS=1
       - DATA_DIR=/app/data
     volumes:
-      # 统一数据卷（所有持久化数据）
-      - cogniflow-data:/app/data
+      # 数据目录（持久化到主机 ./data 目录，升级时保留）
+      - ./data:/app/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
       interval: 30s
@@ -83,7 +83,6 @@ services:
   #   profiles:
   #     - dev  # 需要手动: docker compose --profile dev up
 
-# ========== 数据卷 ==========
-volumes:
-  cogniflow-data:
-    driver: local
+# ========== 数据目录 ==========
+# ./data 目录需要在首次启动前创建：
+#   mkdir -p data
