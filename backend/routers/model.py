@@ -15,7 +15,7 @@ from backend.schemas import ModelCreate, ModelUpdate, ModelResponse
 router = APIRouter()
 
 # 模型存储根目录（统一使用 DATA_DIR）
-_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 _DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
 MODEL_STORAGE_DIR = os.path.join(_DATA_DIR, "uploads", "models")
 

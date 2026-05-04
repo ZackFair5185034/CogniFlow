@@ -24,15 +24,19 @@ from .browser import open_browser, DEFAULT_URL
 class TrayManager:
     """系统托盘管理器。"""
 
-    def __init__(self, app_name: str = "CogniFlow"):
+    def __init__(self, app_name: str = "CogniFlow", on_quit_callback=None, on_show_console_callback=None):
         """初始化托盘管理器。
 
         Args:
             app_name: 应用名称，用于窗口标题等
+            on_quit_callback: 退出时执行的回调函数
+            on_show_console_callback: 显示控制台窗口的回调函数
         """
         self.app_name = app_name
         self._icon: Optional[pystray.Icon] = None
         self._stop_event = threading.Event()
+        self._on_quit_callback = on_quit_callback
+        self._on_show_console_callback = on_show_console_callback
 
     def _create_icon_image(self) -> Image.Image:
         """创建托盘图标图像。
@@ -65,20 +69,32 @@ class TrayManager:
         Returns:
             pystray.Menu 对象
         """
-        return pystray.Menu(
+        items = [
             pystray.MenuItem("打开浏览器", self._on_open_browser),
-            pystray.MenuItem("退出", self._on_quit),
-        )
+        ]
+        if self._on_show_console_callback:
+            items.append(pystray.MenuItem("显示控制台", self._on_show_console))
+        items.append(pystray.Menu.SEPARATOR)
+        items.append(pystray.MenuItem("退出", self._on_quit))
+        return pystray.Menu(*items)
 
     def _on_open_browser(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """打开浏览器菜单项回调。"""
         open_browser(DEFAULT_URL)
+
+    def _on_show_console(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        """显示控制台菜单项回调。"""
+        if self._on_show_console_callback:
+            self._on_show_console_callback()
 
     def _on_quit(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         """退出菜单项回调。"""
         self._stop_event.set()
         if self._icon:
             self._icon.stop()
+        # 执行退出回调，实际关闭应用
+        if self._on_quit_callback:
+            self._on_quit_callback()
 
     def _on_double_click(self, icon: pystray.Icon) -> None:
         """双击托盘图标回调。"""

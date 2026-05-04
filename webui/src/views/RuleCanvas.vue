@@ -1332,7 +1332,6 @@ $panel-header-height: 52px;
     color: #000;
 
     &:hover:not(:disabled) {
-      transform: translateY(-1px);
       box-shadow: 0 4px 20px rgba(0, 240, 255, 0.3);
     }
   }
@@ -1725,7 +1724,6 @@ $panel-header-height: 52px;
     &:hover {
       border-color: #00f0ff;
       color: #fff;
-      transform: translateY(-2px);
     }
   }
 }

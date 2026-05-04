@@ -537,7 +537,6 @@ onUnmounted(() => {
     background: var(--bg-hover);
     border-color: var(--accent-cyan);
     color: var(--accent-cyan);
-    transform: translateY(-1px);
   }
 
   svg {

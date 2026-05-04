@@ -19,7 +19,7 @@ from backend.utils.frame_extract_manager import frame_extract_manager
 router = APIRouter()
 
 # 统一数据目录（与 app.py 保持一致）
-_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 _DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
 
 # 图片存储根目录
