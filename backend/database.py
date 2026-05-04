@@ -181,7 +181,17 @@ class NodeExecutionLog(Base):
 
 
 # 数据库引擎和会话
-DATABASE_URL = "sqlite:///./engine.db"
+import os
+
+# 统一数据目录（所有持久化数据都放项目根目录下的 data/）
+_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
+os.makedirs(os.path.join(DATA_DIR, "database"), exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, "uploads", "images"), exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, "uploads", "videos"), exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, "uploads", "models"), exist_ok=True)
+os.makedirs(os.path.join(DATA_DIR, "inference_output"), exist_ok=True)
+DATABASE_URL = f"sqlite:///{os.path.join(DATA_DIR, 'database', 'engine.db')}"
 
 engine = create_engine(
     DATABASE_URL,

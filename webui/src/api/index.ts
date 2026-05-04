@@ -49,7 +49,7 @@ export const atlasApi = {
 
 // Image API
 export const imageApi = {
-  list: () => api.get('/images'),
+  list: () => api.get('/images/'),
   get: (id: number) => api.get(`/images/${id}`),
   getFile: (id: number) => `/api/images/${id}/file`,
   delete: (id: number) => api.delete(`/images/${id}`),

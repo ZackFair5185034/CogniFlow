@@ -8,8 +8,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from database import get_db, Annotation, Image
-from schemas import AnnotationCreate, AnnotationUpdate, AnnotationResponse
+from backend.database import get_db, Annotation, Image
+from backend.schemas import AnnotationCreate, AnnotationUpdate, AnnotationResponse
 
 router = APIRouter()
 

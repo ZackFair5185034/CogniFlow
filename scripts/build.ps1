@@ -1,17 +1,28 @@
 #!/usr/bin/env pwsh
-# CogniFlow 构建脚本 - Windows (PowerShell)
-# 用法: .\scripts\build.ps1 [backend|frontend|all|docker|clean]
+# CogniFlow 构建脚本 - Windows
+# 用法: .\scripts\build.ps1 <命令>
+#
+# 环境变量:
+#   USE_VENV=1         - 使用虚拟环境
+#   TARGET=exe|dir     - 打包类型: exe=单文件, dir=目录（默认 exe）
+#   PYINSTALLER_OPTS=  - PyInstaller 额外参数
+
+param(
+    [string]$Command = "help"
+)
 
 # ========== 配置 ==========
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$BackendDir = Join-Path $ProjectRoot "backend"
-$WebuiDir = Join-Path $ProjectRoot "webui"
+$BackendDir  = Join-Path $ProjectRoot "backend"
+$WebuiDir   = Join-Path $ProjectRoot "webui"
+$EngineDir  = Join-Path $ProjectRoot "engine"
+$OutputDir  = Join-Path $ProjectRoot "dist"
 
-# 颜色（PowerShell 控制台）
-function Log-Info { Write-Host "[INFO] $args" -ForegroundColor Cyan }
-function Log-Success { Write-Host "[SUCCESS] $args" -ForegroundColor Green }
-function Log-Warn { Write-Host "[WARN] $args" -ForegroundColor Yellow }
-function Log-Error { Write-Host "[ERROR] $args" -ForegroundColor Red }
+# 颜色
+function Log { param($m) Write-Host "[INFO] $m" -ForegroundColor Cyan }
+function Ok  { param($m) Write-Host "[OK] $m" -ForegroundColor Green }
+function Warn{ param($m) Write-Host "[WARN] $m" -ForegroundColor Yellow }
+function Err { param($m) Write-Host "[ERROR] $m" -ForegroundColor Red; exit 1 }
 
 # ========== 前置检查 ==========
 function Test-Command {
@@ -19,131 +30,121 @@ function Test-Command {
     $null -ne (Get-Command $cmd -ErrorAction SilentlyContinue)
 }
 
-function Test-Python {
-    try {
-        $ver = python --version 2>&1
-        if ($LASTEXITCODE -ne 0) { throw "Python not found" }
-        Log-Info "Python: $ver"
-        return $true
-    } catch {
-        Log-Error "Python 未找到，请先安装 Python 3.8+"
-        return $false
-    }
-}
-
-# ========== 后端构建 ==========
+# ========== 后端构建 + PyInstaller 打包 ==========
 function Build-Backend {
-    Log-Info "========== 构建后端 =========="
+    Log "========== 构建后端 (Windows) =========="
 
-    Set-Location $ProjectRoot
+    # 检查 Python
+    if (-not (Test-Command "python")) {
+        Err "Python 未安装，请先安装 Python 3.8+ https://python.org"
+    }
+    $pyVer = python --version 2>&1
+    Log "Python: $pyVer"
 
-    # 创建虚拟环境（可选）
+    # 检查 pip
+    if (-not (Test-Command "pip")) {
+        Err "pip 未找到"
+    }
+
+    # 虚拟环境
     if ($env:USE_VENV -eq "1") {
-        Log-Info "使用虚拟环境..."
+        Log "使用虚拟环境..."
         if (-not (Test-Path "venv")) {
             python -m venv venv
         }
         & ".\venv\Scripts\Activate.ps1"
-        $PyCmd = "python"
-        $PipCmd = "pip"
-    } else {
-        $PyCmd = "python"
-        $PipCmd = "pip"
-    }
-
-    # 检查 pip
-    if (-not (Test-Command "pip")) {
-        Log-Error "pip 未找到"
-        exit 1
     }
 
     # 安装依赖
-    Log-Info "安装后端依赖..."
+    Log "安装 Python 依赖..."
     & pip install --upgrade pip
     & pip install -r requirements.txt
 
-    # 注意：不安装 engine 源码包，只安装运行时依赖
+    # 安装 PyInstaller
+    Log "安装 PyInstaller..."
+    & pip install pyinstaller pyinstaller-hooks-contrib
 
-    Log-Success "后端构建完成！"
+    # 创建 spec 文件（如果没有）
+    $specFile = Join-Path $ProjectRoot "cogniflow.spec"
+    if (-not (Test-Path $specFile)) {
+        Log "生成 PyInstaller spec 文件..."
+        New-FileContent $specFile (Make-SpecContent)
+    }
+
+    # 打包
+    Log "PyInstaller 打包中（这可能需要 5-10 分钟）..."
+    $env:PYINSTALLER_OPTS = if ($env:PYINSTALLER_OPTS) { $env:PYINSTALLER_OPTS } else { "" }
+
+    & python -m PyInstaller cogniflow.spec --clean --noconfirm $env:PYINSTALLER_OPTS.Split(" ")
+
+    if ($LASTEXITCODE -ne 0) {
+        Err "PyInstaller 打包失败"
+    }
+
+    # 复制前端构建产物到输出目录
+    $distBackend = Join-Path $ProjectRoot "dist\backend"
+    $webuiDist = Join-Path $WebuiDir "dist"
+    if (Test-Path $webuiDist) {
+        $targetWebui = Join-Path $distBackend "webui\dist"
+        Log "复制前端构建产物到输出目录..."
+        Copy-Item -Path $webuiDist -Destination $targetWebui -Recurse -Force
+    }
+
+    Ok "后端构建完成！"
+    Log "输出目录: $OutputDir\backend\"
+    Log "运行: $OutputDir\backend\cogniflow.exe"
 }
+
+# ========== 生成 PyInstaller spec 内容 ==========
+function Make-SpecContent {}
 
 # ========== 前端构建 ==========
 function Build-Frontend {
-    Log-Info "========== 构建前端 =========="
+    Log "========== 构建前端 =========="
 
-    Set-Location $WebuiDir
-
-    # 检查 node
     if (-not (Test-Command "node")) {
-        Log-Error "Node.js 未找到，请先安装 https://nodejs.org/"
-        exit 1
+        Err "Node.js 未安装，请先安装 https://nodejs.org"
     }
-    Log-Info "Node: $(node --version)"
+    Log "Node: $(node --version)"
 
     # 选择包管理器
     if (Test-Command "pnpm") {
-        $PkgMgr = "pnpm"
+        $Pkg = "pnpm"
     } elseif (Test-Command "yarn") {
-        $PkgMgr = "yarn"
+        $Pkg = "yarn"
     } else {
-        $PkgMgr = "npm"
-        Log-Warn "未检测到 pnpm，使用 npm（推荐安装 pnpm: npm install -g pnpm）"
+        $Pkg = "npm"
+        Warn "未检测到 pnpm，使用 npm（推荐: npm install -g pnpm）"
     }
-    Log-Info "使用包管理器: $PkgMgr"
+    Log "使用: $Pkg"
 
-    # 安装依赖
-    Log-Info "安装前端依赖（这可能需要几分钟）..."
-    & $PkgMgr install
+    Log "安装前端依赖..."
+    & $Pkg install
 
-    # 构建
-    Log-Info "构建生产版本..."
-    & $PkgMgr run build
+    Log "构建生产版本..."
+    & $Pkg run build
 
-    Log-Success "前端构建完成！输出: $WebuiDir\dist"
+    Ok "前端构建完成: $WebuiDir\dist"
 }
 
-# ========== Docker 构建 ==========
-function Build-Docker {
-    Log-Info "========== 构建 Docker 镜像 =========="
-
-    if (-not (Test-Command "docker")) {
-        Log-Error "Docker 未找到，请先安装 https://docker.com/"
-        exit 1
-    }
-
-    Set-Location $ProjectRoot
-
-    # 检查 Dockerfile
-    $dockerfile = Join-Path $ProjectRoot "Dockerfile"
-    if (-not (Test-Path $dockerfile)) {
-        Log-Error "未找到 Dockerfile，请先创建！"
-        exit 1
-    }
-
-    $version = if ($env:VERSION) { $env:VERSION } else { "latest" }
-    $imageName = if ($env:IMAGE_NAME) { $env:IMAGE_NAME } else { "cogniflow/cogniflow" }
-
-    Log-Info "构建镜像: $imageName`:$version"
-
-    docker build `
-        --build-arg VERSION="$version" `
-        --build-arg PYTHON_VERSION=3.10 `
-        -t "$imageName`:$version" `
-        -t "$imageName`:latest" `
-        .
-
-    if ($LASTEXITCODE -eq 0) {
-        Log-Success "Docker 镜像构建完成！"
-        Log-Info "运行容器: docker run -p 8000:8000 -p 5173:5173 $imageName`:$version"
-    } else {
-        Log-Error "Docker 构建失败"
-        exit 1
-    }
+# ========== 全量构建 ==========
+function Build-All {
+    Log "========== 全量构建 =========="
+    Build-Backend
+    Build-Frontend
+    Ok "全部构建完成！"
+    Log ""
+    Log "输出:"
+    Log "  后端 exe: $OutputDir\backend\cogniflow.exe"
+    Log "  前端: $WebuiDir\dist"
+    Log ""
+    Log "启动后端: $OutputDir\backend\cogniflow.exe"
+    Log "启动前端: cd $WebuiDir && pnpm dev"
 }
 
 # ========== 清理 ==========
 function Clear-Build {
-    Log-Info "========== 清理构建产物 =========="
+    Log "清理构建产物..."
 
     # Python
     Get-ChildItem -Path $ProjectRoot -Directory -Filter "__pycache__" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
@@ -151,85 +152,61 @@ function Clear-Build {
     Get-ChildItem -Path $ProjectRoot -Directory -Filter "*.egg-info" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
     @("build", "dist", "venv") | ForEach-Object {
         $p = Join-Path $ProjectRoot $_
-        if (Test-Path $p) { Remove-Item -Path $p -Recurse -Force }
+        if (Test-Path $p) { Remove-Item -Path $p -Recurse -Force -ErrorAction SilentlyContinue }
     }
+
+    # PyInstaller
+    @("*.spec", "*.manifest") | ForEach-Object {
+        Get-ChildItem -Path $ProjectRoot -Filter $_ -ErrorAction SilentlyContinue | Remove-Item -Force
+    }
+    $specDir = Join-Path $ProjectRoot "dist"
+    if (Test-Path $specDir) { Remove-Item -Path $specDir -Recurse -Force -ErrorAction SilentlyContinue }
 
     # 前端
     @("node_modules", "dist") | ForEach-Object {
         $p = Join-Path $WebuiDir $_
-        if (Test-Path $p) { Remove-Item -Path $p -Recurse -Force }
+        if (Test-Path $p) { Remove-Item -Path $p -Recurse -Force -ErrorAction SilentlyContinue }
     }
 
-    # Docker 镜像
-    if (Test-Command "docker") {
-        docker images | Where-Object { $_.Repository -like "*cogniflow*" } | ForEach-Object {
-            docker rmi -f $_.ID
-        }
-    }
-
-    Log-Success "清理完成！"
+    Ok "清理完成！"
 }
 
 # ========== 帮助 ==========
 function Show-Help {
     Write-Host @"
-CogniFlow 构建脚本 (Windows PowerShell)
+CogniFlow 构建脚本 (Windows)
 
-用法: .\scripts\build.ps1 [命令]
+用法: .\scripts\build.ps1 <命令>
 
 命令:
-  backend   - 仅构建后端
-  frontend  - 仅构建前端
-  all       - 构建前后端（默认）
-  docker    - 构建 Docker 镜像
-  clean     - 清理构建产物
-  help      - 显示此帮助
+  backend   构建后端 + PyInstaller 打包为 exe
+  frontend  构建前端
+  all       构建后端 + 前端
+  clean     清理构建产物
+  help      显示帮助
 
 环境变量:
-  USE_VENV     - 是否使用虚拟环境（0或1，默认: 0）
-  VERSION      - Docker 镜像版本
-  IMAGE_NAME   - Docker 镜像名称
+  USE_VENV=1        使用虚拟环境
+  PYINSTALLER_OPTS= PyInstaller 额外参数
 
 示例:
-  .\scripts\build.ps1 all           # 构建全部
-  .\scripts\build.ps1 backend       # 仅后端
-  .\scripts\build.ps1 docker        # Docker 镜像
-  .\scripts\build.ps1 clean         # 清理
+  .\build.ps1 all        # 构建全部
+  .\build.ps1 backend    # 后端（打包 exe）
+  .\build.ps1 frontend   # 前端
+
+输出:
+  exe:  dist\cogniflow\cogniflow.exe
+  前端: webui\dist
 
 "@
 }
 
 # ========== 主入口 ==========
-$cmd = if ($args[0]) { $args[0] } else { "all" }
-
-Log-Info "CogniFlow 构建脚本"
-Log-Info "项目目录: $ProjectRoot"
-
-switch ($cmd) {
-    "backend" {
-        if (-not (Test-Python)) { exit 1 }
-        Build-Backend
-    }
-    "frontend" {
-        Build-Frontend
-    }
-    "all" {
-        if (-not (Test-Python)) { exit 1 }
-        Build-Backend
-        Build-Frontend
-    }
-    "docker" {
-        Build-Docker
-    }
-    "clean" {
-        Clear-Build
-    }
-    { $_ -in "help", "--help", "-h" } {
-        Show-Help
-    }
-    default {
-        Log-Error "未知命令: $cmd"
-        Show-Help
-        exit 1
-    }
+switch ($Command) {
+    "backend"  { Build-Backend }
+    "frontend" { Build-Frontend }
+    "all"      { Build-All }
+    "clean"    { Clear-Build }
+    "help"     { Show-Help }
+    default    { Show-Help }
 }

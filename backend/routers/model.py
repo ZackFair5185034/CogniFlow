@@ -9,13 +9,15 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 
-from database import get_db, Model
-from schemas import ModelCreate, ModelUpdate, ModelResponse
+from backend.database import get_db, Model
+from backend.schemas import ModelCreate, ModelUpdate, ModelResponse
 
 router = APIRouter()
 
-# 模型存储根目录
-MODEL_STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "uploads", "models")
+# 模型存储根目录（统一使用 DATA_DIR）
+_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+_DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
+MODEL_STORAGE_DIR = os.path.join(_DATA_DIR, "uploads", "models")
 
 
 @router.get("", response_model=List[ModelResponse])
@@ -207,7 +209,7 @@ async def upload_model_file(
 @router.get("/{model_id}/training-history")
 async def get_model_training_history(model_id: int, db: Session = Depends(get_db)):
     """获取模型的训练历史。"""
-    from database import TrainingJob
+    from backend.database import TrainingJob
 
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:

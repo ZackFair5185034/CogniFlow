@@ -1,0 +1,64 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+*.egg
+
+# Node
+node_modules
+dist
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# 环境
+.env
+.env.*
+*.log
+
+# 后端运行时生成（不应打入镜像）
+backend/__pycache__
+backend/*.pyc
+backend/engine.db
+backend/inference_output/
+backend/test_export/
+backend/uploads/
+
+# 上传目录（应在运行时挂载）
+uploads/images
+uploads/models
+
+# 构建产物
+build
+dist
+*.spec
+venv
+env
+.eggs
+
+# 文档（可选，打包时可排除）
+docs
+README.md
+SAMPLE.md
+TODO.md
+CLAUDE.md
+
+# tests
+tests
+
+# engine 源码（不打包到生产镜像）
+engine
+setup.py
+
+# Docker 相关
+docker-compose*.yml
+Dockerfile*
+.dockerignore

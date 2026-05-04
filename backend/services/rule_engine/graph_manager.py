@@ -4,7 +4,7 @@ import json
 from typing import Optional
 from sqlalchemy.orm import Session
 
-from database import RuleGraph
+from backend.database import RuleGraph
 
 
 class GraphValidationError(Exception):

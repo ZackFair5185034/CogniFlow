@@ -13,20 +13,41 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
 
-from database import init_db
-from routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
+from backend.database import init_db
+from backend.routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
+
+# 统一数据目录（所有持久化数据都放这里）
+# 本地开发: ./data, Docker: /app/data
+_DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
 
 # 上传文件存储目录
-UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
+MODEL_DIR = os.path.join(UPLOAD_DIR, "models")
+
+# 推理输出目录
+INFERENCE_OUTPUT_DIR = os.path.join(DATA_DIR, "inference_output")
+
+# 日志目录
+LOGS_DIR = os.path.join(DATA_DIR, "logs")
+
+# YOLO 训练输出目录（YOLO 默认 runs/detect/，我们统一放这里）
+YOLO_RUNS_DIR = os.path.join(DATA_DIR, "runs")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理。"""
-    init_db()
-    # 确保上传目录存在
+    # 确保所有数据目录存在
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
     os.makedirs(os.path.join(UPLOAD_DIR, "images"), exist_ok=True)
-    os.makedirs(os.path.join(UPLOAD_DIR, "models"), exist_ok=True)
+    os.makedirs(os.path.join(UPLOAD_DIR, "videos"), exist_ok=True)
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    os.makedirs(INFERENCE_OUTPUT_DIR, exist_ok=True)
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    os.makedirs(YOLO_RUNS_DIR, exist_ok=True)
+
+    init_db()
     # 设置事件循环给流式推理 WebSocket 管理器
     import asyncio
     try:
@@ -68,18 +89,29 @@ app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
 app.include_router(ws_stream.router, prefix="/ws", tags=["流式推理WebSocket"])
 
 # 挂载上传文件目录为静态文件服务
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_DIR, "images"), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_DIR, "videos"), exist_ok=True)
+os.makedirs(MODEL_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # 挂载推理输出目录为静态文件服务
-INFERENCE_OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "inference_output")
 os.makedirs(INFERENCE_OUTPUT_DIR, exist_ok=True)
 app.mount("/inference_output", StaticFiles(directory=INFERENCE_OUTPUT_DIR), name="inference_output")
+
+# 挂载 Vue 前端静态文件（开发时若无 dist 目录则跳过）
+# Docker 环境: WEBUI_DIST=/app/webui/dist
+_WEBUI_DIST = os.environ.get("WEBUI_DIST", os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui", "dist"))
+if os.path.exists(_WEBUI_DIST):
+    app.mount("/", StaticFiles(directory=_WEBUI_DIST, html=True), name="frontend")
 
 
 @app.get("/")
 async def root():
     """根路径重定向到前端。"""
-    return RedirectResponse(url="/index.html")
+    if os.path.exists(_WEBUI_DIST):
+        return RedirectResponse(url="/index.html")
+    return {"message": "CogniFlow API running", "docs": "/docs"}
 
 
 @app.get("/api/health")

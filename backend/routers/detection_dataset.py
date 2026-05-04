@@ -45,7 +45,7 @@ class AtlasDetectionDataset(Dataset):
 
     def _load_samples(self) -> List[Dict]:
         """加载图集的图片和标注数据。"""
-        from database import Image, Annotation
+        from backend.database import Image, Annotation
 
         images = self.db.query(Image).filter(Image.atlas_id == self.atlas_id).all()
         samples = []
@@ -77,7 +77,7 @@ class AtlasDetectionDataset(Dataset):
 
     def _load_categories(self) -> List[Dict]:
         """加载该图集关联的所有类别。"""
-        from database import Category
+        from backend.database import Category
 
         # 获取该图集中所有被使用的类别
         categories = self.db.query(Category).filter(

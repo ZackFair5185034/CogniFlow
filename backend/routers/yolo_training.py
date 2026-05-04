@@ -135,7 +135,7 @@ def export_to_yolo_format(atlas_id: int, db: Session, output_dir: str) -> Dict:
     Returns:
         导出统计信息
     """
-    from database import Image, Annotation, Category
+    from backend.database import Image, Annotation, Category
 
     # 创建目录结构
     images_dir = Path(output_dir) / "images"
@@ -256,9 +256,12 @@ def train_yolo(
     import os
     from ultralytics import YOLO
 
-    # 设置模型缓存目录到项目目录
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    cache_dir = os.path.join(project_root, 'model_cache')
+    # 统一数据目录
+    _DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+    _DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
+
+    # 模型缓存目录（YOLO 预训练权重，~100MB/模型）
+    cache_dir = os.path.join(_DATA_DIR, "model_cache")
     os.makedirs(cache_dir, exist_ok=True)
     os.environ['YOLO_CACHE_DIR'] = cache_dir
 
@@ -324,8 +327,10 @@ def train_yolo(
                 if on_progress:
                     on_progress(0, epochs, message=f"下载失败，正在重试 ({attempt + 2}/{max_retries})...")
 
-    # 创建保存目录
-    save_dir = Path(model_save_path)
+    # 创建保存目录（统一到 DATA_DIR/runs/ 下）
+    runs_base = os.path.join(_DATA_DIR, "runs")
+    os.makedirs(runs_base, exist_ok=True)
+    save_dir = Path(runs_base) / "train"
     save_dir.mkdir(parents=True, exist_ok=True)
 
     # 注册训练进度回调，获得真实 epoch 进度
