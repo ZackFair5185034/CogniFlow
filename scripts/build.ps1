@@ -1,207 +1,272 @@
 #!/usr/bin/env pwsh
-# CogniFlow 构建脚本 - Windows
-# 用法: .\scripts\build.ps1 <命令>
+# CogniFlow Build Script - Windows
+# Usage: .\scripts\build.ps1 <command>
 #
-# 环境变量:
-#   USE_VENV=1         - 使用虚拟环境
-#   TARGET=exe|dir     - 打包类型: exe=单文件, dir=目录（默认 exe）
-#   PYINSTALLER_OPTS=  - PyInstaller 额外参数
+# Environment variables:
+#   USE_VENV=1         - Use virtual environment (not needed if already in venv)
+#   PYINSTALLER_OPTS=  - PyInstaller extra options
 
 param(
     [string]$Command = "help"
 )
 
-# ========== 配置 ==========
+# ========== Config ==========
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $BackendDir  = Join-Path $ProjectRoot "backend"
 $WebuiDir   = Join-Path $ProjectRoot "webui"
 $EngineDir  = Join-Path $ProjectRoot "engine"
 $OutputDir  = Join-Path $ProjectRoot "dist"
 
-# 颜色
+# Store original location and switch to project root
+# This ensures we use the correct Python and venv
+$OriginalDir = Get-Location
+Set-Location $ProjectRoot
+
+# Find Python in current project venv first
+$VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
+$VenvPip = Join-Path $ProjectRoot ".venv\Scripts\pip.exe"
+$VenvPyInstaller = Join-Path $ProjectRoot ".venv\Scripts\pyinstaller.exe"
+
+# Colors
 function Log { param($m) Write-Host "[INFO] $m" -ForegroundColor Cyan }
 function Ok  { param($m) Write-Host "[OK] $m" -ForegroundColor Green }
 function Warn{ param($m) Write-Host "[WARN] $m" -ForegroundColor Yellow }
-function Err { param($m) Write-Host "[ERROR] $m" -ForegroundColor Red; exit 1 }
+function Err { param($m) Write-Host "[ERROR] $m" -ForegroundColor Red; Set-Location $OriginalDir; exit 1 }
 
-# ========== 前置检查 ==========
+# ========== Pre-check ==========
 function Test-Command {
     param([string]$cmd)
     $null -ne (Get-Command $cmd -ErrorAction SilentlyContinue)
 }
 
-# ========== 后端构建 + PyInstaller 打包 ==========
+# ========== Backend Build + PyInstaller ==========
 function Build-Backend {
-    Log "========== 构建后端 (Windows) =========="
+    Log "========== Build Backend (Windows) =========="
 
-    # 检查 Python
-    if (-not (Test-Command "python")) {
-        Err "Python 未安装，请先安装 Python 3.8+ https://python.org"
+    # Check Python in venv first
+    if (Test-Path $VenvPython) {
+        $PythonExe = $VenvPython
+        $PipExe = $VenvPip
+        Log "Using venv Python: $PythonExe"
+    } elseif (Test-Command "python") {
+        $PythonExe = "python"
+        $PipExe = "pip"
+        Log "Using system Python"
+    } else {
+        Err "Python not found. Install Python 3.8+ https://python.org"
     }
-    $pyVer = python --version 2>&1
+
+    $pyVer = & $PythonExe --version 2>&1
     Log "Python: $pyVer"
 
-    # 检查 pip
-    if (-not (Test-Command "pip")) {
-        Err "pip 未找到"
+    # Check pip
+    if (-not (Test-Path $PipExe) -and -not (Test-Command "pip")) {
+        Err "pip not found"
     }
 
-    # 虚拟环境
-    if ($env:USE_VENV -eq "1") {
-        Log "使用虚拟环境..."
-        if (-not (Test-Path "venv")) {
-            python -m venv venv
+    # Install PyInstaller if not exists
+    $PyInstallerExists = Test-Path $VenvPyInstaller
+    if (-not $PyInstallerExists) {
+        Log "Installing PyInstaller..."
+        if ($PipExe) {
+            & $PipExe install pyinstaller pyinstaller-hooks-contrib
+        } else {
+            & $PythonExe -m pip install pyinstaller pyinstaller-hooks-contrib
         }
-        & ".\venv\Scripts\Activate.ps1"
     }
 
-    # 安装依赖
-    Log "安装 Python 依赖..."
-    & pip install --upgrade pip
-    & pip install -r requirements.txt
-
-    # 安装 PyInstaller
-    Log "安装 PyInstaller..."
-    & pip install pyinstaller pyinstaller-hooks-contrib
-
-    # 创建 spec 文件（如果没有）
+    # Create spec file (if not exists)
     $specFile = Join-Path $ProjectRoot "cogniflow.spec"
     if (-not (Test-Path $specFile)) {
-        Log "生成 PyInstaller spec 文件..."
-        New-FileContent $specFile (Make-SpecContent)
+        Log "Generating PyInstaller spec file..."
+        New-Item -ItemType File -Path $specFile -Force
+        # Create a basic spec file
+        @"
+# -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_all, collect_submodules
+
+datas = [('webui/dist', 'webui/dist')]
+binaries = []
+hiddenimports = [
+    'fastapi', 'starlette', 'uvicorn', 'sqlalchemy', 'PIL', 'cv2', 'ultralytics',
+    'backend.database', 'backend.schemas', 'backend.websocket_manager',
+    'backend.routers.atlas', 'backend.routers.image', 'backend.routers.annotation',
+    'backend.routers.category', 'backend.routers.model', 'backend.routers.training',
+    'backend.routers.launch', 'backend.routers.inference', 'backend.routers.websocket',
+    'backend.routers.ws_stream', 'backend.routers.rule_engine',
+    'system_tray', 'system_tray.tray_manager', 'system_tray.browser',
+    'pystray', 'PIL.Image', 'PIL.ImageDraw',
+]
+
+for pkg in ['fastapi', 'starlette', 'uvicorn', 'sqlalchemy', 'PIL', 'cv2', 'ultralytics']:
+    try:
+        submods = collect_submodules(pkg)
+        hiddenimports.extend(submods)
+    except Exception:
+        pass
+
+a = Analysis(
+    ['app.py'],
+    pathex=['.'],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[],
+    noarchive=False,
+    optimize=0,
+)
+pyz = PYZ(a.pure)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name='cogniflow',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=True,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='cogniflow',
+)
+"@ | Set-Content -Path $specFile -Encoding UTF8
     }
 
-    # 打包
-    Log "PyInstaller 打包中（这可能需要 5-10 分钟）..."
-    $env:PYINSTALLER_OPTS = if ($env:PYINSTALLER_OPTS) { $env:PYINSTALLER_OPTS } else { "" }
+    # Package
+    Log "PyInstaller packaging (may take 5-10 minutes)..."
 
-    & python -m PyInstaller cogniflow.spec --clean --noconfirm $env:PYINSTALLER_OPTS.Split(" ")
+    if (Test-Path $VenvPyInstaller) {
+        & $VenvPyInstaller cogniflow.spec --clean --noconfirm
+    } else {
+        & $PythonExe -m PyInstaller cogniflow.spec --clean --noconfirm
+    }
 
     if ($LASTEXITCODE -ne 0) {
-        Err "PyInstaller 打包失败"
+        Err "PyInstaller packaging failed"
     }
 
-    # 复制前端构建产物到输出目录
-    $distBackend = Join-Path $ProjectRoot "dist\backend"
+    # Copy frontend build output to dist
+    $distBackend = Join-Path $ProjectRoot "dist\cogniflow"
     $webuiDist = Join-Path $WebuiDir "dist"
     if (Test-Path $webuiDist) {
         $targetWebui = Join-Path $distBackend "webui\dist"
-        Log "复制前端构建产物到输出目录..."
+        Log "Copying frontend build output to dist..."
         Copy-Item -Path $webuiDist -Destination $targetWebui -Recurse -Force
     }
 
-    Ok "后端构建完成！"
-    Log "输出目录: $OutputDir\backend\"
-    Log "运行: $OutputDir\backend\cogniflow.exe"
+    Ok "Backend build complete!"
+    Log "Output dir: $OutputDir\cogniflow\cogniflow.exe"
 }
 
-# ========== 生成 PyInstaller spec 内容 ==========
-function Make-SpecContent {}
-
-# ========== 前端构建 ==========
+# ========== Frontend Build ==========
 function Build-Frontend {
-    Log "========== 构建前端 =========="
+    Log "========== Build Frontend =========="
 
     if (-not (Test-Command "node")) {
-        Err "Node.js 未安装，请先安装 https://nodejs.org"
+        Err "Node.js not found. Install https://nodejs.org"
     }
     Log "Node: $(node --version)"
 
-    # 选择包管理器
+    # Select package manager
     if (Test-Command "pnpm") {
         $Pkg = "pnpm"
     } elseif (Test-Command "yarn") {
         $Pkg = "yarn"
     } else {
         $Pkg = "npm"
-        Warn "未检测到 pnpm，使用 npm（推荐: npm install -g pnpm）"
+        Warn "pnpm not found, using npm (recommended: npm install -g pnpm)"
     }
-    Log "使用: $Pkg"
+    Log "Using: $Pkg"
 
-    Log "安装前端依赖..."
+    Log "Installing frontend dependencies..."
     & $Pkg install
 
-    Log "构建生产版本..."
+    Log "Building production version..."
     & $Pkg run build
 
-    Ok "前端构建完成: $WebuiDir\dist"
+    Ok "Frontend build complete: $WebuiDir\dist"
 }
 
-# ========== 全量构建 ==========
+# ========== Full Build ==========
 function Build-All {
-    Log "========== 全量构建 =========="
+    Log "========== Full Build =========="
     Build-Backend
     Build-Frontend
-    Ok "全部构建完成！"
+    Ok "All builds complete!"
     Log ""
-    Log "输出:"
-    Log "  后端 exe: $OutputDir\backend\cogniflow.exe"
-    Log "  前端: $WebuiDir\dist"
+    Log "Output:"
+    Log "  Backend exe: $OutputDir\cogniflow\cogniflow.exe"
+    Log "  Frontend: $WebuiDir\dist"
     Log ""
-    Log "启动后端: $OutputDir\backend\cogniflow.exe"
-    Log "启动前端: cd $WebuiDir && pnpm dev"
+    Log "Start backend: $OutputDir\cogniflow\cogniflow.exe"
+    Log "Start frontend: cd $WebuiDir && pnpm dev"
 }
 
-# ========== 清理 ==========
+# ========== Clean ==========
 function Clear-Build {
-    Log "清理构建产物..."
+    Log "Cleaning build artifacts..."
 
     # Python
     Get-ChildItem -Path $ProjectRoot -Directory -Filter "__pycache__" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
     Get-ChildItem -Path $ProjectRoot -Filter "*.pyc" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force
     Get-ChildItem -Path $ProjectRoot -Directory -Filter "*.egg-info" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
-    @("build", "dist", "venv") | ForEach-Object {
+
+    # PyInstaller output (keep venv)
+    @("build", "dist\cogniflow") | ForEach-Object {
         $p = Join-Path $ProjectRoot $_
         if (Test-Path $p) { Remove-Item -Path $p -Recurse -Force -ErrorAction SilentlyContinue }
     }
 
-    # PyInstaller
-    @("*.spec", "*.manifest") | ForEach-Object {
+    # PyInstaller spec
+    @("cogniflow.spec") | ForEach-Object {
         Get-ChildItem -Path $ProjectRoot -Filter $_ -ErrorAction SilentlyContinue | Remove-Item -Force
     }
-    $specDir = Join-Path $ProjectRoot "dist"
-    if (Test-Path $specDir) { Remove-Item -Path $specDir -Recurse -Force -ErrorAction SilentlyContinue }
 
-    # 前端
-    @("node_modules", "dist") | ForEach-Object {
-        $p = Join-Path $WebuiDir $_
-        if (Test-Path $p) { Remove-Item -Path $p -Recurse -Force -ErrorAction SilentlyContinue }
-    }
+    # Frontend
+    $webuiDist = Join-Path $WebuiDir "dist"
+    if (Test-Path $webuiDist) { Remove-Item -Path $webuiDist -Recurse -Force -ErrorAction SilentlyContinue }
 
-    Ok "清理完成！"
+    Ok "Clean complete!"
 }
 
-# ========== 帮助 ==========
+# ========== Help ==========
 function Show-Help {
-    Write-Host @"
-CogniFlow 构建脚本 (Windows)
-
-用法: .\scripts\build.ps1 <命令>
-
-命令:
-  backend   构建后端 + PyInstaller 打包为 exe
-  frontend  构建前端
-  all       构建后端 + 前端
-  clean     清理构建产物
-  help      显示帮助
-
-环境变量:
-  USE_VENV=1        使用虚拟环境
-  PYINSTALLER_OPTS= PyInstaller 额外参数
-
-示例:
-  .\build.ps1 all        # 构建全部
-  .\build.ps1 backend    # 后端（打包 exe）
-  .\build.ps1 frontend   # 前端
-
-输出:
-  exe:  dist\cogniflow\cogniflow.exe
-  前端: webui\dist
-
-"@
+    Write-Host ""
+    Write-Host "CogniFlow Build Script (Windows)"
+    Write-Host ""
+    Write-Host "Usage: .\scripts\build.ps1 <command>"
+    Write-Host ""
+    Write-Host "Commands:"
+    Write-Host "  backend   Build backend + PyInstaller package to exe"
+    Write-Host "  frontend  Build frontend"
+    Write-Host "  all       Build backend + frontend"
+    Write-Host "  clean     Clean build artifacts"
+    Write-Host "  help      Show help"
+    Write-Host ""
+    Write-Host "Output:"
+    Write-Host "  exe:  dist\cogniflow\cogniflow.exe"
+    Write-Host "  Frontend: webui\dist"
+    Write-Host ""
 }
 
-# ========== 主入口 ==========
+# ========== Main ==========
 switch ($Command) {
     "backend"  { Build-Backend }
     "frontend" { Build-Frontend }
@@ -210,3 +275,6 @@ switch ($Command) {
     "help"     { Show-Help }
     default    { Show-Help }
 }
+
+# Restore original location
+Set-Location $OriginalDir
