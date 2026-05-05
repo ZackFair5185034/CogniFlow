@@ -4,16 +4,16 @@
     <div class="toolbar">
       <div class="toolbar-left">
         <button class="ui-btn" @click="goBack">
-          <ArrowLeftIcon />
+          <SvgIcon name="back" />
           返回
         </button>
         <div class="image-nav" v-if="currentImage">
           <button class="ui-btn" @click="prevImage" :disabled="!hasPrev">
-            <ChevronLeftIcon />
+            <SvgIcon name="chevron-left" />
           </button>
           <span class="nav-info">#{{ currentImage.id }}</span>
           <button class="ui-btn" @click="nextImage" :disabled="!hasNext">
-            <ChevronRightIcon />
+            <SvgIcon name="chevron-right" />
           </button>
         </div>
         <div class="progress-stats" v-if="totalImages > 0">
@@ -41,7 +41,7 @@
       </div>
       <div class="toolbar-right">
         <button class="ui-btn ui-btn-primary" @click="saveAnnotations" :disabled="!hasChanges || saving">
-          <SaveIcon />
+          <SvgIcon name="save" />
           {{ saving ? '保存中...' : '保存 (S)' }}
         </button>
       </div>
@@ -55,7 +55,7 @@
           <h3>类别库</h3>
           <div class="header-actions">
             <button class="ui-btn ui-btn-small" @click="openCreateDialog">
-              <PlusIcon />
+              <SvgIcon name="plus" />
             </button>
           </div>
         </div>
@@ -64,11 +64,11 @@
         <div class="breadcrumb" v-if="currentPath.length > 0 || selectedCategoryId">
           <span class="breadcrumb-item" @click="navigateToRoot">根目录</span>
           <template v-for="(item, idx) in currentPath" :key="item.id">
-            <ChevronRightIcon class="breadcrumb-sep" />
+            <SvgIcon name="chevron-right" class="breadcrumb-sep" />
             <span class="breadcrumb-item" @click="navigateTo(idx)">{{ item.name }}</span>
           </template>
           <template v-if="selectedCategoryId">
-            <ChevronRightIcon class="breadcrumb-sep" />
+            <SvgIcon name="chevron-right" class="breadcrumb-sep" />
             <span class="current-tag" :style="{ background: getSelectedCategoryColor }">
               {{ getSelectedCategoryName }}
             </span>
@@ -83,13 +83,13 @@
             class="dir-item"
             @click="enterDirectory(dir)"
           >
-            <FolderIcon class="dir-icon" />
+            <SvgIcon name="folder" class="dir-icon" />
             <span class="dir-name">{{ dir.name }}</span>
             <div class="item-actions">
               <button class="icon-btn" @click.stop="deleteCategory(dir.id)" title="删除">
-                <TrashIcon />
+                <SvgIcon name="trash" />
               </button>
-              <ChevronRightIcon class="enter-icon" />
+              <SvgIcon name="chevron-right" class="enter-icon" />
             </div>
           </div>
         </div>
@@ -108,7 +108,7 @@
             <span class="tag-name">{{ cat.name }}</span>
             <div class="item-actions">
               <button class="icon-btn" @click.stop="deleteCategory(cat.id)" title="删除">
-                <TrashIcon />
+                <SvgIcon name="trash" />
               </button>
               <span class="tag-hotkey">{{ idx + 1 }}</span>
             </div>
@@ -156,7 +156,7 @@
             <span class="ann-bbox">[{{ formatBbox(ann.bbox) }}]</span>
             <div class="ann-actions">
               <button class="icon-btn" @click.stop="removeAnnotation(index)" title="删除">
-                <TrashIcon />
+                <SvgIcon name="trash" />
               </button>
             </div>
           </div>
@@ -173,7 +173,7 @@
         <div class="dialog-header">
           <h3>{{ categoryForm.is_directory ? '创建目录' : '创建标签' }}</h3>
           <button class="close-btn" @click="closeCreateDialog">
-            <CloseIcon />
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
@@ -187,7 +187,7 @@
                 :class="{ active: !categoryForm.is_directory }"
                 @click="categoryForm.is_directory = false"
               >
-                <TagIcon /> 标签
+                <SvgIcon name="tag" /> 标签
               </button>
               <button
                 type="button"
@@ -195,7 +195,7 @@
                 :class="{ active: categoryForm.is_directory }"
                 @click="categoryForm.is_directory = true"
               >
-                <FolderIcon /> 目录
+                <SvgIcon name="folder" /> 目录
               </button>
             </div>
           </div>
@@ -232,10 +232,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, nextTick, h } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { categoryApi, annotationApi, atlasApi } from '@/api'
+import SvgIcon from '@/components/SvgIcon.vue'
 
 interface Category {
   id: number
@@ -383,50 +384,7 @@ const deleteCategory = async (id: number) => {
   }
 }
 
-// ============ 图标组件 ============
-const ArrowLeftIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '19', y1: '12', x2: '5', y2: '12' }),
-  h('polyline', { points: '12 19 5 12 12 5' })
-])
-
-const ChevronLeftIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '15 18 9 12 15 6' })
-])
-
-const ChevronRightIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '9 18 15 12 9 6' })
-])
-
-const FolderIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z' })
-])
-
-const TagIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z' }),
-  h('line', { x1: '7', y1: '7', x2: '7.01', y2: '7' })
-])
-
-const PlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '12', y1: '5', x2: '12', y2: '19' }),
-  h('line', { x1: '5', y1: '12', x2: '19', y2: '12' })
-])
-
-const SaveIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z' }),
-  h('polyline', { points: '17 21 17 13 7 13 7 21' }),
-  h('polyline', { points: '7 3 7 8 15 8' })
-])
-
-const TrashIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '3 6 5 6 21 6' }),
-  h('path', { d: 'M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2' })
-])
-
-const CloseIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '18', y1: '6', x2: '6', y2: '18' }),
-  h('line', { x1: '6', y1: '6', x2: '18', y2: '18' })
-])
-
+// ============ 类别树 Methods ============
 const openCreateDialog = () => {
   categoryForm.value = {
     name: '',

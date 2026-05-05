@@ -4,9 +4,7 @@
     <header class="canvas-header">
       <div class="header-left">
         <button class="icon-btn back-btn" @click="goBack" title="返回规则列表">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
-          </svg>
+          <SvgIcon name="back" />
         </button>
         <div class="rule-name-section">
           <input
@@ -26,14 +24,10 @@
       <div class="header-center">
         <div class="tool-group">
           <button class="icon-btn" @click="handleUndo" :disabled="!canUndo" title="撤销 (Ctrl+Z)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 7v6h6M3 13a9 9 0 1 0 3-7.5"/>
-            </svg>
+            <SvgIcon name="undo" />
           </button>
           <button class="icon-btn" @click="handleRedo" :disabled="!canRedo" title="重做 (Ctrl+Y)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 7v6h-6M21 13a9 9 0 1 1-3-7.5"/>
-            </svg>
+            <SvgIcon name="redo" />
           </button>
         </div>
 
@@ -41,22 +35,14 @@
 
         <div class="tool-group">
           <button class="icon-btn" @click="zoomIn" title="放大">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              <line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/>
-            </svg>
+            <SvgIcon name="zoom-in" />
           </button>
           <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
           <button class="icon-btn" @click="zoomOut" title="缩小">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              <line x1="8" y1="11" x2="14" y2="11"/>
-            </svg>
+            <SvgIcon name="zoom-out" />
           </button>
           <button class="icon-btn" @click="fitView" title="适应画布">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>
-            </svg>
+            <SvgIcon name="fit-view" />
           </button>
         </div>
 
@@ -64,43 +50,28 @@
 
         <div class="tool-group">
           <button class="icon-btn" :class="{ active: showGrid }" @click="showGrid = !showGrid" title="显示网格">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-              <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-            </svg>
+            <SvgIcon name="grid" />
           </button>
           <button class="icon-btn" :class="{ active: snapGrid }" @click="snapGrid = !snapGrid" title="网格吸附">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="2"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
-            </svg>
+            <SvgIcon name="snap" />
           </button>
           <button class="icon-btn" :class="{ active: showMiniMap }" @click="showMiniMap = !showMiniMap" title="小地图">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
-              <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
-            </svg>
+            <SvgIcon name="minimap" />
           </button>
         </div>
       </div>
 
       <div class="header-right">
         <button class="action-btn secondary" @click="handleValidate">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
+          <SvgIcon name="check" />
           校验
         </button>
         <button class="action-btn secondary" @click="handleSave" :disabled="saving">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
-          </svg>
+          <SvgIcon name="save" />
           {{ saving ? '保存中...' : '保存' }}
         </button>
         <button class="action-btn primary" @click="handleExecute" :disabled="executing || !hasNodes">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polygon points="5 3 19 12 5 21 5 3"/>
-          </svg>
+          <SvgIcon name="play" />
           {{ executing ? '执行中...' : '执行' }}
         </button>
       </div>
@@ -113,9 +84,7 @@
         <div class="palette-header">
           <h3 v-if="showPalette">节点库</h3>
           <button class="collapse-btn" @click="showPalette = !showPalette">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ rotated: !showPalette }">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
+            <SvgIcon name="chevron-left" :class="{ rotated: !showPalette }" />
           </button>
         </div>
 
@@ -133,9 +102,7 @@
               </div>
               <span class="category-name">{{ category.label }}</span>
               <span class="category-count">{{ category.nodes.length }}</span>
-              <svg class="chevron" :class="{ expanded: category.expanded }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
+              <SvgIcon class="chevron" :class="{ expanded: category.expanded }" name="chevron" />
             </div>
 
             <div v-show="category.expanded" class="node-list">
@@ -246,11 +213,7 @@
           <!-- 空画布提示 -->
           <div class="empty-state" v-if="nodes.length === 0 && !isLoading">
             <div class="empty-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <circle cx="5" cy="12" r="3"/>
-                <circle cx="19" cy="12" r="3"/>
-                <path d="M8 12h8M13 9l3 3-3 3"/>
-              </svg>
+              <SvgIcon name="stream" />
             </div>
             <h3>开始设计规则流程</h3>
             <p>从左侧拖拽节点到画布，或双击节点快速添加</p>
@@ -295,9 +258,7 @@
               </div>
             </div>
             <button class="close-btn" @click="selectedNode = null">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
+              <SvgIcon name="close" />
             </button>
           </div>
 
@@ -376,15 +337,11 @@
                         class="field-input"
                       />
                       <button class="remove-btn" @click="removeArrayItem(key, idx)">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
+                        <SvgIcon name="close" />
                       </button>
                     </div>
                     <button class="add-item-btn" @click="addArrayItem(key)">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                      </svg>
+                      <SvgIcon name="plus" />
                       添加
                     </button>
                   </div>
@@ -422,11 +379,7 @@
         </template>
 
         <div class="no-selection" v-else>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="16" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12.01" y2="8"/>
-          </svg>
+          <SvgIcon name="alert" />
           <p>选择画布上的节点<br>查看和编辑属性</p>
         </div>
       </aside>
@@ -436,25 +389,15 @@
     <div class="execution-panel" :class="{ expanded: showExecutionPanel }">
       <div class="execution-header" @click="showExecutionPanel = !showExecutionPanel">
         <div class="execution-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-          </svg>
+          <SvgIcon name="file-text" />
           <span>执行日志</span>
           <span class="execution-status" :class="executionStatus">{{ executionStatusText }}</span>
         </div>
         <div class="execution-actions">
           <button class="icon-btn small" @click.stop="clearLogs" v-if="showExecutionPanel">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-            </svg>
+            <SvgIcon name="trash" />
           </button>
-          <svg class="expand-icon" :class="{ expanded: showExecutionPanel }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="18 15 12 9 6 15"/>
-          </svg>
+          <SvgIcon class="expand-icon" :class="{ expanded: showExecutionPanel }" name="chevron" />
         </div>
       </div>
 

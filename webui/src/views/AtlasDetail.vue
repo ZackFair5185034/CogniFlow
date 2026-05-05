@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <button class="back-btn" @click="$router.push('/atlas')">
-        <BackIcon />
+        <SvgIcon name="back" />
         返回列表
       </button>
       <div class="atlas-info">
@@ -22,11 +22,15 @@
             <option v-for="dir in directories" :key="dir" :value="dir">{{ dir }}</option>
           </select>
           <button class="ui-btn ui-btn-sm" @click="handleBatchMoveDirectory" :disabled="selectedImages.length === 0">
-            <FolderIcon />
+            <SvgIcon name="folder" />
             移动
           </button>
+          <button class="ui-btn ui-btn-sm" @click="handleBatchDownload" :disabled="selectedImages.length === 0">
+            <SvgIcon name="download" />
+            下载
+          </button>
           <button class="ui-btn ui-btn-sm danger" @click="handleBatchDelete" :disabled="selectedImages.length === 0">
-            <TrashIcon />
+            <SvgIcon name="trash" />
             删除
           </button>
         </template>
@@ -34,15 +38,15 @@
           退出批量
         </button>
         <button class="ui-btn ui-btn-sm" v-if="!batchMode" @click="enterBatchMode">
-          <CheckSquareIcon />
+          <SvgIcon name="check-square" />
           批量
         </button>
         <button class="ui-btn ui-btn-secondary ui-btn-sm" @click="triggerVideoUpload">
-          <VideoIcon />
+          <SvgIcon name="video" />
           解析视频
         </button>
         <button class="ui-btn ui-btn-primary ui-btn-sm" @click="triggerUpload">
-          <UploadIcon />
+          <SvgIcon name="upload" />
           上传图片
         </button>
       </div>
@@ -56,12 +60,12 @@
         <div class="panel-header">
           <div class="tabs">
             <button class="tab-btn" :class="{ active: activeTab === 'images' }" @click="activeTab = 'images'">
-              <ImageIcon />
+              <SvgIcon name="image" />
               图片列表
               <span class="count">{{ pagination.total }}</span>
             </button>
             <button class="tab-btn" :class="{ active: activeTab === 'directories' }" @click="activeTab = 'directories'">
-              <FolderIcon />
+              <SvgIcon name="folder" />
               目录管理
               <span class="count">{{ directories.length }}</span>
             </button>
@@ -74,7 +78,7 @@
               </select>
             </div>
             <button class="action-btn" @click="loadImages">
-              <RefreshIcon />
+              <SvgIcon name="refresh" />
             </button>
           </div>
         </div>
@@ -96,26 +100,33 @@
                   <img :src="getImageUrl(img.file_path)" :alt="getFileName(img.file_path)" @click="openImageDialog(img)" />
                   <div class="image-overlay">
                     <span class="overlay-icon">
-                      <EyeIcon />
+                      <SvgIcon name="eye" />
                     </span>
                   </div>
                   <span class="annotated-badge" v-if="img.annotated"></span>
-                  <button class="annotate-btn" @click.stop="handleAnnotateImage(img)" title="标注图片">
-                    <TagIcon />
-                  </button>
-                  <button class="delete-btn" @click.stop="handleDeleteImage(img)" title="删除图片">
-                    <TrashIcon />
-                  </button>
                 </div>
                 <div class="image-info">
-                  <span class="image-name">{{ getFileName(img.file_path) }}</span>
-                  <span class="image-dir" v-if="img.directory">{{ img.directory }}</span>
+                  <span class="image-name" :title="getFileName(img.file_path)">{{ getFileName(img.file_path) }}</span>
+                  <div class="image-dir-row" v-if="img.directory">
+                    <span class="image-dir">{{ img.directory }}</span>
+                    <div class="image-actions" @click.stop>
+                      <button class="img-action-btn" @click="handleDownloadImage(img)" title="下载">
+                        <SvgIcon name="download" />
+                      </button>
+                      <button class="img-action-btn" @click="handleAnnotateImage(img)" title="标注图片">
+                        <SvgIcon name="tag" />
+                      </button>
+                      <button class="img-action-btn danger" @click="handleDeleteImage(img)" title="删除图片">
+                        <SvgIcon name="trash" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
             <div class="empty-state" v-if="!loadingImages && images.length === 0">
               <div class="empty-icon">
-                <ImageIcon />
+                <SvgIcon name="image" />
               </div>
               <p>暂无图片</p>
               <span>上传图片开始标注</span>
@@ -138,12 +149,12 @@
         <div class="directories-content" v-if="activeTab === 'directories'">
           <div class="create-dir-section">
             <div class="input-group">
-              <FolderPlusIcon class="input-icon" />
+              <SvgIcon name="folder-plus" class="input-icon" />
               <input type="text" v-model="newDirectoryName" placeholder="输入新目录名称"
                      @keyup.enter="handleCreateDirectory" />
             </div>
             <button class="ui-btn ui-btn-primary" @click="handleCreateDirectory">
-              <PlusIcon />
+              <SvgIcon name="plus" />
               创建目录
             </button>
           </div>
@@ -156,17 +167,17 @@
               </div>
               <div class="dir-actions">
                 <button class="action-btn" @click="selectDirectory(dir)" title="选择此目录">
-                  <CheckIcon />
+                  <SvgIcon name="check" />
                 </button>
                 <button class="action-btn danger" @click="handleDeleteDirectory(dir)" title="删除目录">
-                  <TrashIcon />
+                  <SvgIcon name="trash" />
                 </button>
               </div>
             </div>
           </div>
           <div class="empty-state" v-else>
             <div class="empty-icon">
-              <FolderIcon />
+              <SvgIcon name="folder" />
             </div>
             <p>暂无子目录</p>
             <span>创建目录来组织图片</span>
@@ -202,7 +213,7 @@
 
         <div class="ui-card upload-tip">
           <div class="tip-header">
-            <LightbulbIcon />
+            <SvgIcon name="lightbulb" />
             <span>上传提示</span>
           </div>
           <ul class="tip-list">
@@ -224,7 +235,7 @@
             <el-button type="text" @click="handleAnnotateImage(selectedImage)">标注</el-button>
             <el-button type="text" @click="handleDeleteImage(selectedImage)">删除</el-button>
             <el-button class="close-btn" @click="showImageDialog = false">
-              <CloseIcon />
+              <SvgIcon name="close" />
             </el-button>
           </div>
         </div>
@@ -260,7 +271,7 @@
               <span class="meta-value" v-else>
                 {{ selectedImage.directory || '根目录' }}
                 <button class="edit-dir-btn" @click="startEditDirectory" title="修改目录">
-                  <EditIcon />
+                  <SvgIcon name="edit" />
                 </button>
               </span>
             </div>
@@ -282,7 +293,7 @@
         <div class="dialog-header">
           <h3>从视频提取帧</h3>
           <button class="close-btn" @click="showVideoDialog = false">
-            <CloseIcon />
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-content">
@@ -343,7 +354,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, h } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi, imageApi } from '@/api'
@@ -440,94 +451,6 @@ const handleSaveDirectory = async () => {
     savingDirectory.value = false
   }
 }
-
-// 图标组件
-const BackIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '19', y1: '12', x2: '5', y2: '12' }),
-  h('polyline', { points: '12 19 5 12 12 5' })
-])
-
-const UploadIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4' }),
-  h('polyline', { points: '17 8 12 3 7 8' }),
-  h('line', { x1: '12', y1: '3', x2: '12', y2: '15' })
-])
-
-const VideoIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polygon', { points: '23 7 16 12 23 17 23 7' }),
-  h('rect', { x: '1', y: '5', width: '15', height: '14', rx: '2', ry: '2' })
-])
-
-const CheckSquareIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '9 11 12 14 22 4' }),
-  h('path', { d: 'M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11' })
-])
-
-const ImageIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('rect', { x: '3', y: '3', width: '18', height: '18', rx: '2', ry: '2' }),
-  h('circle', { cx: '8.5', cy: '8.5', r: '1.5' }),
-  h('polyline', { points: '21 15 16 10 5 21' })
-])
-
-const FolderIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z' })
-])
-
-const FolderPlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z' }),
-  h('line', { x1: '12', y1: '11', x2: '12', y2: '17' }),
-  h('line', { x1: '9', y1: '14', x2: '15', y2: '14' })
-])
-
-const PlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '12', y1: '5', x2: '12', y2: '19' }),
-  h('line', { x1: '5', y1: '12', x2: '19', y2: '12' })
-])
-
-const ChevronIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '6 9 12 15 18 9' })
-])
-
-const RefreshIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '23 4 23 10 17 10' }),
-  h('polyline', { points: '1 20 1 14 7 14' }),
-  h('path', { d: 'M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15' })
-])
-
-const EyeIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z' }),
-  h('circle', { cx: '12', cy: '12', r: '3' })
-])
-
-const CheckIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '20 6 9 17 4 12' })
-])
-
-const TrashIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '3 6 5 6 21 6' }),
-  h('path', { d: 'M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2' })
-])
-
-const CloseIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '18', y1: '6', x2: '6', y2: '18' }),
-  h('line', { x1: '6', y1: '6', x2: '18', y2: '18' })
-])
-
-const TagIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z' }),
-  h('line', { x1: '7', y1: '7', x2: '7.01', y2: '7' })
-])
-
-const EditIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7' }),
-  h('path', { d: 'M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z' })
-])
-
-const LightbulbIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M9 18h6' }),
-  h('path', { d: 'M10 22h4' }),
-  h('path', { d: 'M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0018 8 6 6 0 006 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 018.91 14' })
-])
 
 const loadAtlas = async () => {
   try {
@@ -752,6 +675,38 @@ const handleDeleteImage = async (img: any) => {
     if (error !== 'cancel') {
       ElMessage.error('删除失败')
     }
+  }
+}
+
+const handleDownloadImage = (img: any) => {
+  const url = getImageUrl(img.file_path)
+  const filename = getFileName(img.file_path)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+}
+
+const handleBatchDownload = async () => {
+  if (selectedImages.value.length === 0) {
+    ElMessage.warning('请先选择图片')
+    return
+  }
+  ElMessage.info(`正在打包下载 ${selectedImages.value.length} 张图片...`)
+  try {
+    const response = await atlasApi.batchDownloadImages(Number(route.params.id), selectedImages.value)
+    const blob = response instanceof Blob ? response : response.data
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `images_${Date.now()}.zip`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('打包下载完成')
+  } catch (error) {
+    ElMessage.error('打包下载失败')
   }
 }
 
@@ -1135,59 +1090,52 @@ onMounted(() => {
 }
 
 .overlay-icon {
-  @apply w-10 h-10 flex items-center justify-center bg-[var(--accent-cyan)] rounded-full text-[var(--bg-primary)];
+  @apply w-8 h-8 flex items-center justify-center bg-black/60 rounded-full text-white;
 }
 
 .overlay-icon svg {
-  @apply w-5 h-5;
+  @apply w-4 h-4;
 }
 
 .annotated-badge {
   @apply absolute bottom-2 left-2 w-2 h-2 rounded-full bg-[var(--accent-green)] shadow-[0_0_6px_var(--accent-green)];
 }
 
-.delete-btn {
-  @apply absolute top-2 right-2 w-7 h-7 flex items-center justify-center bg-[rgba(255,68,102,0.9)] border-none rounded-md text-white cursor-pointer opacity-0 transition-all;
-}
-
-.delete-btn svg {
-  @apply w-3.5 h-3.5;
-}
-
-.annotate-btn {
-  @apply absolute top-2 right-10 w-7 h-7 flex items-center justify-center bg-[rgba(0,240,255,0.9)] border-none rounded-md text-black cursor-pointer opacity-0 transition-all;
-}
-
-.annotate-btn svg {
-  @apply w-3.5 h-3.5;
-}
-
-.image-card:hover .annotate-btn {
-  @apply opacity-100;
-}
-
-.annotate-btn:hover {
-  @apply bg-[var(--accent-cyan)] scale-110;
-}
-
-.image-card:hover .delete-btn {
-  @apply opacity-100;
-}
-
-.delete-btn:hover {
-  @apply bg-[#ff4466] scale-110;
-}
-
 .image-info {
   @apply p-3;
+  @apply flex flex-col gap-1;
 }
 
 .image-name {
-  @apply block text-xs text-[var(--text-primary)] truncate;
+  @apply text-xs text-[var(--text-primary)] truncate block w-full min-w-0;
+}
+
+.image-dir-row {
+  @apply flex items-center justify-between gap-2;
 }
 
 .image-dir {
-  @apply block text-[11px] text-[var(--text-muted)] mt-1;
+  @apply text-[11px] text-[var(--text-muted)] truncate;
+}
+
+.image-actions {
+  @apply flex items-center gap-1;
+}
+
+.img-action-btn {
+  @apply w-5 h-5 flex items-center justify-center rounded text-[var(--text-muted)] cursor-pointer transition-all bg-transparent border-none;
+}
+
+.img-action-btn svg {
+  @apply w-3.5 h-3.5;
+}
+
+.img-action-btn:hover {
+  @apply text-[var(--accent-cyan)] bg-[var(--bg-hover)];
+}
+
+.img-action-btn.danger:hover {
+  @apply text-[#ff4466] bg-[var(--bg-hover)];
 }
 
 /* 目录管理 */

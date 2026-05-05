@@ -12,7 +12,7 @@
           :class="{ active: mode === 'image' }"
           @click="mode = 'image'"
         >
-          <ImageIcon />
+          <SvgIcon name="image" />
           图片检测
         </button>
         <button
@@ -20,7 +20,7 @@
           :class="{ active: mode === 'stream' }"
           @click="mode = 'stream'"
         >
-          <StreamIcon />
+          <SvgIcon name="stream" />
           视频检测
         </button>
       </div>
@@ -31,7 +31,7 @@
       <div class="config-panel ui-card">
         <div class="panel-header">
           <div class="header-left">
-            <BrainIcon class="panel-icon" />
+            <SvgIcon name="brain" class="panel-icon" />
             <h3>检测配置</h3>
           </div>
         </div>
@@ -87,7 +87,7 @@
                   style="display: none"
                 />
                 <div class="upload-hint">
-                  <UploadIcon />
+                  <SvgIcon name="upload" />
                   <span v-if="!selectedFile">拖拽或点击上传</span>
                   <span v-else class="file-name">{{ selectedFile.name }}</span>
                 </div>
@@ -115,7 +115,7 @@
                   style="display: none"
                 />
                 <div class="upload-hint">
-                  <VideoUploadIcon />
+                  <SvgIcon name="upload" />
                   <span v-if="!selectedStreamFile">拖拽或点击上传视频</span>
                   <span v-else class="file-name">{{ selectedStreamFile.name }}</span>
                 </div>
@@ -179,7 +179,7 @@
       <div class="result-panel ui-card">
         <div class="panel-header">
           <div class="header-left">
-            <EyeIcon class="panel-icon" />
+            <SvgIcon name="eye" class="panel-icon" />
             <h3>检测结果</h3>
           </div>
           <span class="result-count" v-if="detections.length > 0">
@@ -251,8 +251,8 @@
         <!-- 空状态 -->
         <div v-else class="empty-result">
           <div class="empty-icon">
-            <ImageIcon v-if="mode === 'image'" />
-            <StreamIcon v-else />
+            <SvgIcon name="image" v-if="mode === 'image'" />
+            <SvgIcon name="stream" v-else />
           </div>
           <p>暂无检测结果</p>
           <span>{{ mode === 'image' ? '上传图片开始检测' : '上传视频开始检测' }}</span>
@@ -274,50 +274,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { inferenceApi } from '@/api'
 import { StreamClient, type StreamFrame, type StreamStats } from '@/utils/streamClient'
-
-// 图标组件
-const BrainIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44 2.5 2.5 0 01-2.96-3.08 3 3 0 01-.34-5.58 2.5 2.5 0 011.32-4.24 2.5 2.5 0 011.98-3A2.5 2.5 0 019.5 2z' }),
-  h('path', { d: 'M14.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 004.96.44 2.5 2.5 0 002.96-3.08 3 3 0 00.34-5.58 2.5 2.5 0 00-1.32-4.24 2.5 2.5 0 00-1.98-3A2.5 2.5 0 0014.5 2z' })
-])
-
-const ImageIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('rect', { x: '3', y: '3', width: '18', height: '18', rx: '2', ry: '2' }),
-  h('circle', { cx: '8.5', cy: '8.5', r: '1.5' }),
-  h('polyline', { points: '21 15 16 10 5 21' })
-])
-
-const VideoIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polygon', { points: '23 7 16 12 23 17 23 7' }),
-  h('rect', { x: '1', y: '5', width: '15', height: '14', rx: '2', ry: '2' })
-])
-
-const UploadIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4' }),
-  h('polyline', { points: '17 8 12 3 7 8' }),
-  h('line', { x1: '12', y1: '3', x2: '12', y2: '15' })
-])
-
-const VideoUploadIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4' }),
-  h('polyline', { points: '17 8 12 3 7 8' }),
-  h('line', { x1: '12', y1: '3', x2: '12', y2: '15' }),
-  h('polyline', { points: '10 13 12 15 14 13' })
-])
-
-const EyeIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z' }),
-  h('circle', { cx: '12', cy: '12', r: '3' })
-])
-
-const StreamIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('circle', { cx: '12', cy: '12', r: '10' }),
-  h('polygon', { points: '10 8 16 12 10 16 10 8' })
-])
+import SvgIcon from '@/components/SvgIcon.vue'
 
 // 状态
 const mode = ref<'image' | 'stream'>('image')

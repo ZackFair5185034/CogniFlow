@@ -93,7 +93,7 @@
           </div>
 
           <button class="ui-btn ui-btn-primary start-btn" @click="handleStart" :disabled="starting">
-            <PlayIcon />
+            <SvgIcon name="play" />
             {{ starting ? '启动中...' : '启动训练' }}
           </button>
         </div>
@@ -106,7 +106,7 @@
           <div class="section-header">
             <h3>训练任务</h3>
             <button class="refresh-btn" @click="loadJobs">
-              <RefreshIcon />
+              <SvgIcon name="refresh" />
             </button>
           </div>
 
@@ -135,7 +135,7 @@
 
             <div class="empty-jobs" v-if="!loading && jobs.length === 0">
               <div class="empty-icon">
-                <ChartIcon />
+                <SvgIcon name="chart" />
               </div>
               <p>暂无训练任务</p>
             </div>
@@ -183,9 +183,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { trainingApi, modelApi, atlasApi } from '@/api'
+import SvgIcon from '@/components/SvgIcon.vue'
 
 const jobs = ref<any[]>([])
 const models = ref<any[]>([])
@@ -231,30 +232,6 @@ const handleClearCompleted = async () => {
 }
 
 // 图标
-const RefreshIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '23 4 23 10 17 10' }),
-  h('polyline', { points: '1 20 1 14 7 14' }),
-  h('path', { d: 'M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15' })
-])
-
-const ChartIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.5' }, [
-  h('line', { x1: '18', y1: '20', x2: '18', y2: '10' }),
-  h('line', { x1: '12', y1: '20', x2: '12', y2: '4' }),
-  h('line', { x1: '6', y1: '20', x2: '6', y2: '14' })
-])
-
-const StopIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('rect', { x: '3', y: '3', width: '18', height: '18', rx: '2', ry: '2' })
-])
-
-const PlayIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polygon', { points: '5 3 19 12 5 21 5 3' })
-])
-
-const ChevronIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '6 9 12 15 18 9' })
-])
-
 const getProgress = (job: any) => {
   if (!job || !job.total_steps) return 0
   return Math.round((job.current_step / job.total_steps) * 100)

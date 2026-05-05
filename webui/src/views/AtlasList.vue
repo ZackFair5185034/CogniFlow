@@ -7,7 +7,7 @@
         <span class="subtitle">管理训练数据集</span>
       </div>
       <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
-        <PlusIcon />
+        <SvgIcon name="plus" />
         创建图集
       </button>
     </div>
@@ -24,7 +24,7 @@
           <el-table-column prop="name" label="名称">
             <template #default="{ row }">
               <div class="name-cell">
-                <FolderIcon class="folder-icon" />
+                <SvgIcon name="folder" class="folder-icon" />
                 <span>{{ row.name }}</span>
               </div>
             </template>
@@ -54,7 +54,7 @@
         <div class="dialog-header">
           <h3>创建新图集</h3>
           <button class="close-btn" @click="showCreateDialog = false">
-            <CloseIcon />
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
@@ -82,7 +82,7 @@
         <div class="dialog-header">
           <h3>重命名图集</h3>
           <button class="close-btn" @click="showRenameDialog = false">
-            <CloseIcon />
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
@@ -107,7 +107,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi } from '@/api'
 
@@ -122,31 +122,6 @@ const showRenameDialog = ref(false)
 const renaming = ref(false)
 const renameTarget = ref<any>(null)
 const renameForm = ref({ name: '', description: '' })
-
-// 图标组件
-const PlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '12', y1: '5', x2: '12', y2: '19' }),
-  h('line', { x1: '5', y1: '12', x2: '19', y2: '12' })
-])
-
-const FolderIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z' })
-])
-
-const EyeIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z' }),
-  h('circle', { cx: '12', cy: '12', r: '3' })
-])
-
-const TrashIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '3 6 5 6 21 6' }),
-  h('path', { d: 'M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2' })
-])
-
-const CloseIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '18', y1: '6', x2: '6', y2: '18' }),
-  h('line', { x1: '6', y1: '6', x2: '18', y2: '18' })
-])
 
 const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleString('zh-CN', {

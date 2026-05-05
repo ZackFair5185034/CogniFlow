@@ -7,7 +7,7 @@
         <span class="subtitle">管理训练模型</span>
       </div>
       <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
-        <PlusIcon />
+        <SvgIcon name="plus" />
         注册模型
       </button>
     </div>
@@ -24,7 +24,7 @@
           <el-table-column prop="name" label="名称" min-width="150">
             <template #default="{ row }">
               <div class="name-cell">
-                <BoxIcon class="model-icon" />
+                <SvgIcon name="box" class="model-icon" />
                 <span>{{ row.name }}</span>
               </div>
             </template>
@@ -84,10 +84,11 @@
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="230" fixed="right">
+          <el-table-column label="操作" width="280" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
                 <el-button type="text" @click="handleRename(row)">重命名</el-button>
+                <el-button type="text" @click="handleDownload(row)" v-if="row.file_path">下载</el-button>
                 <el-button type="text" @click="handleUpload(row)" v-if="!row.file_path">上传</el-button>
                 <el-button type="text" @click="handleSetBest(row)" :disabled="row.is_best || !row.file_path">最佳</el-button>
                 <el-button type="text" @click="handleDelete(row)">删除</el-button>
@@ -98,7 +99,7 @@
 
         <div class="empty-state" v-if="!loading && models.length === 0">
           <div class="empty-icon">
-            <BoxIcon />
+            <SvgIcon name="box" />
           </div>
           <p>暂无模型</p>
           <span>注册第一个模型开始训练</span>
@@ -112,7 +113,7 @@
         <div class="dialog-header">
           <h3>注册模型</h3>
           <button class="close-btn" @click="showCreateDialog = false">
-            <CloseIcon />
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
@@ -163,14 +164,14 @@
         <div class="dialog-header">
           <h3>上传模型文件</h3>
           <button class="close-btn" @click="showUploadDialog = false">
-            <CloseIcon />
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
           <div class="upload-area">
             <input ref="fileInputRef" type="file" accept=".pt,.pth,.onnx" style="display: none" @change="handleFileChange" />
             <button class="upload-btn" @click="fileInputRef?.click()">
-              <UploadIcon />
+              <SvgIcon name="upload" />
               <span>{{ uploadFile ? uploadFile.name : '选择模型文件' }}</span>
             </button>
             <p class="upload-hint">支持 .pt, .pth, .onnx 格式</p>
@@ -191,7 +192,7 @@
         <div class="dialog-header">
           <h3>重命名模型</h3>
           <button class="close-btn" @click="showRenameDialog = false">
-            <CloseIcon />
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
@@ -216,9 +217,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { modelApi, atlasApi } from '@/api'
+import SvgIcon from '@/components/SvgIcon.vue'
 
 const models = ref<any[]>([])
 const atlases = ref<any[]>([])
@@ -238,42 +240,6 @@ const showRenameDialog = ref(false)
 const renaming = ref(false)
 const renameTarget = ref<any>(null)
 const renameForm = ref({ name: '', version: '' })
-
-// 图标组件
-const PlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '12', y1: '5', x2: '12', y2: '19' }),
-  h('line', { x1: '5', y1: '12', x2: '19', y2: '12' })
-])
-
-const BoxIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z' }),
-  h('polyline', { points: '3.27 6.96 12 12.01 20.73 6.96' }),
-  h('line', { x1: '12', y1: '22.08', x2: '12', y2: '12' })
-])
-
-const StarIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polygon', { points: '12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2' })
-])
-
-const UploadIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4' }),
-  h('polyline', { points: '17 8 12 3 7 8' }),
-  h('line', { x1: '12', y1: '3', x2: '12', y2: '15' })
-])
-
-const CheckIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '20 6 9 17 4 12' })
-])
-
-const TrashIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '3 6 5 6 21 6' }),
-  h('path', { d: 'M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2' })
-])
-
-const CloseIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '18', y1: '6', x2: '6', y2: '18' }),
-  h('line', { x1: '6', y1: '6', x2: '18', y2: '18' })
-])
 
 const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleString('zh-CN', {
@@ -434,6 +400,18 @@ const handleRenameSubmit = async () => {
   } finally {
     renaming.value = false
   }
+}
+
+const handleDownload = (row: any) => {
+  if (!row.file_path) {
+    ElMessage.warning('模型文件不存在')
+    return
+  }
+  const url = modelApi.getDownloadUrl(row.id)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = row.name + (row.version ? `_${row.version}` : '') + '.pt'
+  link.click()
 }
 
 onMounted(() => {

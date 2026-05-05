@@ -3,7 +3,9 @@ import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import 'virtual:svg-icons-register'
 import App from './App.vue'
+import SvgIcon from './components/SvgIcon.vue'
 import router from './router'
 import 'virtual:uno.css'
 import '@/style/index.scss'
@@ -32,5 +34,6 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 app.use(createPinia())
 app.use(router)
 app.use(ElementPlus)
+app.component('SvgIcon', SvgIcon)
 
 app.mount('#app')

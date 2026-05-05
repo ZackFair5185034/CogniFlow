@@ -10,7 +10,7 @@
       >
         <div class="stat-glow" :style="{ background: stat.gradient }"></div>
         <div class="stat-icon" :style="{ color: stat.color }">
-          <component :is="stat.icon" />
+          <SvgIcon :name="stat.icon" />
         </div>
         <div class="stat-content">
           <div class="stat-value" :style="{ color: stat.color }">{{ stat.value }}</div>
@@ -40,7 +40,7 @@
             :style="{ '--accent': action.color }"
           >
             <div class="action-icon">
-              <component :is="action.icon" />
+              <SvgIcon :name="action.icon" />
             </div>
             <span class="action-label">{{ action.label }}</span>
             <div class="action-hover-effect"></div>
@@ -121,10 +121,7 @@
         </div>
         <div class="empty-state" v-else>
           <div class="empty-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 6v6l4 2"/>
-            </svg>
+            <SvgIcon name="clock" />
           </div>
           <p>暂无训练任务</p>
           <span>开始一个新训练来监控进度</span>
@@ -135,55 +132,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, h } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { atlasApi, imageApi, modelApi, trainingApi } from '@/api'
 
-// 图标定义必须在使用之前
-const FolderIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z' })
-])
-
-const ImageIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('rect', { x: '3', y: '3', width: '18', height: '18', rx: '2', ry: '2' }),
-  h('circle', { cx: '8.5', cy: '8.5', r: '1.5' }),
-  h('polyline', { points: '21 15 16 10 5 21' })
-])
-
-const BoxIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z' })
-])
-
-const ChartIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '18', y1: '20', x2: '18', y2: '10' }),
-  h('line', { x1: '12', y1: '20', x2: '12', y2: '4' }),
-  h('line', { x1: '6', y1: '20', x2: '6', y2: '14' })
-])
-
-const PlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '12', y1: '5', x2: '12', y2: '19' }),
-  h('line', { x1: '5', y1: '12', x2: '19', y2: '12' })
-])
-
-const UploadIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4' }),
-  h('polyline', { points: '17 8 12 3 7 8' }),
-  h('line', { x1: '12', y1: '3', x2: '12', y2: '15' })
-])
-
-const PlayIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polygon', { points: '5 3 19 12 5 21 5 3' })
-])
-
-const BrainIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44 2.5 2.5 0 01-2.96-3.08 3 3 0 01-.34-5.58 2.5 2.5 0 011.32-4.24 2.5 2.5 0 011.98-3A2.5 2.5 0 019.5 2z' }),
-  h('path', { d: 'M14.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 004.96.44 2.5 2.5 0 002.96-3.08 3 3 0 00.34-5.58 2.5 2.5 0 00-1.32-4.24 2.5 2.5 0 00-1.98-3A2.5 2.5 0 0014.5 2z' })
-])
-
 const stats = ref<any[]>([
-  { label: '图集总数', value: 0, color: '#00f0ff', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 240, 255, 0.2), transparent 70%)', icon: FolderIcon },
-  { label: '图片总数', value: 0, color: '#ff00aa', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 0, 170, 0.2), transparent 70%)', icon: ImageIcon },
-  { label: '模型数量', value: 0, color: '#00ff88', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 255, 136, 0.2), transparent 70%)', icon: BoxIcon },
-  { label: '训练任务', value: 0, color: '#ffdd00', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 221, 0, 0.2), transparent 70%)', icon: ChartIcon },
+  { label: '图集总数', value: 0, color: '#00f0ff', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 240, 255, 0.2), transparent 70%)', icon: 'folder' },
+  { label: '图片总数', value: 0, color: '#ff00aa', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 0, 170, 0.2), transparent 70%)', icon: 'image' },
+  { label: '模型数量', value: 0, color: '#00ff88', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 255, 136, 0.2), transparent 70%)', icon: 'box' },
+  { label: '训练任务', value: 0, color: '#ffdd00', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 221, 0, 0.2), transparent 70%)', icon: 'chart' },
 ])
 
 const recentJobs = ref<any[]>([])
@@ -195,10 +151,10 @@ const statusText: Record<string, string> = {
 }
 
 const quickActions = [
-  { label: '图集管理', path: '/atlas', icon: FolderIcon, color: '#00f0ff' },
-  { label: '模型管理', path: '/models', icon: BoxIcon, color: '#ff00aa' },
-  { label: '模型训练', path: '/training', icon: PlayIcon, color: '#ffdd00' },
-  { label: '模型测试', path: '/launch', icon: BrainIcon, color: '#00ff88' },
+  { label: '图集管理', path: '/atlas', icon: 'folder', color: '#00f0ff' },
+  { label: '模型管理', path: '/models', icon: 'box', color: '#ff00aa' },
+  { label: '模型训练', path: '/training', icon: 'play', color: '#ffdd00' },
+  { label: '模型测试', path: '/launch', icon: 'brain', color: '#00ff88' },
 ]
 
 // 系统状态
