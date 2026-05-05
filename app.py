@@ -21,8 +21,13 @@ import logging.handlers
 from backend.database import init_db
 from backend.routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
 
-# 系统托盘支持
-from system_tray import TrayManager, open_browser
+# 系统托盘支持（仅 Windows）
+is_windows = sys.platform == "win32"
+if is_windows:
+    from system_tray import TrayManager, open_browser
+else:
+    TrayManager = None
+    open_browser = None
 
 
 # ===== 日志配置 =====

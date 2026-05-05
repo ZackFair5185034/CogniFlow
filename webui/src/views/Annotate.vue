@@ -1181,66 +1181,83 @@ onUnmounted(() => {
 
 .annotation-panel {
   @apply flex flex-col;
-  width: clamp(160px, 15vw, 240px);
-  min-width: 160px;
+  width: clamp(200px, 18vw, 280px);
+  min-width: 200px;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
 .annotation-list {
-  @apply flex-1 overflow-y-auto p-1.5;
+  @apply flex-1 overflow-y-auto;
+  padding: var(--spacing-xs);
 }
 
 .annotation-item {
-  @apply flex items-center gap-2 p-1.5 rounded-md cursor-pointer transition-all border border-transparent;
-}
+  @apply flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all border border-transparent;
+  margin-bottom: 4px;
 
-.annotation-item:hover {
-  @apply bg-[var(--bg-hover)];
-}
+  // Figma Design: 轻微背景区分，未选中项也有层次感
+  &:hover {
+    background: var(--bg-hover);
+  }
 
-.annotation-item.selected {
-  background: rgba(0, 240, 255, 0.1);
-  @apply border-[var(--accent-cyan)];
-}
+  &.selected {
+    background: rgba(0, 240, 255, 0.08);
+    border-color: rgba(0, 240, 255, 0.4);
+  }
 
-.annotation-item.pending {
-  @apply opacity-70;
+  &.pending {
+    opacity: 0.65;
+  }
 }
 
 .ann-color {
-  @apply w-2.5 h-2.5 rounded flex-shrink-0;
+  @apply w-3 h-3 rounded-sm flex-shrink-0;
+  box-shadow: 0 0 4px currentColor;  // 颜色点带微发光
 }
 
 .ann-name {
-  @apply flex-1 text-xs text-[var(--text-primary)];
+  @apply flex-1 text-sm text-[var(--text-primary)] font-medium;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ann-bbox {
-  font-family: 'JetBrains Mono', monospace;
-  @apply text-[10px] text-[var(--text-muted)];
+  font-family: var(--font-family-mono);
+  font-size: 12px;        // Figma: caption = 12px，不再是 10px
+  font-weight: 400;
+  color: var(--text-secondary);  // 从 muted → secondary，对比度提升
+  letter-spacing: 0.30px;  // Figma caption letter-spacing
+  flex-shrink: 0;
+  text-transform: uppercase;  // Figma caption 规范
 }
 
 .ann-actions {
   @apply flex gap-1;
+  flex-shrink: 0;
 }
 
 .icon-btn {
-  @apply w-6 h-6 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded transition-all;
-}
+  @apply w-7 h-7 flex items-center justify-center bg-transparent border-none cursor-pointer rounded-lg transition-all;
+  color: var(--text-muted);
 
-.icon-btn:hover {
-  background: rgba(255, 68, 102, 0.2);
-  @apply text-[#ff4466];
-}
+  &:hover {
+    background: rgba(255, 68, 102, 0.15);
+    color: #ff4466;
+  }
 
-.icon-btn svg {
-  @apply w-3.5 h-3.5;
+  svg {
+    @apply w-3.5 h-3.5;
+  }
 }
 
 .empty-tip {
-  @apply p-5 text-center text-sm text-[var(--text-muted)] leading-relaxed;
+  @apply p-5 text-center leading-relaxed;
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
 /* 对话框 */

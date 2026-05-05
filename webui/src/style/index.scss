@@ -1,56 +1,121 @@
 // -*- coding: utf-8 -*-
 /**
- * 全局样式入口
+ * 全局样式入口 - 设计规范 v-alpha
+ * 基于 Figma Design System TOKEN 规范重构
+ *
+ * 设计语言：黑白为主轴 + CogniFlow 品牌色(青/紫红)作为强调色
+ * 深色主题适配
  */
 
-// ===== 响应式配置 =====
-// 使用 clamp() 实现流畅的响应式尺寸
-// clamp(min, preferred, max) 在 min 和 max 之间平滑过渡
+// ===== Figma Design Token 系统 =====
 
-// 间距响应式
-$spacing-xs: clamp(8px, 1vw, 12px);
-$spacing-sm: clamp(12px, 1.5vw, 16px);
-$spacing-md: clamp(16px, 2.5vw, 24px);
-$spacing-lg: clamp(20px, 3vw, 32px);
-$spacing-xl: clamp(24px, 4vw, 48px);
+// 响应式配置（8px 基准）
+$spacing-hair: 1px;
+$spacing-xxs: 4px;
+$spacing-xs: 8px;
+$spacing-sm: 12px;
+$spacing-md: 16px;
+$spacing-lg: 24px;
+$spacing-xl: 32px;
+$spacing-xxl: 48px;
+$spacing-section: 96px;
 
-// 内边距响应式
-$padding-page: clamp(16px, 3vw, 32px);
-$padding-card: clamp(16px, 2vw, 24px);
-$padding-section: clamp(12px, 1.5vw, 20px);
+// 圆角系统
+$rounded-xs: 2px;
+$rounded-sm: 6px;
+$rounded-md: 8px;
+$rounded-lg: 24px;
+$rounded-xl: 32px;
+$rounded-pill: 50px;
+$rounded-full: 9999px;
+
+// 响应式间距
+$spacing-page: clamp(16px, 3vw, 32px);
+$spacing-card: clamp(16px, 2vw, 24px);
+$spacing-section-responsive: clamp(12px, 1.5vw, 20px);
 
 // 面板宽度
 $sidebar-width: clamp(200px, 15vw, 280px);
 $panel-width: clamp(200px, 18vw, 320px);
 
-// ===== CSS 变量 =====
+// ===== CSS 变量（设计规范对齐）=====
 :root {
-  // 背景色
+  // === 色彩系统 - Figma Design 规范 ===
+  // 背景色（深色主题适配）
   --bg-primary: #0a0a0f;
   --bg-secondary: #12121a;
   --bg-card: #1a1a24;
   --bg-hover: #22222e;
+  --bg-surface-soft: #f7f7f5;  // 保留但本项目深色主题中不直接使用
 
-  // 边框色
-  --border-color: #2a2a3a;
+  // Figma Design 色彩映射到深色主题
+  --color-primary: #000000;       // Figma primary（黑）
+  --color-on-primary: #ffffff;   // Figma on-primary（白）
+  --color-ink: #ffffff;          // 主文字（白）
+  --color-canvas: #ffffff;       // 画布色
+  --color-inverse-canvas: #000000;
+  --color-inverse-ink: #ffffff;
+
+  // 边框/分割线
+  --color-hairline: #e6e6e6;
+  --color-hairline-soft: #f1f1f1;
+  --border-color: #2a2a3a;        // 深色主题边框
   --border-glow: #00f0ff;
 
-  // 文字色
-  --text-primary: #ffffff;
-  --text-secondary: #8888aa;
-  --text-muted: #555566;
+  // 文字色（深色主题）
+  --text-primary: #ffffff;        // == Figma ink
+  --text-secondary: #8888aa;      // 次要文字
+  --text-muted: #555566;         // 弱化文字
 
-  // 强调色
+  // Figma Block 色彩（深色主题适配版本）
+  --block-lime: #dceeb1;
+  --block-lilac: #c5b0f4;
+  --block-cream: #f4ecd6;
+  --block-pink: #efd4d4;
+  --block-mint: #c8e6cd;
+  --block-coral: #f3c9b6;
+  --block-navy: #1f1d3d;
+
+  // CogniFlow 品牌强调色（保留）
   --accent-cyan: #00f0ff;
   --accent-magenta: #ff00aa;
   --accent-green: #00ff88;
   --accent-yellow: #ffdd00;
   --accent-orange: #ff8800;
 
+  // Figma 语义色
+  --semantic-success: #1ea64a;
+  --accent-magenta-promo: #ff3d8b;
+  --overlay-scrim: #000000;
+
   // 发光效果
   --glow-cyan: 0 0 20px rgba(0, 240, 255, 0.5);
   --glow-magenta: 0 0 20px rgba(255, 0, 170, 0.5);
   --glow-green: 0 0 20px rgba(0, 255, 136, 0.5);
+
+  // === Figma Typography Token 等效 CSS 自定义属性 ===
+  // 注：字体实际在 body{} 中统一设置，此处定义数值参考
+  --font-family-sans: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  // === Figma Spacing Token 等效 ===
+  --spacing-hair: #{$spacing-hair};
+  --spacing-xxs: #{$spacing-xxs};
+  --spacing-xs: #{$spacing-xs};
+  --spacing-sm: #{$spacing-sm};
+  --spacing-md: #{$spacing-md};
+  --spacing-lg: #{$spacing-lg};
+  --spacing-xl: #{$spacing-xl};
+  --spacing-xxl: #{$spacing-xxl};
+
+  // === Figma Rounded Token 等效 ===
+  --rounded-xs: #{$rounded-xs};
+  --rounded-sm: #{$rounded-sm};
+  --rounded-md: #{$rounded-md};
+  --rounded-lg: #{$rounded-lg};
+  --rounded-xl: #{$rounded-xl};
+  --rounded-pill: #{$rounded-pill};
+  --rounded-full: #{$rounded-full};
 }
 
 // ===== 基础重置 =====
@@ -142,9 +207,9 @@ body {
   50% { opacity: 0.6; }
 }
 
-// ===== 公共组件样式 =====
+// ===== 公共组件样式（Phase 2 完整重构） =====
 
-// 按钮
+// --- 按钮系统：Figma Pill 按钮规范 ---
 .ui-btn {
   display: inline-flex;
   align-items: center;
@@ -153,65 +218,85 @@ body {
   padding: 10px 20px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--rounded-pill);  // Figma: pill = 50px
   color: var(--text-primary);
-  font-family: inherit;
+  font-family: var(--font-family-sans);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 480;  // Figma button weight
+  letter-spacing: -0.10px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;  // Figma 规范：更快的过渡
   position: relative;
   overflow: hidden;
+
+  &:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--accent-cyan);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
 }
 
-.ui-btn:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--accent-cyan);
-}
-
-.ui-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.ui-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
+// Figma: button-primary — 黑色胶囊
 .ui-btn-primary {
-  background: linear-gradient(135deg, var(--accent-cyan), #00aaff);
-  color: var(--bg-primary);
-  border-color: var(--accent-cyan);
+  background: var(--color-primary);  // Figma: primary = black
+  color: var(--color-on-primary);
+  border: none;  // Figma primary button 无边框
+  font-weight: 480;
+  letter-spacing: -0.10px;
+
+  &:hover:not(:disabled) {
+    background: #333;
+    box-shadow: none;
+  }
 }
 
-.ui-btn-primary:hover:not(:disabled) {
-  box-shadow: var(--glow-cyan);
+// 品牌强调色按钮（保留 CogniFlow 特色）
+.ui-btn-brand {
+  background: var(--accent-cyan);
+  color: #000;
+  border: none;
+  font-weight: 480;
+  letter-spacing: -0.10px;
+
+  &:hover:not(:disabled) {
+    background: #00d4e0;
+    box-shadow: var(--glow-cyan);
+  }
 }
 
 .ui-btn-success {
   background: linear-gradient(135deg, var(--accent-green), #00aa66);
-  color: var(--bg-primary);
-  border-color: var(--accent-green);
-}
+  color: #000;
+  border: none;
 
-.ui-btn-success:hover:not(:disabled) {
-  box-shadow: var(--glow-green);
+  &:hover:not(:disabled) {
+    box-shadow: var(--glow-green);
+  }
 }
 
 .ui-btn-danger {
   background: linear-gradient(135deg, #ff4466, #cc0033);
   color: white;
-  border-color: #ff4466;
-}
+  border: none;
 
-.ui-btn-danger:hover:not(:disabled) {
-  box-shadow: 0 0 20px rgba(255, 68, 102, 0.5);
+  &:hover:not(:disabled) {
+    box-shadow: 0 0 20px rgba(255, 68, 102, 0.5);
+  }
 }
 
 .ui-btn-small {
-  padding: 4px 8px;
+  padding: 8px 18px 10px;  // Figma: 视觉居中的非对称 padding
   font-size: 13px;
+  border-radius: var(--rounded-pill);
 }
 
 .ui-btn-small svg {
@@ -219,85 +304,72 @@ body {
   height: 14px;
 }
 
+// Figma: button-icon-circular — 40px 圆形图标按钮
 .ui-btn-icon {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-secondary);
+  background: var(--bg-surface-soft);
+  border: none;
+  border-radius: var(--rounded-full);  // Figma: full = 9999px
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--accent-cyan);
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+  }
 }
 
-.ui-btn-icon:hover {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-}
-
-.ui-btn-icon svg {
-  width: 18px;
-  height: 18px;
-}
-
-// 卡片
+// --- 卡片系统：Figma 规范 ---
+// Figma: pricing-card — hairline 边框，无阴影
 .ui-card {
   background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border: 1px solid var(--border-color);  // Figma: hairline
+  border-radius: var(--rounded-lg);  // Figma: lg = 24px
   overflow: hidden;
   position: relative;
-  transition: all 0.3s ease;
-}
+  transition: border-color 0.2s ease;  // Figma: 无 hover 阴影，用边框颜色变化
 
-.ui-card:hover {
-  border-color: rgba(0, 240, 255, 0.3);
-}
-
-.ui-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.ui-card:hover::before {
-  opacity: 1;
+  // Figma 规范：hover 用边框颜色而非阴影
+  &:hover {
+    border-color: rgba(0, 240, 255, 0.3);
+  }
 }
 
 .ui-card-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 20px 24px;
+  padding: var(--spacing-lg);  // Figma: lg = 24px
   border-bottom: 1px solid var(--border-color);
-}
 
-.ui-card-header h3 {
-  font-size: 16px;
-  font-weight: 600;
-  flex: 1;
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    flex: 1;
+  }
 }
 
 .ui-card-content {
-  padding: 24px;
+  padding: var(--spacing-lg);
 }
 
-// 标签
+// --- 标签系统 ---
 .ui-tag {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  border-radius: 4px;
+  border-radius: var(--rounded-sm);  // Figma: sm = 6px
   font-size: 12px;
   font-weight: 500;
 }
@@ -326,67 +398,42 @@ body {
   border: 1px solid rgba(255, 0, 170, 0.3);
 }
 
-// 输入框
+// --- 输入框 ---
 .ui-input {
   width: 100%;
-  padding: 12px 16px;
-  background: var(--bg-secondary);
+  padding: 12px 14px;  // Figma: sm=12px vertical, 14px horizontal
+  background: var(--bg-primary);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
+  border-radius: var(--rounded-md);  // Figma: md = 8px
   color: var(--text-primary);
   font-size: 14px;
-  transition: all 0.2s ease;
+  font-family: var(--font-family-sans);
+  transition: border-color 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent-cyan);
+  }
+
+  &::placeholder {
+    color: var(--text-muted);
+  }
 }
 
-.ui-input:focus {
-  outline: none;
-  border-color: var(--accent-cyan);
-}
-
-.ui-input::placeholder {
-  color: var(--text-muted);
-}
-
-// 徽章
+// --- 徽章 ---
 .ui-badge {
   padding: 4px 8px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-family-mono);
   font-size: 10px;
   color: var(--text-muted);
-  letter-spacing: 1px;
+  letter-spacing: 0.60px;  // Figma caption letter-spacing
   background: var(--bg-secondary);
-  border-radius: 4px;
+  border-radius: var(--rounded-xs);  // Figma: xs = 2px
   border: 1px solid var(--border-color);
-}
-
-// 滚动条
-.ui-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-color) var(--bg-secondary);
-}
-
-.ui-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.ui-scrollbar::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
-  border-radius: 3px;
-}
-
-.ui-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 3px;
-}
-
-.ui-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  text-transform: uppercase;  // Figma caption 规范
 }
 
 // ===== Element Plus 主题覆盖 =====
-
-// v-loading 遮罩 — 深色主题下默认白底会很刺眼
 .el-loading-mask {
   background-color: rgba(10, 10, 15, 0.75) !important;
 }
@@ -398,10 +445,11 @@ body {
 .el-loading-spinner .circular {
   color: var(--accent-cyan) !important;
 }
+
 .el-message-box {
   background: var(--bg-card) !important;
   border: 1px solid var(--border-color) !important;
-  border-radius: 8px !important;
+  border-radius: var(--rounded-lg) !important;
 }
 
 .el-message-box__title {
@@ -417,7 +465,7 @@ body {
 }
 
 .el-message-box .el-button {
-  border-radius: 6px !important;
+  border-radius: var(--rounded-pill) !important;
 }
 
 .el-message-box .el-button--primary {
