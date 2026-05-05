@@ -189,6 +189,49 @@ async def upload_model_file(
         content = await file.read()
         buffer.write(content)
 
+    # 解析模型 ckpt，提取 metrics 元数据
+    try:
+        from ultralytics import YOLO
+        detector = YOLO(file_path)
+        ckpt = detector.ckpt
+        # 安全提取各字段
+        def safe_get(d, *keys, default=None):
+            for k in keys:
+                if d is None:
+                    return default
+                if isinstance(d, dict):
+                    d = d.get(k)
+                elif isinstance(d, (list, tuple)):
+                    d = d[k] if k < len(d) else None
+                else:
+                    d = getattr(d, k, None)
+                if d is None:
+                    return default
+            return d
+
+        names = safe_get(ckpt, "model", "names") or {}
+        yaml_info = safe_get(ckpt, "model", "yaml") or {}
+        nc = safe_get(yaml_info, "nc", default=len(names)) or len(names)
+        train_metrics = safe_get(ckpt, "train_metrics") or {}
+
+        categories = [{"id": int(k), "name": str(v)} for k, v in (names or {}).items()]
+
+        parsed_metrics = {
+            "num_classes": nc or 0,
+            "categories": categories,
+            "precision": train_metrics.get("metrics/precision(B)") if train_metrics else None,
+            "recall": train_metrics.get("metrics/recall(B)") if train_metrics else None,
+            "mAP50": train_metrics.get("metrics/mAP50(B)") if train_metrics else None,
+            "mAP50-95": train_metrics.get("metrics/mAP50-95(B)") if train_metrics else None,
+            "fitness": train_metrics.get("fitness") if train_metrics else None,
+            "best_epoch": ckpt.get("epoch") if ckpt else None,
+        }
+        m.metrics = json.dumps(parsed_metrics)
+    except Exception as e:
+        # 解析失败不影响上传，只打日志
+        import logging
+        logging.getLogger(__name__).warning(f"解析模型元数据失败: {e}")
+
     # 更新模型记录
     m.file_path = file_path
     db.commit()

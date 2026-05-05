@@ -8,7 +8,7 @@ import shutil
 import threading
 from pathlib import Path
 from datetime import datetime
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form
 from sqlalchemy.orm import Session
 
 from backend.database import get_db, SessionLocal, Model, InferenceJob
@@ -29,8 +29,8 @@ INFERENCE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 @router.post("/detect/image")
 async def detect_image(
     file: UploadFile = File(...),
-    model_id: int = None,
-    conf_threshold: float = 0.25,
+    model_id: int = Form(default=None),
+    conf_threshold: float = Form(default=0.25),
     db: Session = Depends(get_db)
 ):
     """对单张图片进行目标检测。"""
@@ -53,40 +53,24 @@ async def detect_image(
         detector = load_yolo_model(model.file_path)
         result = inference_yolo(detector, str(file_path), conf_threshold)
 
-        # 绘制检测结果
-        from PIL import Image, ImageDraw
-        img = Image.open(file_path)
-        draw = ImageDraw.Draw(img)
-
-        categories = json.loads(model.metrics or '{}').get('categories', []) if model.metrics else []
-        if not categories:
-            class_ids = set(det['class_id'] for det in result['detections'])
-            categories = [{'name': f'Class {i}', 'color': '#FF0000'} for i in range(max(class_ids) + 1) if i in class_ids] if class_ids else []
-
-        for det in result['detections']:
-            bbox = det['bbox']
-            conf = det['confidence']
-            cls_id = det['class_id']
-            cls_name = det.get('class_name', categories[cls_id]['name'] if cls_id < len(categories) else f'Class {cls_id}')
-            color = categories[cls_id]['color'] if cls_id < len(categories) else '#FF0000'
-            draw.rectangle(bbox, outline=color, width=3)
-            label = f"{cls_name} {conf:.2f}"
-            draw.text((bbox[0], bbox[1] - 20), label, fill=color)
-
-        output_path = INFERENCE_OUTPUT_DIR / f"result_{timestamp}_{file.filename}"
-        img.save(output_path)
-
-        with open(output_path, 'rb') as f:
+        # 返回原图（画框由前端 SVG overlay 负责）
+        with open(file_path, 'rb') as f:
             result_image_b64 = base64.b64encode(f.read()).decode('utf-8')
 
-        # 生成缩略图（结果图缩略图）
+        # 生成缩略图（输入图缩略图）
         from PIL import Image as PILImage
-        thumb_img = PILImage.open(output_path)
+        thumb_img = PILImage.open(file_path)
         thumb_img.thumbnail((40, 40))
         import io
         thumb_buf = io.BytesIO()
         thumb_img.save(thumb_buf, format='JPEG', quality=60)
         thumb_b64 = base64.b64encode(thumb_buf.getvalue()).decode('utf-8')
+
+        # 构建 name -> color 映射（从 Category 表）
+        from backend.routers.category import Category
+        name_to_color = {}
+        for cat in db.query(Category).filter(Category.is_directory == False).all():
+            name_to_color[cat.name] = cat.color
 
         # 记录到数据库（用输入图路径，支持重新检测）
         import uuid
@@ -104,13 +88,26 @@ async def detect_image(
         db.add(record)
         db.commit()
 
+        # 从 model.metrics 读取 categories（用于前端展示标签颜色）
+        categories = []
+        if model.metrics:
+            try:
+                categories = json.loads(model.metrics).get('categories', [])
+            except json.JSONDecodeError:
+                pass
+
+        # 补充 color 字段：从 Category 表按类名查找
+        for cat in categories:
+            cat['color'] = name_to_color.get(cat['name'], '#FF0000')
+
         return {
             "success": True,
             "original_image": str(file_path),
-            "result_image": str(output_path),
+            "result_image": str(file_path),
             "result_image_base64": f"data:image/jpeg;base64,{result_image_b64}",
             "detections": result['detections'],
-            "num_detections": result['num_detections']
+            "num_detections": result['num_detections'],
+            "categories": categories,
         }
     except Exception:
         # 检测失败时不记录
@@ -597,42 +594,14 @@ async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold:
             "file_type": "video",
         }
     else:
-        # 图片：重新执行 detect_image 逻辑
+        # 图片：重新执行 detect_image 逻辑（只返回原图，画框由前端负责）
         from backend.routers.yolo_training import load_yolo_model, inference_yolo
-        from PIL import Image as PILImage, ImageDraw
 
         detector = load_yolo_model(model.file_path)
         result = inference_yolo(detector, job.file_path, conf_threshold)
 
-        # 绘制检测结果
-        img = PILImage.open(job.file_path)
-        draw = ImageDraw.Draw(img)
-
-        categories = []
-        if model.metrics:
-            try:
-                metrics_json = json.loads(model.metrics)
-                categories = metrics_json.get('categories', [])
-            except json.JSONDecodeError:
-                pass
-        if not categories:
-            class_ids = set(det['class_id'] for det in result['detections'])
-            categories = [{'name': f'Class {i}', 'color': '#FF0000'} for i in range(max(class_ids) + 1) if i in class_ids] if class_ids else []
-
-        for det in result['detections']:
-            bbox = det['bbox']
-            conf = det['confidence']
-            cls_id = det['class_id']
-            cls_name = det.get('class_name', categories[cls_id]['name'] if cls_id < len(categories) else f'Class {cls_id}')
-            color = categories[cls_id]['color'] if cls_id < len(categories) else '#FF0000'
-            draw.rectangle(bbox, outline=color, width=3)
-            label = f"{cls_name} {conf:.2f}"
-            draw.text((bbox[0], bbox[1] - 20), label, fill=color)
-
-        output_path = INFERENCE_OUTPUT_DIR / f"result_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{job.file_name}"
-        img.save(output_path)
-
-        with open(output_path, 'rb') as f:
+        # 返回原图（画框由前端 SVG overlay 负责）
+        with open(job.file_path, 'rb') as f:
             result_image_b64 = base64.b64encode(f.read()).decode('utf-8')
 
         # 更新原记录的检测结果和完成时间
@@ -641,15 +610,33 @@ async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold:
         job.finished_at = datetime.utcnow()
         db.commit()
 
+        # 构建 name -> color 映射（从 Category 表）
+        from backend.routers.category import Category
+        cat_name_to_color = {}
+        for cat in db.query(Category).filter(Category.is_directory == False).all():
+            cat_name_to_color[cat.name] = cat.color
+
+        # 从 model.metrics 读取 categories（用于前端展示）
+        categories = []
+        if model.metrics:
+            try:
+                categories = json.loads(model.metrics).get('categories', [])
+            except json.JSONDecodeError:
+                pass
+
+        # 补充 color 字段：从 Category 表按类名查找
+        for cat in categories:
+            cat['color'] = cat_name_to_color.get(cat['name'], '#FF0000')
+
         return {
             "success": True,
             "original_image": job.file_path,
-            "result_image": str(output_path),
+            "result_image": job.file_path,
             "result_image_base64": f"data:image/jpeg;base64,{result_image_b64}",
             "detections": result['detections'],
             "num_detections": result['num_detections'],
-            "file_type": "image",
             "categories": categories,
+            "file_type": "image",
         }
 
 

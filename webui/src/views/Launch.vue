@@ -225,9 +225,6 @@
             <SvgIcon name="eye" class="panel-icon" />
             <h3>检测结果</h3>
           </div>
-          <span class="result-count" v-if="detections.length > 0">
-            {{ detections.length }} 个目标
-          </span>
         </div>
 
         <div class="result-body">
@@ -317,17 +314,6 @@
           <p>暂无检测结果</p>
           <span>{{ mode === 'image' ? '上传图片开始检测' : '上传视频开始检测' }}</span>
         </div>
-
-        <!-- 检测详情列表 -->
-        <div class="detections-list" v-if="detections.length > 0">
-          <span class="detection-item" v-for="(det, idx) in detections" :key="idx">
-            <span class="det-class" :style="{ background: getClassColor(det.class_id) }">
-              {{ det.class_name }}
-            </span>
-            <span class="det-conf">{{ (det.confidence * 100).toFixed(0) }}%</span>
-          </span>
-        </div>
-
         </div>
 
         <!-- 分割拖拽条 -->
@@ -658,8 +644,8 @@ const handleRerun = async (rec: RecentRecord) => {
         loadImageSize(res.data.result_image_base64)
 
         // 构建类别颜色映射
-        const colors: Record<number, string> = {}
         if (res.data.categories) {
+          const colors: Record<number, string> = {}
           res.data.categories.forEach((cat: any, idx: number) => {
             colors[idx] = cat.color || '#FF0000'
           })
@@ -792,7 +778,7 @@ const clearResults = () => {
   imageSize.value = { width: 0, height: 0 }
 }
 
-// 加载图片获取尺寸
+// 加载图片获取尺寸（用于 SVG viewBox）
 const loadImageSize = (src: string) => {
   const img = new Image()
   img.onload = () => {
@@ -817,9 +803,9 @@ const startDetection = async () => {
         loadImageSize(res.data.result_image_base64)
 
         // 构建类别颜色映射（来自模型配置，使用数组索引作为 key）
-        if (selectedModel.value?.metrics?.categories) {
+        if (res.data.categories) {
           const colors: Record<number, string> = {}
-          selectedModel.value.metrics.categories.forEach((cat: any, idx: number) => {
+          res.data.categories.forEach((cat: any, idx: number) => {
             colors[idx] = cat.color || '#FF0000'
           })
           categoryColors.value = colors
