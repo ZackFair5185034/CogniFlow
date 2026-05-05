@@ -17,9 +17,9 @@
             {{ completedCount }} 完成
           </div>
         </div>
-        <el-button type="text" size="small" @click="handleClearCompleted" :disabled="completedCount === 0">
+        <button class="ui-btn ui-btn-sm" @click="handleClearCompleted" :disabled="completedCount === 0">
           清理
-        </el-button>
+        </button>
       </div>
     </div>
 
