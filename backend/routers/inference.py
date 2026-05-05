@@ -122,54 +122,50 @@ async def list_trained_models(db: Session = Depends(get_db)):
 # ===== 流式视频检测（实时推送模式）=====
 
 
-def process_video_stream_background(
+def _inference_worker(
     job_id: str,
-    model_file_path: str,
-    conf_threshold: float,
-    categories: list,
+    detector,
     input_path: str,
+    fps: int,
+    total_frames: int,
+    conf_threshold: float,
 ):
-    """后台线程：流式处理视频，边推理边将结果放入帧缓冲队列。
+    """推理线程：读取视频帧，执行 YOLO 推理，放入原始帧缓冲。
 
-    生产者-消费者模式：
-    - 本函数为生产者，将推理结果放入 FrameBuffer
-    - ws_stream.py 的推送协程为消费者，从 FrameBuffer 取数据推送给前端
+    消费者：_encode_worker
     """
     import cv2
     import time
-    from backend.utils.frame_buffer import FrameResult
-    from backend.routers.yolo_training import load_yolo_model
+    from backend.utils.frame_buffer import RawFrameResult
 
-    frame_buffer = stream_job_manager.get_job_frame_buffer(job_id)
-    if frame_buffer is None:
+    raw_buffer = stream_job_manager.get_job_raw_buffer(job_id)
+    if raw_buffer is None:
         return
 
+    cap = cv2.VideoCapture(input_path)
     try:
-        stream_job_manager.update_job(job_id, status="processing")
-
-        # 加载 YOLO 模型
-        detector = load_yolo_model(model_file_path)
-
-        # 获取视频信息
-        cap = cv2.VideoCapture(input_path)
-        fps = round(cap.get(cv2.CAP_PROP_FPS)) or 24
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        stream_job_manager.update_job(job_id,
-            total_frames=total_frames,
-            fps=fps,
-        )
-
         frame_count = 0
         total_detections = 0
-        start_time = time.time()
+        skip_count = 0  # 连续跳帧计数
 
         while True:
-            # 检查是否被停止
             if stream_job_manager.is_job_stopped(job_id):
                 break
+
+            # 自适应抽帧：原始帧缓冲将满时跳过部分帧
+            if raw_buffer.qsize >= 8:
+                skip_count += 1
+            else:
+                skip_count = 0
+
+            if skip_count > 0:
+                # 跳过当前帧的推理，直接读取下一帧
+                frame_count += 1
+                ret = cap.grab()  # 不解码，快速跳到下一帧
+                if not ret:
+                    break
+                skip_count -= 1
+                continue
 
             ret, frame = cap.read()
             if not ret:
@@ -182,9 +178,7 @@ def process_video_stream_background(
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             try:
-                # YOLO 推理
                 results = detector(rgb_frame, conf=conf_threshold, verbose=False)
-
                 detections = []
                 for result in results:
                     boxes = result.boxes
@@ -194,7 +188,6 @@ def process_video_stream_background(
                             conf = float(box.conf[0])
                             cls_id = int(box.cls[0])
                             cls_name = result.names[cls_id] if cls_id < len(result.names) else f'Class {cls_id}'
-
                             detections.append({
                                 "bbox": [int(x1), int(y1), int(x2), int(y2)],
                                 "class_id": cls_id,
@@ -207,20 +200,15 @@ def process_video_stream_background(
 
             inference_ms = int((time.time() - frame_start) * 1000)
 
-            # JPEG 压缩并转为 base64
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 85]
-            _, buffer = cv2.imencode('.jpg', frame, encode_param)
-            image_base64 = base64.b64encode(buffer).decode('utf-8')
-
-            # 构建帧结果，放入队列
-            frame_result = FrameResult(
+            # 原始帧入队（编码线程会处理压缩）
+            raw_result = RawFrameResult(
                 frame_id=frame_count,
                 timestamp=frame_count / fps,
-                image_base64=image_base64,
+                frame_bgr=frame,
                 detections=detections,
                 inference_ms=inference_ms,
             )
-            frame_buffer.put(frame_result)
+            raw_buffer.put(raw_result)
 
             # 更新进度
             if frame_count % 10 == 0 or frame_count == total_frames:
@@ -231,18 +219,139 @@ def process_video_stream_background(
                     total_detections=total_detections,
                 )
 
-        cap.release()
-
-        # 标记完成
+        # 标记推理完成（编码线程需要知道何时停止）
         stream_job_manager.update_job(job_id,
-            status="completed",
-            progress=100,
-            current_frame=total_frames,
-            total_detections=total_detections,
+            inference_done=True,
+            final_frame_count=frame_count,
+            final_total_detections=total_detections,
         )
 
     except Exception as e:
         stream_job_manager.update_job(job_id, status="failed", error=str(e))
+    finally:
+        cap.release()
+
+
+def _encode_worker(job_id: str):
+    """编码线程：从原始帧缓冲取帧，JPEG 压缩后放入推送缓冲。
+
+    消费者：ws_stream.py 的推送协程
+    """
+    import cv2
+    import time
+    from backend.utils.frame_buffer import FrameResult
+
+    raw_buffer = stream_job_manager.get_job_raw_buffer(job_id)
+    frame_buffer = stream_job_manager.get_job_frame_buffer(job_id)
+    if raw_buffer is None or frame_buffer is None:
+        return
+
+    while True:
+        # 检查是否应结束
+        job = stream_job_manager.get_job(job_id)
+        if job is None:
+            break
+        if job["status"] in ("failed", "stopped"):
+            break
+        if job.get("inference_done") and raw_buffer.qsize == 0:
+            break
+
+        raw = raw_buffer.get(timeout=0.5)
+        if raw is None:
+            continue
+
+        try:
+            # 动态 JPEG quality：根据原始帧缓冲积压情况调整
+            qsize = raw_buffer.qsize
+            if qsize >= 2:
+                jpeg_quality = 50  # 缓冲快满，降质量
+            elif qsize >= 1:
+                jpeg_quality = 70  # 有一定积压，中等质量
+            else:
+                jpeg_quality = 85  # 正常质量
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_quality]
+            _, buffer = cv2.imencode('.jpg', raw.frame_bgr, encode_param)
+            image_bytes = buffer.tobytes()
+
+            # 编码后的帧入推送队列
+            frame_result = FrameResult(
+                frame_id=raw.frame_id,
+                timestamp=raw.timestamp,
+                image_bytes=image_bytes,
+                detections=raw.detections,
+                inference_ms=raw.inference_ms,
+            )
+            frame_buffer.put(frame_result)
+        except Exception:
+            continue
+
+    # 标记编码完成
+    job = stream_job_manager.get_job(job_id)
+    if job and job["status"] not in ("failed", "stopped"):
+        stream_job_manager.update_job(job_id,
+            status="completed",
+            progress=100,
+            current_frame=job.get("final_frame_count", 0),
+            total_detections=job.get("final_total_detections", 0),
+        )
+
+
+def process_video_stream_background(
+    job_id: str,
+    model_file_path: str,
+    conf_threshold: float,
+    categories: list,
+    input_path: str,
+):
+    """后台线程：流式处理视频，推理与编码分离为流水线。
+
+    流水线：
+    1. _inference_worker：读取视频帧 → YOLO 推理 → 原始帧入 raw_buffer
+    2. _encode_worker：从 raw_buffer 取帧 → JPEG 压缩 → 编码帧入 frame_buffer
+    3. ws_stream.py 推送协程：从 frame_buffer 取数据 → WebSocket 推送给前端
+    """
+    import cv2
+    from backend.routers.yolo_training import load_yolo_model
+
+    if stream_job_manager.get_job_frame_buffer(job_id) is None:
+        return
+
+    stream_job_manager.update_job(job_id, status="processing")
+
+    # 加载 YOLO 模型
+    detector = load_yolo_model(model_file_path)
+
+    # 获取视频信息
+    cap = cv2.VideoCapture(input_path)
+    fps = round(cap.get(cv2.CAP_PROP_FPS)) or 24
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+
+    stream_job_manager.update_job(job_id,
+        total_frames=total_frames,
+        fps=fps,
+    )
+
+    # 启动推理线程
+    inference_thread = threading.Thread(
+        target=_inference_worker,
+        args=(job_id, detector, input_path, fps, total_frames, conf_threshold),
+        daemon=True,
+    )
+    inference_thread.start()
+
+    # 启动编码线程
+    encode_thread = threading.Thread(
+        target=_encode_worker,
+        args=(job_id,),
+        daemon=True,
+    )
+    encode_thread.start()
+
+    # 等待推理线程完成
+    inference_thread.join()
+    # 等待编码线程消费完剩余帧
+    encode_thread.join()
 
 
 @router.post("/detect/video/stream", status_code=202)
@@ -312,7 +421,8 @@ async def detect_video_stream(
             "fps": int(fps),
             "total_frames": total_frames,
             "duration": round(total_frames / fps) if fps > 0 else 0,
-        }
+        },
+        "categories": categories,
     }
 
 

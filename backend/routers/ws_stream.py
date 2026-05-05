@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 """WebSocket 流推理端点 - 实时推送推理帧给前端。
 
+暂停时继续推帧（前端口侧缓存），恢复时正常推帧。
+双进度通过每帧 frame_meta 的 progress 字段下推。
+
 路由：WS /ws/inference/stream/{job_id}
 """
 
 import asyncio
-import base64
 import json
-import threading
 import time
 from typing import Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from backend.utils.frame_buffer import stream_job_manager, FrameBuffer
+from backend.utils.frame_buffer import stream_job_manager, FrameBuffer, FrameResult
 
 router = APIRouter()
 
@@ -22,26 +23,25 @@ class StreamConnectionManager:
     """流式推理 WebSocket 连接管理器。"""
 
     def __init__(self):
-        # job_id -> WebSocket 连接
         self._connections: dict[str, WebSocket] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._pusher_tasks: dict[str, asyncio.Task] = {}
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._paused: dict[str, bool] = {}
+        self._fps_settings: dict[str, int] = {}
 
     def set_loop(self, loop):
-        """设置事件循环（需在应用启动时调用）。"""
         self._loop = loop
 
     async def connect(self, job_id: str, websocket: WebSocket):
-        """接受 WebSocket 连接。"""
         await websocket.accept()
         self._connections[job_id] = websocket
         if job_id not in self._locks:
             self._locks[job_id] = asyncio.Lock()
+        self._paused[job_id] = False
+        self._fps_settings[job_id] = 24
 
     def disconnect(self, job_id: str):
-        """断开连接。"""
-        # 取消推送任务
         if job_id in self._pusher_tasks:
             self._pusher_tasks[job_id].cancel()
             del self._pusher_tasks[job_id]
@@ -49,98 +49,144 @@ class StreamConnectionManager:
             del self._connections[job_id]
         if job_id in self._locks:
             del self._locks[job_id]
+        self._paused.pop(job_id, None)
+        self._fps_settings.pop(job_id, None)
 
     async def send_json(self, job_id: str, data: dict):
-        """发送 JSON 数据。"""
         if job_id in self._connections:
             try:
                 await self._connections[job_id].send_json(data)
             except Exception:
                 self.disconnect(job_id)
 
+    async def send_bytes(self, job_id: str, data: bytes):
+        if job_id in self._connections:
+            try:
+                await self._connections[job_id].send_bytes(data)
+            except Exception:
+                self.disconnect(job_id)
+
+    def set_paused(self, job_id: str, paused: bool):
+        self._paused[job_id] = paused
+
+    def is_paused(self, job_id: str) -> bool:
+        return self._paused.get(job_id, False)
+
+    def set_fps(self, job_id: str, fps: int):
+        fps = max(1, min(60, fps))
+        self._fps_settings[job_id] = fps
+
+    def get_fps(self, job_id: str) -> int:
+        return self._fps_settings.get(job_id, 24)
+
     def start_pusher(self, job_id: str, frame_buffer: FrameBuffer):
-        """启动帧推送协程。"""
         if self._loop is None:
             return
         task = self._loop.create_task(self._push_frames(job_id, frame_buffer))
         self._pusher_tasks[job_id] = task
 
-    async def _push_frames(self, job_id: str, frame_buffer: FrameBuffer):
-        """从帧缓冲队列取帧并推送。"""
-        target_fps = 24
-        frame_interval = 1.0 / target_fps
+    async def _send_frame(self, job_id: str, frame: FrameResult):
+        """发送单帧（元数据 + 二进制），附带推理进度信息。"""
+        job = stream_job_manager.get_job(job_id)
+        buffer_frame = job["current_frame"] if job else frame.frame_id
+        total = job["total_frames"] if job else 0
 
+        meta = {
+            "type": "frame_meta",
+            "frame_id": frame.frame_id,
+            "timestamp": frame.timestamp,
+            "detections": frame.detections,
+            "stats": {
+                "inference_ms": frame.inference_ms,
+                "total_detections": len(frame.detections),
+            },
+            "progress": {
+                "buffer_frame": buffer_frame,
+                "total_frames": total,
+                "buffer_pct": round((buffer_frame / max(total, 1)) * 100, 1),
+            }
+        }
+
+        await self.send_json(job_id, meta)
+        await self.send_bytes(job_id, frame.image_bytes)
+
+    async def _send_complete(self, job_id: str, job: Optional[dict]):
+        if not job:
+            await self.send_json(job_id, {
+                "type": "complete", "total_frames": 0, "total_detections": 0,
+            })
+            return
+        is_complete = job["status"] == "completed"
+        await self.send_json(job_id, {
+            "type": "complete" if is_complete else "stopped",
+            "total_frames": job.get("current_frame", 0),
+            "total_detections": job.get("total_detections", 0),
+        })
+
+    async def _push_frames(self, job_id: str, frame_buffer: FrameBuffer):
+        """从帧缓冲取帧并推送，暂停时不节流（前端自行缓存）。"""
         while True:
             frame = frame_buffer.get(timeout=0.5)
 
-            if frame is None:
-                # 超时，检查任务是否结束
+            if frame is not None:
+                await self._send_frame(job_id, frame)
+                stream_job_manager.update_job(job_id, playback_frame=frame.frame_id)
+
+                if not self.is_paused(job_id):
+                    # 正常模式：按配置帧率节流
+                    fps = self.get_fps(job_id)
+                    await asyncio.sleep(1.0 / fps)
+                else:
+                    # 暂停模式：最小延迟，让前端尽快收齐缓存
+                    await asyncio.sleep(0.005)
+            else:
                 job = stream_job_manager.get_job(job_id)
                 if job is None or job["status"] in ("completed", "failed", "stopped"):
-                    # 推送结束消息
-                    await self.send_json(job_id, {
-                        "type": "complete" if job and job["status"] == "completed" else "stopped",
-                        "total_frames": job["current_frame"] if job else 0,
-                        "total_detections": job["total_detections"] if job else 0,
-                    })
+                    await self._send_complete(job_id, job)
                     break
-                continue
+                await asyncio.sleep(0.1)
 
-            # 构建帧消息
-            msg = {
-                "type": "frame",
-                "frame_id": frame.frame_id,
-                "timestamp": frame.timestamp,
-                "image": frame.image_base64,
-                "detections": frame.detections,
-                "stats": {
-                    "inference_ms": frame.inference_ms,
-                    "total_detections": len(frame.detections),
-                }
-            }
+    async def handle_client_message(self, job_id: str, msg: dict):
+        msg_type = msg.get("type", "")
 
-            try:
-                await self.send_json(job_id, msg)
-            except Exception:
-                break
-
-            # 控制推送节奏（尽量接近 target_fps）
-            await asyncio.sleep(frame_interval)
+        if msg_type == "ping":
+            await self.send_json(job_id, {"type": "pong"})
+        elif msg_type == "pause":
+            self.set_paused(job_id, True)
+            await self.send_json(job_id, {"type": "paused"})
+        elif msg_type == "resume":
+            self.set_paused(job_id, False)
+            await self.send_json(job_id, {"type": "resumed"})
+        elif msg_type == "set_fps":
+            fps = msg.get("fps", 24)
+            self.set_fps(job_id, fps)
+            await self.send_json(job_id, {
+                "type": "fps_updated", "fps": self.get_fps(job_id),
+            })
 
 
-# 全局连接管理器
 stream_conn_manager = StreamConnectionManager()
 
 
 @router.websocket("/inference/stream/{job_id}")
 async def ws_inference_stream(websocket: WebSocket, job_id: str):
-    """WebSocket 流式推理端点。
-
-    前端连接此端点接收实时推理帧。
-    """
     await stream_conn_manager.connect(job_id, websocket)
 
     try:
-        # 获取帧缓冲
         frame_buffer = stream_job_manager.get_job_frame_buffer(job_id)
         if frame_buffer is None:
             await websocket.send_json({"type": "error", "error": "任务不存在"})
             stream_conn_manager.disconnect(job_id)
             return
 
-        # 启动推送协程
         stream_conn_manager.start_pusher(job_id, frame_buffer)
 
-        # 保持连接，处理前端消息
         while True:
             try:
-                # 等待前端消息（目前主要处理 ping）
                 data = await asyncio.wait_for(websocket.receive_text(), timeout=30)
                 msg = json.loads(data)
-                if msg.get("type") == "ping":
-                    await websocket.send_json({"type": "pong"})
+                await stream_conn_manager.handle_client_message(job_id, msg)
             except asyncio.TimeoutError:
-                # 发送心跳
                 try:
                     await websocket.send_json({"type": "heartbeat"})
                 except Exception:

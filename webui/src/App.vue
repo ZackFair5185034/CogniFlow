@@ -38,11 +38,12 @@
         <span class="status-text">{{ isOnline ? '系统在线' : '离线' }}</span>
       </div>
 
-      <!-- 折叠按钮：放在侧边栏内部，绝对定位 -->
-      <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
-        <SvgIcon name="menu" />
-      </button>
     </aside>
+
+    <!-- 折叠按钮：紧贴侧边栏右侧外部 -->
+    <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
+      <SvgIcon :name="collapsed ? 'chevron-right' : 'chevron-left'" />
+    </button>
 
     <!-- 主内容区 -->
     <main class="main-content">
@@ -148,6 +149,7 @@ onUnmounted(() => {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  position: relative;
 }
 
 // 背景效果
@@ -248,56 +250,43 @@ onUnmounted(() => {
 
 .collapse-btn {
   position: absolute;
+  left: clamp(180px, 12vw, 240px);
   top: 50%;
-  right: 8px;
   transform: translateY(-50%);
-  width: 28px;
-  height: 40px;
+  width: 14px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-muted);
   cursor: pointer;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
   z-index: 20;
+  padding: 0;
 
   &:hover {
     color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    border-left: none;
   }
 
   svg {
-    width: 20px;
-    height: 20px;
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    width: 12px;
+    height: 12px;
+    transition: transform 0.3s ease;
   }
 
-  line {
-    transition: transform 0.3s ease, opacity 0.3s ease;
-    transform-origin: center;
+  &.collapsed svg {
+    transform: translateX(1px);
   }
+}
 
-  &.collapsed {
-    svg {
-      transform: translateX(4px);
-    }
-
-    .top-line {
-      transform: translateX(3px);
-      opacity: 0.6;
-    }
-
-    .mid-line {
-      transform: translateX(6px);
-      opacity: 0.4;
-    }
-
-    .bot-line {
-      transform: translateX(3px);
-      opacity: 0.6;
-    }
-  }
+.sidebar.collapsed + .collapse-btn {
+  left: 64px;
 }
 
 .logo {
