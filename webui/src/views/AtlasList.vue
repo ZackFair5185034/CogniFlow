@@ -215,7 +215,7 @@ onMounted(loadAtlases)
 
 <style lang="scss" scoped>
 .atlas-list {
-  @apply flex flex-col gap-6;
+  @apply flex flex-col gap-4;
   width: 100%;
   min-width: 0;
 }

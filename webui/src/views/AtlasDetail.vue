@@ -846,7 +846,7 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .atlas-detail {
-  @apply flex flex-col gap-3;
+  @apply flex flex-col gap-4;
   height: 100%;
   min-height: 0;
   overflow: hidden;

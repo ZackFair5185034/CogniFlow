@@ -235,11 +235,11 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   height: 100%;
   display: flex;
   flex-direction: column;
+  gap: 16px;
 }
 
 .page-header {
   @apply flex justify-between items-center gap-4;
-  margin-bottom: 24px;
 }
 
 .header-info {

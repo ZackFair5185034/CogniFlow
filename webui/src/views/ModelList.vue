@@ -428,7 +428,7 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .model-list {
-  @apply flex flex-col gap-6;
+  @apply flex flex-col gap-4;
 }
 
 .page-header {
