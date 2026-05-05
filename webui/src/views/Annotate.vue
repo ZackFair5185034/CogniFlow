@@ -54,9 +54,26 @@
         <div class="panel-header">
           <h3>类别库</h3>
           <div class="header-actions">
-            <button class="ui-btn ui-btn-small" @click="openCreateDialog">
-              <SvgIcon name="plus" />
-            </button>
+            <div class="header-dropdown" @click.stop>
+              <button class="ui-btn ui-btn-small" @click="showHeaderMenu = !showHeaderMenu">
+                <SvgIcon name="menu" />
+              </button>
+              <div class="dropdown-menu" v-if="showHeaderMenu" @click="showHeaderMenu = false">
+                <div class="dropdown-item" @click="handleExport">
+                  <SvgIcon name="download" />
+                  <span>导出类别</span>
+                </div>
+                <div class="dropdown-item" @click="triggerImport">
+                  <SvgIcon name="upload" />
+                  <span>导入类别</span>
+                </div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" @click="openCreateDialog">
+                  <SvgIcon name="plus" />
+                  <span>新建类别</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -228,6 +245,73 @@
         </div>
       </div>
     </div>
+
+    <!-- 导入类别对话框 -->
+    <div class="dialog-overlay" v-if="showImportDialog" @click.self="closeImportDialog">
+      <div class="dialog-panel ui-card">
+        <div class="dialog-header">
+          <h3>导入类别</h3>
+          <button class="close-btn" @click="closeImportDialog">
+            <SvgIcon name="close" />
+          </button>
+        </div>
+        <div class="dialog-body">
+          <!-- 步骤 1：文件选择 -->
+          <div v-if="!importPreviewData" class="form-group">
+            <label>选择 JSON 文件</label>
+            <div class="import-dropzone" @click="importFileInput?.click()">
+              <SvgIcon name="upload" />
+              <span>点击选择文件</span>
+              <span class="import-hint">支持 .json 格式的类别导出文件</span>
+            </div>
+            <input
+              ref="importFileInput"
+              type="file"
+              accept=".json,application/json"
+              style="display: none"
+              @change="onImportFileSelected"
+            />
+          </div>
+
+          <!-- 步骤 2：预览 -->
+          <div v-if="importPreviewData" class="import-preview">
+            <div class="preview-stats">
+              <div class="preview-stat">
+                <span class="stat-count">{{ importPreviewStats.directories }}</span>
+                <span class="stat-label">目录</span>
+              </div>
+              <div class="preview-stat">
+                <span class="stat-count">{{ importPreviewStats.tags }}</span>
+                <span class="stat-label">标签</span>
+              </div>
+              <div class="preview-stat">
+                <span class="stat-count">{{ importPreviewStats.total }}</span>
+                <span class="stat-label">总计</span>
+              </div>
+            </div>
+            <div class="preview-tree">
+              <div v-for="node in importPreviewData.categories" :key="node.name" class="preview-node">
+                <SvgIcon :name="node.is_directory ? 'folder' : 'tag'" />
+                <span>{{ node.name }}</span>
+                <span v-if="node.children?.length" class="node-count">({{ countChildren(node) }} 子项)</span>
+              </div>
+            </div>
+            <div v-if="importParseError" class="import-error">{{ importParseError }}</div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="ui-btn" @click="closeImportDialog">取消</button>
+          <button
+            v-if="importPreviewData"
+            class="ui-btn ui-btn-primary"
+            :disabled="importing"
+            @click="handleImport"
+          >
+            {{ importing ? '导入中...' : '确认导入' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -282,6 +366,15 @@ const saving = ref(false)
 const showCategoryDialog = ref(false)
 const creatingCategory = ref(false)
 const categoryForm = ref({ name: '', color: '#FF0000', is_directory: false, parent_id: null as number | null })
+
+// 导入导出状态
+const showHeaderMenu = ref(false)
+const closeHeaderMenu = () => { showHeaderMenu.value = false }
+const showImportDialog = ref(false)
+const importPreviewData = ref<any>(null)
+const importParseError = ref('')
+const importing = ref(false)
+const importFileInput = ref<HTMLInputElement | null>(null)
 
 const imageList = ref<ImageData[]>([])
 const currentImageIndex = ref(0)
@@ -381,6 +474,113 @@ const deleteCategory = async (id: number) => {
   } catch (error: any) {
     const msg = error.response?.data?.detail || '删除失败'
     ElMessage.error(msg)
+  }
+}
+
+// ============ 导入导出 ============
+const countChildren = (node: any): number => {
+  let count = 0
+  const walk = (nodes: any[]) => {
+    for (const n of nodes) {
+      count++
+      if (n.children?.length) walk(n.children)
+    }
+  }
+  if (node.children?.length) walk(node.children)
+  return count
+}
+
+const importPreviewStats = computed(() => {
+  const data = importPreviewData.value
+  if (!data) return { directories: 0, tags: 0, total: 0 }
+  let dirs = 0, tags = 0
+  const walk = (nodes: any[]) => {
+    for (const n of nodes) {
+      if (n.is_directory) dirs++
+      else tags++
+      if (n.children?.length) walk(n.children)
+    }
+  }
+  walk(data.categories || [])
+  return { directories: dirs, tags, total: dirs + tags }
+})
+
+const handleExport = async () => {
+  try {
+    const res = await categoryApi.export()
+    const data = JSON.stringify(res.data, null, 2)
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `categories_${Date.now()}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } catch (error) {
+    ElMessage.error('导出失败')
+  }
+}
+
+const triggerImport = () => {
+  importPreviewData.value = null
+  importParseError.value = ''
+  showImportDialog.value = true
+  nextTick(() => {
+    if (importFileInput.value) importFileInput.value.value = ''
+  })
+}
+
+const closeImportDialog = () => {
+  showImportDialog.value = false
+  importPreviewData.value = null
+  importParseError.value = ''
+}
+
+const onImportFileSelected = (e: Event) => {
+  const input = e.target as HTMLInputElement
+  if (!input.files?.length) return
+  const file = input.files[0]
+  const reader = new FileReader()
+  reader.onload = (evt) => {
+    try {
+      const data = JSON.parse(evt.target?.result as string)
+      if (typeof data.version !== 'number' || !Array.isArray(data.categories)) {
+        importParseError.value = '无效的类别文件格式：缺少 version 或 categories 字段'
+        return
+      }
+      importPreviewData.value = data
+      importParseError.value = ''
+    } catch {
+      importParseError.value = '无效的 JSON 文件'
+    }
+  }
+  reader.readAsText(file)
+}
+
+const handleImport = async () => {
+  if (!importPreviewData.value) return
+  importing.value = true
+  try {
+    const res = await categoryApi.import(importPreviewData.value)
+    const result = res.data
+    const msgs: string[] = []
+    if (result.created > 0) msgs.push(`新增 ${result.created} 个类别`)
+    if (result.skipped > 0) msgs.push(`跳过 ${result.skipped} 个重复类别`)
+    ElMessage.success(msgs.join('，') || '导入完成')
+    closeImportDialog()
+    await loadTree()
+    if (selectedCategoryId.value) {
+      const stillExists = flatCategories.value.find(c => c.id === selectedCategoryId.value)
+      if (!stillExists) selectedCategoryId.value = null
+    }
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '导入失败'
+    ElMessage.error(msg)
+  } finally {
+    importing.value = false
   }
 }
 
@@ -841,10 +1041,12 @@ onMounted(() => {
     })
   }
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('click', closeHeaderMenu)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('click', closeHeaderMenu)
 })
 </script>
 
@@ -1349,5 +1551,112 @@ onUnmounted(() => {
 .dialog-footer {
   @apply flex justify-end gap-2 p-3;
   border-top: 1px solid var(--border-color);
+}
+
+/* 下拉菜单样式 */
+.header-dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  min-width: 140px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  animation: dialogIn 0.15s ease;
+}
+
+.dropdown-item {
+  @apply flex items-center gap-2 px-3 py-2 rounded text-sm cursor-pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+}
+
+.dropdown-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.dropdown-item svg {
+  @apply w-4 h-4;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 8px;
+}
+
+/* 导入导出样式 */
+.import-dropzone {
+  @apply flex flex-col items-center gap-2 p-8 rounded-lg cursor-pointer border-2 border-dashed;
+  border-color: var(--border-color);
+  background: var(--bg-primary);
+  transition: all 0.2s;
+}
+
+.import-dropzone:hover {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.05);
+}
+
+.import-dropzone svg {
+  @apply w-8 h-8 text-[var(--text-muted)];
+}
+
+.import-hint {
+  @apply text-xs text-[var(--text-muted)];
+}
+
+.import-preview {
+  @apply space-y-3;
+}
+
+.preview-stats {
+  @apply flex gap-4;
+}
+
+.preview-stat {
+  @apply flex flex-col items-center p-3 rounded-lg;
+  background: var(--bg-primary);
+  flex: 1;
+}
+
+.preview-stat .stat-count {
+  @apply text-xl font-bold font-mono;
+  color: var(--accent-cyan);
+}
+
+.preview-stat .stat-label {
+  @apply text-xs text-[var(--text-muted)] uppercase tracking-wide;
+}
+
+.preview-tree {
+  @apply space-y-1 max-h-48 overflow-y-auto p-2 rounded;
+  background: var(--bg-primary);
+}
+
+.preview-node {
+  @apply flex items-center gap-2 text-sm p-1.5;
+}
+
+.preview-node svg {
+  @apply w-4 h-4;
+}
+
+.node-count {
+  @apply text-xs text-[var(--text-muted)];
+}
+
+.import-error {
+  @apply text-sm p-2 rounded;
+  color: #ff4466;
+  background: rgba(255, 68, 102, 0.1);
 }
 </style>

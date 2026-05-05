@@ -76,6 +76,16 @@ export const categoryApi = {
   update: (id: number, data: { name?: string; color?: string; is_directory?: boolean; parent_id?: number | null }) =>
     api.put(`/categories/${id}`, data),
   delete: (id: number) => api.delete(`/categories/${id}`),
+  export: () => api.get('/categories/export'),
+  import: (data: {
+    version: number
+    categories: Array<{
+      name: string
+      color: string
+      is_directory: boolean
+      children: any[]
+    }>
+  }) => api.post('/categories/import', data),
 }
 
 // Annotation API

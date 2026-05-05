@@ -4,11 +4,12 @@
 提供类别和目录的 CRUD 操作。
 """
 from typing import List, Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from backend.database import get_db, Category
-from backend.schemas import CategoryCreate, CategoryUpdate, CategoryResponse
+from backend.schemas import CategoryCreate, CategoryUpdate, CategoryResponse, CategoryImportPayload, CategoryImportResult
 
 router = APIRouter()
 
@@ -121,3 +122,84 @@ async def delete_category(category_id: int, db: Session = Depends(get_db)):
     delete_recursive(category_id)
     db.commit()
     return None
+
+
+@router.get("/export")
+async def export_categories(db: Session = Depends(get_db)):
+    """导出所有类别为树形 JSON 结构。"""
+    all_items = db.query(Category).order_by(Category.parent_id.nullslast(), Category.name).all()
+
+    def build_export(items: List[Category], parent_id: Optional[int] = None) -> list:
+        nodes = []
+        for item in items:
+            if item.parent_id == parent_id:
+                node = {
+                    "name": item.name,
+                    "color": item.color,
+                    "is_directory": item.is_directory,
+                    "children": build_export(items, item.id) if item.is_directory else [],
+                }
+                nodes.append(node)
+        return nodes
+
+    return {
+        "version": 1,
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "categories": build_export(all_items),
+    }
+
+
+@router.post("/import", response_model=CategoryImportResult)
+async def import_categories(payload: CategoryImportPayload, db: Session = Depends(get_db)):
+    """从 JSON 树结构导入类别。
+
+    按名称 + 父级去重，已存在则跳过（幂等）。
+    """
+    result = CategoryImportResult()
+
+    def import_recursive(nodes: list, parent_id: Optional[int] = None):
+        for node in nodes:
+            name = node.name.strip()
+            if not name:
+                result.errors.append("跳过空名称的条目")
+                continue
+
+            existing = (
+                db.query(Category)
+                .filter(Category.name == name, Category.parent_id == parent_id)
+                .first()
+            )
+
+            if existing:
+                needs_update = (
+                    existing.is_directory != node.is_directory
+                    or existing.color != node.color
+                )
+                if needs_update:
+                    existing.is_directory = node.is_directory
+                    existing.color = node.color
+                    db.flush()
+                result.skipped += 1
+                if node.is_directory:
+                    import_recursive(node.children, existing.id)
+            else:
+                cat = Category(
+                    name=name,
+                    color=node.color if not node.is_directory else "#888888",
+                    is_directory=node.is_directory,
+                    parent_id=parent_id,
+                )
+                db.add(cat)
+                db.flush()
+                result.created += 1
+                if node.is_directory:
+                    import_recursive(node.children, cat.id)
+
+    try:
+        import_recursive(payload.categories)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        result.errors.append(str(e))
+
+    return result

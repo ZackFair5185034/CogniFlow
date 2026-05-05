@@ -90,6 +90,29 @@ class CategoryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CategoryExportNode(BaseModel):
+    """类别导出节点（递归）。"""
+    name: str
+    color: str
+    is_directory: bool
+    children: List["CategoryExportNode"] = []
+
+CategoryExportNode.model_rebuild()
+
+
+class CategoryImportPayload(BaseModel):
+    """类别导入请求。"""
+    version: int = 1
+    categories: List[CategoryExportNode]
+
+
+class CategoryImportResult(BaseModel):
+    """类别导入结果。"""
+    created: int = 0
+    skipped: int = 0
+    errors: List[str] = []
+
+
 # ============ Annotation Schemas ============
 
 class AnnotationBase(BaseModel):
