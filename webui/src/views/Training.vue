@@ -388,7 +388,7 @@ onUnmounted(() => {
 }
 
 .page-header {
-  @apply flex justify-between items-center gap-3 flex-shrink-0;
+  @apply flex justify-between items-center gap-4 flex-shrink-0;
 }
 
 .header-info {

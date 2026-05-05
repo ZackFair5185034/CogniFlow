@@ -1149,7 +1149,7 @@ onUnmounted(() => {
 }
 
 .page-header {
-  @apply flex justify-between items-center;
+  @apply flex justify-between items-center gap-4;
   flex-shrink: 0;
 }
 
