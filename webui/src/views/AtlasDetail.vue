@@ -869,7 +869,7 @@ onMounted(() => {
 }
 
 .atlas-info {
-  @apply flex-1 min-w-0;
+  @apply flex-1 min-w-0 flex items-center;
 }
 
 .atlas-info h2 {
@@ -985,16 +985,16 @@ onMounted(() => {
 }
 
 .sort-wrapper {
-  @apply relative flex items-center gap-1 px-3 h-9 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-sm cursor-pointer;
+  @apply relative flex items-center gap-2 px-4 h-9 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-sm cursor-pointer;
   min-width: 140px;
 }
 
 .sort-label {
-  @apply flex items-center gap-1;
+  @apply flex items-center gap-2;
 }
 
 .sort-arrow {
-  @apply text-[var(--accent-cyan)];
+  @apply inline-flex items-center justify-center min-w-[1.2em] text-[var(--accent-cyan)] font-medium;
 }
 
 .sort-dropdown {
