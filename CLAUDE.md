@@ -212,7 +212,66 @@ webui/
 └── package.json
 ```
 
-### 7.3 UnoCSS 样式规范
+### 7.3 按钮体系
+
+CogniFlow WebUI 使用全局统一的 `.ui-btn` 按钮体系，定义在 `webui/src/style/_common.scss` 和 `webui/src/style/index.scss`。
+
+**按钮层级：**
+
+| 类名 | 用途 | 尺寸 |
+|------|------|------|
+| `.ui-btn` | 默认按钮 | `padding: 8px 16px`，`font-size: 14px`，`border-radius: 8px` |
+| `.ui-btn-primary` | 主操作按钮（青色渐变） | 继承默认尺寸 |
+| `.ui-btn-secondary` | 次级按钮（透明背景） | 继承默认尺寸 |
+| `.ui-btn-sm` | 紧凑按钮（工具栏等） | `padding: 6px 14px`，`font-size: 13px`，`border-radius: 6px` |
+| `.ui-btn-small` | 与 `.ui-btn-sm` 等效 | 同上 |
+| `.ui-btn-danger` | 危险操作（红色渐变） | 继承默认尺寸 |
+| `.ui-btn-icon` | 图标按钮（36×36） | `width/height: 36px`，`padding: 0` |
+
+**使用规范：**
+- 页面主操作按钮使用 `.ui-btn .ui-btn-primary`
+- 工具栏/卡片内操作使用 `.ui-btn .ui-btn-sm`
+- 不允许在视图组件中覆盖 `.ui-btn` 的 padding、border-radius 等基础样式
+- 图标按钮使用 `.ui-btn-icon`
+- Element Plus 的 `el-button--text` 已全局统一样式为青色
+
+**页面头部结构规范：**
+```html
+<div class="page-header">
+  <div class="header-info">
+    <h2>页面标题</h2>
+    <span class="subtitle">副标题说明</span>
+  </div>
+  <button class="ui-btn ui-btn-primary">操作</button>
+</div>
+```
+
+```scss
+.page-header {
+  @apply flex justify-between items-center gap-4;
+  flex-shrink: 0;
+}
+.header-info {
+  @apply flex items-baseline;
+}
+.header-info h2 {
+  @apply text-2xl font-semibold;
+  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.header-info .subtitle {
+  @apply text-sm text-[var(--text-muted)] ml-3;
+}
+```
+
+- 根容器使用 `gap-4`（16px）与子元素间距
+- 页面标题统一使用渐变色文字（text → accent-cyan）
+- 副标题使用 `text-muted`，左侧 `ml-3` 与标题保持间距
+- 右侧操作按钮统一使用 `ui-btn-primary`
+
+### 7.5 UnoCSS 样式规范
 
 UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 
@@ -231,7 +290,7 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 <div class="vg-card">卡片内容</div>
 ```
 
-### 7.4 代码规范
+### 7.6 代码规范
 
 **Vue 组件规范：**
 - 使用 `<script setup lang="ts">` 语法
@@ -256,7 +315,7 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 - 组件样式使用 `scoped`
 - 避免行内样式（除了动态值）
 
-### 7.5 ESLint 规则
+### 7.7 ESLint 规则
 
 ```javascript
 // eslint.config.mjs 核心规则
@@ -269,7 +328,7 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 }
 ```
 
-### 7.6 Git 提交规范（前端）
+### 7.8 Git 提交规范（前端）
 
 提交前端代码时，scope 使用以下值：
 - `webui`: WebUI 通用修改
@@ -277,7 +336,7 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 - `webui/components`: 组件相关
 - `webui/views`: 页面相关
 
-### 7.7 常用命令
+### 7.9 常用命令
 
 ```bash
 cd webui
