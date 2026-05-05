@@ -985,8 +985,12 @@ onMounted(() => {
 }
 
 .sort-wrapper {
-  @apply relative flex items-center gap-2 px-4 h-9 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-sm cursor-pointer;
+  @apply relative flex items-center gap-2 px-4 h-9 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-sm cursor-pointer transition-all;
   min-width: 140px;
+}
+
+.sort-wrapper:hover {
+  @apply border-[var(--accent-cyan)];
 }
 
 .sort-label {
