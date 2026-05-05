@@ -1,13 +1,12 @@
 // -*- coding: utf-8 -*-
 /**
- * 全局样式入口 - 设计规范 v-alpha
- * 基于 Figma Design System TOKEN 规范重构
+ * CogniFlow 深色主题设计规范 v1.0
  *
- * 设计语言：黑白为主轴 + CogniFlow 品牌色(青/紫红)作为强调色
- * 深色主题适配
+ * 设计语言：深色背景 + CogniFlow 品牌色(青/紫红)作为强调色
+ * 深色主题 UI，专为 AI 推理工具场景优化
  */
 
-// ===== Figma Design Token 系统 =====
+// ===== CogniFlow Design Token 系统 =====
 
 // 响应式配置（8px 基准）
 $spacing-hair: 1px;
@@ -38,9 +37,9 @@ $spacing-section-responsive: clamp(12px, 1.5vw, 20px);
 $sidebar-width: clamp(200px, 15vw, 280px);
 $panel-width: clamp(200px, 18vw, 320px);
 
-// ===== CSS 变量（设计规范对齐）=====
+// ===== CSS 变量（CogniFlow 设计系统）=====
 :root {
-  // === 色彩系统 - Figma Design 规范 ===
+  // === CogniFlow 色彩系统 ===
   // 背景色（深色主题适配）
   --bg-primary: #0a0a0f;
   --bg-secondary: #12121a;
