@@ -201,3 +201,4 @@ async def ws_inference_stream(websocket: WebSocket, job_id: str):
             pass
     finally:
         stream_conn_manager.disconnect(job_id)
+        stream_job_manager.stop_job(job_id)
