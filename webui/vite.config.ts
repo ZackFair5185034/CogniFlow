@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import UnoCSS from 'unocss/vite'
 import { resolve } from 'path'
+import { createSvgIconsPlugin } from 'vite-plugin-svg-icons'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -10,6 +11,10 @@ export default defineConfig(({ mode }) => {
     plugins: [
       vue(),
       UnoCSS(),
+      createSvgIconsPlugin({
+        iconDirs: [resolve(__dirname, 'src/icons')],
+        symbolId: 'icon-[name]',
+      }),
     ],
 
     resolve: {
@@ -23,19 +28,19 @@ export default defineConfig(({ mode }) => {
       port: Number(env.VITE_PORT) || 5173,
       proxy: {
         '/api': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
+          target: env.VITE_API_TARGET || 'http://localhost:8000',
           changeOrigin: true,
         },
         '/uploads': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
+          target: env.VITE_API_TARGET || 'http://localhost:8000',
           changeOrigin: true,
         },
         '/inference_output': {
-          target: env.VITE_API_BASE_URL || 'http://localhost:8000',
+          target: env.VITE_API_TARGET || 'http://localhost:8000',
           changeOrigin: true,
         },
         '/ws': {
-          target: env.VITE_WS_BASE_URL || 'ws://localhost:8000',
+          target: env.VITE_API_TARGET?.replace('http://', 'ws://') || 'ws://localhost:8000',
           ws: true,
         },
       },

@@ -7,7 +7,7 @@
         <span class="subtitle">管理训练数据集</span>
       </div>
       <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
-        <PlusIcon />
+        <SvgIcon name="plus" />
         创建图集
       </button>
     </div>
@@ -15,30 +15,30 @@
     <!-- 图集表格 -->
     <div class="ui-card" style="width: 100%; min-width: 0;">
       <div class="table-wrapper">
-        <el-table :data="atlases" v-loading="loading" :row-class-name="tableRowClassName" table-layout="auto">
+        <el-table :data="atlases" v-loading="loading" :row-class-name="tableRowClassName" style="width: 100%">
           <el-table-column prop="id" label="ID" width="100">
             <template #default="{ row }">
               <span class="id-badge">#{{ row.id }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="name" label="名称">
+          <el-table-column prop="name" label="名称" min-width="200">
             <template #default="{ row }">
               <div class="name-cell">
-                <FolderIcon class="folder-icon" />
+                <SvgIcon name="folder" class="folder-icon" />
                 <span>{{ row.name }}</span>
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="description" label="描述" />
-          <el-table-column prop="created_at" label="创建时间" width="180">
+          <el-table-column prop="description" label="描述" min-width="240" />
+          <el-table-column prop="created_at" label="创建时间" width="160">
             <template #default="{ row }">
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="210" fixed="right">
+          <el-table-column label="操作" width="240" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
-                <el-button type="text" @click="handleRename(row)">重命名</el-button>
+                <el-button type="text" @click="handleRename(row)">编辑</el-button>
                 <el-button type="text" @click="$router.push(`/atlas/${row.id}`)">查看</el-button>
                 <el-button type="text" @click="handleDelete(row)">删除</el-button>
               </div>
@@ -54,7 +54,7 @@
         <div class="dialog-header">
           <h3>创建新图集</h3>
           <button class="close-btn" @click="showCreateDialog = false">
-            <CloseIcon />
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
@@ -76,13 +76,13 @@
       </div>
     </div>
 
-    <!-- 重命名对话框 -->
+    <!-- 编辑对话框 -->
     <div class="dialog-overlay" v-if="showRenameDialog" @click.self="showRenameDialog = false">
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
-          <h3>重命名图集</h3>
+          <h3>编辑图集</h3>
           <button class="close-btn" @click="showRenameDialog = false">
-            <CloseIcon />
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
@@ -107,7 +107,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, h } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi } from '@/api'
 
@@ -117,36 +117,11 @@ const showCreateDialog = ref(false)
 const creating = ref(false)
 const createForm = ref({ name: '', description: '' })
 
-// 重命名状态
+// 编辑状态
 const showRenameDialog = ref(false)
 const renaming = ref(false)
 const renameTarget = ref<any>(null)
 const renameForm = ref({ name: '', description: '' })
-
-// 图标组件
-const PlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '12', y1: '5', x2: '12', y2: '19' }),
-  h('line', { x1: '5', y1: '12', x2: '19', y2: '12' })
-])
-
-const FolderIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z' })
-])
-
-const EyeIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z' }),
-  h('circle', { cx: '12', cy: '12', r: '3' })
-])
-
-const TrashIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '3 6 5 6 21 6' }),
-  h('path', { d: 'M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2' })
-])
-
-const CloseIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '18', y1: '6', x2: '6', y2: '18' }),
-  h('line', { x1: '6', y1: '6', x2: '18', y2: '18' })
-])
 
 const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleString('zh-CN', {
@@ -207,11 +182,11 @@ const handleRenameSubmit = async () => {
   renaming.value = true
   try {
     await atlasApi.update(renameTarget.value.id, renameForm.value)
-    ElMessage.success('重命名成功')
+    ElMessage.success('编辑成功')
     showRenameDialog.value = false
     loadAtlases()
   } catch (error: any) {
-    const msg = error.response?.data?.detail || '重命名失败'
+    const msg = error.response?.data?.detail || '编辑失败'
     ElMessage.error(msg)
   } finally {
     renaming.value = false
@@ -240,7 +215,7 @@ onMounted(loadAtlases)
 
 <style lang="scss" scoped>
 .atlas-list {
-  @apply flex flex-col gap-6;
+  @apply flex flex-col gap-4;
   width: 100%;
   min-width: 0;
 }
@@ -273,10 +248,6 @@ onMounted(loadAtlases)
   width: 100%;
   overflow-x: auto;
   min-width: 0;
-
-  :deep(.el-table) {
-    table-layout: auto;
-  }
 }
 
 /* 表格样式覆盖 */
@@ -289,13 +260,22 @@ onMounted(loadAtlases)
   --el-table-text-color: var(--text-primary);
   --el-table-header-text-color: var(--text-secondary);
 
-  th.el-table__cell {
-    @apply bg-[var(--bg-secondary)] font-medium uppercase text-xs tracking-wider;
-  }
-
   td.el-table__cell {
-    @apply border-b border-[var(--border-color)] py-4 px-3;
+    @apply border-b border-[var(--border-color)];
   }
+}
+
+:deep(.el-table__cell) {
+  padding: 12px 16px !important;
+  white-space: nowrap;
+}
+
+:deep(.el-table th.el-table__cell) {
+  @apply bg-[var(--bg-secondary)] font-medium uppercase text-xs tracking-wider;
+}
+
+:deep(.el-table__fixed-right .el-table__cell) {
+  white-space: nowrap;
 }
 
 :deep(.even-row) {
@@ -324,18 +304,6 @@ onMounted(loadAtlases)
 
 .action-buttons {
   @apply flex gap-4 items-center;
-}
-
-:deep(.el-button--text) {
-  @apply p-1 border-none bg-transparent text-[var(--accent-cyan)] text-sm;
-
-  &:hover {
-    @apply bg-transparent border-none text-[var(--accent-cyan)];
-  }
-
-  &:last-child:hover {
-    @apply text-[#ff4466];
-  }
 }
 
 /* 对话框 */

@@ -6,10 +6,8 @@
         <h2>规则引擎</h2>
         <span class="subtitle">可视化规则流程编排与执行</span>
       </div>
-      <button class="create-btn" @click="showCreateDialog = true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
+      <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
+        <SvgIcon name="plus" />
         新建规则
       </button>
     </div>
@@ -23,18 +21,12 @@
 
       <div v-else-if="graphs.length === 0" class="empty-state">
         <div class="empty-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="5" cy="12" r="3"/>
-            <circle cx="19" cy="12" r="3"/>
-            <path d="M8 12h8M13 9l3 3-3 3"/>
-          </svg>
+          <SvgIcon name="flow" />
         </div>
         <h3>暂无规则</h3>
         <p>创建您的第一条规则，开始自动化流程设计</p>
-        <button class="create-btn" @click="showCreateDialog = true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
+        <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
+          <SvgIcon name="plus" />
           新建规则
         </button>
       </div>
@@ -62,16 +54,10 @@
               </div>
               <div class="card-actions" @click.stop>
                 <button class="action-btn" @click="goToDesign(graph.id)" title="编辑规则">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
-                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                  </svg>
+                  <SvgIcon name="edit" />
                 </button>
                 <button class="action-btn danger" @click="handleDelete(graph)" title="删除规则">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
-                  </svg>
+                  <SvgIcon name="trash" />
                 </button>
               </div>
             </div>
@@ -81,18 +67,12 @@
             <div class="card-footer">
               <div class="card-meta">
                 <span class="meta-item">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                  </svg>
+                  <SvgIcon name="clock" />
                   {{ formatDate(graph.updated_at) }}
                 </span>
               </div>
               <span class="has-snapshot" v-if="graph.thumbnail">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                  <polyline points="21 15 16 10 5 21"/>
-                </svg>
+                <SvgIcon name="image" />
                 快照
               </span>
             </div>
@@ -107,9 +87,7 @@
         <div class="dialog-header">
           <h3>新建规则</h3>
           <button class="close-btn" @click="showCreateDialog = false">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
@@ -257,53 +235,27 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   height: 100%;
   display: flex;
   flex-direction: column;
+  gap: 16px;
 }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-
-  .header-info {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    h2 {
-      font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 0;
-    }
-
-    .subtitle {
-      font-size: 13px;
-      color: var(--text-secondary);
-    }
-  }
+  @apply flex justify-between items-center gap-4;
 }
 
-.create-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #00f0ff, #00aa88);
-  border: none;
-  border-radius: 8px;
-  color: #000;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
+.header-info {
+  @apply flex items-baseline;
+}
 
-  svg {
-    width: 18px;
-    height: 18px;
-  }
+.header-info h2 {
+  @apply text-2xl font-semibold;
+  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
-  &:hover {
-    box-shadow: 0 4px 20px rgba(0, 240, 255, 0.3);
-  }
+.header-info .subtitle {
+  @apply text-sm text-[var(--text-muted)] ml-3;
 }
 
 .rules-container {

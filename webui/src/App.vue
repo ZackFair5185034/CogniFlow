@@ -11,6 +11,9 @@
 
     <!-- 侧边导航 -->
     <aside class="sidebar" :class="{ collapsed }">
+      <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
+        <SvgIcon :name="collapsed ? 'chevron-right' : 'chevron-left'" />
+      </button>
       <div class="logo">
         <img class="logo-icon" src="/logo.svg" alt="CogniFlow">
         <div class="logo-text">
@@ -27,7 +30,7 @@
           class="nav-item"
           :class="{ active: isNavActive(item.path) }"
         >
-          <component :is="item.icon" class="nav-icon" />
+          <SvgIcon :name="item.icon" class="nav-icon" />
           <span class="nav-text">{{ item.label }}</span>
           <span class="nav-indicator"></span>
         </router-link>
@@ -38,14 +41,6 @@
         <span class="status-text">{{ isOnline ? '系统在线' : '离线' }}</span>
       </div>
 
-      <!-- 折叠按钮：放在侧边栏内部，绝对定位 -->
-      <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <line x1="3" y1="6" x2="21" y2="6" class="top-line"></line>
-          <line x1="3" y1="12" x2="21" y2="12" class="mid-line"></line>
-          <line x1="3" y1="18" x2="21" y2="18" class="bot-line"></line>
-        </svg>
-      </button>
     </aside>
 
     <!-- 主内容区 -->
@@ -54,7 +49,7 @@
         <div class="top-actions">
           <span class="time-display">{{ currentTime }}</span>
           <button class="action-btn" @click="refreshData">
-            <RefreshIcon />
+            <SvgIcon name="refresh" />
           </button>
         </div>
       </header>
@@ -71,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
@@ -83,53 +78,13 @@ const toggleSidebar = () => {
   collapsed.value = !collapsed.value
 }
 
-const HomeIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z' }),
-  h('polyline', { points: '9 22 9 12 15 12 15 22' })
-])
-
-const FolderIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z' })
-])
-
-const BoxIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z' }),
-  h('polyline', { points: '3.27 6.96 12 12.01 20.73 6.96' }),
-  h('line', { x1: '12', y1: '22.08', x2: '12', y2: '12' })
-])
-
-const ChartIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '18', y1: '20', x2: '18', y2: '10' }),
-  h('line', { x1: '12', y1: '20', x2: '12', y2: '4' }),
-  h('line', { x1: '6', y1: '20', x2: '6', y2: '14' })
-])
-
-const RocketIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 00-2.91-.09z' }),
-  h('path', { d: 'M12 15l-3-3a22 22 0 012-3.95A12.88 12.88 0 0122 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 01-4 2z' }),
-  h('path', { d: 'M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0' }),
-  h('path', { d: 'M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5' })
-])
-
-const FlowIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('circle', { cx: '5', cy: '12', r: '3' }),
-  h('circle', { cx: '19', cy: '12', r: '3' }),
-  h('path', { d: 'M8 12h8M13 9l3 3-3 3' })
-])
-
-const RefreshIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '23 4 23 10 17 10' }),
-  h('polyline', { points: '1 20 1 14 7 14' }),
-  h('path', { d: 'M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15' })
-])
-
 const navItems = [
-  { path: '/', label: '控制台', icon: HomeIcon },
-  { path: '/atlas', label: '图集管理', icon: FolderIcon },
-  { path: '/models', label: '模型管理', icon: BoxIcon },
-  { path: '/training', label: '模型训练', icon: ChartIcon },
-  { path: '/launch', label: '模型测试', icon: RocketIcon },
-  { path: '/rule-engine', label: '规则引擎', icon: FlowIcon },
+  { path: '/', label: '控制台', icon: 'home' },
+  { path: '/atlas', label: '图集管理', icon: 'folder' },
+  { path: '/models', label: '模型管理', icon: 'box' },
+  { path: '/training', label: '模型训练', icon: 'chart' },
+  { path: '/launch', label: '模型测试', icon: 'rocket' },
+  { path: '/rule-engine', label: '规则引擎', icon: 'flow' },
 ]
 
 const pageTitles: Record<string, string> = {
@@ -192,6 +147,7 @@ onUnmounted(() => {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  position: relative;
 }
 
 // 背景效果
@@ -247,7 +203,7 @@ onUnmounted(() => {
   z-index: 11;
   flex-shrink: 0;
   transition: width 0.3s ease;
-  overflow: hidden;
+  overflow: visible;
 
   &::before {
     content: '';
@@ -292,55 +248,36 @@ onUnmounted(() => {
 
 .collapse-btn {
   position: absolute;
+  right: -14px;
   top: 50%;
-  right: 8px;
   transform: translateY(-50%);
-  width: 28px;
-  height: 40px;
+  width: 14px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-muted);
   cursor: pointer;
-  transition: color 0.2s ease;
   z-index: 20;
+  padding: 0;
 
   &:hover {
     color: var(--accent-cyan);
+    border-color: var(--accent-cyan);
+    border-left: none;
   }
 
   svg {
-    width: 20px;
-    height: 20px;
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    width: 12px;
+    height: 12px;
   }
 
-  line {
-    transition: transform 0.3s ease, opacity 0.3s ease;
-    transform-origin: center;
-  }
-
-  &.collapsed {
-    svg {
-      transform: translateX(4px);
-    }
-
-    .top-line {
-      transform: translateX(3px);
-      opacity: 0.6;
-    }
-
-    .mid-line {
-      transform: translateX(6px);
-      opacity: 0.4;
-    }
-
-    .bot-line {
-      transform: translateX(3px);
-      opacity: 0.6;
-    }
+  &.collapsed svg {
+    transform: translateX(1px);
   }
 }
 

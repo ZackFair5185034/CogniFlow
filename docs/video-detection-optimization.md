@@ -1,0 +1,148 @@
+# 视频检测功能优化方案
+
+## 现状分析
+
+```
+上传视频 → 保存文件 → 逐帧读取 → BGR2RGB → YOLO推理 → RGB2BGR → JPEG压缩 → Base64编码 → 入队列 → WS推送JSON → 前端new Image() → Canvas绘制
+```
+
+目前每条路径都穿在一个线程里，且每帧都要经过**推理**和**编码**两个 CPU 密集阶段。
+
+---
+
+## 优化方案
+
+### 1. 推理流水线：生产者-消费者分离
+
+**问题：** 推理和编码在同一线程中串行执行，推理慢时编码都在等，编码慢时推理被阻塞。
+
+**方案：** 拆分两阶段流水线
+
+```
+推理线程（生产者）→ FrameBuffer1 → 编码线程（消费者/生产者）→ FrameBuffer2 → WS推送（消费者）
+```
+
+- 推理线程：只做 `detector(rgb_frame)` + 结果解析，把原始 RGB 帧和检测结果放入队列
+- 编码线程：从队列取原始帧 + 检测数据做 JPEG 压缩 + 二进制封装，放入推送队列
+- WS 推送：从推送队列取数据，通过二进制 WebSocket 发送
+
+**好处：** 推理无需等待编码完成，流水线并行提高吞吐。
+
+---
+
+### 2. 二进制 WebSocket 传输
+
+**问题：** 每帧的图片数据用 base64 编码后放在 JSON 中传输，额外增加 33% 体积，而且 JSON 解析大字符串有内存开销。
+
+**方案：** 混合消息协议
+
+```
+=== 文本消息 (JSON) ===
+{
+  "type": "frame_meta",
+  "frame_id": 42,
+  "detections": [...],
+  "inference_ms": 28
+}
+
+=== 二进制消息 ===
+[JPEG 原始字节]
+```
+
+- 每帧先发一条文本消息（含元数据 + 检测结果）
+- 紧跟着发一条二进制消息（原始 JPEG 字节，无编码开销）
+- 前端 WebSocket 通过 `event.data instanceof ArrayBuffer` 区分
+
+**好处：** 减少 33% 图片传输带宽，消除编解码开销。
+
+---
+
+### 3. 前端的 Canvas 渲染优化
+
+**问题：** 每帧创建 `new Image()` → 等待 `onload` → `drawImage`，对象频繁创建销毁导致 GC 抖动。
+
+**方案 A — 直接使用 `createImageBitmap`（推荐）：**
+
+```typescript
+// 收到二进制帧数据后
+const blob = new Blob([frameData], { type: 'image/jpeg' })
+const bitmap = await createImageBitmap(blob)
+ctx.drawImage(bitmap, 0, 0)
+bitmap.close()  // 立即释放 GPU 内存
+```
+
+`createImageBitmap` 是零拷贝解码，且支持在 Web Worker 中执行，不阻塞主线程。
+
+**方案 B — 复用 `Image` 对象：**
+
+```typescript
+// 维护 2-3 个 Image 对象池，轮换使用
+```
+
+**建议采用方案 A**，性能最好。
+
+---
+
+### 4. 自适应帧率与压缩质量
+
+**问题：** 全分辨率固定 quality 85，网络差/CPU 高时无降级策略。
+
+**方案：**
+
+- **动态 JPEG quality**：根据 FrameBuffer 积压情况调整
+  - quality 正常 = 85（buffer 空）
+  - quality 中等 = 70（buffer 过半）
+  - quality 低 = 50（buffer 快满）
+  
+- **抽帧推理**：对于长视频，支持隔帧推理（skip=1 跳 1 帧, skip=2 跳 2 帧）
+  - 跳过的帧使用上一次的检测结果显示（或直接显示原帧）
+  - 前端看起来仍然是连续的视频
+
+- **缩放推理**：对于高分辨率视频，先缩小再推理，然后映射回原坐标
+
+```python
+# 示例：缩放检测
+scale = 0.5
+small_frame = cv2.resize(rgb_frame, (0, 0), fx=scale, fy=scale)
+results = detector(small_frame, conf=conf_threshold)
+# 坐标映射回原图
+for det in detections:
+    det['bbox'] = [int(x/scale), int(y/scale), int(x2/scale), int(y2/scale)]
+```
+
+---
+
+### 5. 前端帧率自适应
+
+**问题：** 目前 `_push_frames` 固定 `asyncio.sleep(1/24)`，不支持动态调整。
+
+**方案：** 服务器随帧数据附带建议的帧间隔，或客户端主动请求帧率：
+
+```
+前端 → WS: { "type": "set_fps", "fps": 15 }
+前端 → WS: { "type": "pause" }
+前端 → WS: { "type": "resume" }
+```
+
+或者服务器端做更智能的推送：当 buffer 里堆积了多帧数据时，跳过中间帧只推送最新帧（确保实时性）。
+
+---
+
+## 里程碑
+
+| 阶段 | 内容 | 涉及文件 |
+|------|------|----------|
+| M1 | 二进制 WebSocket + 前端 createImageBitmap | ws_stream.py, streamClient.ts, Launch.vue |
+| M2 | 推理-编码流水线分离 | inference.py, frame_buffer.py |
+| M3 | 自适应质量 + 抽帧策略 | inference.py, ws_stream.py, Launch.vue |
+| M4 | 前端控制 (pause/resume/fps 设置) | ws_stream.py, streamClient.ts, Launch.vue |
+
+---
+
+## 影响分析
+
+- 后端 `inference.py` 重写 `process_video_stream_background` 函数
+- 后端 `ws_stream.py` 增加二进制帧支持，需要修改 WebSocket 握手部分
+- 前端 `streamClient.ts` 需要支持二进制消息解析
+- 前端 `Launch.vue` 的 `renderFrame` 需要改为 `createImageBitmap`
+- `frame_buffer.py` 可能需要新增一个 buffer 类型用于原始帧数据

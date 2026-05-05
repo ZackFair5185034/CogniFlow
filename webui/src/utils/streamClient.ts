@@ -1,17 +1,36 @@
 /**
  * 流式推理 WebSocket 客户端
  * 负责连接后端 /ws/inference/stream/{job_id} 并接收实时帧数据
+ *
+ * 协议：混合模式
+ * - 文本消息（JSON）: 帧元数据 + 检测结果 + 进度信息
+ * - 二进制消息: JPEG 原始字节
  */
+
+export interface StreamFrameProgress {
+  buffer_frame: number
+  total_frames: number
+  buffer_pct: number
+}
 
 export interface StreamFrame {
   frame_id: number
   timestamp: number
-  image: string          // base64 jpeg
+  /** 仅当需要 base64 回退时使用 */
+  image?: string
+  /** 通过 createImageBitmap 解码后的位图 */
+  bitmap?: ImageBitmap
+  /** JPEG 二进制数据 */
+  imageData?: ArrayBuffer
   detections: StreamDetection[]
   stats: {
     inference_ms: number
     total_detections: number
   }
+  /** 双进度信息 */
+  progress?: StreamFrameProgress
+  /** 是否为重放帧（暂停恢复后追赶） */
+  replay?: boolean
 }
 
 export interface StreamDetection {
@@ -28,12 +47,17 @@ export interface StreamStats {
   progress: number
   total_detections: number
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'stopped'
+  /** 缓冲帧数（暂停期间累积） */
+  buffer_frame?: number
+  buffered_frames?: number
 }
 
 type FrameCallback = (frame: StreamFrame) => void
-type StatsCallback = (stats: StreamStats) => void
+type ProgressCallback = (progress: StreamFrameProgress) => void
 type CompleteCallback = (total_frames: number, total_detections: number) => void
 type ErrorCallback = (error: string) => void
+type PauseCallback = () => void
+type FpsCallback = (fps: number) => void
 
 export class StreamClient {
   private ws: WebSocket | null = null
@@ -44,12 +68,17 @@ export class StreamClient {
   private reconnectDelay = 2000
 
   private onFrameCb: FrameCallback | null = null
-  private onStatsCb: StatsCallback | null = null
+  private onProgressCb: ProgressCallback | null = null
   private onCompleteCb: CompleteCallback | null = null
   private onErrorCb: ErrorCallback | null = null
+  private onPausedCb: PauseCallback | null = null
+  private onResumedCb: PauseCallback | null = null
+  private onFpsUpdatedCb: FpsCallback | null = null
 
   private paused = false
   private lastFrame: StreamFrame | null = null
+  /** 缓存的帧元数据，等待二进制图片数据到达后合并 */
+  private pendingMeta: StreamFrame | null = null
 
   /**
    * 连接到流式推理任务
@@ -60,6 +89,7 @@ export class StreamClient {
     this.jobId = jobId
     this.url = this._buildWsUrl(streamUrl)
     this.reconnectAttempts = 0
+    this.pendingMeta = null
     this._doConnect()
   }
 
@@ -72,6 +102,7 @@ export class StreamClient {
       this.ws = null
     }
     this.jobId = null
+    this.pendingMeta = null
   }
 
   /**
@@ -86,7 +117,6 @@ export class StreamClient {
    */
   resume(): void {
     this.paused = false
-    // 立即渲染最新帧
     if (this.lastFrame) {
       this._emitFrame(this.lastFrame)
     }
@@ -104,8 +134,8 @@ export class StreamClient {
     this.onFrameCb = cb
   }
 
-  onStats(cb: StatsCallback): void {
-    this.onStatsCb = cb
+  onProgress(cb: ProgressCallback): void {
+    this.onProgressCb = cb
   }
 
   onComplete(cb: CompleteCallback): void {
@@ -116,8 +146,40 @@ export class StreamClient {
     this.onErrorCb = cb
   }
 
+  onPaused(cb: PauseCallback): void {
+    this.onPausedCb = cb
+  }
+
+  onResumed(cb: PauseCallback): void {
+    this.onResumedCb = cb
+  }
+
+  onFpsUpdated(cb: FpsCallback): void {
+    this.onFpsUpdatedCb = cb
+  }
+
+  /** 发送暂停指令 */
+  sendPause(): void {
+    this._send({ type: 'pause' })
+  }
+
+  /** 发送恢复指令 */
+  sendResume(): void {
+    this._send({ type: 'resume' })
+  }
+
+  /** 设置目标帧率 */
+  setFps(fps: number): void {
+    this._send({ type: 'set_fps', fps })
+  }
+
+  private _send(data: Record<string, unknown>): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data))
+    }
+  }
+
   private _buildWsUrl(streamUrl: string): string {
-    // 相对路径转 WebSocket URL
     if (streamUrl.startsWith('ws') || streamUrl.startsWith('http')) {
       return streamUrl.replace('http', 'ws')
     }
@@ -131,6 +193,8 @@ export class StreamClient {
 
     try {
       this.ws = new WebSocket(this.url)
+      // 设置为二进制类型为 ArrayBuffer
+      this.ws.binaryType = 'arraybuffer'
 
       this.ws.onopen = () => {
         this.reconnectAttempts = 0
@@ -138,15 +202,18 @@ export class StreamClient {
 
       this.ws.onmessage = (event) => {
         try {
-          const msg = JSON.parse(event.data)
-          this._handleMessage(msg)
+          if (event.data instanceof ArrayBuffer) {
+            this._handleBinary(event.data)
+          } else {
+            const msg = JSON.parse(event.data)
+            this._handleMessage(msg)
+          }
         } catch (e) {
           console.error('[StreamClient] 解析消息失败', e)
         }
       }
 
-      this.ws.onerror = (error) => {
-        console.error('[StreamClient] WebSocket 错误', error)
+      this.ws.onerror = () => {
         this.onErrorCb?.('WebSocket 连接错误')
       }
 
@@ -163,7 +230,25 @@ export class StreamClient {
 
   private _handleMessage(msg: any): void {
     switch (msg.type) {
+      case 'frame_meta':
+        // 缓存元数据，等待后续的二进制帧数据
+        this.pendingMeta = {
+          frame_id: msg.frame_id,
+          timestamp: msg.timestamp,
+          detections: msg.detections || [],
+          stats: msg.stats || { inference_ms: 0, total_detections: 0 },
+          progress: msg.progress,
+          replay: msg.replay,
+        }
+        break
+
+      case 'progress':
+        // 纯进度更新（暂停期间）
+        this.onProgressCb?.(msg as StreamFrameProgress)
+        break
+
       case 'frame':
+        // 兼容旧协议（base64），不走二进制路径
         if (!this.paused) {
           this._emitFrame(msg as StreamFrame)
         } else {
@@ -184,17 +269,42 @@ export class StreamClient {
         this.onErrorCb?.(msg.error || '未知错误')
         break
 
-      case 'heartbeat':
-        // 心跳包，无需处理
+      case 'paused':
+        this.onPausedCb?.()
         break
 
+      case 'resumed':
+        this.onResumedCb?.()
+        break
+
+      case 'fps_updated':
+        this.onFpsUpdatedCb?.(msg.fps || 24)
+        break
+
+      case 'heartbeat':
       case 'pong':
-        // pong 响应，无需处理
         break
 
       default:
-        // 忽略其他消息
         break
+    }
+  }
+
+  private _handleBinary(data: ArrayBuffer): void {
+    const meta = this.pendingMeta
+    if (!meta) return
+
+    // 合并元数据和二进制图片数据
+    const frame: StreamFrame = {
+      ...meta,
+      imageData: data,
+    }
+    this.pendingMeta = null
+
+    if (!this.paused) {
+      this._emitFrame(frame)
+    } else {
+      this.lastFrame = frame
     }
   }
 

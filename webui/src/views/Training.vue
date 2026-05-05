@@ -17,9 +17,9 @@
             {{ completedCount }} 完成
           </div>
         </div>
-        <el-button type="text" size="small" @click="handleClearCompleted" :disabled="completedCount === 0">
+        <button class="ui-btn ui-btn-sm" @click="handleClearCompleted" :disabled="completedCount === 0">
           清理
-        </el-button>
+        </button>
       </div>
     </div>
 
@@ -93,7 +93,7 @@
           </div>
 
           <button class="ui-btn ui-btn-primary start-btn" @click="handleStart" :disabled="starting">
-            <PlayIcon />
+            <SvgIcon name="play" />
             {{ starting ? '启动中...' : '启动训练' }}
           </button>
         </div>
@@ -106,7 +106,7 @@
           <div class="section-header">
             <h3>训练任务</h3>
             <button class="refresh-btn" @click="loadJobs">
-              <RefreshIcon />
+              <SvgIcon name="refresh" />
             </button>
           </div>
 
@@ -135,7 +135,7 @@
 
             <div class="empty-jobs" v-if="!loading && jobs.length === 0">
               <div class="empty-icon">
-                <ChartIcon />
+                <SvgIcon name="chart" />
               </div>
               <p>暂无训练任务</p>
             </div>
@@ -183,9 +183,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, h } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { trainingApi, modelApi, atlasApi } from '@/api'
+import SvgIcon from '@/components/SvgIcon.vue'
 
 const jobs = ref<any[]>([])
 const models = ref<any[]>([])
@@ -231,30 +232,6 @@ const handleClearCompleted = async () => {
 }
 
 // 图标
-const RefreshIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '23 4 23 10 17 10' }),
-  h('polyline', { points: '1 20 1 14 7 14' }),
-  h('path', { d: 'M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15' })
-])
-
-const ChartIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.5' }, [
-  h('line', { x1: '18', y1: '20', x2: '18', y2: '10' }),
-  h('line', { x1: '12', y1: '20', x2: '12', y2: '4' }),
-  h('line', { x1: '6', y1: '20', x2: '6', y2: '14' })
-])
-
-const StopIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('rect', { x: '3', y: '3', width: '18', height: '18', rx: '2', ry: '2' })
-])
-
-const PlayIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polygon', { points: '5 3 19 12 5 21 5 3' })
-])
-
-const ChevronIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '6 9 12 15 18 9' })
-])
-
 const getProgress = (job: any) => {
   if (!job || !job.total_steps) return 0
   return Math.round((job.current_step / job.total_steps) * 100)
@@ -403,7 +380,7 @@ onUnmounted(() => {
 
 <style lang="scss" scoped>
 .training {
-  @apply flex flex-col gap-3;
+  @apply flex flex-col gap-4;
   height: 100%;
   box-sizing: border-box;
   min-height: 0;
@@ -411,7 +388,7 @@ onUnmounted(() => {
 }
 
 .page-header {
-  @apply flex justify-between items-center gap-3 flex-shrink-0;
+  @apply flex justify-between items-center gap-4 flex-shrink-0;
 }
 
 .header-info {
@@ -419,7 +396,7 @@ onUnmounted(() => {
 }
 
 .header-info h2 {
-  @apply text-xl font-semibold;
+  @apply text-2xl font-semibold;
   background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -427,11 +404,11 @@ onUnmounted(() => {
 }
 
 .header-info .subtitle {
-  @apply text-xs text-[var(--text-muted)] ml-2;
+  @apply text-sm text-[var(--text-muted)] ml-3;
 }
 
 .header-actions {
-  @apply flex items-center gap-3;
+  @apply flex items-center gap-3 h-9;
 }
 
 .header-stats {
@@ -608,13 +585,6 @@ onUnmounted(() => {
   @apply mt-2 pt-2 border-t border-[var(--border-color)];
 }
 
-:deep(.el-button--text) {
-  @apply p-0.5 border-none bg-transparent text-[#ff4466] text-xs;
-  &:hover {
-    @apply bg-transparent border-none text-[#ff4466];
-  }
-}
-
 .empty-jobs {
   @apply flex-1 flex flex-col items-center justify-center text-center text-[var(--text-muted)];
 }
@@ -747,33 +717,5 @@ onUnmounted(() => {
 
 .device-hint {
   @apply text-[10px] text-[var(--text-muted)] mt-1;
-}
-
-.ui-btn {
-  @apply inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-sm text-[var(--text-primary)] cursor-pointer transition-all;
-}
-
-.ui-btn:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
-}
-
-.ui-btn svg {
-  @apply w-4 h-4;
-}
-
-.ui-btn-sm {
-  @apply px-3 py-1.5 text-xs;
-}
-
-.ui-btn-sm svg {
-  @apply w-3.5 h-3.5;
-}
-
-.ui-btn-primary {
-  @apply bg-[var(--accent-cyan)] border-[var(--accent-cyan)] text-black font-medium;
-}
-
-.ui-btn-primary:hover {
-  @apply opacity-80;
 }
 </style>

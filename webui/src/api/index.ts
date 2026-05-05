@@ -14,8 +14,8 @@ export const atlasApi = {
   create: (data: { name: string; description?: string }) => api.post('/atlas', data),
   update: (id: number, data: { name?: string; description?: string }) => api.put(`/atlas/${id}`, data),
   delete: (id: number) => api.delete(`/atlas/${id}`),
-  getImages: (id: number, directory?: string, page: number = 1, pageSize: number = 50) =>
-    api.get(`/atlas/${id}/images`, { params: { directory, page, page_size: pageSize } }),
+  getImages: (id: number, directory?: string, page: number = 1, pageSize: number = 50, sortBy?: string, sortOrder?: string) =>
+    api.get(`/atlas/${id}/images`, { params: { directory, page, page_size: pageSize, sort_by: sortBy, sort_order: sortOrder } }),
   getDirectories: (id: number) => api.get(`/atlas/${id}/directories`),
   createDirectory: (id: number, directory: string) => api.post(`/atlas/${id}/directories`, null, { params: { directory } }),
   deleteDirectory: (id: number, directory: string) => api.delete(`/atlas/${id}/directories`, { params: { directory } }),
@@ -45,6 +45,12 @@ export const atlasApi = {
     api.get(`/atlas/${id}/video/extract-frames/${jobId}/status`),
   cancelExtractJob: (id: number, jobId: string) =>
     api.delete(`/atlas/${id}/video/extract-frames/${jobId}`),
+  batchDownloadImages: (id: number, imageIds: number[]) => {
+    return api.get(`/atlas/${id}/images/download`, {
+      params: { image_ids: imageIds.join(",") },
+      responseType: 'blob',
+    })
+  },
 }
 
 // Image API
@@ -70,6 +76,16 @@ export const categoryApi = {
   update: (id: number, data: { name?: string; color?: string; is_directory?: boolean; parent_id?: number | null }) =>
     api.put(`/categories/${id}`, data),
   delete: (id: number) => api.delete(`/categories/${id}`),
+  export: () => api.get('/categories/export'),
+  import: (data: {
+    version: number
+    categories: Array<{
+      name: string
+      color: string
+      is_directory: boolean
+      children: any[]
+    }>
+  }) => api.post('/categories/import', data),
 }
 
 // Annotation API
@@ -88,6 +104,7 @@ export const modelApi = {
   update: (id: number, data: { name?: string; version?: string; metrics?: object }) => api.put(`/models/${id}`, data),
   delete: (id: number) => api.delete(`/models/${id}`),
   setBest: (id: number) => api.post(`/models/${id}/set-best`),
+  getDownloadUrl: (id: number) => `/api/models/${id}/download`,
   upload: (id: number, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -141,6 +158,10 @@ export const inferenceApi = {
   // 停止流式推理
   stopVideoStream: (jobId: string) => api.post(`/inference/detect/stop/${jobId}`),
   listTrainedModels: () => api.get('/inference/models'),
+  listInferenceJobs: () => api.get('/inference/jobs'),
+  rerunInferenceJob: (jobId: string, modelId: number, confThreshold: number = 0.25) =>
+    api.post(`/inference/jobs/${jobId}/rerun?model_id=${modelId}&conf_threshold=${confThreshold}`),
+  clearInferenceJobs: () => api.delete('/inference/jobs'),
 }
 
 // RuleEngine API

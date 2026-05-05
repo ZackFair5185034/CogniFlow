@@ -4,16 +4,16 @@
     <div class="toolbar">
       <div class="toolbar-left">
         <button class="ui-btn" @click="goBack">
-          <ArrowLeftIcon />
+          <SvgIcon name="back" />
           返回
         </button>
         <div class="image-nav" v-if="currentImage">
           <button class="ui-btn" @click="prevImage" :disabled="!hasPrev">
-            <ChevronLeftIcon />
+            <SvgIcon name="chevron-left" />
           </button>
           <span class="nav-info">#{{ currentImage.id }}</span>
           <button class="ui-btn" @click="nextImage" :disabled="!hasNext">
-            <ChevronRightIcon />
+            <SvgIcon name="chevron-right" />
           </button>
         </div>
         <div class="progress-stats" v-if="totalImages > 0">
@@ -41,7 +41,7 @@
       </div>
       <div class="toolbar-right">
         <button class="ui-btn ui-btn-primary" @click="saveAnnotations" :disabled="!hasChanges || saving">
-          <SaveIcon />
+          <SvgIcon name="save" />
           {{ saving ? '保存中...' : '保存 (S)' }}
         </button>
       </div>
@@ -54,9 +54,26 @@
         <div class="panel-header">
           <h3>类别库</h3>
           <div class="header-actions">
-            <button class="ui-btn ui-btn-small" @click="openCreateDialog">
-              <PlusIcon />
-            </button>
+            <div class="header-dropdown" @click.stop>
+              <button class="ui-btn ui-btn-small" @click="showHeaderMenu = !showHeaderMenu">
+                <SvgIcon name="menu" />
+              </button>
+              <div class="dropdown-menu" v-if="showHeaderMenu" @click="showHeaderMenu = false">
+                <div class="dropdown-item" @click="handleExport">
+                  <SvgIcon name="download" />
+                  <span>导出类别</span>
+                </div>
+                <div class="dropdown-item" @click="triggerImport">
+                  <SvgIcon name="upload" />
+                  <span>导入类别</span>
+                </div>
+                <div class="dropdown-divider"></div>
+                <div class="dropdown-item" @click="openCreateDialog">
+                  <SvgIcon name="plus" />
+                  <span>新建类别</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -64,11 +81,11 @@
         <div class="breadcrumb" v-if="currentPath.length > 0 || selectedCategoryId">
           <span class="breadcrumb-item" @click="navigateToRoot">根目录</span>
           <template v-for="(item, idx) in currentPath" :key="item.id">
-            <ChevronRightIcon class="breadcrumb-sep" />
+            <SvgIcon name="chevron-right" class="breadcrumb-sep" />
             <span class="breadcrumb-item" @click="navigateTo(idx)">{{ item.name }}</span>
           </template>
           <template v-if="selectedCategoryId">
-            <ChevronRightIcon class="breadcrumb-sep" />
+            <SvgIcon name="chevron-right" class="breadcrumb-sep" />
             <span class="current-tag" :style="{ background: getSelectedCategoryColor }">
               {{ getSelectedCategoryName }}
             </span>
@@ -83,13 +100,13 @@
             class="dir-item"
             @click="enterDirectory(dir)"
           >
-            <FolderIcon class="dir-icon" />
+            <SvgIcon name="folder" class="dir-icon" />
             <span class="dir-name">{{ dir.name }}</span>
             <div class="item-actions">
               <button class="icon-btn" @click.stop="deleteCategory(dir.id)" title="删除">
-                <TrashIcon />
+                <SvgIcon name="trash" />
               </button>
-              <ChevronRightIcon class="enter-icon" />
+              <SvgIcon name="chevron-right" class="enter-icon" />
             </div>
           </div>
         </div>
@@ -108,7 +125,7 @@
             <span class="tag-name">{{ cat.name }}</span>
             <div class="item-actions">
               <button class="icon-btn" @click.stop="deleteCategory(cat.id)" title="删除">
-                <TrashIcon />
+                <SvgIcon name="trash" />
               </button>
               <span class="tag-hotkey">{{ idx + 1 }}</span>
             </div>
@@ -156,7 +173,7 @@
             <span class="ann-bbox">[{{ formatBbox(ann.bbox) }}]</span>
             <div class="ann-actions">
               <button class="icon-btn" @click.stop="removeAnnotation(index)" title="删除">
-                <TrashIcon />
+                <SvgIcon name="trash" />
               </button>
             </div>
           </div>
@@ -173,7 +190,7 @@
         <div class="dialog-header">
           <h3>{{ categoryForm.is_directory ? '创建目录' : '创建标签' }}</h3>
           <button class="close-btn" @click="closeCreateDialog">
-            <CloseIcon />
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
@@ -187,7 +204,7 @@
                 :class="{ active: !categoryForm.is_directory }"
                 @click="categoryForm.is_directory = false"
               >
-                <TagIcon /> 标签
+                <SvgIcon name="tag" /> 标签
               </button>
               <button
                 type="button"
@@ -195,7 +212,7 @@
                 :class="{ active: categoryForm.is_directory }"
                 @click="categoryForm.is_directory = true"
               >
-                <FolderIcon /> 目录
+                <SvgIcon name="folder" /> 目录
               </button>
             </div>
           </div>
@@ -228,14 +245,82 @@
         </div>
       </div>
     </div>
+
+    <!-- 导入类别对话框 -->
+    <div class="dialog-overlay" v-if="showImportDialog" @click.self="closeImportDialog">
+      <div class="dialog-panel ui-card">
+        <div class="dialog-header">
+          <h3>导入类别</h3>
+          <button class="close-btn" @click="closeImportDialog">
+            <SvgIcon name="close" />
+          </button>
+        </div>
+        <div class="dialog-body">
+          <!-- 步骤 1：文件选择 -->
+          <div v-if="!importPreviewData" class="form-group">
+            <label>选择 JSON 文件</label>
+            <div class="import-dropzone" @click="importFileInput?.click()">
+              <SvgIcon name="upload" />
+              <span>点击选择文件</span>
+              <span class="import-hint">支持 .json 格式的类别导出文件</span>
+            </div>
+            <input
+              ref="importFileInput"
+              type="file"
+              accept=".json,application/json"
+              style="display: none"
+              @change="onImportFileSelected"
+            />
+          </div>
+
+          <!-- 步骤 2：预览 -->
+          <div v-if="importPreviewData" class="import-preview">
+            <div class="preview-stats">
+              <div class="preview-stat">
+                <span class="stat-count">{{ importPreviewStats.directories }}</span>
+                <span class="stat-label">目录</span>
+              </div>
+              <div class="preview-stat">
+                <span class="stat-count">{{ importPreviewStats.tags }}</span>
+                <span class="stat-label">标签</span>
+              </div>
+              <div class="preview-stat">
+                <span class="stat-count">{{ importPreviewStats.total }}</span>
+                <span class="stat-label">总计</span>
+              </div>
+            </div>
+            <div class="preview-tree">
+              <div v-for="node in importPreviewData.categories" :key="node.name" class="preview-node">
+                <SvgIcon :name="node.is_directory ? 'folder' : 'tag'" />
+                <span>{{ node.name }}</span>
+                <span v-if="node.children?.length" class="node-count">({{ countChildren(node) }} 子项)</span>
+              </div>
+            </div>
+            <div v-if="importParseError" class="import-error">{{ importParseError }}</div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="ui-btn" @click="closeImportDialog">取消</button>
+          <button
+            v-if="importPreviewData"
+            class="ui-btn ui-btn-primary"
+            :disabled="importing"
+            @click="handleImport"
+          >
+            {{ importing ? '导入中...' : '确认导入' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, nextTick, h } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { categoryApi, annotationApi, atlasApi } from '@/api'
+import SvgIcon from '@/components/SvgIcon.vue'
 
 interface Category {
   id: number
@@ -281,6 +366,15 @@ const saving = ref(false)
 const showCategoryDialog = ref(false)
 const creatingCategory = ref(false)
 const categoryForm = ref({ name: '', color: '#FF0000', is_directory: false, parent_id: null as number | null })
+
+// 导入导出状态
+const showHeaderMenu = ref(false)
+const closeHeaderMenu = () => { showHeaderMenu.value = false }
+const showImportDialog = ref(false)
+const importPreviewData = ref<any>(null)
+const importParseError = ref('')
+const importing = ref(false)
+const importFileInput = ref<HTMLInputElement | null>(null)
 
 const imageList = ref<ImageData[]>([])
 const currentImageIndex = ref(0)
@@ -383,50 +477,114 @@ const deleteCategory = async (id: number) => {
   }
 }
 
-// ============ 图标组件 ============
-const ArrowLeftIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '19', y1: '12', x2: '5', y2: '12' }),
-  h('polyline', { points: '12 19 5 12 12 5' })
-])
+// ============ 导入导出 ============
+const countChildren = (node: any): number => {
+  let count = 0
+  const walk = (nodes: any[]) => {
+    for (const n of nodes) {
+      count++
+      if (n.children?.length) walk(n.children)
+    }
+  }
+  if (node.children?.length) walk(node.children)
+  return count
+}
 
-const ChevronLeftIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '15 18 9 12 15 6' })
-])
+const importPreviewStats = computed(() => {
+  const data = importPreviewData.value
+  if (!data) return { directories: 0, tags: 0, total: 0 }
+  let dirs = 0, tags = 0
+  const walk = (nodes: any[]) => {
+    for (const n of nodes) {
+      if (n.is_directory) dirs++
+      else tags++
+      if (n.children?.length) walk(n.children)
+    }
+  }
+  walk(data.categories || [])
+  return { directories: dirs, tags, total: dirs + tags }
+})
 
-const ChevronRightIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '9 18 15 12 9 6' })
-])
+const handleExport = async () => {
+  try {
+    const res = await categoryApi.export()
+    const data = JSON.stringify(res.data, null, 2)
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `categories_${Date.now()}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } catch (error) {
+    ElMessage.error('导出失败')
+  }
+}
 
-const FolderIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z' })
-])
+const triggerImport = () => {
+  importPreviewData.value = null
+  importParseError.value = ''
+  showImportDialog.value = true
+  nextTick(() => {
+    if (importFileInput.value) importFileInput.value.value = ''
+  })
+}
 
-const TagIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z' }),
-  h('line', { x1: '7', y1: '7', x2: '7.01', y2: '7' })
-])
+const closeImportDialog = () => {
+  showImportDialog.value = false
+  importPreviewData.value = null
+  importParseError.value = ''
+}
 
-const PlusIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '12', y1: '5', x2: '12', y2: '19' }),
-  h('line', { x1: '5', y1: '12', x2: '19', y2: '12' })
-])
+const onImportFileSelected = (e: Event) => {
+  const input = e.target as HTMLInputElement
+  if (!input.files?.length) return
+  const file = input.files[0]
+  const reader = new FileReader()
+  reader.onload = (evt) => {
+    try {
+      const data = JSON.parse(evt.target?.result as string)
+      if (typeof data.version !== 'number' || !Array.isArray(data.categories)) {
+        importParseError.value = '无效的类别文件格式：缺少 version 或 categories 字段'
+        return
+      }
+      importPreviewData.value = data
+      importParseError.value = ''
+    } catch {
+      importParseError.value = '无效的 JSON 文件'
+    }
+  }
+  reader.readAsText(file)
+}
 
-const SaveIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('path', { d: 'M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z' }),
-  h('polyline', { points: '17 21 17 13 7 13 7 21' }),
-  h('polyline', { points: '7 3 7 8 15 8' })
-])
+const handleImport = async () => {
+  if (!importPreviewData.value) return
+  importing.value = true
+  try {
+    const res = await categoryApi.import(importPreviewData.value)
+    const result = res.data
+    const msgs: string[] = []
+    if (result.created > 0) msgs.push(`新增 ${result.created} 个类别`)
+    if (result.skipped > 0) msgs.push(`跳过 ${result.skipped} 个重复类别`)
+    ElMessage.success(msgs.join('，') || '导入完成')
+    closeImportDialog()
+    await loadTree()
+    if (selectedCategoryId.value) {
+      const stillExists = flatCategories.value.find(c => c.id === selectedCategoryId.value)
+      if (!stillExists) selectedCategoryId.value = null
+    }
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '导入失败'
+    ElMessage.error(msg)
+  } finally {
+    importing.value = false
+  }
+}
 
-const TrashIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('polyline', { points: '3 6 5 6 21 6' }),
-  h('path', { d: 'M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2' })
-])
-
-const CloseIcon = () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' }, [
-  h('line', { x1: '18', y1: '6', x2: '6', y2: '18' }),
-  h('line', { x1: '6', y1: '6', x2: '18', y2: '18' })
-])
-
+// ============ 类别树 Methods ============
 const openCreateDialog = () => {
   categoryForm.value = {
     name: '',
@@ -521,7 +679,9 @@ const loadImageList = async () => {
   if (!currentImage.value) return
   try {
     const directory = route.query.directory as string | undefined
-    const res = await atlasApi.getImages(currentImage.value.atlas_id, directory)
+    const sortBy = route.query.sort_by as string | undefined
+    const sortOrder = route.query.sort_order as string | undefined
+    const res = await atlasApi.getImages(currentImage.value.atlas_id, directory, 1, 999, sortBy, sortOrder)
     imageList.value = res.data.items || []
     currentImageIndex.value = imageList.value.findIndex((img: ImageData) => img.id === currentImage.value?.id)
   } catch (error) {
@@ -818,7 +978,9 @@ const prevImage = async () => {
     await saveAnnotations()
   }
   const newId = imageList.value[currentImageIndex.value - 1].id
-  const query = route.query.directory ? { directory: route.query.directory as string } : {}
+  const query: Record<string, string> = route.query.directory ? { directory: route.query.directory as string } : {}
+  query.sort_by = route.query.sort_by as string || 'created_at'
+  query.sort_order = route.query.sort_order as string || 'desc'
   router.push({ path: `/annotate/${newId}`, query })
 }
 
@@ -829,7 +991,9 @@ const nextImage = async () => {
     await saveAnnotations()
   }
   const newId = imageList.value[currentImageIndex.value + 1].id
-  const query = route.query.directory ? { directory: route.query.directory as string } : {}
+  const query: Record<string, string> = route.query.directory ? { directory: route.query.directory as string } : {}
+  query.sort_by = route.query.sort_by as string || 'created_at'
+  query.sort_order = route.query.sort_order as string || 'desc'
   router.push({ path: `/annotate/${newId}`, query })
 }
 
@@ -877,10 +1041,12 @@ onMounted(() => {
     })
   }
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('click', closeHeaderMenu)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('click', closeHeaderMenu)
 })
 </script>
 
@@ -978,41 +1144,6 @@ onUnmounted(() => {
   border: 1px solid var(--border-color);
   font-family: 'JetBrains Mono', monospace;
   @apply text-[11px] text-[var(--text-secondary)] mr-1;
-}
-
-.ui-btn {
-  @apply inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-sm cursor-pointer transition-all;
-}
-
-.ui-btn:hover:not(:disabled) {
-  @apply bg-[var(--bg-hover)] border-[var(--accent-cyan)];
-}
-
-.ui-btn:disabled {
-  @apply opacity-50 cursor-not-allowed;
-}
-
-.ui-btn svg {
-  @apply w-4 h-4;
-}
-
-.ui-btn-primary {
-  background: var(--accent-cyan);
-  border-color: var(--accent-cyan);
-  @apply text-black;
-}
-
-.ui-btn-primary:hover:not(:disabled) {
-  background: #00d4e0;
-  border-color: #00d4e0;
-}
-
-.ui-btn-small {
-  @apply px-2 py-1;
-}
-
-.ui-btn-small svg {
-  @apply w-3.5 h-3.5;
 }
 
 .content-area {
@@ -1217,66 +1348,83 @@ onUnmounted(() => {
 
 .annotation-panel {
   @apply flex flex-col;
-  width: clamp(160px, 15vw, 240px);
-  min-width: 160px;
+  width: clamp(200px, 18vw, 280px);
+  min-width: 200px;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
 .annotation-list {
-  @apply flex-1 overflow-y-auto p-1.5;
+  @apply flex-1 overflow-y-auto;
+  padding: var(--spacing-xs);
 }
 
 .annotation-item {
-  @apply flex items-center gap-2 p-1.5 rounded-md cursor-pointer transition-all border border-transparent;
-}
+  @apply flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all border border-transparent;
+  margin-bottom: 4px;
 
-.annotation-item:hover {
-  @apply bg-[var(--bg-hover)];
-}
+  // Figma Design: 轻微背景区分，未选中项也有层次感
+  &:hover {
+    background: var(--bg-hover);
+  }
 
-.annotation-item.selected {
-  background: rgba(0, 240, 255, 0.1);
-  @apply border-[var(--accent-cyan)];
-}
+  &.selected {
+    background: rgba(0, 240, 255, 0.08);
+    border-color: rgba(0, 240, 255, 0.4);
+  }
 
-.annotation-item.pending {
-  @apply opacity-70;
+  &.pending {
+    opacity: 0.65;
+  }
 }
 
 .ann-color {
-  @apply w-2.5 h-2.5 rounded flex-shrink-0;
+  @apply w-3 h-3 rounded-sm flex-shrink-0;
+  box-shadow: 0 0 4px currentColor;  // 颜色点带微发光
 }
 
 .ann-name {
-  @apply flex-1 text-xs text-[var(--text-primary)];
+  @apply flex-1 text-sm text-[var(--text-primary)] font-medium;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ann-bbox {
-  font-family: 'JetBrains Mono', monospace;
-  @apply text-[10px] text-[var(--text-muted)];
+  font-family: var(--font-family-mono);
+  font-size: 12px;        // Figma: caption = 12px，不再是 10px
+  font-weight: 400;
+  color: var(--text-secondary);  // 从 muted → secondary，对比度提升
+  letter-spacing: 0.30px;  // Figma caption letter-spacing
+  flex-shrink: 0;
+  text-transform: uppercase;  // Figma caption 规范
 }
 
 .ann-actions {
   @apply flex gap-1;
+  flex-shrink: 0;
 }
 
 .icon-btn {
-  @apply w-6 h-6 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded transition-all;
-}
+  @apply w-7 h-7 flex items-center justify-center bg-transparent border-none cursor-pointer rounded-lg transition-all;
+  color: var(--text-muted);
 
-.icon-btn:hover {
-  background: rgba(255, 68, 102, 0.2);
-  @apply text-[#ff4466];
-}
+  &:hover {
+    background: rgba(255, 68, 102, 0.15);
+    color: #ff4466;
+  }
 
-.icon-btn svg {
-  @apply w-3.5 h-3.5;
+  svg {
+    @apply w-3.5 h-3.5;
+  }
 }
 
 .empty-tip {
-  @apply p-5 text-center text-sm text-[var(--text-muted)] leading-relaxed;
+  @apply p-5 text-center leading-relaxed;
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
 /* 对话框 */
@@ -1314,7 +1462,7 @@ onUnmounted(() => {
 }
 
 .close-btn {
-  @apply w-7 h-7 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded transition-all;
+  @apply w-8 h-8 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded transition-all;
 }
 
 .close-btn:hover {
@@ -1385,5 +1533,112 @@ onUnmounted(() => {
 .dialog-footer {
   @apply flex justify-end gap-2 p-3;
   border-top: 1px solid var(--border-color);
+}
+
+/* 下拉菜单样式 */
+.header-dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  min-width: 140px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  animation: dialogIn 0.15s ease;
+}
+
+.dropdown-item {
+  @apply flex items-center gap-2 px-3 py-2 rounded text-sm cursor-pointer;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+}
+
+.dropdown-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.dropdown-item svg {
+  @apply w-4 h-4;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 8px;
+}
+
+/* 导入导出样式 */
+.import-dropzone {
+  @apply flex flex-col items-center gap-2 p-8 rounded-lg cursor-pointer border-2 border-dashed;
+  border-color: var(--border-color);
+  background: var(--bg-primary);
+  transition: all 0.2s;
+}
+
+.import-dropzone:hover {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 240, 255, 0.05);
+}
+
+.import-dropzone svg {
+  @apply w-8 h-8 text-[var(--text-muted)];
+}
+
+.import-hint {
+  @apply text-xs text-[var(--text-muted)];
+}
+
+.import-preview {
+  @apply space-y-3;
+}
+
+.preview-stats {
+  @apply flex gap-4;
+}
+
+.preview-stat {
+  @apply flex flex-col items-center p-3 rounded-lg;
+  background: var(--bg-primary);
+  flex: 1;
+}
+
+.preview-stat .stat-count {
+  @apply text-xl font-bold font-mono;
+  color: var(--accent-cyan);
+}
+
+.preview-stat .stat-label {
+  @apply text-xs text-[var(--text-muted)] uppercase tracking-wide;
+}
+
+.preview-tree {
+  @apply space-y-1 max-h-48 overflow-y-auto p-2 rounded;
+  background: var(--bg-primary);
+}
+
+.preview-node {
+  @apply flex items-center gap-2 text-sm p-1.5;
+}
+
+.preview-node svg {
+  @apply w-4 h-4;
+}
+
+.node-count {
+  @apply text-xs text-[var(--text-muted)];
+}
+
+.import-error {
+  @apply text-sm p-2 rounded;
+  color: #ff4466;
+  background: rgba(255, 68, 102, 0.1);
 }
 </style>
