@@ -111,18 +111,22 @@ async def list_atlas_images(
     directory: str = None,
     page: int = 1,
     page_size: int = 50,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
     db: Session = Depends(get_db)
 ):
-    """获取图集图片列表，支持按目录筛选和分页。
+    """获取图集图片列表，支持按目录筛选、分页和排序。
 
     Args:
         atlas_id: 图集 ID
         directory: 可选，按目录名筛选
         page: 页码，从 1 开始
         page_size: 每页数量，默认 50
+        sort_by: 排序字段，可选 created_at（创建时间）、name（文件名）
+        sort_order: 排序方向，asc 或 desc
     """
     import sys
-    print(f"[DEBUG] list_atlas_images called with atlas_id={atlas_id}, directory={directory}, page={page}, page_size={page_size}", flush=True)
+    print(f"[DEBUG] list_atlas_images called with atlas_id={atlas_id}, directory={directory}, page={page}, page_size={page_size}, sort_by={sort_by}, sort_order={sort_order}", flush=True)
 
     atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
     if not atlas:
@@ -133,11 +137,19 @@ async def list_atlas_images(
     if directory is not None:
         query = query.filter(Image.directory == directory)
 
+    # 排序
+    if sort_by == "name":
+        # 按文件名排序（直接用 file_path 排序，路径末尾即文件名）
+        query = query.order_by(Image.file_path.desc() if sort_order == "desc" else Image.file_path.asc())
+    else:
+        # 默认按创建时间排序
+        query = query.order_by(Image.created_at.desc() if sort_order == "desc" else Image.created_at.asc())
+
     total = query.count()
     total_pages = (total + page_size - 1) // page_size if total > 0 else 1
 
     offset = (page - 1) * page_size
-    images = query.order_by(Image.created_at.desc()).offset(offset).limit(page_size).all()
+    images = query.offset(offset).limit(page_size).all()
 
     return {
         "items": images,
@@ -390,6 +402,7 @@ async def extract_video_frames(
 
     # 重新打开视频读帧（顺序读取，避免 codec seek 不准导致乱序）
     cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
     extracted_images = []
     extracted_idx = 0
     video_frame_idx = 0
@@ -406,6 +419,10 @@ async def extract_video_frames(
             cv2.imwrite(output_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
 
             img_height, img_width = frame.shape[:2]
+            # 计算帧在视频中的时间偏移量，加上当前时间作为实际存储时间
+            from datetime import datetime, timedelta
+            frame_offset = video_frame_idx / fps if fps > 0 else 0
+            created_at = datetime.utcnow() + timedelta(seconds=frame_offset)
 
             image = Image(
                 atlas_id=atlas_id,
@@ -413,6 +430,7 @@ async def extract_video_frames(
                 directory=directory,
                 width=img_width,
                 height=img_height,
+                created_at=created_at,
             )
             db.add(image)
             extracted_images.append(image)
@@ -441,6 +459,7 @@ def _extract_frames_background(
     video_path: str,
     extract_count: int,
     total_frames: int,
+    fps: float,
 ):
     """后台线程执行帧提取（内部函数，供 threadPoolExecutor 调用）。"""
     import cv2
@@ -475,7 +494,9 @@ def _extract_frames_background(
                 cv2.imwrite(output_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
 
                 img_height, img_width = frame.shape[:2]
-                frame_paths.append((output_path, img_width, img_height))
+                # 计算帧在视频中的时间偏移量
+                frame_offset = video_frame_idx / fps if fps > 0 else 0
+                frame_paths.append((output_path, img_width, img_height, frame_offset))
 
                 extracted_idx += 1
 
@@ -485,14 +506,21 @@ def _extract_frames_background(
 
             video_frame_idx += 1
 
+        cap.release()
+
         # 批量创建 Image 记录
-        for idx, (file_path, img_width, img_height) in enumerate(frame_paths):
+        from datetime import datetime, timedelta
+        base_time = datetime.utcnow()
+        for idx, (file_path, img_width, img_height, frame_offset) in enumerate(frame_paths):
+            # 帧时间偏移量加上基准时间
+            created_at = base_time + timedelta(seconds=frame_offset)
             image = Image(
                 atlas_id=atlas_id,
                 file_path=file_path,
                 directory=f"video_{job_id}",
                 width=img_width,
                 height=img_height,
+                created_at=created_at,
             )
             db.add(image)
         db.commit()
@@ -544,7 +572,7 @@ async def extract_video_frames_async(
     # 启动后台线程执行提取
     thread = threading.Thread(
         target=_extract_frames_background,
-        args=(job_id, atlas_id, video_path, extract_count, total_frames),
+        args=(job_id, atlas_id, video_path, extract_count, total_frames, fps),
         daemon=True,
     )
     thread.start()

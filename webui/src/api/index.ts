@@ -14,8 +14,8 @@ export const atlasApi = {
   create: (data: { name: string; description?: string }) => api.post('/atlas', data),
   update: (id: number, data: { name?: string; description?: string }) => api.put(`/atlas/${id}`, data),
   delete: (id: number) => api.delete(`/atlas/${id}`),
-  getImages: (id: number, directory?: string, page: number = 1, pageSize: number = 50) =>
-    api.get(`/atlas/${id}/images`, { params: { directory, page, page_size: pageSize } }),
+  getImages: (id: number, directory?: string, page: number = 1, pageSize: number = 50, sortBy?: string, sortOrder?: string) =>
+    api.get(`/atlas/${id}/images`, { params: { directory, page, page_size: pageSize, sort_by: sortBy, sort_order: sortOrder } }),
   getDirectories: (id: number) => api.get(`/atlas/${id}/directories`),
   createDirectory: (id: number, directory: string) => api.post(`/atlas/${id}/directories`, null, { params: { directory } }),
   deleteDirectory: (id: number, directory: string) => api.delete(`/atlas/${id}/directories`, { params: { directory } }),

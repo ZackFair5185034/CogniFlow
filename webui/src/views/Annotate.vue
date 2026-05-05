@@ -479,7 +479,9 @@ const loadImageList = async () => {
   if (!currentImage.value) return
   try {
     const directory = route.query.directory as string | undefined
-    const res = await atlasApi.getImages(currentImage.value.atlas_id, directory)
+    const sortBy = route.query.sort_by as string | undefined
+    const sortOrder = route.query.sort_order as string | undefined
+    const res = await atlasApi.getImages(currentImage.value.atlas_id, directory, 1, 999, sortBy, sortOrder)
     imageList.value = res.data.items || []
     currentImageIndex.value = imageList.value.findIndex((img: ImageData) => img.id === currentImage.value?.id)
   } catch (error) {
@@ -776,7 +778,9 @@ const prevImage = async () => {
     await saveAnnotations()
   }
   const newId = imageList.value[currentImageIndex.value - 1].id
-  const query = route.query.directory ? { directory: route.query.directory as string } : {}
+  const query: Record<string, string> = route.query.directory ? { directory: route.query.directory as string } : {}
+  query.sort_by = route.query.sort_by as string || 'created_at'
+  query.sort_order = route.query.sort_order as string || 'desc'
   router.push({ path: `/annotate/${newId}`, query })
 }
 
@@ -787,7 +791,9 @@ const nextImage = async () => {
     await saveAnnotations()
   }
   const newId = imageList.value[currentImageIndex.value + 1].id
-  const query = route.query.directory ? { directory: route.query.directory as string } : {}
+  const query: Record<string, string> = route.query.directory ? { directory: route.query.directory as string } : {}
+  query.sort_by = route.query.sort_by as string || 'created_at'
+  query.sort_order = route.query.sort_order as string || 'desc'
   router.push({ path: `/annotate/${newId}`, query })
 }
 

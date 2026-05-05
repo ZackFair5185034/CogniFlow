@@ -77,6 +77,21 @@
                 <option v-for="dir in directories" :key="dir" :value="dir">{{ dir }}</option>
               </select>
             </div>
+            <div class="sort-wrapper" @click="showSortMenu = !showSortMenu">
+              <span class="sort-label">
+                {{ sortConfig.by === 'created_at' ? '创建时间' : '名称' }}
+                <span class="sort-arrow">{{ sortConfig.order === 'asc' ? '↑' : '↓' }}</span>
+              </span>
+              <div class="sort-dropdown" v-if="showSortMenu" @click.stop>
+                <div class="sort-group-title">排序字段</div>
+                <div class="sort-option" :class="{ active: sortConfig.by === 'created_at' }" @click="sortConfig.by = 'created_at'; loadImages()">创建时间</div>
+                <div class="sort-option" :class="{ active: sortConfig.by === 'name' }" @click="sortConfig.by = 'name'; loadImages()">名称</div>
+                <div class="sort-divider"></div>
+                <div class="sort-group-title">排序方向</div>
+                <div class="sort-option" :class="{ active: sortConfig.order === 'desc' }" @click="sortConfig.order = 'desc'; loadImages()">降序</div>
+                <div class="sort-option" :class="{ active: sortConfig.order === 'asc' }" @click="sortConfig.order = 'asc'; loadImages()">升序</div>
+              </div>
+            </div>
             <button class="action-btn" @click="loadImages">
               <SvgIcon name="refresh" />
             </button>
@@ -371,6 +386,8 @@ const directories = ref<string[]>([])
 const loadingImages = ref(false)
 const activeTab = ref('images')
 const selectedDirectory = ref('')
+const sortConfig = ref({ by: 'created_at', order: 'desc' as 'asc' | 'desc' })
+const showSortMenu = ref(false)
 const showImageDialog = ref(false)
 const selectedImage = ref<any>(null)
 const newDirectoryName = ref('')
@@ -466,7 +483,7 @@ const loadImages = async () => {
   try {
     const directory = selectedDirectory.value || undefined
     console.log('[DEBUG] loadImages called, directory:', directory, 'page:', pagination.value.page)
-    const res = await atlasApi.getImages(id, directory, pagination.value.page, pagination.value.page_size)
+    const res = await atlasApi.getImages(id, directory, pagination.value.page, pagination.value.page_size, sortConfig.value.by, sortConfig.value.order)
     console.log('[DEBUG] getImages response, total:', res.data.total)
     images.value = res.data.items
     pagination.value.total = res.data.total
@@ -480,6 +497,14 @@ const loadImages = async () => {
 }
 
 const onDirectoryChange = () => {
+  pagination.value.page = 1
+  loadImages()
+}
+
+const setSort = (by: 'created_at' | 'name', order: 'asc' | 'desc') => {
+  sortConfig.value.by = by
+  sortConfig.value.order = order
+  showSortMenu.value = false
   pagination.value.page = 1
   loadImages()
 }
@@ -655,7 +680,9 @@ const handleDeleteDirectory = async (dir: string) => {
 }
 
 const handleAnnotateImage = (img: any) => {
-  const query = selectedDirectory.value ? { directory: selectedDirectory.value } : {}
+  const query: Record<string, string> = selectedDirectory.value ? { directory: selectedDirectory.value } : {}
+  query.sort_by = sortConfig.value.by
+  query.sort_order = sortConfig.value.order
   router.push({ path: `/annotate/${img.id}`, query })
 }
 
@@ -983,6 +1010,43 @@ onMounted(() => {
 
 .action-btn {
   @apply w-9 h-9 flex items-center justify-center bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md text-[var(--text-secondary)] cursor-pointer transition-all;
+}
+
+.sort-wrapper {
+  @apply relative flex items-center gap-1 px-3 h-9 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-sm cursor-pointer;
+  min-width: 140px;
+}
+
+.sort-label {
+  @apply flex items-center gap-1;
+}
+
+.sort-arrow {
+  @apply text-[var(--accent-cyan)];
+}
+
+.sort-dropdown {
+  @apply absolute top-full left-0 mt-1 w-full bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md shadow-lg z-50;
+}
+
+.sort-option {
+  @apply px-3 py-2 text-sm cursor-pointer transition-all;
+}
+
+.sort-option:hover {
+  @apply bg-[var(--bg-hover)] text-[var(--accent-cyan)];
+}
+
+.sort-option.active {
+  @apply text-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)];
+}
+
+.sort-divider {
+  @apply h-px bg-[var(--border-color)] my-1;
+}
+
+.sort-group-title {
+  @apply px-3 py-1 text-xs text-[var(--text-muted)] uppercase tracking-wider;
 }
 
 .action-btn:hover {

@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Text,
     UniqueConstraint,
