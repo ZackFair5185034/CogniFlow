@@ -9,17 +9,28 @@
 
 import threading
 import time
+import numpy as np
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional
 
 
 @dataclass
-class FrameResult:
-    """单帧推理结果。"""
+class RawFrameResult:
+    """原始帧推理结果（编码前）。"""
     frame_id: int           # 帧序号
     timestamp: float        # 时间戳（秒）
-    image_base64: str       # JPEG 压缩后的 base64 图片
+    frame_bgr: np.ndarray   # BGR 原始帧数据（numpy 数组）
+    detections: list        # 检测结果列表
+    inference_ms: int       # 推理耗时（毫秒）
+
+
+@dataclass
+class FrameResult:
+    """单帧推理结果（已编码）。"""
+    frame_id: int           # 帧序号
+    timestamp: float        # 时间戳（秒）
+    image_bytes: bytes      # JPEG 压缩后的原始字节
     detections: list        # 检测结果列表
     inference_ms: int       # 推理耗时（毫秒）
 
@@ -128,6 +139,8 @@ class StreamJobManager:
         import uuid
         job_id = str(uuid.uuid4())[:8]
         frame_buffer = FrameBuffer(maxsize=30)
+        # 原始帧缓冲（编码前），用于推理→编码流水线
+        raw_buffer = FrameBuffer(maxsize=10)
 
         with self._lock:
             self._jobs[job_id] = {
@@ -144,8 +157,16 @@ class StreamJobManager:
                 "categories": categories,
                 "fps": fps,
                 "frame_buffer": frame_buffer,
+                "raw_buffer": raw_buffer,
+                "inference_done": False,
+                "final_frame_count": 0,
+                "final_total_detections": 0,
                 "created_at": time.time(),
                 "total_detections": 0,
+                # 播放进度（前端当前显示的帧位置）
+                "playback_frame": 0,
+                # 缓存帧数（暂停期间累积）
+                "buffered_frames": 0,
             }
 
         return job_id, frame_buffer
@@ -167,6 +188,12 @@ class StreamJobManager:
         with self._lock:
             job = self._jobs.get(job_id)
             return job["frame_buffer"] if job else None
+
+    def get_job_raw_buffer(self, job_id: str) -> Optional[FrameBuffer]:
+        """获取任务的原始帧缓冲（用于编码线程）。"""
+        with self._lock:
+            job = self._jobs.get(job_id)
+            return job.get("raw_buffer") if job else None
 
     def stop_job(self, job_id: str):
         """停止任务。"""
