@@ -15,13 +15,13 @@
     <!-- 模型列表 -->
     <div class="ui-card" style="width: 100%; min-width: 0;">
       <div class="table-wrapper">
-        <el-table :data="models" v-loading="loading" :row-class-name="tableRowClassName" table-layout="auto">
-          <el-table-column prop="id" label="ID" width="80">
+        <el-table :data="models" v-loading="loading" :row-class-name="tableRowClassName" style="width: 100%">
+          <el-table-column prop="id" label="ID" width="100">
             <template #default="{ row }">
               <span class="id-badge">#{{ row.id }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="name" label="名称" min-width="150">
+          <el-table-column prop="name" label="名称" min-width="200">
             <template #default="{ row }">
               <div class="name-cell">
                 <SvgIcon name="box" class="model-icon" />
@@ -48,7 +48,7 @@
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="性能指标" width="180">
+          <el-table-column label="性能指标" width="200">
             <template #default="{ row }">
               <div v-if="row.metrics?.mAP50" class="metrics-cell">
                 <span class="metric-item">
@@ -63,7 +63,7 @@
               <span v-else class="text-muted">-</span>
             </template>
           </el-table-column>
-          <el-table-column label="模型文件" min-width="200">
+          <el-table-column label="模型文件" min-width="240">
             <template #default="{ row }">
               <span v-if="row.file_path" class="file-path" :title="row.file_path">
                 {{ shortenPath(row.file_path) }}
@@ -84,10 +84,10 @@
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="280" fixed="right">
+          <el-table-column label="操作" width="240" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
-                <el-button type="text" @click="handleRename(row)">重命名</el-button>
+                <el-button type="text" @click="handleRename(row)">编辑</el-button>
                 <el-button type="text" @click="handleDownload(row)" v-if="row.file_path">下载</el-button>
                 <el-button type="text" @click="handleUpload(row)" v-if="!row.file_path">上传</el-button>
                 <el-button type="text" @click="handleSetBest(row)" :disabled="row.is_best || !row.file_path">最佳</el-button>
@@ -186,11 +186,11 @@
       </div>
     </div>
 
-    <!-- 重命名对话框 -->
+    <!-- 编辑对话框 -->
     <div class="dialog-overlay" v-if="showRenameDialog" @click.self="showRenameDialog = false">
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
-          <h3>重命名模型</h3>
+          <h3>编辑模型</h3>
           <button class="close-btn" @click="showRenameDialog = false">
             <SvgIcon name="close" />
           </button>
@@ -235,7 +235,7 @@ const uploadFile = ref<File | null>(null)
 
 const createForm = ref({ name: '', version: '', pretrained_model: 'yolov8s.pt', atlas_id: null as number | null })
 
-// 重命名状态
+// 编辑状态
 const showRenameDialog = ref(false)
 const renaming = ref(false)
 const renameTarget = ref<any>(null)
@@ -252,7 +252,13 @@ const formatDate = (dateStr: string) => {
 
 const formatTrainedAt = (dateStr: string) => {
   if (!dateStr) return '-'
-  const date = new Date(dateStr.replace('_', ' ').replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'))
+  // 后端格式: %Y%m%d_%H%M%S → 20250315_143022
+  const formatted = dateStr.replace(
+    /^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/,
+    '$1-$2-$3 $4:$5:$6'
+  )
+  const date = new Date(formatted)
+  if (isNaN(date.getTime())) return '-'
   return date.toLocaleString('zh-CN', {
     month: '2-digit',
     day: '2-digit',
@@ -391,11 +397,11 @@ const handleRenameSubmit = async () => {
       name: renameForm.value.name,
       version: renameForm.value.version || undefined,
     })
-    ElMessage.success('重命名成功')
+    ElMessage.success('编辑成功')
     showRenameDialog.value = false
     loadModels()
   } catch (error: any) {
-    const msg = error.response?.data?.detail || '重命名失败'
+    const msg = error.response?.data?.detail || '编辑失败'
     ElMessage.error(msg)
   } finally {
     renaming.value = false
@@ -452,10 +458,6 @@ onMounted(() => {
   width: 100%;
   overflow-x: auto;
   min-width: 0;
-
-  :deep(.el-table) {
-    table-layout: auto;
-  }
 }
 
 /* 表格样式覆盖 */
@@ -468,13 +470,22 @@ onMounted(() => {
   --el-table-text-color: var(--text-primary);
   --el-table-header-text-color: var(--text-secondary);
 
-  th.el-table__cell {
-    @apply bg-[var(--bg-secondary)] font-medium uppercase text-xs tracking-wider;
-  }
-
   td.el-table__cell {
-    @apply border-b border-[var(--border-color)] py-4 px-3;
+    @apply border-b border-[var(--border-color)];
   }
+}
+
+:deep(.el-table__cell) {
+  padding: 12px 16px !important;
+  white-space: nowrap;
+}
+
+:deep(.el-table th.el-table__cell) {
+  @apply bg-[var(--bg-secondary)] font-medium uppercase text-xs tracking-wider;
+}
+
+:deep(.el-table__fixed-right .el-table__cell) {
+  white-space: nowrap;
 }
 
 :deep(.even-row) {
@@ -511,6 +522,7 @@ onMounted(() => {
 
 .status-badge {
   @apply inline-flex items-center gap-1 text-xs px-2 py-1 rounded;
+  white-space: nowrap;
 
   &.trained {
     @apply bg-[rgba(0,255,136,0.1)] text-[var(--accent-green)] border border-[rgba(0,255,136,0.3)];

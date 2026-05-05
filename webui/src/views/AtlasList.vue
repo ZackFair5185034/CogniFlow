@@ -15,13 +15,13 @@
     <!-- 图集表格 -->
     <div class="ui-card" style="width: 100%; min-width: 0;">
       <div class="table-wrapper">
-        <el-table :data="atlases" v-loading="loading" :row-class-name="tableRowClassName" table-layout="auto">
+        <el-table :data="atlases" v-loading="loading" :row-class-name="tableRowClassName" style="width: 100%">
           <el-table-column prop="id" label="ID" width="100">
             <template #default="{ row }">
               <span class="id-badge">#{{ row.id }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="name" label="名称">
+          <el-table-column prop="name" label="名称" min-width="200">
             <template #default="{ row }">
               <div class="name-cell">
                 <SvgIcon name="folder" class="folder-icon" />
@@ -29,16 +29,16 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="description" label="描述" />
-          <el-table-column prop="created_at" label="创建时间" width="180">
+          <el-table-column prop="description" label="描述" min-width="240" />
+          <el-table-column prop="created_at" label="创建时间" width="160">
             <template #default="{ row }">
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="210" fixed="right">
+          <el-table-column label="操作" width="240" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
-                <el-button type="text" @click="handleRename(row)">重命名</el-button>
+                <el-button type="text" @click="handleRename(row)">编辑</el-button>
                 <el-button type="text" @click="$router.push(`/atlas/${row.id}`)">查看</el-button>
                 <el-button type="text" @click="handleDelete(row)">删除</el-button>
               </div>
@@ -76,11 +76,11 @@
       </div>
     </div>
 
-    <!-- 重命名对话框 -->
+    <!-- 编辑对话框 -->
     <div class="dialog-overlay" v-if="showRenameDialog" @click.self="showRenameDialog = false">
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
-          <h3>重命名图集</h3>
+          <h3>编辑图集</h3>
           <button class="close-btn" @click="showRenameDialog = false">
             <SvgIcon name="close" />
           </button>
@@ -117,7 +117,7 @@ const showCreateDialog = ref(false)
 const creating = ref(false)
 const createForm = ref({ name: '', description: '' })
 
-// 重命名状态
+// 编辑状态
 const showRenameDialog = ref(false)
 const renaming = ref(false)
 const renameTarget = ref<any>(null)
@@ -182,11 +182,11 @@ const handleRenameSubmit = async () => {
   renaming.value = true
   try {
     await atlasApi.update(renameTarget.value.id, renameForm.value)
-    ElMessage.success('重命名成功')
+    ElMessage.success('编辑成功')
     showRenameDialog.value = false
     loadAtlases()
   } catch (error: any) {
-    const msg = error.response?.data?.detail || '重命名失败'
+    const msg = error.response?.data?.detail || '编辑失败'
     ElMessage.error(msg)
   } finally {
     renaming.value = false
@@ -248,10 +248,6 @@ onMounted(loadAtlases)
   width: 100%;
   overflow-x: auto;
   min-width: 0;
-
-  :deep(.el-table) {
-    table-layout: auto;
-  }
 }
 
 /* 表格样式覆盖 */
@@ -264,13 +260,22 @@ onMounted(loadAtlases)
   --el-table-text-color: var(--text-primary);
   --el-table-header-text-color: var(--text-secondary);
 
-  th.el-table__cell {
-    @apply bg-[var(--bg-secondary)] font-medium uppercase text-xs tracking-wider;
-  }
-
   td.el-table__cell {
-    @apply border-b border-[var(--border-color)] py-4 px-3;
+    @apply border-b border-[var(--border-color)];
   }
+}
+
+:deep(.el-table__cell) {
+  padding: 12px 16px !important;
+  white-space: nowrap;
+}
+
+:deep(.el-table th.el-table__cell) {
+  @apply bg-[var(--bg-secondary)] font-medium uppercase text-xs tracking-wider;
+}
+
+:deep(.el-table__fixed-right .el-table__cell) {
+  white-space: nowrap;
 }
 
 :deep(.even-row) {
