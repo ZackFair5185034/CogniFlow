@@ -4,6 +4,7 @@
     <div class="page-header">
       <div class="header-info">
         <h2>模型测试</h2>
+        <span class="subtitle">图片/视频检测</span>
       </div>
       <!-- 模式切换 Tab -->
       <div class="mode-tabs">
@@ -1150,6 +1151,14 @@ onUnmounted(() => {
 .page-header {
   @apply flex justify-between items-center;
   flex-shrink: 0;
+}
+
+.header-info {
+  @apply flex items-baseline;
+}
+
+.header-info .subtitle {
+  @apply text-sm text-[var(--text-muted)] ml-3;
 }
 
 .header-info h2 {

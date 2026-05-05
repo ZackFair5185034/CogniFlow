@@ -6,7 +6,7 @@
         <h2>规则引擎</h2>
         <span class="subtitle">可视化规则流程编排与执行</span>
       </div>
-      <button class="create-btn" @click="showCreateDialog = true">
+      <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
         <SvgIcon name="plus" />
         新建规则
       </button>
@@ -25,7 +25,7 @@
         </div>
         <h3>暂无规则</h3>
         <p>创建您的第一条规则，开始自动化流程设计</p>
-        <button class="create-btn" @click="showCreateDialog = true">
+        <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
           <SvgIcon name="plus" />
           新建规则
         </button>
@@ -238,50 +238,24 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
 }
 
 .page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  @apply flex justify-between items-center gap-4;
   margin-bottom: 24px;
-
-  .header-info {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    h2 {
-      font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 0;
-    }
-
-    .subtitle {
-      font-size: 13px;
-      color: var(--text-secondary);
-    }
-  }
 }
 
-.create-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #00f0ff, #00aa88);
-  border: none;
-  border-radius: 8px;
-  color: #000;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
+.header-info {
+  @apply flex items-baseline;
+}
 
-  svg {
-    width: 18px;
-    height: 18px;
-  }
+.header-info h2 {
+  @apply text-2xl font-semibold;
+  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
-  &:hover {
-    box-shadow: 0 4px 20px rgba(0, 240, 255, 0.3);
-  }
+.header-info .subtitle {
+  @apply text-sm text-[var(--text-muted)] ml-3;
 }
 
 .rules-container {

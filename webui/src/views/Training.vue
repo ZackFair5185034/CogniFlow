@@ -396,7 +396,7 @@ onUnmounted(() => {
 }
 
 .header-info h2 {
-  @apply text-xl font-semibold;
+  @apply text-2xl font-semibold;
   background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -404,7 +404,7 @@ onUnmounted(() => {
 }
 
 .header-info .subtitle {
-  @apply text-xs text-[var(--text-muted)] ml-2;
+  @apply text-sm text-[var(--text-muted)] ml-3;
 }
 
 .header-actions {
