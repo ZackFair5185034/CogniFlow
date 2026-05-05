@@ -214,7 +214,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 20px;
+  padding: 8px 16px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -295,9 +295,16 @@ body {
   border-radius: 6px;
 }
 
-.ui-btn-small svg {
+.ui-btn-small svg,
+.ui-btn-sm svg {
   width: 14px;
   height: 14px;
+}
+
+.ui-btn-sm {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 6px;
 }
 
 // Figma: button-icon-circular — 40px 圆形图标按钮
