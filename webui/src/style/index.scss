@@ -208,7 +208,7 @@ body {
 
 // ===== 公共组件样式（Phase 2 完整重构） =====
 
-// --- 按钮系统：Figma Pill 按钮规范 ---
+// --- 按钮系统 ---
 .ui-btn {
   display: inline-flex;
   align-items: center;
@@ -217,14 +217,13 @@ body {
   padding: 10px 20px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: var(--rounded-pill);  // Figma: pill = 50px
+  border-radius: 8px;
   color: var(--text-primary);
   font-family: var(--font-family-sans);
   font-size: 14px;
-  font-weight: 480;  // Figma button weight
-  letter-spacing: -0.10px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;  // Figma 规范：更快的过渡
+  transition: all 0.2s ease;
   position: relative;
   overflow: hidden;
 
@@ -244,30 +243,26 @@ body {
   }
 }
 
-// Figma: button-primary — 黑色胶囊
 .ui-btn-primary {
-  background: var(--color-primary);  // Figma: primary = black
-  color: var(--color-on-primary);
-  border: none;  // Figma primary button 无边框
-  font-weight: 480;
-  letter-spacing: -0.10px;
-
-  &:hover:not(:disabled) {
-    background: #333;
-    box-shadow: none;
-  }
-}
-
-// 品牌强调色按钮（保留 CogniFlow 特色）
-.ui-btn-brand {
   background: var(--accent-cyan);
   color: #000;
   border: none;
-  font-weight: 480;
-  letter-spacing: -0.10px;
+  font-weight: 500;
 
   &:hover:not(:disabled) {
     background: #00d4e0;
+    box-shadow: var(--glow-cyan);
+  }
+}
+
+// 品牌强调色按钮（青色渐变，用于最具吸引力的操作）
+.ui-btn-brand {
+  background: linear-gradient(135deg, var(--accent-cyan), #00d4e0);
+  color: #000;
+  border: none;
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
     box-shadow: var(--glow-cyan);
   }
 }
@@ -276,6 +271,7 @@ body {
   background: linear-gradient(135deg, var(--accent-green), #00aa66);
   color: #000;
   border: none;
+  font-weight: 500;
 
   &:hover:not(:disabled) {
     box-shadow: var(--glow-green);
@@ -286,6 +282,7 @@ body {
   background: linear-gradient(135deg, #ff4466, #cc0033);
   color: white;
   border: none;
+  font-weight: 500;
 
   &:hover:not(:disabled) {
     box-shadow: 0 0 20px rgba(255, 68, 102, 0.5);
@@ -293,9 +290,9 @@ body {
 }
 
 .ui-btn-small {
-  padding: 8px 18px 10px;  // Figma: 视觉居中的非对称 padding
+  padding: 6px 14px;
   font-size: 13px;
-  border-radius: var(--rounded-pill);
+  border-radius: 6px;
 }
 
 .ui-btn-small svg {
@@ -313,7 +310,7 @@ body {
   justify-content: center;
   background: var(--bg-surface-soft);
   border: none;
-  border-radius: var(--rounded-full);  // Figma: full = 9999px
+  border-radius: 50%;
   color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -461,6 +458,26 @@ body {
 
 .el-message-box__message {
   color: var(--text-secondary) !important;
+}
+
+// Element Plus 表格操作按钮统一样式
+.el-button--text {
+  border: none !important;
+  background: transparent !important;
+  color: var(--accent-cyan) !important;
+  font-size: 13px !important;
+  padding: 4px 8px !important;
+
+  &:hover {
+    color: var(--accent-cyan) !important;
+    opacity: 0.8;
+  }
+
+  &:disabled {
+    color: var(--text-muted) !important;
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 .el-message-box .el-button {

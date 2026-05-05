@@ -900,34 +900,6 @@ onMounted(() => {
   @apply px-2 py-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-xs text-[var(--text-primary)];
 }
 
-.ui-btn {
-  @apply inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-sm text-[var(--text-primary)] cursor-pointer transition-all;
-}
-
-.ui-btn:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
-}
-
-.ui-btn svg {
-  @apply w-4 h-4;
-}
-
-.ui-btn-sm {
-  @apply px-3 py-1.5 text-xs;
-}
-
-.ui-btn-sm svg {
-  @apply w-3.5 h-3.5;
-}
-
-.ui-btn-primary {
-  @apply bg-[var(--accent-cyan)] border-[var(--accent-cyan)] text-black font-medium;
-}
-
-.ui-btn-primary:hover {
-  @apply opacity-80;
-}
-
 .ui-btn.danger {
   @apply text-[#ff4466];
 }
@@ -1398,15 +1370,8 @@ onMounted(() => {
   @apply flex items-center gap-2.5;
 }
 
-:deep(.el-button--text) {
-  @apply p-1 border-none bg-transparent text-[#ff4466] text-sm;
-  &:hover {
-    @apply bg-transparent border-none text-[#ff4466];
-  }
-}
-
 .close-btn {
-  @apply w-9 h-9 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded-lg transition-all;
+  @apply w-8 h-8 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded-lg transition-all;
 }
 
 .close-btn:hover {
@@ -1414,7 +1379,7 @@ onMounted(() => {
 }
 
 .close-btn svg {
-  @apply w-5 h-5;
+  @apply w-4.5 h-4.5;
 }
 
 .dialog-content {

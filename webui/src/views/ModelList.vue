@@ -569,22 +569,6 @@ onMounted(() => {
   @apply flex gap-4 items-center;
 }
 
-:deep(.el-button--text) {
-  @apply p-1 border-none bg-transparent text-[var(--accent-cyan)] text-sm;
-
-  &:hover {
-    @apply bg-transparent border-none text-[var(--accent-cyan)];
-  }
-
-  &:last-child:hover {
-    @apply text-[#ff4466];
-  }
-
-  &:disabled {
-    @apply text-[var(--text-muted)] opacity-50;
-  }
-}
-
 /* 空状态 */
 .empty-state {
   @apply py-20 px-5 flex flex-col items-center text-center;

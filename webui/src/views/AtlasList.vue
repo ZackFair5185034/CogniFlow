@@ -21,15 +21,17 @@
               <span class="id-badge">#{{ row.id }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="name" label="名称" min-width="200">
+          <el-table-column prop="name" label="名称" min-width="280">
             <template #default="{ row }">
               <div class="name-cell">
                 <SvgIcon name="folder" class="folder-icon" />
-                <span>{{ row.name }}</span>
+                <div class="name-desc">
+                  <span class="atlas-name">{{ row.name }}</span>
+                  <span class="atlas-desc" v-if="row.description">{{ row.description }}</span>
+                </div>
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="description" label="描述" min-width="240" />
           <el-table-column prop="created_at" label="创建时间" width="160">
             <template #default="{ row }">
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
@@ -291,11 +293,37 @@ onMounted(loadAtlases)
 }
 
 .name-cell {
-  @apply flex items-center gap-2.5;
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+}
+
+.name-desc {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.atlas-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.atlas-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .folder-icon {
-  @apply w-5 h-5 text-[var(--accent-yellow)];
+  @apply w-5 h-5 text-[var(--accent-yellow)] flex-shrink-0;
 }
 
 .time-badge {
@@ -304,18 +332,6 @@ onMounted(loadAtlases)
 
 .action-buttons {
   @apply flex gap-4 items-center;
-}
-
-:deep(.el-button--text) {
-  @apply p-1 border-none bg-transparent text-[var(--accent-cyan)] text-sm;
-
-  &:hover {
-    @apply bg-transparent border-none text-[var(--accent-cyan)];
-  }
-
-  &:last-child:hover {
-    @apply text-[#ff4466];
-  }
 }
 
 /* 对话框 */

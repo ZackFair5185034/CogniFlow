@@ -1146,41 +1146,6 @@ onUnmounted(() => {
   @apply text-[11px] text-[var(--text-secondary)] mr-1;
 }
 
-.ui-btn {
-  @apply inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-sm cursor-pointer transition-all;
-}
-
-.ui-btn:hover:not(:disabled) {
-  @apply bg-[var(--bg-hover)] border-[var(--accent-cyan)];
-}
-
-.ui-btn:disabled {
-  @apply opacity-50 cursor-not-allowed;
-}
-
-.ui-btn svg {
-  @apply w-4 h-4;
-}
-
-.ui-btn-primary {
-  background: var(--accent-cyan);
-  border-color: var(--accent-cyan);
-  @apply text-black;
-}
-
-.ui-btn-primary:hover:not(:disabled) {
-  background: #00d4e0;
-  border-color: #00d4e0;
-}
-
-.ui-btn-small {
-  @apply px-2 py-1;
-}
-
-.ui-btn-small svg {
-  @apply w-3.5 h-3.5;
-}
-
 .content-area {
   @apply flex flex-1 overflow-hidden;
 }
@@ -1497,7 +1462,7 @@ onUnmounted(() => {
 }
 
 .close-btn {
-  @apply w-7 h-7 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded transition-all;
+  @apply w-8 h-8 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded transition-all;
 }
 
 .close-btn:hover {

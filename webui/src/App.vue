@@ -11,6 +11,9 @@
 
     <!-- 侧边导航 -->
     <aside class="sidebar" :class="{ collapsed }">
+      <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
+        <SvgIcon :name="collapsed ? 'chevron-right' : 'chevron-left'" />
+      </button>
       <div class="logo">
         <img class="logo-icon" src="/logo.svg" alt="CogniFlow">
         <div class="logo-text">
@@ -39,11 +42,6 @@
       </div>
 
     </aside>
-
-    <!-- 折叠按钮：紧贴侧边栏右侧外部 -->
-    <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
-      <SvgIcon :name="collapsed ? 'chevron-right' : 'chevron-left'" />
-    </button>
 
     <!-- 主内容区 -->
     <main class="main-content">
@@ -205,7 +203,7 @@ onUnmounted(() => {
   z-index: 11;
   flex-shrink: 0;
   transition: width 0.3s ease;
-  overflow: hidden;
+  overflow: visible;
 
   &::before {
     content: '';
@@ -250,7 +248,7 @@ onUnmounted(() => {
 
 .collapse-btn {
   position: absolute;
-  left: clamp(180px, 12vw, 240px);
+  right: -14px;
   top: 50%;
   transform: translateY(-50%);
   width: 14px;
@@ -264,7 +262,6 @@ onUnmounted(() => {
   border-radius: 0 6px 6px 0;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s ease;
   z-index: 20;
   padding: 0;
 
@@ -277,16 +274,11 @@ onUnmounted(() => {
   svg {
     width: 12px;
     height: 12px;
-    transition: transform 0.3s ease;
   }
 
   &.collapsed svg {
     transform: translateX(1px);
   }
-}
-
-.sidebar.collapsed + .collapse-btn {
-  left: 64px;
 }
 
 .logo {

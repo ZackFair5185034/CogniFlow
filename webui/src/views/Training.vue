@@ -585,13 +585,6 @@ onUnmounted(() => {
   @apply mt-2 pt-2 border-t border-[var(--border-color)];
 }
 
-:deep(.el-button--text) {
-  @apply p-0.5 border-none bg-transparent text-[#ff4466] text-xs;
-  &:hover {
-    @apply bg-transparent border-none text-[#ff4466];
-  }
-}
-
 .empty-jobs {
   @apply flex-1 flex flex-col items-center justify-center text-center text-[var(--text-muted)];
 }
@@ -724,33 +717,5 @@ onUnmounted(() => {
 
 .device-hint {
   @apply text-[10px] text-[var(--text-muted)] mt-1;
-}
-
-.ui-btn {
-  @apply inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-sm text-[var(--text-primary)] cursor-pointer transition-all;
-}
-
-.ui-btn:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
-}
-
-.ui-btn svg {
-  @apply w-4 h-4;
-}
-
-.ui-btn-sm {
-  @apply px-3 py-1.5 text-xs;
-}
-
-.ui-btn-sm svg {
-  @apply w-3.5 h-3.5;
-}
-
-.ui-btn-primary {
-  @apply bg-[var(--accent-cyan)] border-[var(--accent-cyan)] text-black font-medium;
-}
-
-.ui-btn-primary:hover {
-  @apply opacity-80;
 }
 </style>
