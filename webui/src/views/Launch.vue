@@ -143,6 +143,45 @@
             </div>
           </template>
 
+          <!-- 最近记录 -->
+          <div class="config-section">
+            <div class="section-label-row" @click="recentRecordsExpanded = !recentRecordsExpanded">
+              <span class="section-label">最近记录</span>
+              <div class="flex items-center gap-2">
+                <button
+                  v-if="recentRecords.length > 0"
+                  class="clear-btn"
+                  @click.stop="handleClearRecords"
+                  title="清除历史"
+                >清空</button>
+                <SvgIcon :name="recentRecordsExpanded ? 'chevron-up' : 'chevron-down'" class="chevron-icon" />
+              </div>
+            </div>
+            <div class="recent-records" v-if="recentRecordsExpanded">
+              <div v-if="filteredRecords.length === 0" class="records-empty">暂无{{ mode === 'stream' ? '视频' : '图片' }}检测记录</div>
+              <div
+                v-for="rec in filteredRecords"
+                :key="rec.job_id"
+                class="record-item"
+              >
+                <img v-if="rec.thumbnail" :src="rec.thumbnail" class="record-thumb" alt="缩略图" />
+                <div class="record-info">
+                  <span class="record-name">{{ rec.file_name }}</span>
+                  <span class="record-meta">{{ rec.model_name }} · {{ rec.total_detections }} 个目标</span>
+                  <span class="record-time">{{ formatRelativeTime(rec.created_at) }}</span>
+                </div>
+                <el-button
+                  size="small"
+                  class="rerun-btn"
+                  :disabled="!rec.file_path"
+                  @click="handleRerun(rec)"
+                >
+                  {{ rec.file_type === 'image' ? '图片重检' : '重新检测' }}
+                </el-button>
+              </div>
+            </div>
+          </div>
+
           <!-- 检测按钮 -->
           <el-button
             v-if="mode === 'image'"
@@ -194,42 +233,42 @@
         <div class="result-body">
           <!-- 图片检测结果 -->
           <div v-if="resultImage" class="result-image-wrapper">
-          <div class="image-container">
-            <img :src="resultImage" alt="检测结果" class="result-image" />
-            <svg class="bbox-overlay" :viewBox="`0 0 ${imageSize.width} ${imageSize.height}`">
-              <g v-for="(det, idx) in detections" :key="idx">
-                <rect
-                  :x="det.bbox[0]"
-                  :y="det.bbox[1]"
-                  :width="det.bbox[2] - det.bbox[0]"
-                  :height="det.bbox[3] - det.bbox[1]"
-                  :stroke="getClassColor(det.class_id)"
-                  stroke-width="2"
-                  fill="none"
-                />
-                <rect
-                  :x="det.bbox[0]"
-                  :y="det.bbox[1] - 20"
-                  width="80"
-                  height="20"
-                  :fill="getClassColor(det.class_id)"
-                />
-                <text
-                  :x="det.bbox[0] + 4"
-                  :y="det.bbox[1] - 5"
-                  fill="white"
-                  font-size="12"
-                  font-family="sans-serif"
-                >{{ det.class_name }} {{ (det.confidence * 100).toFixed(0) }}%</text>
-              </g>
-            </svg>
+            <div class="image-area">
+              <img :src="resultImage" alt="检测结果" class="result-image" />
+              <svg class="bbox-overlay" :viewBox="`0 0 ${imageSize.width} ${imageSize.height}`">
+                <g v-for="(det, idx) in detections" :key="idx">
+                  <rect
+                    :x="det.bbox[0]"
+                    :y="det.bbox[1]"
+                    :width="det.bbox[2] - det.bbox[0]"
+                    :height="det.bbox[3] - det.bbox[1]"
+                    :stroke="getClassColor(det.class_id)"
+                    stroke-width="2"
+                    fill="none"
+                  />
+                  <rect
+                    :x="det.bbox[0]"
+                    :y="det.bbox[1] - 20"
+                    width="80"
+                    height="20"
+                    :fill="getClassColor(det.class_id)"
+                  />
+                  <text
+                    :x="det.bbox[0] + 4"
+                    :y="det.bbox[1] - 5"
+                    fill="white"
+                    font-size="12"
+                    font-family="sans-serif"
+                  >{{ det.class_name }} {{ (det.confidence * 100).toFixed(0) }}%</text>
+                </g>
+              </svg>
+            </div>
+            <div class="zoom-controls">
+              <button class="zoom-btn" @click="zoomLevel = Math.min(2, zoomLevel + 0.25)">+</button>
+              <span class="zoom-level">{{ (zoomLevel * 100).toFixed(0) }}%</span>
+              <button class="zoom-btn" @click="zoomLevel = Math.max(0.5, zoomLevel - 0.25)">-</button>
+            </div>
           </div>
-          <div class="zoom-controls">
-            <button class="zoom-btn" @click="zoomLevel = Math.min(2, zoomLevel + 0.25)">+</button>
-            <span class="zoom-level">{{ (zoomLevel * 100).toFixed(0) }}%</span>
-            <button class="zoom-btn" @click="zoomLevel = Math.max(0.5, zoomLevel - 0.25)">-</button>
-          </div>
-        </div>
 
         <!-- 视频检测结果 - Canvas 渲染 -->
         <div v-else-if="mode === 'stream' && (streamConnected || streamComplete)" class="result-stream-wrapper">
@@ -281,13 +320,12 @@
 
         <!-- 检测详情列表 -->
         <div class="detections-list" v-if="detections.length > 0">
-          <div class="detection-item" v-for="(det, idx) in detections" :key="idx">
+          <span class="detection-item" v-for="(det, idx) in detections" :key="idx">
             <span class="det-class" :style="{ background: getClassColor(det.class_id) }">
               {{ det.class_name }}
             </span>
-            <span class="det-conf">{{ (det.confidence * 100).toFixed(1) }}%</span>
-            <span class="det-bbox">x: {{ Math.round(det.bbox[0]) }}, y: {{ Math.round(det.bbox[1]) }}, w: {{ Math.round(det.bbox[2] - det.bbox[0]) }}, h: {{ Math.round(det.bbox[3] - det.bbox[1]) }}</span>
-          </div>
+            <span class="det-conf">{{ (det.confidence * 100).toFixed(0) }}%</span>
+          </span>
         </div>
 
         </div>
@@ -544,6 +582,194 @@ const handleFileSelect = (event: Event) => {
   }
 }
 
+// 最近记录
+interface RecentRecord {
+  job_id: string
+  model_id: number
+  model_name: string
+  file_name: string
+  file_path: string
+  file_type: 'image' | 'video'
+  conf_threshold: number
+  status: string
+  total_frames: number | null
+  total_detections: number
+  thumbnail: string | null
+  created_at: string
+  finished_at: string | null
+}
+
+const recentRecords = ref<RecentRecord[]>([])
+const recentRecordsExpanded = ref(true)
+const filteredRecords = computed(() => {
+  return recentRecords.value.filter(r => r.file_type === (mode.value === 'stream' ? 'video' : 'image'))
+})
+
+// 加载最近记录
+const loadRecentRecords = async () => {
+  try {
+    const res = await inferenceApi.listInferenceJobs()
+    recentRecords.value = res.data
+  } catch (error) {
+    console.error('加载最近记录失败', error)
+  }
+}
+
+// 相对时间格式化
+const formatRelativeTime = (isoString: string): string => {
+  if (!isoString) return '未知'
+  const serverTime = new Date(isoString.endsWith('Z') ? isoString : isoString + 'Z').getTime()
+  if (isNaN(serverTime)) return '未知'
+  const diff = Date.now() - serverTime
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 60) return '刚刚'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}分钟前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}小时前`
+  const days = Math.floor(hours / 24)
+  return `${days}天前`
+}
+
+// 清除历史记录
+const handleClearRecords = async () => {
+  try {
+    await inferenceApi.clearInferenceJobs()
+    recentRecords.value = []
+    ElMessage.success('已清除历史记录')
+  } catch (error: any) {
+    ElMessage.error('清除失败')
+  }
+}
+
+// 重新检测
+const handleRerun = async (rec: RecentRecord) => {
+  selectedModelId.value = rec.model_id
+  confThreshold.value = rec.conf_threshold
+
+  try {
+    const res = await inferenceApi.rerunInferenceJob(rec.job_id, rec.model_id, rec.conf_threshold)
+    if (res.data.success) {
+      // 图片重检：内联结果
+      if (res.data.file_type === 'image') {
+        mode.value = 'image'
+        resultImage.value = res.data.result_image_base64
+        detections.value = res.data.detections || []
+        loadImageSize(res.data.result_image_base64)
+
+        // 构建类别颜色映射
+        const colors: Record<number, string> = {}
+        if (res.data.categories) {
+          res.data.categories.forEach((cat: any, idx: number) => {
+            colors[idx] = cat.color || '#FF0000'
+          })
+          categoryColors.value = colors
+        }
+
+        addConsoleEntry('图片检测', `${res.data.num_detections || 0} 个目标`, {
+          num_detections: res.data.num_detections,
+          detections: res.data.detections,
+          model_id: rec.model_id,
+          conf_threshold: rec.conf_threshold,
+          rerun: true,
+        })
+        loadRecentRecords()
+        return
+      }
+
+      // 视频重检：WebSocket 流式
+      mode.value = 'stream'
+      streamJobId.value = res.data.job_id
+      const videoInfo = res.data.video_info
+      videoFps.value = videoInfo.fps || 24
+      streamStats.value = {
+        fps: videoInfo.fps || 24,
+        total_frames: videoInfo.total_frames || 0,
+        current_frame: 0,
+        progress: 0,
+        total_detections: 0,
+        status: 'processing',
+        buffer_frame: 0,
+      }
+      frameCache.value = []
+      isReplaying.value = false
+
+      const client = new StreamClient()
+      client.onFrame((frame) => {
+        if (streamPaused.value || isReplaying.value) {
+          frameCache.value.push(frame)
+          streamStats.value = {
+            ...streamStats.value,
+            buffer_frame: frame.progress?.buffer_frame || streamStats.value.buffer_frame || frame.frame_id,
+            buffered_frames: frameCache.value.length,
+          }
+          return
+        }
+
+        streamStats.value = {
+          ...streamStats.value,
+          current_frame: frame.frame_id,
+          total_detections: frame.stats.total_detections,
+          progress: Math.min(99, Math.ceil((frame.frame_id / (videoInfo.total_frames || 1)) * 100)),
+          buffer_frame: frame.progress?.buffer_frame || streamStats.value.buffer_frame,
+          buffered_frames: frameCache.value.length,
+        }
+        renderFrame(frame)
+        addConsoleEntry('视频帧',
+          `帧 #${frame.frame_id} | ${frame.detections.length} 个目标 | ${frame.stats.inference_ms}ms`,
+          {
+            frame_id: frame.frame_id,
+            timestamp: frame.timestamp,
+            detections: frame.detections,
+            stats: frame.stats,
+          },
+          frame.frame_id,
+        )
+      })
+      client.onComplete((totalFrames, totalDetections) => {
+        streamComplete.value = true
+        streamConnected.value = false
+        streamPaused.value = false
+        streamStats.value = {
+          ...streamStats.value,
+          progress: 100,
+          current_frame: totalFrames,
+          total_detections: totalDetections,
+          status: 'completed',
+        }
+        loadRecentRecords()
+        addConsoleEntry('视频帧', `检测完成，共 ${totalFrames} 帧，${totalDetections} 个目标`, {
+          total_frames: totalFrames,
+          total_detections: totalDetections,
+          status: 'completed',
+        })
+      })
+      client.onError((error) => {
+        ElMessage.error(`视频检测错误: ${error}`)
+        streamConnected.value = false
+      })
+      client.onPaused(() => { streamPaused.value = true })
+      client.onResumed(() => { streamPaused.value = false })
+      client.onFpsUpdated((fps) => { videoFps.value = fps })
+      client.onProgress((progress) => {
+        streamStats.value = {
+          ...streamStats.value,
+          buffer_frame: progress.buffer_frame,
+        }
+      })
+
+      client.connect(res.data.job_id, res.data.stream_url)
+      videoClient.value = client
+      streamConnected.value = true
+      streamPaused.value = false
+      streamComplete.value = false
+    }
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '重新检测失败'
+    ElMessage.error(msg)
+  }
+}
+
 const handleDrop = (event: DragEvent) => {
   isDragging.value = false
   if (event.dataTransfer?.files && event.dataTransfer.files[0]) {
@@ -589,6 +815,16 @@ const startDetection = async () => {
         resultImage.value = res.data.result_image_base64
         detections.value = res.data.detections || []
         loadImageSize(res.data.result_image_base64)
+
+        // 构建类别颜色映射（来自模型配置，使用数组索引作为 key）
+        if (selectedModel.value?.metrics?.categories) {
+          const colors: Record<number, string> = {}
+          selectedModel.value.metrics.categories.forEach((cat: any, idx: number) => {
+            colors[idx] = cat.color || '#FF0000'
+          })
+          categoryColors.value = colors
+        }
+
         // 写入监控台
         addConsoleEntry('图片检测', `${res.data.num_detections || 0} 个目标`, {
           num_detections: res.data.num_detections,
@@ -596,6 +832,7 @@ const startDetection = async () => {
           model_id: selectedModelId.value,
           conf_threshold: confThreshold.value,
         })
+        loadRecentRecords()
       }
     }
   } catch (error: any) {
@@ -908,6 +1145,7 @@ watch(mode, handleModeChange)
 
 onMounted(() => {
   loadTrainedModels()
+  loadRecentRecords()
 })
 
 onUnmounted(() => {
@@ -1089,12 +1327,21 @@ onUnmounted(() => {
 
 .result-image-wrapper {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-primary);
+  position: relative;
+}
+
+.image-area {
+  flex: 1;
   overflow: auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
-  background: var(--bg-primary);
+  position: relative;
+  min-height: 0;
 }
 
 .video-container {
@@ -1117,7 +1364,7 @@ onUnmounted(() => {
 }
 
 .zoom-controls {
-  @apply flex items-center justify-center gap-4 p-2 border-t border-[var(--border-color)];
+  @apply flex items-center justify-center gap-4 p-2 border-t border-[var(--border-color)] flex-shrink-0;
   background: var(--bg-secondary);
 }
 
@@ -1173,12 +1420,12 @@ onUnmounted(() => {
 
 /* 检测列表 */
 .detections-list {
-  @apply max-h-48 overflow-y-auto border-t border-[var(--border-color)];
+  @apply max-h-[72px] overflow-y-auto border-t border-[var(--border-color)] flex flex-wrap content-start gap-1 p-2;
   flex-shrink: 0;
 }
 
 .detection-item {
-  @apply flex items-center gap-3 px-4 py-2 text-xs border-b border-[var(--border-color)] last:border-b-0;
+  @apply inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] border border-[var(--border-color)];
 }
 
 .det-class {
@@ -1471,7 +1718,7 @@ onUnmounted(() => {
   border-radius: 4px;
   padding: 8px;
   margin: 0;
-  max-height: 200px;
+  max-height: 400px;
   overflow-y: auto;
   overflow-x: auto;
   white-space: pre;
@@ -1480,6 +1727,61 @@ onUnmounted(() => {
 
 .console-empty {
   @apply flex items-center justify-center py-8 text-xs text-[var(--text-muted)];
+}
+
+.section-label-row {
+  @apply flex items-center justify-between cursor-pointer;
+}
+
+.clear-btn {
+  @apply text-xs px-2 py-0.5 rounded border border-[var(--border-color)] bg-transparent text-[var(--text-muted)] cursor-pointer;
+  &:hover {
+    @apply border-[#ff4466] text-[#ff4466];
+  }
+}
+
+.chevron-icon {
+  @apply w-4 h-4 text-[var(--text-muted)];
+}
+
+.recent-records {
+  @apply mt-2 flex flex-col gap-2 max-h-64 overflow-y-auto;
+}
+
+.records-empty {
+  @apply text-sm text-[var(--text-muted)] text-center py-4;
+}
+
+.record-item {
+  @apply flex items-center gap-2 p-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-color)];
+
+  &.expired {
+    @apply opacity-50;
+  }
+}
+
+.record-thumb {
+  @apply w-10 h-10 rounded object-cover flex-shrink-0 border border-[var(--border-color)];
+}
+
+.record-info {
+  @apply flex-1 min-w-0 flex flex-col gap-0.5;
+}
+
+.record-name {
+  @apply text-sm text-[var(--text-primary)] truncate font-medium;
+}
+
+.record-meta {
+  @apply text-xs text-[var(--text-secondary)];
+}
+
+.record-time {
+  @apply text-xs text-[var(--text-muted)];
+}
+
+.rerun-btn {
+  @apply flex-shrink-0 text-xs py-1 px-2;
 }
 
 </style>

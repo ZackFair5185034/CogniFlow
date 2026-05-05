@@ -148,6 +148,10 @@ export const inferenceApi = {
   // 停止流式推理
   stopVideoStream: (jobId: string) => api.post(`/inference/detect/stop/${jobId}`),
   listTrainedModels: () => api.get('/inference/models'),
+  listInferenceJobs: () => api.get('/inference/jobs'),
+  rerunInferenceJob: (jobId: string, modelId: number, confThreshold: number = 0.25) =>
+    api.post(`/inference/jobs/${jobId}/rerun?model_id=${modelId}&conf_threshold=${confThreshold}`),
+  clearInferenceJobs: () => api.delete('/inference/jobs'),
 }
 
 // RuleEngine API

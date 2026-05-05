@@ -105,6 +105,7 @@ class Model(Base):
     is_best = Column(Boolean, default=False)
 
     atlas = relationship("Atlas", back_populates=None)
+    inference_jobs = relationship("InferenceJob", back_populates="model", cascade="all, delete-orphan")
 
 
 class TrainingJob(Base):
@@ -179,6 +180,27 @@ class NodeExecutionLog(Base):
     end_time = Column(DateTime, nullable=True)
 
     execution = relationship("ExecutionHistory", back_populates="node_logs")
+
+
+class InferenceJob(Base):
+    """推理记录模型 - 记录最近检测任务的元数据。"""
+    __tablename__ = "inference_job"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_id = Column(String(36), nullable=False, unique=True)
+    model_id = Column(Integer, ForeignKey("model.id", ondelete="CASCADE"), nullable=False)
+    file_name = Column(String(255), nullable=False)
+    file_path = Column(String(500), nullable=False)
+    file_type = Column(String(10), nullable=False)                   # "image" / "video"
+    conf_threshold = Column(Float, default=0.25)
+    status = Column(String(20), default="completed")                 # completed / processing / failed
+    total_frames = Column(Integer, nullable=True)
+    total_detections = Column(Integer, default=0)
+    thumbnail = Column(Text, nullable=True)                           # 缩略图 Base64 JPEG
+    created_at = Column(DateTime, default=datetime.utcnow)
+    finished_at = Column(DateTime, nullable=True)
+
+    model = relationship("Model", back_populates="inference_jobs")
 
 
 # 数据库引擎和会话

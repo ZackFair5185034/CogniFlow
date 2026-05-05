@@ -11,7 +11,7 @@ from datetime import datetime
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.orm import Session
 
-from backend.database import get_db, Model
+from backend.database import get_db, SessionLocal, Model, InferenceJob
 from backend.utils.frame_buffer import stream_job_manager
 
 router = APIRouter()
@@ -78,6 +78,31 @@ async def detect_image(
         with open(output_path, 'rb') as f:
             result_image_b64 = base64.b64encode(f.read()).decode('utf-8')
 
+        # 生成缩略图（结果图缩略图）
+        from PIL import Image as PILImage
+        thumb_img = PILImage.open(output_path)
+        thumb_img.thumbnail((40, 40))
+        import io
+        thumb_buf = io.BytesIO()
+        thumb_img.save(thumb_buf, format='JPEG', quality=60)
+        thumb_b64 = base64.b64encode(thumb_buf.getvalue()).decode('utf-8')
+
+        # 记录到数据库（用输入图路径，支持重新检测）
+        import uuid
+        record = InferenceJob(
+            job_id=str(uuid.uuid4())[:8],
+            model_id=model_id,
+            file_name=file.filename,
+            file_path=str(file_path),  # 输入图路径，保留在磁盘
+            file_type="image",
+            conf_threshold=conf_threshold,
+            status="completed",
+            total_detections=result['num_detections'],
+            thumbnail=f"data:image/jpeg;base64,{thumb_b64}",
+        )
+        db.add(record)
+        db.commit()
+
         return {
             "success": True,
             "original_image": str(file_path),
@@ -86,9 +111,9 @@ async def detect_image(
             "detections": result['detections'],
             "num_detections": result['num_detections']
         }
-    finally:
-        if file_path.exists():
-            file_path.unlink()
+    except Exception:
+        # 检测失败时不记录
+        raise HTTPException(status_code=500, detail="图片检测失败")
 
 
 @router.get("/models")
@@ -113,7 +138,7 @@ async def list_trained_models(db: Session = Depends(get_db)):
             "version": m.version,
             "file_path": m.file_path,
             "metrics": metrics,
-            "created_at": m.created_at.isoformat() if m.created_at else None
+            "created_at": int(m.created_at.timestamp() * 1000) if m.created_at else int(datetime.now().timestamp() * 1000)
         })
 
     return result
@@ -353,6 +378,19 @@ def process_video_stream_background(
     # 等待编码线程消费完剩余帧
     encode_thread.join()
 
+    # 更新任务状态为完成
+    try:
+        db_session = SessionLocal()
+        try:
+            db_session.query(InferenceJob).filter(
+                InferenceJob.job_id == job_id
+            ).update({"status": "completed"})
+            db_session.commit()
+        finally:
+            db_session.close()
+    except Exception:
+        pass  # 状态更新失败不影响检测结果
+
 
 @router.post("/detect/video/stream", status_code=202)
 async def detect_video_stream(
@@ -395,6 +433,27 @@ async def detect_video_stream(
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
 
+    # 提前生成缩略图（取中间帧）
+    video_thumbnail = None
+    try:
+        cap = cv2.VideoCapture(str(input_path))
+        mid_frame = max(0, total_frames // 2)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, mid_frame)
+        ret, frame = cap.read()
+        cap.release()
+        if ret:
+            from PIL import Image as PILImage
+            import io
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            pil_img = PILImage.fromarray(rgb)
+            pil_img.thumbnail((40, 40))
+            buf = io.BytesIO()
+            pil_img.save(buf, format='JPEG', quality=60)
+            thumb_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+            video_thumbnail = f"data:image/jpeg;base64,{thumb_b64}"
+    except Exception:
+        pass  # 缩略图生成失败不影响检测
+
     # 创建流式推理任务
     job_id, frame_buffer = stream_job_manager.create_job(
         input_path=str(input_path),
@@ -413,6 +472,20 @@ async def detect_video_stream(
     )
     thread.start()
 
+    # 记录到数据库
+    inference_job = InferenceJob(
+        job_id=job_id,
+        model_id=model_id,
+        file_name=file.filename,
+        file_path=str(input_path),
+        file_type="video",
+        conf_threshold=conf_threshold,
+        status="processing",
+        thumbnail=video_thumbnail,
+    )
+    db.add(inference_job)
+    db.commit()
+
     return {
         "success": True,
         "job_id": job_id,
@@ -424,6 +497,158 @@ async def detect_video_stream(
         },
         "categories": categories,
     }
+
+
+@router.get("/jobs")
+async def list_inference_jobs(db: Session = Depends(get_db)):
+    """获取最近 20 条推理记录，按时间倒序。"""
+    jobs = db.query(InferenceJob).order_by(
+        InferenceJob.created_at.desc()
+    ).limit(20).all()
+
+    result = []
+    for job in jobs:
+        model = db.query(Model).filter(Model.id == job.model_id).first()
+        result.append({
+            "id": job.id,
+            "job_id": job.job_id,
+            "model_id": job.model_id,
+            "model_name": model.name if model else "",
+            "file_name": job.file_name,
+            "file_path": job.file_path,
+            "file_type": job.file_type,
+            "conf_threshold": job.conf_threshold,
+            "status": job.status,
+            "total_frames": job.total_frames,
+            "total_detections": job.total_detections,
+            "thumbnail": job.thumbnail,
+            "created_at": (job.created_at.isoformat() + 'Z') if job.created_at else None,
+            "finished_at": (job.finished_at.isoformat() + 'Z') if job.finished_at else None,
+        })
+    return result
+
+
+@router.delete("/jobs")
+async def clear_inference_jobs(db: Session = Depends(get_db)):
+    """清除所有推理记录。"""
+    db.query(InferenceJob).delete()
+    db.commit()
+    return {"success": True, "message": "已清除所有历史记录"}
+
+
+@router.post("/jobs/{job_id}/rerun")
+async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold: float = 0.25, db: Session = Depends(get_db)):
+    """复用已有记录的配置重新发起检测（图片或视频）。"""
+    job = db.query(InferenceJob).filter(InferenceJob.job_id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="记录不存在")
+
+    if not os.path.exists(job.file_path):
+        raise HTTPException(status_code=400, detail="文件已不存在，请重新上传")
+
+    model = db.query(Model).filter(Model.id == (model_id or job.model_id)).first()
+    if not model:
+        raise HTTPException(status_code=404, detail="模型不存在")
+    if not model.file_path or not os.path.exists(model.file_path):
+        raise HTTPException(status_code=400, detail="模型文件不存在")
+
+    if job.file_type == "video":
+        import cv2
+        categories = []
+        if model.metrics:
+            try:
+                categories = json.loads(model.metrics).get('categories', [])
+            except json.JSONDecodeError:
+                pass
+
+        cap = cv2.VideoCapture(job.file_path)
+        fps = round(cap.get(cv2.CAP_PROP_FPS)) or 24
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+
+        from backend.utils.frame_buffer import stream_job_manager
+        new_job_id, frame_buffer = stream_job_manager.create_job(
+            input_path=job.file_path,
+            model_id=model.id,
+            conf_threshold=conf_threshold,
+            categories=categories,
+            fps=fps,
+            total_frames=total_frames,
+        )
+
+        thread = threading.Thread(
+            target=process_video_stream_background,
+            args=(new_job_id, model.file_path, conf_threshold, categories, job.file_path),
+            daemon=True,
+        )
+        thread.start()
+
+        return {
+            "success": True,
+            "job_id": new_job_id,
+            "stream_url": f"/ws/inference/stream/{new_job_id}",
+            "video_info": {
+                "fps": int(fps),
+                "total_frames": total_frames,
+                "duration": round(total_frames / fps) if fps > 0 else 0,
+            },
+            "categories": categories,
+            "file_type": "video",
+        }
+    else:
+        # 图片：重新执行 detect_image 逻辑
+        from backend.routers.yolo_training import load_yolo_model, inference_yolo
+        from PIL import Image as PILImage, ImageDraw
+
+        detector = load_yolo_model(model.file_path)
+        result = inference_yolo(detector, job.file_path, conf_threshold)
+
+        # 绘制检测结果
+        img = PILImage.open(job.file_path)
+        draw = ImageDraw.Draw(img)
+
+        categories = []
+        if model.metrics:
+            try:
+                metrics_json = json.loads(model.metrics)
+                categories = metrics_json.get('categories', [])
+            except json.JSONDecodeError:
+                pass
+        if not categories:
+            categories = [{'name': f'Class {i}', 'color': '#FF0000'} for i in range(result['num_classes'])]
+
+        for det in result['detections']:
+            bbox = det['bbox']
+            conf = det['confidence']
+            cls_id = det['class_id']
+            cls_name = det.get('class_name', categories[cls_id]['name'] if cls_id < len(categories) else f'Class {cls_id}')
+            color = categories[cls_id]['color'] if cls_id < len(categories) else '#FF0000'
+            draw.rectangle(bbox, outline=color, width=3)
+            label = f"{cls_name} {conf:.2f}"
+            draw.text((bbox[0], bbox[1] - 20), label, fill=color)
+
+        output_path = INFERENCE_OUTPUT_DIR / f"result_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{job.file_name}"
+        img.save(output_path)
+
+        with open(output_path, 'rb') as f:
+            result_image_b64 = base64.b64encode(f.read()).decode('utf-8')
+
+        # 更新原记录的检测结果和完成时间
+        job.status = "completed"
+        job.total_detections = result['num_detections']
+        job.finished_at = datetime.utcnow()
+        db.commit()
+
+        return {
+            "success": True,
+            "original_image": job.file_path,
+            "result_image": str(output_path),
+            "result_image_base64": f"data:image/jpeg;base64,{result_image_b64}",
+            "detections": result['detections'],
+            "num_detections": result['num_detections'],
+            "file_type": "image",
+            "categories": categories,
+        }
 
 
 @router.post("/detect/stop/{job_id}")
