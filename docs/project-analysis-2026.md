@@ -123,9 +123,76 @@ backend/services/rule_engine/
 - 无画布编辑器（VueFlow / ReactFlow 尚未集成）
 - 无节点配置面板
 
-### 2.2 迭代计划
+### 2.2 Unity/Blender 调研对标分析
 
-#### Phase 1：核心连通（让规则引擎真正跑起来）
+> 参考日期：2026-05-05
+
+#### Unity Visual Scripting 核心能力
+
+| 特性 | 说明 | 对 CogniFlow 的启发 |
+|------|------|---------------------|
+| **事件驱动执行** | Start/Update/OnCollisionEnter 等生命周期事件触发图执行 | YOLO 触发器 = 游戏引擎的 Update 事件 |
+| **Script Machine** | 每个对象可挂载独立规则图 | 当前设计：全局图 → 应支持每规则独立图 |
+| **Subgraph 子图复用** | 用户封装节点组为可复用子图 | ❌ 当前缺失，需补充 |
+| **变量作用域** | Object/Graph/Scene 三级变量 | ⚠️ 只有全局变量，需补充作用域 |
+| **类型专化节点** | Transform/Rigidbody/Collider 等游戏对象绑定 | CogniFlow 应有：Model/Detection/Input 等领域节点 |
+| **断点调试** | 断点+单步+变量监视 | ❌ 当前缺失，Phase 1 应补充 |
+| **实时高亮** | 执行到哪个节点画布上高亮 | ❌ WebSocket 未实现，无法做到 |
+| **代码转换** | Visual Script ↔ C# 互转 | 🟢 低优先级 |
+
+#### Blender Geometry Nodes 核心能力
+
+| 特性 | 说明 | 对 CogniFlow 的启发 |
+|------|------|---------------------|
+| **Socket 类型系统** | Geometry/Float/Vector/Color/Boolean，类型不匹配禁止连接 | 🔴 **当前缺失，应优先补充** |
+| **Field 隐式并行** | 自动对每个点/面/边执行，无需显式循环 | detections 是数组，应支持批量过滤/映射 |
+| **节点树嵌套** | Group Input/Output 封装子图 | ❌ 当前缺失 |
+| **实时视口反馈** | 节点修改即时反映在视图 | 需要执行状态 WebSocket 推送 |
+| **实例化** | 大规模场景高效处理 | 规则引擎中用于批量动作执行 |
+
+#### 设计文档 vs 实际实现 对比
+
+| 模块 | 设计文档 (rule-engine-design.md) | 实际实现 | 差距 |
+|------|--------------------------------|---------|------|
+| 节点数量 | 20+（规划到 Phase 4） | 16 节点 | ⚠️ 规划完整，实现 OK |
+| 执行引擎 | DAG + 并发 + 缓存 | 异步 DFS 图遍历 | ✅ 基本骨架 OK |
+| 节点注册 | `@register` 装饰器 | 同 | ✅ 一致 |
+| ExecutionContext | 完整设计 | 同 | ✅ 一致 |
+| WebSocket | 实时状态推送 | ❌ **未实现** | 🔴 缺失 |
+| CogniFlow 集成 | engine.core.control 对接 | Keyboard/Mouse 有 TODO | 🔴 未连通 |
+| 前端画布 | VueFlow + 完整编辑器 | RuleList + RuleCanvas 基础 | ⚠️ 缺节点面板 |
+| YOLO 触发器 | 对接推理服务 | 只是框架，未调用推理 | 🔴 未连通 |
+| Socket 类型系统 | ❌ 无 | ❌ 无 | 🔴 **与 Blender 差距核心** |
+| 子图复用 | ❌ 无 | ❌ 无 | 🟡 Blender 强大的关键 |
+
+### 2.3 当前架构合理性评估
+
+#### ✅ 合理的部分
+
+1. **DAG 执行模型** — 正确，规则引擎就是有向无环图
+2. **节点注册装饰器** — 方便扩展，符合开闭原则
+3. **ExecutionContext 携带 detections/variables** — 设计正确
+4. **Phase 1-5 分阶段** — 务实路线图
+5. **BaseNodeExecutor.execute() 接口** — 统一执行契约
+6. **TypeScript 类型定义** — 文档完整，前端类型有据可查
+
+#### ❌ 问题与风险
+
+| 问题 | 严重程度 | 说明 |
+|------|---------|------|
+| **YOLO 触发器没有真正对接推理** | 🔴 P0 | 只是框架，detections 来源没打通 |
+| **Keyboard/Mouse 节点有 TODO** | 🔴 P0 | engine.core.control 集成未做 |
+| **WebSocket 未实现** | 🔴 P1 | 调试体验会很差，无法实时高亮 |
+| **没有 Socket 类型系统** | 🔴 P1 | 任意端口可以互连，类型安全为零（Blender 核心特性） |
+| **节点不支持子图/复用** | 🟡 P2 | 复杂规则无法封装复用 |
+| **没有 Field 概念** | 🟡 P2 | detections 是数组，但所有节点都是标量处理 |
+| **执行引擎没有断点/单步调试** | 🟡 P1 | 复杂规则无法调试 |
+| **节点面板缺失** | 🟡 P1 | 前端 RuleCanvas 有画布但没有节点搜索/拖放面板 |
+| **没有变量作用域** | 🟡 P2 | 只有全局变量，无 Object/Graph 变量概念 |
+
+### 2.4 迭代计划（修订版）
+
+#### Phase 0: 连通性补全（1-2周）⚠️ 最优先
 
 **目标**：实现一个完整场景 —— "检测到金币 → 按空格键"
 
@@ -134,8 +201,8 @@ backend/services/rule_engine/
 | YOLO 触发器对接推理服务 | `YOLOTriggerNode._execute` 调用 `inference_yolo()` 或推理 API | 中 |
 | 键盘动作对接 `engine/input_emulator` | 将 `KeyboardActionNode` 的 TODO 改为真实调用 | 中 |
 | 鼠标动作对接 `engine/input_emulator` | 同上 | 中 |
-| 推理结果传递给触发器 | `trigger_data` 格式定义和传递 | 小 |
-| 触发器配置项完善 | `class_names`/`min_confidence` 从配置读取 | 小 |
+| WebSocket 实时状态推送 | 节点执行时前端能高亮当前节点 | 中 |
+| 节点面板 | 显示所有节点类型，支持拖入画布 | 中 |
 
 **触发器 → 动作的典型流程**：
 
@@ -161,27 +228,42 @@ KeyboardActionNode 执行：
   2. 调用 input_emulator.press(key)
 ```
 
-#### Phase 2：画布编辑器
+#### Phase 1: 调试能力（1周）
 
 | 任务 | 说明 | 工作量 |
 |------|------|--------|
-| VueFlow 集成 | 拖拽节点、缩放、画布操作 | 大 |
-| 节点面板 | 显示所有节点类型，支持拖入画布 | 中 |
-| 节点配置面板 | 点击节点显示配置项 | 中 |
-| 连线操作 | 拖拽连接点建立边 | 中 |
-| 保存/部署 | 实时保存图配置到后端 | 小 |
-| 执行预览 | 从画布触发一次执行并高亮路径 | 中 |
+| 断点设置 | 节点级别断点，执行到断点暂停 | 中 |
+| 单步执行 | next/continue 操作 | 中 |
+| 变量监视面板 | 显示 context.variables 当前值 | 中 |
+| 执行历史日志查看 | 每次执行记录到数据库，可回放 | 小 |
 
-#### Phase 3：功能完善
+#### Phase 2: 类型安全（1周）
 
 | 任务 | 说明 | 工作量 |
 |------|------|--------|
-| 执行历史 | 每次执行记录到数据库，可回放 | 中 |
-| 节点日志 | 每个节点的输入/输出/耗时记录 | 小 |
-| 变量系统增强 | 跨节点传递复杂数据（检测结果等） | 中 |
-| 并行执行 | ParallelBranchNode 真正并行运行 | 中 |
-| 定时器完善 | 记录上次触发时间，支持 cron 表达式 | 小 |
-| 循环执行 | LoopNode 迭代逻辑落地 | 中 |
+| 端口类型化 | trigger/data/boolean/数值，类型不匹配禁止连接 | 中 |
+| detections 字段补全 | bbox/confidence/label 等字段类型定义 | 小 |
+| Field 批量处理 | 支持对 detections 数组批量过滤/映射 | 中 |
+
+#### Phase 3: 高级节点（2周）
+
+| 任务 | 说明 | 工作量 |
+|------|------|--------|
+| Loop 循环完整实现 | 执行器处理迭代逻辑 | 中 |
+| ParallelBranch 并行执行 | 真正并发运行多个分支 | 中 |
+| PythonCode 节点 | 安全沙箱执行用户代码 | 中 |
+| Expression 表达式节点 | `detection.label == "coin" and detection.conf > 0.8` | 中 |
+| Subgraph 子图复用 | 封装节点组为可复用子图 | 中 |
+
+#### Phase 4: 生态扩展（长期）
+
+| 任务 | 说明 | 优先级 |
+|------|------|--------|
+| 截图/OCR/区域检测节点 | 更丰富的触发源 | 🔴 高 |
+| 图像处理节点 | resize/crop/filter | 🟡 中 |
+| 变量作用域完善 | Object/Graph 变量 | 🟡 中 |
+| 规则导入/导出 | JSON/YAML 格式 | 🟢 低 |
+| TensorRT 加速 | 高性能推理 | 🟡 中 |
 
 ---
 
@@ -349,10 +431,26 @@ class ModelLoader:
 
 | 优先级 | 事项 | 理由 |
 |--------|------|------|
+| **P0** | 规则引擎 Phase 0 连通性 | YOLO触发+键盘鼠标+WebSocket，核心不连通规则引擎永远跑不起来 |
 | **P0** | GPU 训练入口 | 前端加设备选择，后端无需改动 |
-| **P0** | 规则引擎 Phase 1 | 核心功能连通，YOLO 触发 + 键盘动作 |
 | **P1** | 推理 GPU 支持 + FP16 | 改动小，效果明显 |
+| **P1** | Socket 类型系统 | Blender 强大的核心，当前完全缺失 |
 | **P1** | ONNX 格式支持 | 统一推理加速 + 多格式支持 |
 | **P1** | 规则引擎画布编辑器 | 前端工作量较大，尽早启动 |
 | **P2** | TensorRT 支持 | 需要 CUDA 环境，效果最大 |
 | **P2** | engine 模块集成 | 长期目标，短期先维持现状 |
+
+---
+
+## 八、设计文档修订建议
+
+现有 `docs/rule-engine-design.md` (128KB) 存在以下问题，建议后续一并修订：
+
+| 问题 | 说明 |
+|------|------|
+| **文档部分过时** | endpoint 描述有些与实际代码不符（如 `/node-types` 实际是 `/nodes/definitions`） |
+| **Socket 类型缺失** | Blender 最核心的类型化 Socket 没有对应设计 |
+| **Field 概念缺失** | detections 是数组，但所有节点都是标量处理逻辑 |
+| **子图/复用没有** | 这是 Unity/Blender 强大的关键之一，文档没有规划 |
+| **变量作用域** | 只有全局变量，没有 Object/Graph 变量概念 |
+| **Phase 5 过于笼统** | "集成与完善"没有具体里程碑 |
