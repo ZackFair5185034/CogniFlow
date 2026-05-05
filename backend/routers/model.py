@@ -7,6 +7,7 @@ import json
 import os
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from backend.database import get_db, Model
@@ -232,3 +233,15 @@ async def get_model_training_history(model_id: int, db: Session = Depends(get_db
             "finished_at": job.finished_at,
         })
     return results
+
+
+@router.get("/{model_id}/download")
+async def download_model(model_id: int, db: Session = Depends(get_db)):
+    """下载模型文件。"""
+    m = db.query(Model).filter(Model.id == model_id).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="模型不存在")
+    if not m.file_path or not os.path.exists(m.file_path):
+        raise HTTPException(status_code=404, detail="模型文件不存在")
+    filename = os.path.basename(m.file_path)
+    return FileResponse(m.file_path, filename=filename)

@@ -3,12 +3,15 @@
 
 提供图集的创建、读取、更新、删除功能。
 """
+import io
 import os
 import shutil
 import threading
 import time
+import zipfile
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from PIL import Image as PILImage
 
@@ -385,34 +388,37 @@ async def extract_video_frames(
     frames_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), directory)
     os.makedirs(frames_dir, exist_ok=True)
 
-    # 重新打开视频读帧
+    # 重新打开视频读帧（顺序读取，避免 codec seek 不准导致乱序）
     cap = cv2.VideoCapture(video_path)
     extracted_images = []
     extracted_idx = 0
+    video_frame_idx = 0
 
     while extracted_idx < extract_count:
-        target_frame = int(extracted_idx * interval)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
         ret, frame = cap.read()
         if not ret:
             break
 
-        output_filename = f"frame_{extracted_idx:04d}.jpg"
-        output_path = os.path.join(frames_dir, output_filename)
-        cv2.imwrite(output_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        # 仅在达到目标帧位置时保存
+        if video_frame_idx >= int(extracted_idx * interval):
+            output_filename = f"frame_{extracted_idx:04d}.jpg"
+            output_path = os.path.join(frames_dir, output_filename)
+            cv2.imwrite(output_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
 
-        img_height, img_width = frame.shape[:2]
+            img_height, img_width = frame.shape[:2]
 
-        image = Image(
-            atlas_id=atlas_id,
-            file_path=output_path,
-            directory=directory,
-            width=img_width,
-            height=img_height,
-        )
-        db.add(image)
-        extracted_images.append(image)
-        extracted_idx += 1
+            image = Image(
+                atlas_id=atlas_id,
+                file_path=output_path,
+                directory=directory,
+                width=img_width,
+                height=img_height,
+            )
+            db.add(image)
+            extracted_images.append(image)
+            extracted_idx += 1
+
+        video_frame_idx += 1
 
     cap.release()
     db.commit()
@@ -448,7 +454,7 @@ def _extract_frames_background(
 
     cap = cv2.VideoCapture(video_path)
     extracted_idx = 0
-    current_frame = 0
+    video_frame_idx = 0
     frame_paths = []  # 收集所有帧路径，最后批量入库
 
     try:
@@ -458,25 +464,26 @@ def _extract_frames_background(
             if job and job["status"] == "stopped":
                 break
 
-            target_frame = int(extracted_idx * interval)
-            cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
             ret, frame = cap.read()
             if not ret:
                 break
 
-            output_filename = f"frame_{extracted_idx:04d}.jpg"
-            output_path = os.path.join(frames_dir, output_filename)
-            cv2.imwrite(output_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+            # 仅在达到目标帧位置时保存
+            if video_frame_idx >= int(extracted_idx * interval):
+                output_filename = f"frame_{extracted_idx:04d}.jpg"
+                output_path = os.path.join(frames_dir, output_filename)
+                cv2.imwrite(output_path, frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
 
-            img_height, img_width = frame.shape[:2]
-            frame_paths.append((output_path, img_width, img_height))
+                img_height, img_width = frame.shape[:2]
+                frame_paths.append((output_path, img_width, img_height))
 
-            extracted_idx += 1
-            current_frame = target_frame
+                extracted_idx += 1
 
-            # 每提取 5 帧更新一次进度
-            if extracted_idx % 5 == 0 or extracted_idx == extract_count:
-                frame_extract_manager.update_progress(job_id, current_frame, extracted_idx)
+                # 每提取 5 帧更新一次进度
+                if extracted_idx % 5 == 0 or extracted_idx == extract_count:
+                    frame_extract_manager.update_progress(job_id, video_frame_idx, extracted_idx)
+
+            video_frame_idx += 1
 
         # 批量创建 Image 记录
         for idx, (file_path, img_width, img_height) in enumerate(frame_paths):
@@ -587,3 +594,42 @@ async def cancel_extract_job(
 
     frame_extract_manager.set_status(job_id, "stopped")
     return None
+
+
+@router.get("/{atlas_id}/images/download")
+async def batch_download_images(
+    atlas_id: int,
+    image_ids: str = Query(..., description="图片ID列表，逗号分隔"),
+    db: Session = Depends(get_db)
+):
+    """打包下载选中的图片为 ZIP 文件。"""
+    atlas = db.query(Atlas).filter(Atlas.id == atlas_id).first()
+    if not atlas:
+        raise HTTPException(status_code=404, detail="图集不存在")
+
+    image_id_list = [int(x.strip()) for x in image_ids.split(",") if x.strip().isdigit()]
+    if not image_id_list:
+        raise HTTPException(status_code=400, detail="没有指定要下载的图片")
+
+    images = db.query(Image).filter(Image.id.in_(image_id_list)).all()
+    if not images:
+        raise HTTPException(status_code=404, detail="未找到指定的图片")
+
+    # 创建内存 ZIP 文件
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for img in images:
+            if img.file_path and os.path.exists(img.file_path):
+                arcname = os.path.basename(img.file_path)
+                zipf.write(img.file_path, arcname)
+
+    zip_buffer.seek(0)
+    # 使用 ASCII 文件名避免 Content-Disposition 编码问题
+    filename = f"atlas_{atlas_id}_images.zip"
+
+    return StreamingResponse(
+        iter([zip_buffer.getvalue()]),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )

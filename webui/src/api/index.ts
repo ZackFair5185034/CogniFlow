@@ -45,6 +45,12 @@ export const atlasApi = {
     api.get(`/atlas/${id}/video/extract-frames/${jobId}/status`),
   cancelExtractJob: (id: number, jobId: string) =>
     api.delete(`/atlas/${id}/video/extract-frames/${jobId}`),
+  batchDownloadImages: (id: number, imageIds: number[]) => {
+    return api.get(`/atlas/${id}/images/download`, {
+      params: { image_ids: imageIds.join(",") },
+      responseType: 'blob',
+    })
+  },
 }
 
 // Image API
@@ -88,6 +94,7 @@ export const modelApi = {
   update: (id: number, data: { name?: string; version?: string; metrics?: object }) => api.put(`/models/${id}`, data),
   delete: (id: number) => api.delete(`/models/${id}`),
   setBest: (id: number) => api.post(`/models/${id}/set-best`),
+  getDownloadUrl: (id: number) => `/api/models/${id}/download`,
   upload: (id: number, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
