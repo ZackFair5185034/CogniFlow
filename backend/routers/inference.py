@@ -60,7 +60,8 @@ async def detect_image(
 
         categories = json.loads(model.metrics or '{}').get('categories', []) if model.metrics else []
         if not categories:
-            categories = [{'name': f'Class {i}', 'color': '#FF0000'} for i in range(result['num_classes'])]
+            class_ids = set(det['class_id'] for det in result['detections'])
+            categories = [{'name': f'Class {i}', 'color': '#FF0000'} for i in range(max(class_ids) + 1) if i in class_ids] if class_ids else []
 
         for det in result['detections']:
             bbox = det['bbox']
@@ -615,7 +616,8 @@ async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold:
             except json.JSONDecodeError:
                 pass
         if not categories:
-            categories = [{'name': f'Class {i}', 'color': '#FF0000'} for i in range(result['num_classes'])]
+            class_ids = set(det['class_id'] for det in result['detections'])
+            categories = [{'name': f'Class {i}', 'color': '#FF0000'} for i in range(max(class_ids) + 1) if i in class_ids] if class_ids else []
 
         for det in result['detections']:
             bbox = det['bbox']
