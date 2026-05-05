@@ -408,7 +408,7 @@ onUnmounted(() => {
 }
 
 .header-actions {
-  @apply flex items-center gap-3;
+  @apply flex items-center gap-3 h-9;
 }
 
 .header-stats {

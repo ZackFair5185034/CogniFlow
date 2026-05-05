@@ -1175,7 +1175,7 @@ onUnmounted(() => {
 }
 
 .mode-tab {
-  @apply flex items-center gap-2 px-4 py-1.5 rounded-md text-sm font-medium cursor-pointer transition-all;
+  @apply flex items-center gap-2 px-4 py-1 rounded-md text-sm font-medium cursor-pointer transition-all;
   @apply text-[var(--text-secondary)] bg-transparent border-none;
 
   svg {
