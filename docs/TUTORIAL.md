@@ -12,7 +12,7 @@ CogniFlow 是一个通用视觉感知处理框架，集模型训练、模型测�
 - 📁 **图集管理** — 上传、管理训练图片
 - 🏷️ **数据标注** — YOLO 格式目标检测标注
 - 🏋️ **模型训练** — YOLO 模型训练
-- 🚀 **模型推理** — 实时目标检测
+- 🚀 **模型推理** — 实时目标检测（图片/视频/实时流）
 - 🔧 **规则引擎** — 可视化流程编排，基于检测结果触发动作
 
 ---
@@ -29,8 +29,8 @@ uvicorn app:app --reload --port 8000
 
 # 启动前端 (新终端)
 cd webui
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 访问 `http://localhost:5173`
@@ -63,7 +63,8 @@ npm run dev
 1. 进入 **模型启动**
 2. 选择训练好的模型，点击 **加载模型**
 3. 可选择：
-   - **上传图片/视频** 进行离线推理
+   - **上传图片** 进行图片检测
+   - **上传视频** 进行视频检测
    - **实时采集** 连接屏幕进行实时检测
 
 ### 2.6 规则引擎
@@ -75,27 +76,6 @@ npm run dev
 3. **配置节点**：点击节点，右侧面板设置参数
 4. **连接节点**：从输出端口拖拽到输入端口
 5. **执行规则**：保存后点击 **执行**
-
-**已实现的节点类型：**
-
-| 分类 | 节点 | 说明 |
-|-----|------|------|
-| 触发器 | YOLO 触发器 | 检测到目标时触发 |
-| 触发器 | 定时器触发器 | 定时触发 |
-| 触发器 | 手动触发器 | 手动触发 |
-| 条件 | 目标存在 | 检查是否检测到指定目标 |
-| 条件 | 置信度阈值 | 检查置信度是否满足 |
-| 条件 | 变量条件 | 检查变量值 |
-| 动作 | 键盘动作 | 模拟按键 |
-| 动作 | 鼠标动作 | 模拟鼠标点击/移动 |
-| 动作 | 等待 | 延时 |
-| 动作 | HTTP 请求 | 发送 HTTP 请求 |
-| 动作 | 日志 | 记录日志 |
-| 逻辑 | 分支 | 条件分支 |
-| 逻辑 | 并行分支 | 并行执行 |
-| 逻辑 | 循环 | 循环执行 |
-| 逻辑 | 延迟 | 延时 |
-| 逻辑 | 设置变量 | 设置变量值 |
 
 ---
 
@@ -118,7 +98,8 @@ CogniFlow/
 │   │   ├── inference.py    # 推理
 │   │   ├── launch.py       # 启动/推理
 │   │   ├── rule_engine.py  # 规则引擎
-│   │   └── websocket.py    # WebSocket
+│   │   ├── websocket.py    # WebSocket
+│   │   └── ws_stream.py    # 视频流 WebSocket
 │   └── services/
 │       └── rule_engine/    # 规则引擎核心
 │           ├── executor.py     # 执行器
@@ -164,8 +145,8 @@ CogniFlow/
 │   ├── annotation/         # 标注工具
 │   └── config/             # 配置管理
 ├── docs/
-│   ├── TUTORIAL.md        # 本教程
-│   └── rule-engine-design.md # 规则引擎设计文档
+│   ├── project-analysis-2026.md  # 项目分析文档
+│   └── research/           # 规则引擎研发文档
 └── tests/
 ```
 
@@ -225,6 +206,7 @@ POST   /api/training/start         # 开始训练
 POST   /api/training/stop         # 停止训练
 DELETE /api/training/jobs/:id     # 删除任务
 GET    /api/training/jobs/:id/metrics-history # 获取指标历史
+GET    /api/training/device-info   # 获取可用 GPU 设备
 ```
 
 ### 4.6 规则引擎
@@ -241,7 +223,7 @@ POST   /api/rule-engine/graphs/:id/activate # 激活规则图
 POST   /api/rule-engine/graphs/:id/deactivate # 停用规则图
 
 # 节点定义
-GET    /api/rule-engine/nodes/definitions   # 获取所有节点类型
+GET    /api/rule-engine/nodes/definitions   # 获取所有节点类型定义
 
 # 执行
 POST   /api/rule-engine/execute             # 执行规则图
@@ -251,53 +233,7 @@ GET    /api/rule-engine/executions/:id      # 获取执行详情
 
 ---
 
-## 5. 规则引擎节点配置示例
-
-### 5.1 YOLO 触发器
-
-```json
-{
-  "class_names": ["button", "enemy", "health"],
-  "min_confidence": 0.5,
-  "max_objects": 10
-}
-```
-
-### 5.2 目标存在条件
-
-```json
-{
-  "class_names": ["button"],
-  "min_count": 1,
-  "comparison": "at_least"
-}
-```
-
-### 5.3 键盘动作
-
-```json
-{
-  "keys": ["a", "b"],
-  "hold_duration": 0.1,
-  "interval": 0.2
-}
-```
-
-### 5.4 HTTP 请求
-
-```json
-{
-  "url": "http://example.com/webhook",
-  "method": "POST",
-  "headers": {"Content-Type": "application/json"},
-  "body": {"event": "detected", "target": "{{class_name}}"},
-  "timeout": 5
-}
-```
-
----
-
-## 6. 常见问题
+## 5. 常见问题
 
 ### Q: 训练中断后能继续吗？
 A: 可以，训练任务支持断点续传，重新开始训练会自动加载已有进度。
@@ -314,10 +250,14 @@ A: 在 **模型启动** 页面，选择 **实时采集** 模式连接屏幕。
 ### Q: 规则引擎能同时触发多个动作吗？
 A: 可以，使用 **并行分支** 节点可同时执行多个分支。
 
+### Q: 如何选择 GPU 训练？
+A: 在 **模型训练** 页面，点击设备选择器选择 GPU 设备。
+
 ---
 
-## 7. 更新日志
+## 6. 更新日志
 
 | 版本 | 日期 | 说明 |
 |-----|------|------|
+| 0.2.0 | 2026-05-06 | 更新目录结构；添加 GPU 训练、实时流推理说明 |
 | 0.1.0 | 2026-04 | 初始版本，包含图集管理、标注、YOLO训练、规则引擎 |
