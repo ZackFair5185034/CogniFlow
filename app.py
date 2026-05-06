@@ -144,14 +144,21 @@ app.mount("/inference_output", StaticFiles(directory=INFERENCE_OUTPUT_DIR), name
 # Docker 环境: WEBUI_DIST=/app/webui/dist
 _WEBUI_DIST = os.environ.get("WEBUI_DIST", os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui", "dist"))
 if os.path.exists(_WEBUI_DIST):
-    app.mount("/", StaticFiles(directory=_WEBUI_DIST, html=True), name="frontend")
+    # 注册 catch-all 路由，所有非 API/WebSocket 路径由前端处理
+    @app.get("/{path:path}")
+    async def serve_frontend(path: str):
+        from starlette.responses import FileResponse
+        file_path = os.path.join(_WEBUI_DIST, path)
+        if path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(_WEBUI_DIST, "index.html"))
 
 
 @app.get("/")
 async def root():
     """根路径重定向到前端。"""
     if os.path.exists(_WEBUI_DIST):
-        return RedirectResponse(url="/index.html")
+        return RedirectResponse(url="/webui/index.html")
     return {"message": "CogniFlow API running", "docs": "/docs"}
 
 
