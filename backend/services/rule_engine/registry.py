@@ -91,13 +91,74 @@ class NodeRegistry:
         """获取所有节点定义 - 用于前端渲染节点面板。
 
         Returns:
-            节点定义列表（字典格式）
+            节点定义列表（字典格式），转换为前端兼容格式：
+            - display_name -> label
+            - inputs/outputs: Dict -> List[{name, type, label, description}]
         """
         definitions = []
         for executor_class in self._executors.values():
             executor = executor_class()
-            definitions.append(executor.get_definition().model_dump())
+            defn = executor.get_definition()
+            # 转换为前端兼容格式
+            definition_dict = {
+                "type": defn.type,
+                "category": defn.category,
+                "label": defn.display_name,
+                "description": defn.description,
+                "icon": defn.icon,
+                "color": defn.color,
+                "inputs": [
+                    {
+                        "name": name,
+                        "type": port.type,
+                        "label": port.name,
+                        "description": port.description,
+                    }
+                    for name, port in defn.inputs.items()
+                ],
+                "outputs": [
+                    {
+                        "name": name,
+                        "type": port.type,
+                        "label": port.name,
+                        "description": port.description,
+                    }
+                    for name, port in defn.outputs.items()
+                ],
+                "config_schema": getattr(defn, 'config_schema', {}),
+            }
+            definitions.append(definition_dict)
         return definitions
+
+    def _convert_to_frontend_format(self, defn: "NodeDefinition") -> dict:
+        """将 NodeDefinition 转换为前端兼容格式。"""
+        return {
+            "type": defn.type,
+            "category": defn.category,
+            "label": defn.display_name,
+            "description": defn.description,
+            "icon": defn.icon,
+            "color": defn.color,
+            "inputs": [
+                {
+                    "name": name,
+                    "type": port.type,
+                    "label": port.name,
+                    "description": port.description,
+                }
+                for name, port in defn.inputs.items()
+            ],
+            "outputs": [
+                {
+                    "name": name,
+                    "type": port.type,
+                    "label": port.name,
+                    "description": port.description,
+                }
+                for name, port in defn.outputs.items()
+            ],
+            "config_schema": getattr(defn, 'config_schema', {}),
+        }
 
     def get_definitions_by_category(self) -> Dict[str, List[dict]]:
         """按分类获取所有节点定义。
@@ -112,7 +173,7 @@ class NodeRegistry:
             definition = executor.get_definition()
             category = definition.category
             if category in result:
-                result[category].append(definition.model_dump())
+                result[category].append(self._convert_to_frontend_format(definition))
 
         return result
 
@@ -125,11 +186,12 @@ class NodeRegistry:
         Returns:
             该分类下的节点定义列表
         """
-        return [
-            executor_class().get_definition().model_dump()
-            for executor_class in self._executors.values()
-            if executor_class().get_definition().category == category
-        ]
+        result = []
+        for executor_class in self._executors.values():
+            definition = executor_class().get_definition()
+            if definition.category == category:
+                result.append(self._convert_to_frontend_format(definition))
+        return result
 
     def get_categories(self) -> List[CategoryInfo]:
         """获取所有类别定义。"""
