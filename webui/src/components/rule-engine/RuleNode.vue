@@ -1,8 +1,5 @@
 <template>
-  <div class="rule-node" :class="[`category-${data.category}`, { selected }]">
-    <!-- 顶部3px色条 -->
-    <div class="node-color-bar"></div>
-
+  <div class="rule-node" :class="[`category-${data.category}`, { selected }]" @contextmenu.prevent>
     <!-- 标题栏 -->
     <div class="node-header">
       <div class="node-icon" :class="data.category">
@@ -165,7 +162,12 @@
           :key="input.name"
           class="port-item"
         >
-          <div class="port-dot input-port" :class="input.type?.toLowerCase()"></div>
+          <Handle
+            type="target"
+            :position="Position.Left"
+            :id="input.name"
+            class="node-handle"
+          />
           <span class="port-label">{{ input.label || input.name }}</span>
         </div>
       </div>
@@ -178,7 +180,12 @@
           class="port-item"
         >
           <span class="port-label">{{ output.label || output.name }}</span>
-          <div class="port-dot output-port" :class="output.type?.toLowerCase()"></div>
+          <Handle
+            type="source"
+            :position="Position.Right"
+            :id="output.name"
+            class="node-handle"
+          />
         </div>
       </div>
     </div>
@@ -187,11 +194,15 @@
     <div class="node-status" v-if="data.status">
       <div class="status-indicator" :class="data.status"></div>
     </div>
+
+    <!-- 删除按钮 -->
+    <button class="node-delete-btn" @click.stop="$emit('delete', data.id)" title="删除节点">×</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, inject, ref } from 'vue'
+import { Handle, Position } from '@vue-flow/core'
 import SvgIcon from '@/components/SvgIcon.vue'
 
 interface ConfigSchemaProperty {
@@ -234,6 +245,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:config', key: string, value: any): void
+  (e: 'delete', nodeId: string): void
 }>()
 
 // 可用模型（model-select用）
@@ -327,47 +339,50 @@ function updateConfig(key: string, value: any) {
 
 <style scoped>
 .rule-node {
-  background: #1e1e2e;
-  border: 1px solid #3a3a4a;
-  border-radius: 8px;
+  background: linear-gradient(180deg, #2d2d30 0%, #252528 100%);
+  border: 1px solid #404044;
+  border-radius: 6px;
   min-width: 200px;
   max-width: 280px;
   font-size: 12px;
   color: #e0e0e0;
   position: relative;
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition: all 0.2s ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 2px 8px rgba(0,0,0,0.3);
 }
 
 .rule-node:hover {
-  border-color: #5a5a6a;
+  border-color: #505055;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 4px 16px rgba(0,0,0,0.4);
 }
 
 .rule-node.selected {
   border-color: #00f0ff;
-  box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 0 0 1px rgba(0,240,255,0.3),
+    0 4px 16px rgba(0,0,0,0.4);
 }
 
-/* 顶部3px色条 */
-.node-color-bar {
-  height: 3px;
-  border-radius: 8px 8px 0 0;
-}
-
-.category-input .node-color-bar { background: #4CFF4C; }
-.category-detection .node-color-bar { background: #00f0FF; }
-.category-processing .node-color-bar { background: #FFFF4C; }
-.category-action .node-color-bar { background: #FF7F4C; }
-.category-logic .node-color-bar { background: #DC4FDC; }
-.category-output .node-color-bar { background: #FF4C4C; }
-
-/* 标题栏 */
+/* 标题栏 - 使用背景色区分类型 */
 .node-header {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid #2a2a3a;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
 }
+
+.category-input .node-header { background: linear-gradient(90deg, rgba(76,255,76,0.2), rgba(76,255,76,0.05)); }
+.category-detection .node-header { background: linear-gradient(90deg, rgba(0,240,255,0.2), rgba(0,240,255,0.05)); }
+.category-processing .node-header { background: linear-gradient(90deg, rgba(255,255,76,0.2), rgba(255,255,76,0.05)); }
+.category-action .node-header { background: linear-gradient(90deg, rgba(255,127,76,0.2), rgba(255,127,76,0.05)); }
+.category-logic .node-header { background: linear-gradient(90deg, rgba(220,79,220,0.2), rgba(220,79,220,0.05)); }
+.category-output .node-header { background: linear-gradient(90deg, rgba(255,76,76,0.2), rgba(255,76,76,0.05)); }
 
 .node-icon {
   width: 24px;
@@ -384,9 +399,9 @@ function updateConfig(key: string, value: any) {
   height: 14px;
 }
 
-.category-input .node-icon { background: rgba(76, 255, 76, 0.2); color: #4CFF4C; }
-.category-detection .node-icon { background: rgba(0, 240, 255, 0.2); color: #00f0FF; }
-.category-processing .node-icon { background: rgba(255, 255, 76, 0.2); color: #FFFF4C; }
+.category-input .node-icon { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
+.category-detection .node-icon { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
+.category-processing .node-icon { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
 .category-action .node-icon { background: rgba(255, 127, 76, 0.2); color: #FF7F4C; }
 .category-logic .node-icon { background: rgba(220, 79, 220, 0.2); color: #DC4FDC; }
 .category-output .node-icon { background: rgba(255, 76, 76, 0.2); color: #FF4C4C; }
@@ -420,7 +435,8 @@ function updateConfig(key: string, value: any) {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-bottom: 1px solid #2a2a3a;
+  background: rgba(0,0,0,0.15);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
 }
 
 .node-field {
@@ -430,9 +446,11 @@ function updateConfig(key: string, value: any) {
 }
 
 .field-label {
-  font-size: 11px;
-  color: #999;
+  font-size: 10px;
+  color: #777;
   font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .field-control {
@@ -446,10 +464,10 @@ function updateConfig(key: string, value: any) {
 .number-input,
 .select-input {
   flex: 1;
-  background: #2a2a3a;
-  border: 1px solid #3a3a4a;
+  background: #1a1a1c;
+  border: 1px solid #3a3a3c;
   border-radius: 4px;
-  padding: 4px 8px;
+  padding: 5px 8px;
   font-size: 12px;
   color: #e0e0e0;
   min-width: 0;
@@ -632,35 +650,42 @@ function updateConfig(key: string, value: any) {
   align-items: center;
   gap: 6px;
   padding: 0 8px;
+  position: relative;
 }
 
-.port-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 2px solid #5a5a6a;
-  background: #1e1e2e;
-  flex-shrink: 0;
+/* VueFlow Handle 样式 */
+.node-handle {
+  width: 12px !important;
+  height: 12px !important;
+  background: #1e1e2e !important;
+  border: 2px solid #5a5a6a !important;
+  border-radius: 50% !important;
+  cursor: crosshair !important;
+  transition: all 0.15s ease !important;
 }
 
-.port-dot.input-port {
-  margin-left: -5px;
+.node-handle:hover {
+  width: 16px !important;
+  height: 16px !important;
+  margin: -2px !important;
+  border-color: #00f0ff !important;
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.6) !important;
 }
 
-.port-dot.output-port {
-  margin-right: -5px;
+.node-handle.vue-flow-handle-connected {
+  border-color: #00ff88 !important;
 }
 
 /* 端口类型颜色 */
-.port-dot.image { border-color: #4CFF4C; }
-.port-dot.bbox { border-color: #00f0FF; }
-.port-dot.mask { border-color: #FFFF4C; }
-.port-dot.scores { border-color: #FF7F4C; }
-.port-dot.trigger { border-color: #DC4FDC; }
-.port-dot.control { border-color: #DC4FDC; }
-.port-dot.boolean { border-color: #FF4C4C; }
-.port-dot.array { border-color: #4CFF4C; }
-.port-dot.any { border-color: #888; }
+.node-handle.type-image { border-color: #4CFF4C; }
+.node-handle.type-bbox { border-color: #00f0FF; }
+.node-handle.type-mask { border-color: #FFFF4C; }
+.node-handle.type-scores { border-color: #FF7F4C; }
+.node-handle.type-trigger { border-color: #DC4FDC; }
+.node-handle.type-control { border-color: #DC4FDC; }
+.node-handle.type-boolean { border-color: #FF4C4C; }
+.node-handle.type-array { border-color: #4CFF4C; }
+.node-handle.type-any { border-color: #888; }
 
 .port-label {
   font-size: 11px;
@@ -698,5 +723,36 @@ function updateConfig(key: string, value: any) {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* 删除按钮 */
+.node-delete-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ff4c4c;
+  border: 2px solid #1e1e2e;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.rule-node:hover .node-delete-btn {
+  opacity: 1;
+}
+
+.node-delete-btn:hover {
+  transform: scale(1.15);
+  background: #ff6666;
 }
 </style>

@@ -182,24 +182,7 @@
 
       <!-- 画布区域 -->
       <div class="canvas-wrapper" ref="canvasWrapper">
-        <!-- 顶部标尺 -->
-        <div class="ruler ruler-horizontal" v-if="showRulers">
-          <div class="ruler-content" :style="{ width: canvasWidth + 'px', transform: `translateX(${-panX}px)` }">
-            <span v-for="i in Math.ceil(canvasWidth / rulerStep)" :key="i" class="ruler-mark" :style="{ left: (i - 1) * rulerStep + 'px' }">
-              {{ (i - 1) * rulerStep }}
-            </span>
-          </div>
-        </div>
-
-        <!-- 左侧标尺 -->
-        <div class="ruler ruler-vertical" v-if="showRulers">
-          <div class="ruler-content" :style="{ height: canvasHeight + 'px', transform: `translateY(${-panY}px)` }">
-            <span v-for="i in Math.ceil(canvasHeight / rulerStep)" :key="i" class="ruler-mark" :style="{ top: (i - 1) * rulerStep + 'px' }">
-              {{ (i - 1) * rulerStep }}
-            </span>
-          </div>
-        </div>
-
+        
         <!-- VueFlow 画布 -->
         <div
           class="flow-container"
@@ -219,7 +202,7 @@
             :node-types="nodeTypes"
             :default-edge-options="defaultEdgeOptions"
             :connection-line-style="connectionLineStyle"
-            :snap-to-grid="snapGrid"
+            :snap-to-grid="false"
             :snap-grid="[gridSize, gridSize]"
             fit-view-on-init
             @node-click="handleNodeClick"
@@ -241,15 +224,10 @@
             :nodes-connectable="true"
             :elements-selectable="true"
             :select-nodes-on-drag="true"
+            :selection-key-code="true"
+            :multi-selection-key-code="'Control'"
           >
-            <!-- 点阵背景 -->
-            <Background
-              v-if="showGrid"
-              :pattern-color="gridColor"
-              :gap="gridSize"
-              :size="gridSize"
-            />
-
+            
             <!-- 小地图 -->
             <MiniMap
               v-if="showMiniMap"
@@ -294,175 +272,7 @@
         </div>
       </div>
 
-      <!-- 右侧属性面板 -->
-      <aside class="properties-panel" :class="{ visible: selectedNode }">
-        <template v-if="selectedNode">
-          <div class="panel-header">
-            <div class="panel-title">
-              <span class="panel-icon" :class="selectedNode.category">
-                <SvgIcon :name="selectedNode.category" />
-              </span>
-              <div class="panel-title-text">
-                <span class="node-name">{{ selectedNode.label }}</span>
-                <span class="node-type-label">{{ selectedNode.type }}</span>
-              </div>
-            </div>
-            <button class="close-btn" @click="selectedNode = null">
-              <SvgIcon name="close" />
-            </button>
           </div>
-
-          <div class="panel-body">
-            <!-- 节点描述 -->
-            <div class="config-section" v-if="selectedNode.description">
-              <div class="section-label">描述</div>
-              <p class="node-description">{{ selectedNode.description }}</p>
-            </div>
-
-            <!-- 参数配置 -->
-            <div class="config-section">
-              <div class="section-label">参数配置</div>
-              <div class="config-form">
-                <div
-                  v-for="(schema, key) in (selectedNode.configSchema || selectedNode.data?.configSchema || {})"
-                  :key="key"
-                  class="form-field"
-                >
-                  <label class="field-label">{{ schema.title || key }}</label>
-
-                  <!-- 所有输入类型统一包装，确保 v-if/v-else-if 链完整 -->
-                  <div class="field-input-wrapper">
-                    <!-- 字符串输入 -->
-                    <template v-if="schema.type === 'string' && !schema.enum">
-                      <input
-                        type="text"
-                        :value="nodeConfig[key]"
-                        @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
-                        class="field-input"
-                        placeholder="请输入..."
-                      />
-                      <button
-                        class="var-btn"
-                        @click="showVariableMenu(key, $event)"
-                        title="插入变量"
-                      >📎</button>
-                    </template>
-
-                    <!-- 数字输入 -->
-                    <template v-else-if="schema.type === 'number' || schema.type === 'integer'">
-                      <input
-                        type="number"
-                        :min="schema.minimum"
-                        :max="schema.maximum"
-                        :step="schema.type === 'integer' ? 1 : 0.1"
-                        :value="nodeConfig[key]"
-                        @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
-                        class="field-input"
-                      />
-                      <button
-                        class="var-btn"
-                        @click="showVariableMenu(key, $event)"
-                        title="插入变量"
-                      >📎</button>
-                    </template>
-
-                    <!-- 布尔选择 -->
-                    <template v-else-if="schema.type === 'boolean'">
-                      <select
-                        :value="String(nodeConfig[key])"
-                        @change="updateConfig(key, ($event.target as HTMLSelectElement).value === 'true')"
-                        class="field-select"
-                      >
-                        <option value="true">是</option>
-                        <option value="false">否</option>
-                      </select>
-                    </template>
-
-                    <!-- 枚举选择 -->
-                    <template v-else-if="schema.enum">
-                      <select
-                        :value="nodeConfig[key]"
-                        @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
-                        class="field-select"
-                      >
-                        <option v-for="opt in schema.enum" :key="opt" :value="opt">{{ opt }}</option>
-                      </select>
-                    </template>
-
-                    <!-- 数组输入 -->
-                    <template v-else-if="schema.type === 'array'">
-                      <div class="array-field">
-                        <div
-                          v-for="(item, idx) in (nodeConfig[key] || [])"
-                          :key="idx"
-                          class="array-item"
-                        >
-                          <input
-                            type="text"
-                            :value="item"
-                            @input="updateArrayItem(key, idx, ($event.target as HTMLInputElement).value)"
-                            class="field-input"
-                          />
-                          <button class="remove-btn" @click="removeArrayItem(key, idx)">
-                            <SvgIcon name="close" />
-                          </button>
-                        </div>
-                        <button class="add-item-btn" @click="addArrayItem(key)">
-                          <SvgIcon name="plus" />
-                          添加
-                        </button>
-                      </div>
-                    </template>
-                  </div>
-
-                  <span class="field-default" v-if="schema.default !== undefined">
-                    默认: {{ JSON.stringify(schema.default) }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <!-- 连接信息 -->
-            <div class="config-section">
-              <div class="section-label">连接</div>
-              <div class="ports-display">
-                <div class="ports-row" v-if="selectedNode.inputs?.length">
-                  <div
-                    v-for="input in selectedNode.inputs"
-                    :key="input.name"
-                    class="port-item"
-                  >
-                    <span class="port-chip input">{{ input.label || input.name }}</span>
-                    <template v-if="getInputConnection(input.name)">
-                      <span class="port-connected">
-                        → {{ getInputConnection(input.name)?.sourceNode?.label || getInputConnection(input.name)?.sourceNode?.type }}
-                      </span>
-                      <button class="port-disconnect" @click="disconnectInput(input.name)" title="断开连接">×</button>
-                    </template>
-                    <span v-else class="port-disconnected">[未连接]</span>
-                  </div>
-                </div>
-                <div class="ports-row" v-if="selectedNode.outputs?.length">
-                  <div
-                    v-for="output in selectedNode.outputs"
-                    :key="output.name"
-                    class="port-item"
-                  >
-                    <span class="port-chip output">{{ output.label || output.name }}</span>
-                    <span class="port-outgoing">→</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-
-        <div class="no-selection" v-else>
-          <SvgIcon name="alert" />
-          <p>选择画布上的节点<br>查看和编辑属性</p>
-        </div>
-      </aside>
-    </div>
 
     <!-- 执行日志面板 -->
     <div class="execution-panel" :class="{ expanded: showExecutionPanel }">
@@ -583,8 +393,8 @@ const route = useRoute()
 const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate, getZoom, getPan } = useVueFlow()
 
 // 常量
-const gridSize = 20
-const gridColor = '#1a1a2e'
+const gridSize = 30
+const gridColor = '#2a2a32'
 const rulerStep = 100
 const showRulers = ref(true)
 
@@ -1775,12 +1585,12 @@ $panel-header-height: 52px;
   .header-right {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
   }
 
-  .header-left { flex: 1; }
+  .header-left { flex: 0 0 auto; }
   .header-center { flex: 0 0 auto; }
-  .header-right { flex: 1; justify-content: flex-end; }
+  .header-right { flex: 0 0 auto; }
 }
 
 .rule-name-section {
@@ -1901,20 +1711,22 @@ $panel-header-height: 52px;
 }
 
 .action-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 6px;
+  padding: 6px 12px;
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
   }
 
   &:disabled {
@@ -2332,7 +2144,10 @@ $panel-header-height: 52px;
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #08080c;
+  background:
+    radial-gradient(circle, #3a3a4a 1px, transparent 1px);
+  background-size: 30px 30px;
+  background-position: 0 0;
 }
 
 .flow-container {
@@ -2346,8 +2161,10 @@ $panel-header-height: 52px;
     background: transparent;
   }
 
-  :deep(.vue-flow__background) {
-    background: #08080c;
+  :deep(.vue-flow) {
+    width: 100%;
+    height: 100%;
+    background: transparent !important;
   }
 
   :deep(.vue-flow__edge-path) {
