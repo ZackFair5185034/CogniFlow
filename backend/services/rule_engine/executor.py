@@ -24,6 +24,19 @@ class RuleGraphExecutor:
     # 保存所有进行中的执行上下文（用于取消操作）
     _active_executions: Dict[int, ExecutionContext] = {}
 
+    # 端口类型兼容性矩阵
+    PORT_COMPATIBILITY = {
+        # 源类型: [兼容的目标类型]
+        "ANY": ["ANY", "IMAGE", "BBOX", "MASK", "SCORES", "TRIGGER", "CONTROL", "MODEL"],
+        "IMAGE": ["ANY", "IMAGE"],
+        "BBOX": ["ANY", "BBOX"],
+        "MASK": ["ANY", "MASK"],
+        "SCORES": ["ANY", "SCORES"],
+        "TRIGGER": ["ANY", "TRIGGER", "CONTROL"],
+        "CONTROL": ["ANY", "CONTROL"],
+        "MODEL": ["ANY", "MODEL"],
+    }
+
     def __init__(self, db=None, ws_manager=None):
         """初始化执行器。
 
@@ -65,6 +78,81 @@ class RuleGraphExecutor:
         self.db.commit()
         self.db.refresh(record)
         return record.id
+
+    # ============================================================
+    # 图连接校验
+    # ============================================================
+
+    def _validate_graph_connections(
+        self,
+        nodes: List[Dict[str, Any]],
+        edges: List[Dict[str, Any]]
+    ):
+        """校验图中所有连接的端口类型兼容性。
+
+        Args:
+            nodes: 节点列表（List[Dict]），每个节点包含 id, type 等
+            edges: 边列表（List[Dict]），每条边包含 source, target, sourceHandle, targetHandle
+
+        Raises:
+            ValidationError: 如果存在不兼容的连接
+        """
+        if not nodes:
+            return
+
+        # 构建节点类型映射: node_id -> node_type
+        node_type_map = {node["id"]: node.get("type") for node in nodes}
+
+        # 获取节点注册表
+        registry = get_registry()
+
+        for edge in edges:
+            source_id = edge.get("source")
+            target_id = edge.get("target")
+            source_handle = edge.get("source_handle") or edge.get("sourceHandle")
+            target_handle = edge.get("target_handle") or edge.get("targetHandle")
+
+            source_type = node_type_map.get(source_id)
+            target_type = node_type_map.get(target_id)
+
+            if not source_type or not target_type:
+                continue  # 跳过无法识别的节点
+
+            # 获取源节点输出端口类型
+            source_executor = registry.get(source_type)
+            if not source_executor:
+                continue
+            source_def = source_executor.get_definition()
+            source_port_type = None
+            if source_handle and source_handle in source_def.outputs:
+                source_port_type = source_def.outputs[source_handle].type
+            elif source_def.outputs:
+                # 如果没有指定handle，取第一个输出端口
+                first_output = next(iter(source_def.outputs.values()))
+                source_port_type = first_output.type
+
+            # 获取目标节点输入端口类型
+            target_executor = registry.get(target_type)
+            if not target_executor:
+                continue
+            target_def = target_executor.get_definition()
+            target_port_type = None
+            if target_handle and target_handle in target_def.inputs:
+                target_port_type = target_def.inputs[target_handle].type
+            elif target_def.inputs:
+                # 如果没有指定handle，取第一个输入端口
+                first_input = next(iter(target_def.inputs.values()))
+                target_port_type = first_input.type
+
+            # 检查兼容性
+            if source_port_type and target_port_type:
+                compatible_types = self.PORT_COMPATIBILITY.get(source_port_type, [])
+                if target_port_type not in compatible_types:
+                    raise ValidationError(
+                        f"端口类型不兼容: {source_id}.{source_handle or 'output'} "
+                        f"({source_port_type}) → {target_id}.{target_handle or 'input'} "
+                        f"({target_port_type})"
+                    )
 
     # ============================================================
     # Kahn 拓扑排序
@@ -271,6 +359,9 @@ class RuleGraphExecutor:
 
         if not nodes:
             raise ValidationError("规则图为空")
+
+        # 校验图连接（端口类型兼容性）
+        self._validate_graph_connections(nodes, edges)
 
         # 拓扑排序
         try:
