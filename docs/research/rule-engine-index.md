@@ -46,7 +46,8 @@ docs/research/
 ├── 📐 架构设计
 │   ├── rule-engine-api-design.md            API 设计文档
 │   ├── rule-engine-data-models.md           数据模型文档
-│   └── rule-engine-dev-guide.md             开发规范
+│   ├── rule-engine-dev-guide.md             开发规范
+│   └── rule-engine-ui-ux-spec.md            UI/UX 交互规范 ← 新增
 │
 └── 🔧 阶段实现（详细技术文档）
     ├── rule-engine-phase1-node-registry.md    Phase 1: 节点注册表
