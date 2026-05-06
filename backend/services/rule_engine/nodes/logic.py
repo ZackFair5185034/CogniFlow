@@ -187,7 +187,19 @@ class DelayNode(BaseExecutor):
         params = self.config.get("params", {})
         delay = params.get("delay", 1.0)
 
-        await asyncio.sleep(delay)
+        # 分段 sleep，支持取消检查
+        check_interval = 0.1  # 每 100ms 检查一次
+        elapsed = 0.0
+        while elapsed < delay:
+            if context.is_cancelled():
+                return {
+                    "status": "cancelled",
+                    "delayed_seconds": elapsed,
+                    "cancelled": True
+                }
+            sleep_time = min(check_interval, delay - elapsed)
+            await asyncio.sleep(sleep_time)
+            elapsed += sleep_time
 
         return {
             "delayed_seconds": delay,

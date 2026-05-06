@@ -361,7 +361,9 @@ class RuleGraphExecutor:
             raise ValidationError("规则图为空")
 
         # 校验图连接（端口类型兼容性）
-        self._validate_graph_connections(nodes, edges)
+        # _validate_graph_connections 期望 List[Dict]，但 nodes 是 Dict[str, Dict]
+        nodes_list = [node for node in nodes.values()] if isinstance(nodes, dict) else nodes
+        self._validate_graph_connections(nodes_list, edges)
 
         # 拓扑排序
         try:
@@ -382,8 +384,17 @@ class RuleGraphExecutor:
             ws_manager=self.ws_manager
         )
 
-        # 注册执行上下文
+        # 如果在调用 execute() 之前就已请求取消，需要继承取消状态
+        # 注意：必须在 register_execution 之前检查旧的注册状态
+        pre_cancelled = RuleGraphExecutor._active_executions.get(execution_id)
+        was_cancelled = pre_cancelled and pre_cancelled.is_cancelled()
+
+        # 注册执行上下文（会覆盖旧的）
         self.register_execution(execution_id, context)
+
+        # 继承取消状态
+        if was_cancelled:
+            context.request_cancel()
 
         # 更新执行记录状态
         await self._update_execution_status(execution_id, "running")
@@ -410,7 +421,8 @@ class RuleGraphExecutor:
                     level_idx,
                     total_levels,
                     len(level),
-                    total_nodes
+                    total_nodes,
+                    levels
                 )
 
                 # 并行执行当前层
@@ -664,11 +676,14 @@ class RuleGraphExecutor:
         current_level: int,
         total_levels: int,
         nodes_in_level: int,
-        total_nodes: int
+        total_nodes: int,
+        levels: List[List[str]] = None
     ):
         """广播执行进度。"""
         if self.ws_manager:
-            completed_nodes = sum(len(levels[i]) for i in range(current_level))
+            completed_nodes = 0
+            if levels:
+                completed_nodes = sum(len(levels[i]) for i in range(current_level))
 
             await self.ws_manager.broadcast({
                 "type": "execution_progress",
@@ -722,9 +737,11 @@ class RuleGraphExecutor:
 
             if status in ("completed", "failed", "cancelled"):
                 record.end_time = datetime.now()
-                if record.start_time:
-                    delta = record.end_time - record.start_time
-                    # 尝试更新 logs_json
+                # 安全检查：只有当 start_time 是真实 datetime 时才计算 delta
+                try:
+                    if record.start_time and isinstance(record.start_time, datetime):
+                        delta = record.end_time - record.start_time
+                except (TypeError, AttributeError):
                     pass
 
             if result:
