@@ -5,7 +5,7 @@
  * 支持三种类型：success（成功）、error（错误）、info（信息）
  * 提供全局单例模式，通过 toastApi 调用。
  */
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue'
 
 // ============ Toast 类型定义 ============
 

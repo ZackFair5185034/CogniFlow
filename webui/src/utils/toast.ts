@@ -10,7 +10,7 @@
  *   toast.info('提示信息')
  */
 
-import type { ToastOptions, ToastType } from '@/components/common/Toast.vue'
+import type { ToastOptions } from '@/components/common/Toast.vue'
 
 // ============ Toast 实例引用 ============
 

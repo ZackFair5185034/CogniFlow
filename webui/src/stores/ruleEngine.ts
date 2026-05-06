@@ -356,7 +356,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    * 更新变量
    */
   function updateVariable(name: string, updates: Partial<Variable>) {
-    const v = variables.value.find(var => var.name === name)
+    const v = variables.value.find(item => item.name === name)
     if (v) {
       Object.assign(v, updates)
     }

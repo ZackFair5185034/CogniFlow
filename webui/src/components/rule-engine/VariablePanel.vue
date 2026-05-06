@@ -4,7 +4,7 @@
  *
  * 提供变量的 CRUD 操作界面，支持添加、删除、编辑变量。
  */
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import SvgIcon from '@/components/SvgIcon.vue'
 
 // ============ 类型定义 ============
@@ -57,14 +57,6 @@ function handleRemove(index: number) {
 
 function handleUpdate(index: number, field: keyof Variable, value: any) {
   emit('update', index, field, value)
-}
-
-function getTypeColor(type: VariableType): string {
-  return VARIABLE_TYPES.find(t => t.value === type)?.color || '#8888aa'
-}
-
-function getTypeLabel(type: VariableType): string {
-  return VARIABLE_TYPES.find(t => t.value === type)?.label || type
 }
 </script>
 
