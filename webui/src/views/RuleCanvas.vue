@@ -500,11 +500,13 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 
-// 图标
-const TriggerIcon = () => h('polygon', { points: '13 2 3 14 12 14 11 22 21 10 12 10 13 2' })
-const ConditionIcon = () => h('polyline', { points: '22 12 18 12 15 21 9 3 6 12 2 12' })
-const ActionIcon = () => h('polygon', { points: '5 3 19 12 5 21 5 3' })
-const LogicIcon = () => h('rect', { x: '3', y: '3', width: '7', height: '7' })
+// 图标 - 6色分类体系 (按设计文档)
+const InputIcon = () => h('path', { d: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' })  // input (#4CFF4C)
+const DetectionIcon = () => h('circle', { cx: '12', cy: '12', r: '10', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' })  // detection (#00f0FF)
+const ProcessingIcon = () => h('polygon', { points: '13 2 3 14 12 14 11 22 21 10 12 10 13 2', fill: 'currentColor' })  // processing (#FFFF4C)
+const ActionIcon = () => h('polygon', { points: '5 3 19 12 5 21 5 3', fill: 'currentColor' })  // action (#FF7F4C)
+const LogicIcon = () => h('rect', { x: '3', y: '3', width: '7', height: '7', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' })  // logic (#DC4FDC)
+const OutputIcon = () => h('path', { d: 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' })  // output (#FF4C4C)
 
 import { h } from 'vue'
 
@@ -572,12 +574,14 @@ const historyIndex = ref(-1)
 const canUndo = computed(() => historyIndex.value > 0)
 const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
 
-// 节点分类
+// 节点分类 - 6色体系 (按设计文档)
 const nodeCategories = computed(() => [
-  { name: 'trigger', label: '触发器', icon: markRaw(TriggerIcon), expanded: true, nodes: [] as any[] },
-  { name: 'condition', label: '条件', icon: markRaw(ConditionIcon), expanded: true, nodes: [] as any[] },
+  { name: 'input', label: '输入', icon: markRaw(InputIcon), expanded: true, nodes: [] as any[] },
+  { name: 'detection', label: '检测', icon: markRaw(DetectionIcon), expanded: true, nodes: [] as any[] },
+  { name: 'processing', label: '处理', icon: markRaw(ProcessingIcon), expanded: true, nodes: [] as any[] },
   { name: 'action', label: '动作', icon: markRaw(ActionIcon), expanded: true, nodes: [] as any[] },
   { name: 'logic', label: '逻辑', icon: markRaw(LogicIcon), expanded: true, nodes: [] as any[] },
+  { name: 'output', label: '输出', icon: markRaw(OutputIcon), expanded: true, nodes: [] as any[] },
 ].map(cat => ({
   ...cat,
   nodes: nodeDefinitions.value.filter((d: any) => d.category === cat.name)
@@ -614,13 +618,15 @@ const connectionLineStyle = {
 // 节点类型
 const nodeTypes = {}
 
-// 小地图颜色
+// 小地图颜色 - 6色分类体系
 function miniMapNodeColor(node: any) {
   const colors: Record<string, string> = {
-    trigger: '#00f0ff',
-    condition: '#ffdd00',
-    action: '#00ff88',
-    logic: '#ff00aa'
+    input: '#4CFF4C',      // input (#4CFF4C)
+    detection: '#00f0FF',  // detection (#00f0FF)
+    processing: '#FFFF4C', // processing (#FFFF4C)
+    action: '#FF7F4C',     // action (#FF7F4C)
+    logic: '#DC4FDC',      // logic (#DC4FDC)
+    output: '#FF4C4C'       // output (#FF4C4C)
   }
   return colors[node.category] || '#888'
 }
@@ -628,10 +634,12 @@ function miniMapNodeColor(node: any) {
 // 获取分类图标
 function getCategoryIcon(category: string) {
   const icons: Record<string, any> = {
-    trigger: markRaw(TriggerIcon),
-    condition: markRaw(ConditionIcon),
+    input: markRaw(InputIcon),
+    detection: markRaw(DetectionIcon),
+    processing: markRaw(ProcessingIcon),
     action: markRaw(ActionIcon),
-    logic: markRaw(LogicIcon)
+    logic: markRaw(LogicIcon),
+    output: markRaw(OutputIcon)
   }
   return icons[category] || icons.action
 }
@@ -1783,10 +1791,12 @@ $panel-header-height: 52px;
 
     svg { width: 16px; height: 16px; }
 
-    &.trigger { background: rgba(0, 240, 255, 0.15); color: #00f0ff; }
-    &.condition { background: rgba(255, 221, 0, 0.15); color: #ffdd00; }
-    &.action { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
-    &.logic { background: rgba(255, 0, 170, 0.15); color: #ff00aa; }
+    &.input { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
+    &.detection { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
+    &.processing { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
+    &.action { background: rgba(255, 127, 76, 0.15); color: #FF7F4C; }
+    &.logic { background: rgba(220, 79, 220, 0.15); color: #DC4FDC; }
+    &.output { background: rgba(255, 76, 76, 0.15); color: #FF4C4C; }
   }
 
   .category-name {
@@ -1845,10 +1855,12 @@ $panel-header-height: 52px;
 
     svg { width: 14px; height: 14px; }
 
-    &.trigger { background: rgba(0, 240, 255, 0.1); color: #00f0ff; }
-    &.condition { background: rgba(255, 221, 0, 0.1); color: #ffdd00; }
-    &.action { background: rgba(0, 255, 136, 0.1); color: #00ff88; }
-    &.logic { background: rgba(255, 0, 170, 0.1); color: #ff00aa; }
+    &.input { background: rgba(76, 255, 76, 0.1); color: #4CFF4C; }
+    &.detection { background: rgba(0, 240, 255, 0.1); color: #00f0FF; }
+    &.processing { background: rgba(255, 255, 76, 0.1); color: #FFFF4C; }
+    &.action { background: rgba(255, 127, 76, 0.1); color: #FF7F4C; }
+    &.logic { background: rgba(220, 79, 220, 0.1); color: #DC4FDC; }
+    &.output { background: rgba(255, 76, 76, 0.1); color: #FF4C4C; }
   }
 
   .node-info {
@@ -2057,10 +2069,12 @@ $panel-header-height: 52px;
 
       svg { width: 14px; height: 14px; }
 
-      &.trigger { background: rgba(0, 240, 255, 0.1); color: #00f0ff; }
-      &.condition { background: rgba(255, 221, 0, 0.1); color: #ffdd00; }
-      &.action { background: rgba(0, 255, 136, 0.1); color: #00ff88; }
-      &.logic { background: rgba(255, 0, 170, 0.1); color: #ff00aa; }
+      &.input { background: rgba(76, 255, 76, 0.1); color: #4CFF4C; }
+      &.detection { background: rgba(0, 240, 255, 0.1); color: #00f0FF; }
+      &.processing { background: rgba(255, 255, 76, 0.1); color: #FFFF4C; }
+      &.action { background: rgba(255, 127, 76, 0.1); color: #FF7F4C; }
+      &.logic { background: rgba(220, 79, 220, 0.1); color: #DC4FDC; }
+      &.output { background: rgba(255, 76, 76, 0.1); color: #FF4C4C; }
     }
 
     &:hover {
@@ -2142,10 +2156,12 @@ $panel-header-height: 52px;
 
     svg { width: 18px; height: 18px; }
 
-    &.trigger { background: rgba(0, 240, 255, 0.15); color: #00f0ff; }
-    &.condition { background: rgba(255, 221, 0, 0.15); color: #ffdd00; }
-    &.action { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
-    &.logic { background: rgba(255, 0, 170, 0.15); color: #ff00aa; }
+    &.input { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
+    &.detection { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
+    &.processing { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
+    &.action { background: rgba(255, 127, 76, 0.15); color: #FF7F4C; }
+    &.logic { background: rgba(220, 79, 220, 0.15); color: #DC4FDC; }
+    &.output { background: rgba(255, 76, 76, 0.15); color: #FF4C4C; }
   }
 
   .panel-title-text {
