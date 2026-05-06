@@ -1,10 +1,10 @@
 # CogniFlow 规则引擎 - 项目入口
 
-> **文档版本：** v2.0
+> **文档版本：** v2.1
 > **创建时间：** 2026-05-06
-> **最后更新：** 2026-05-06
+> **最后更新：** 2026-05-07
 > **Phase 1-6 状态：** ✅ 全部完成（Kahn拓扑排序 + 层内并行，47测试通过）
-> **Phase A-E 状态：** ✅ Phase A-D 已完成，Phase E 验证中
+> **Phase A-G 状态：** ✅ 全部完成
 > **相关文档：** `rule-engine-redesign-v2.md`（前端重构详细设计）
 
 ---
@@ -136,9 +136,9 @@ docs/research/
 | **Phase B** | 前端节点样式重构 | ComfyUI 风格自定义节点组件 | ✅ 完成 |
 | **Phase C** | 节点内嵌配置控件 | 动态渲染 slider/dropdown/checkbox 等 | ✅ 完成 |
 | **Phase D** | 属性面板完善 | 动态表单 + 变量绑定 + 执行状态 | ✅ 完成 |
-| **Phase E** | 交互完善 | 复制粘贴 + 撤销重做(20步) + 右键菜单 | 🔄 验证中 |
-| **Phase F** | 变量系统 | 变量 CRUD 面板 + 表达式求值 | ⏳ 未开始 |
-| **Phase G** | 优化增强 | Toast 通知 + MiniMap 彩色节点点 | ⏳ 未开始 |
+| **Phase E** | 交互完善 | 复制粘贴 + 撤销重做(20步) + 右键菜单 | ✅ 完成 |
+| **Phase F** | 变量系统 | Pinia Store + 表达式工具 + VariablePanel | ✅ 完成 |
+| **Phase G** | 优化增强 | Toast 组件 + MiniMap 彩色节点 | ✅ 完成 |
 
 ---
 
