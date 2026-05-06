@@ -113,6 +113,41 @@
             </select>
           </template>
 
+          <!-- Textarea -->
+          <template v-else-if="schema.widget === 'textarea'">
+            <textarea
+              :value="nodeConfig[key]"
+              @input="updateConfig(key, ($event.target as HTMLTextAreaElement).value)"
+              class="textarea-input"
+              :placeholder="schema.description || ''"
+              rows="2"
+            ></textarea>
+          </template>
+
+          <!-- Code -->
+          <template v-else-if="schema.widget === 'code'">
+            <textarea
+              :value="nodeConfig[key]"
+              @input="updateConfig(key, ($event.target as HTMLTextAreaElement).value)"
+              class="code-input"
+              :placeholder="schema.description || ''"
+              rows="2"
+            ></textarea>
+          </template>
+
+          <!-- Checkbox -->
+          <template v-else-if="schema.widget === 'checkbox'">
+            <label class="checkbox-wrapper">
+              <input
+                type="checkbox"
+                :checked="nodeConfig[key]"
+                @change="updateConfig(key, ($event.target as HTMLInputElement).checked)"
+                class="checkbox-input"
+              />
+              <span class="checkbox-label">{{ schema.description || '' }}</span>
+            </label>
+          </template>
+
           <!-- Text / Default -->
           <template v-else>
             <input
@@ -123,8 +158,34 @@
               :placeholder="schema.description || ''"
             />
           </template>
+
+          <!-- 变量绑定按钮 -->
+          <button
+            v-if="schema.widget !== 'checkbox'"
+            class="var-bind-btn"
+            @click.stop="toggleVarMenu(key)"
+            title="绑定变量"
+          >📎</button>
+
+          <!-- 变量下拉菜单 -->
+          <div
+            v-if="activeVarMenu === key && variables.length > 0"
+            class="var-dropdown"
+          >
+            <div
+              v-for="v in variables"
+              :key="v.name"
+              class="var-option"
+              @click="bindVariable(key, v.name)"
+            >{{ formatVarRef(v.name) }}</div>
+          </div>
         </div>
       </div>
+    </div>
+
+    <!-- 底部配置摘要 -->
+    <div class="node-footer" v-if="configSummary">
+      <span class="summary-text">{{ configSummary }}</span>
     </div>
 
     <!-- 端口区域 - 左进右出 -->
@@ -162,7 +223,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject } from 'vue'
+import { computed, inject, ref } from 'vue'
 import {
   InputIcon,
   DetectionIcon,
@@ -251,6 +312,64 @@ const nodeConfig = computed(() => {
 
 // 可用模型（model-select用）
 const availableModels = inject<Array<{ id: number; name: string }>>('availableModels', [])
+
+// 可用变量列表（从父组件注入）
+interface Variable {
+  name: string
+  type: string
+}
+const variables = inject<Variable[]>('variables', [])
+
+// 变量绑定菜单状态
+const activeVarMenu = ref<string | null>(null)
+
+function toggleVarMenu(key: string) {
+  activeVarMenu.value = activeVarMenu.value === key ? null : key
+}
+
+function bindVariable(key: string, varName: string) {
+  // 将变量插入到当前字段值中
+  const currentValue = nodeConfig.value[key] || ''
+  const varRef = `{{${varName}}}`
+  // 如果已有变量引用则替换，否则追加
+  const newValue = currentValue
+    ? currentValue + varRef
+    : varRef
+  updateConfig(key, newValue)
+  activeVarMenu.value = null
+}
+
+// 格式化变量引用显示
+function formatVarRef(name: string) {
+  return `{{${name}}}`
+}
+
+// 底部配置摘要
+const configSummary = computed(() => {
+  const parts: string[] = []
+  const schema = props.data.configSchema || {}
+  const config = nodeConfig.value
+
+  // 关键配置项：model_id, confidence, threshold 等
+  const summaryKeys = ['model_id', 'confidence', 'iou_threshold', 'max_detections', 'device',
+                        'interval_ms', 'delay_ms', 'expression', 'method', 'url']
+
+  for (const key of summaryKeys) {
+    if (schema[key] && config[key] !== undefined) {
+      const val = config[key]
+      const label = schema[key].title || key
+      if (val !== '' && val !== null && val !== undefined) {
+        // 截断过长值
+        const displayVal = String(val).length > 12
+          ? String(val).slice(0, 10) + '...'
+          : String(val)
+        parts.push(`${label}: ${displayVal}`)
+      }
+    }
+  }
+
+  return parts.slice(0, 3).join(' | ') // 最多显示3项
+})
 
 // 更新配置
 function updateConfig(key: string, value: any) {
@@ -422,6 +541,120 @@ function updateConfig(key: string, value: any) {
 
 .select-input {
   cursor: pointer;
+}
+
+/* Textarea / Code */
+.textarea-input,
+.code-input {
+  flex: 1;
+  width: 100%;
+  background: #1a1a24;
+  border: 1px solid #3a3a4a;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: #e0e0e0;
+  font-family: monospace;
+  resize: vertical;
+  min-height: 40px;
+}
+
+.code-input {
+  background: #0a0a12;
+  min-height: 36px;
+}
+
+.textarea-input:focus,
+.code-input:focus {
+  outline: none;
+  border-color: #00f0ff;
+}
+
+/* Checkbox */
+.checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.checkbox-input {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: #00f0ff;
+}
+
+.checkbox-label {
+  font-size: 11px;
+  color: #aaa;
+}
+
+/* 变量绑定按钮 */
+.var-bind-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  color: #888;
+  flex-shrink: 0;
+}
+
+.var-bind-btn:hover {
+  background: #3a3a4a;
+  color: #00f0ff;
+}
+
+/* 变量下拉菜单 */
+.var-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: #2a2a3a;
+  border: 1px solid #3a3a4a;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  min-width: 120px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.var-option {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-family: monospace;
+  color: #00f0ff;
+  cursor: pointer;
+}
+
+.var-option:hover {
+  background: #3a3a4a;
+}
+
+.field-control {
+  position: relative;
+  flex-wrap: wrap;
+}
+
+/* 底部配置摘要 */
+.node-footer {
+  padding: 4px 12px;
+  background: #16161e;
+  border-top: 1px solid #2a2a3a;
+  border-radius: 0 0 8px 8px;
+}
+
+.summary-text {
+  font-size: 10px;
+  color: #777;
+  font-family: monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
 }
 
 /* 端口区域 */
