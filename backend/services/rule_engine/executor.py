@@ -1,379 +1,610 @@
 # -*- coding: utf-8 -*-
-"""规则图执行器 - 执行规则图的核心引擎。"""
+"""规则图执行器 - Kahn 拓扑排序 + 层内并行执行。
+按设计文档 phase2-execution-engine.md 实现。
+"""
 import asyncio
 import json
 from collections import defaultdict
 from datetime import datetime
-from typing import Optional, Dict, List, Any
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.database import ExecutionHistory, NodeExecutionLog
-from .nodes.base import BaseNode, ExecutionContext, NodeStatus, NodeResult
-from .registry import NodeRegistry, init_builtin_executors
-
-
-class ExecutionError(Exception):
-    """执行异常。"""
-    pass
+from .exceptions import CycleError, ExecutorError, ValidationError
+from .nodes.base import BaseNode, ExecutionContext, NodeStatus
+from .registry import NodeRegistry, get_registry
 
 
 class RuleGraphExecutor:
-    """规则图执行器 - 负责执行规则图。
+    """规则图执行引擎 - 负责图的解析、调度和执行。
 
-    使用异步遍历执行图节点，支持条件分支和并行执行。
+    使用 Kahn 拓扑排序算法实现节点调度，同层节点并行执行。
     """
 
-    def __init__(self, db_session=None):
+    # 保存所有进行中的执行上下文（用于取消操作）
+    _active_executions: Dict[int, ExecutionContext] = {}
+
+    def __init__(self, db=None, ws_manager=None):
         """初始化执行器。
 
         Args:
-            db_session: 数据库会话（可选）
+            db: 数据库会话
+            ws_manager: WebSocket 管理器
         """
-        self.db = db_session
-        self.registry: NodeRegistry = init_builtin_executors()
+        self.db = db
+        self.ws_manager = ws_manager
 
-    async def execute(
+    # ============================================================
+    # Kahn 拓扑排序
+    # ============================================================
+
+    def build_dependency_graph(
         self,
-        graph_data: dict,
-        execution_id: Optional[int] = None,
-        trigger_type: str = "manual",
-        trigger_data: dict = None,
-    ) -> dict:
-        """执行规则图。
+        nodes: Dict[str, Any],
+        edges: List[Dict[str, Any]]
+    ) -> Tuple[Dict[str, List[str]], Dict[str, int]]:
+        """从节点和边构建依赖图。
 
         Args:
-            graph_data: 图数据，包含 nodes, edges, variables
-            execution_id: 执行记录ID（用于数据库记录）
-            trigger_type: 触发类型 (yolo/timer/manual/http)
-            trigger_data: 触发数据（如 YOLO 检测结果）
+            nodes: 节点字典，key 为节点 ID
+            edges: 边列表
 
         Returns:
-            执行结果字典
+            (graph, in_degree) 元组
+            - graph: 邻接表，graph[source] = [targets...]
+            - in_degree: 入度表，node_id -> 入度数量
         """
-        context = ExecutionContext(
-            execution_id=execution_id,
-            trigger_data=trigger_data or {},
-        )
+        graph = defaultdict(list)  # source -> [targets]
+        in_degree = defaultdict(int)  # node -> in_degree
 
-        # 加载变量
-        variables = graph_data.get("variables", {})
-        for key, value in variables.items():
-            context.set_var(key, value)
+        # 初始化所有节点的入度为 0
+        for node_id in nodes:
+            in_degree[node_id] = 0
 
-        nodes = graph_data.get("nodes", [])
-        edges = graph_data.get("edges", [])
-
-        if not nodes:
-            return {
-                "status": "failed",
-                "error": "规则图为空",
-            }
-
-        # 构建节点实例映射
-        node_instances: Dict[str, BaseNode] = {}
-        for node_data in nodes:
-            node_type = node_data.get("type")
-            node_id = node_data.get("id")
-            node_config = node_data.get("data", {})
-
-            node_instance = self.registry.create_node(node_type, node_id, node_config)
-            if node_instance is None:
-                raise ExecutionError(f"未知节点类型: {node_type}")
-
-            node_instances[node_id] = node_instance
-
-        # 构建边映射: source_id -> [(target_id, target_handle)]
-        edge_map: Dict[str, list] = defaultdict(list)
+        # 从边构建依赖关系
         for edge in edges:
             source = edge.get("source")
             target = edge.get("target")
-            source_handle = edge.get("source_handle")
-            target_handle = edge.get("target_handle")
-            edge_map[source].append({
-                "target": target,
-                "source_handle": source_handle,
-                "target_handle": target_handle,
-            })
+            if not source or not target:
+                continue
+            # target 依赖 source（需要先执行 source）
+            graph[source].append(target)
+            in_degree[target] += 1
 
-        # 查找触发器节点（起始节点）
-        trigger_nodes = [
-            node_id for node_id, node in node_instances.items()
-            if node.category.value == "trigger"
-        ]
+        return dict(graph), dict(in_degree)
 
-        if not trigger_nodes:
-            raise ExecutionError("规则图没有触发器节点")
+    def topological_sort_levels(
+        self,
+        nodes: Dict[str, Any],
+        edges: List[Dict[str, Any]]
+    ) -> List[List[str]]:
+        """Kahn 算法拓扑排序，返回按层级分组的节点列表。
 
-        # 执行图遍历
-        try:
-            result = await self._execute_from_nodes(
-                trigger_nodes,
-                node_instances,
-                edge_map,
-                context,
-            )
+        同一层内的节点没有依赖关系，可以并行执行。
 
-            # 更新执行记录
-            if execution_id and self.db:
-                self._update_execution(
-                    execution_id,
-                    status="completed",
-                    result=result,
-                    logs=context.logs,
+        Args:
+            nodes: 节点字典
+            edges: 边列表
+
+        Returns:
+            List of levels, each level is a list of node IDs
+            e.g., [["node_001"], ["node_002", "node_003"], ["node_004"]]
+            Level 0 的节点无依赖，最先执行;
+
+        Raises:
+            CycleError: 如果图中存在循环依赖
+        """
+        graph, in_degree = self.build_dependency_graph(nodes, edges)
+
+        all_nodes = set(nodes.keys())
+        remaining_in_degree = dict(in_degree)
+
+        levels: List[List[str]] = []
+        processed: Set[str] = set()
+
+        while True:
+            # 找到所有入度为 0 的节点（当前层）
+            current_level = [
+                node_id for node_id in all_nodes
+                if node_id not in processed and remaining_in_degree.get(node_id, 0) == 0
+            ]
+
+            if not current_level:
+                # 没有入度为 0 的节点，检查是否所有节点都已处理
+                if len(processed) == len(all_nodes):
+                    break
+                # 否则说明存在环
+                unprocessed = all_nodes - processed
+                cycle_info = self._find_cycle_nodes(graph, unprocessed)
+                raise CycleError(
+                    f"规则图存在循环依赖: {' -> '.join(cycle_info[:5])}...",
+                    cycle_nodes=cycle_info
                 )
 
-            return {
+            levels.append(current_level)
+            processed.update(current_level)
+
+            # 更新下游节点的入度
+            for node_id in current_level:
+                for dependent in graph.get(node_id, []):
+                    remaining_in_degree[dependent] -= 1
+
+        return levels
+
+    def _find_cycle_nodes(
+        self,
+        graph: Dict[str, List[str]],
+        remaining: Set[str]
+    ) -> List[str]:
+        """从剩余节点中用 DFS 检测环。
+
+        Args:
+            graph: 邻接表
+            remaining: 还未处理的节点集合
+
+        Returns:
+            环中的节点列表
+        """
+        if not remaining:
+            return []
+
+        # DFS 检测环
+        visited: Set[str] = set()
+        rec_stack: Set[str] = set()
+        path: List[str] = []
+
+        def dfs(node: str) -> Optional[List[str]]:
+            visited.add(node)
+            rec_stack.add(node)
+            path.append(node)
+
+            for neighbor in graph.get(node, []):
+                if neighbor not in visited:
+                    result = dfs(neighbor)
+                    if result:
+                        return result
+                elif neighbor in rec_stack:
+                    # 找到环
+                    cycle_start = path.index(neighbor)
+                    return path[cycle_start:] + [neighbor]
+
+            path.pop()
+            rec_stack.remove(node)
+            return None
+
+        for node in remaining:
+            if node not in visited:
+                result = dfs(node)
+                if result:
+                    return result
+
+        return list(remaining)
+
+    # ============================================================
+    # 主执行流程
+    # ============================================================
+
+    @classmethod
+    def register_execution(cls, execution_id: int, context: ExecutionContext):
+        """注册执行上下文（用于取消操作）。"""
+        cls._active_executions[execution_id] = context
+
+    @classmethod
+    def unregister_execution(cls, execution_id: int):
+        """注销执行上下文。"""
+        cls._active_executions.pop(execution_id, None)
+
+    @classmethod
+    def cancel_execution(cls, execution_id: int) -> bool:
+        """请求取消指定执行。
+
+        Returns:
+            True 如果执行存在并已请求取消，False 如果执行不存在
+        """
+        context = cls._active_executions.get(execution_id)
+        if context:
+            context.request_cancel()
+            return True
+        return False
+
+    async def execute(
+        self,
+        graph_data: Dict[str, Any],
+        execution_id: int,
+        trigger_type: str = "manual",
+        trigger_data: Dict[str, Any] = None
+    ) -> Dict[str, Any]:
+        """执行规则图。
+
+        Args:
+            graph_data: 规则图数据（nodes, edges, variables）
+            execution_id: 执行记录 ID
+            trigger_type: 触发类型
+            trigger_data: 触发时携带的数据
+
+        Returns:
+            执行结果字典
+
+        Raises:
+            ValidationError: 规则图校验失败
+            CycleError: 规则图存在循环依赖
+            ExecutorError: 节点执行失败
+        """
+        trigger_data = trigger_data or {}
+
+        # 解析图数据
+        nodes = graph_data.get("nodes", {})
+        edges = graph_data.get("edges", [])
+        variables = graph_data.get("variables", {})
+
+        if not nodes:
+            raise ValidationError("规则图为空")
+
+        # 拓扑排序
+        try:
+            levels = self.topological_sort_levels(nodes, edges)
+        except CycleError:
+            raise
+
+        # 创建执行上下文
+        context = ExecutionContext(
+            execution_id=execution_id,
+            trigger_type=trigger_type,
+            trigger_data=trigger_data,
+            node_results={},
+            node_status={},
+            variables=dict(variables),
+            config={"nodes": nodes},
+            cancelled=False,
+            ws_manager=self.ws_manager
+        )
+
+        # 注册执行上下文
+        self.register_execution(execution_id, context)
+
+        # 更新执行记录状态
+        await self._update_execution_status(execution_id, "running")
+
+        try:
+            total_levels = len(levels)
+            total_nodes = sum(len(level) for level in levels)
+
+            # 执行每一层
+            for level_idx, level in enumerate(levels):
+                # 检查是否取消
+                if context.is_cancelled():
+                    await self._handle_cancellation(execution_id, context)
+                    return {
+                        "status": "cancelled",
+                        "cancelled_at": datetime.now().isoformat(),
+                        "completed_nodes": sum(len(levels[i]) for i in range(level_idx)),
+                        "total_nodes": total_nodes
+                    }
+
+                # 推送进度
+                await self._broadcast_progress(
+                    execution_id,
+                    level_idx,
+                    total_levels,
+                    len(level),
+                    total_nodes
+                )
+
+                # 并行执行当前层
+                await self._execute_level(level, context)
+
+            # 全部完成
+            result = {
                 "status": "completed",
-                "result": result,
-                "logs": context.logs,
+                "completed_at": datetime.now().isoformat(),
+                "node_results": context.node_results
             }
+
+            await self._update_execution_status(execution_id, "completed", result)
+            await self._broadcast_complete(execution_id, result)
+
+            return result
 
         except Exception as e:
-            # 更新执行记录
-            if execution_id and self.db:
-                self._update_execution(
-                    execution_id,
-                    status="failed",
-                    result={"error": str(e)},
-                    logs=context.logs,
-                )
+            await self._handle_execution_error(execution_id, context, e)
+            raise
+        finally:
+            # 确保注销
+            self.unregister_execution(execution_id)
 
-            return {
-                "status": "failed",
-                "error": str(e),
-                "logs": context.logs,
-            }
-
-    async def _execute_from_nodes(
+    async def _execute_level(
         self,
-        node_ids: List[str],
-        node_instances: Dict[str, BaseNode],
-        edge_map: Dict[str, list],
-        context: ExecutionContext,
-        input_data: dict = None,
-    ) -> dict:
-        """从指定节点开始执行。
+        level: List[str],
+        context: ExecutionContext
+    ):
+        """执行同一层的所有节点（并行）。"""
+        tasks = [
+            self._execute_node(node_id, context)
+            for node_id in level
+        ]
 
-        Args:
-            node_ids: 起始节点ID列表
-            node_instances: 节点实例映射
-            edge_map: 边映射
-            context: 执行上下文
-            input_data: 传递给起始节点的输入数据
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        Returns:
-            执行结果
-        """
-        results = {}
+        # 检查是否有失败
+        for node_id, result in zip(level, results):
+            if isinstance(result, Exception):
+                context.set_node_status(node_id, "failed")
 
-        for node_id in node_ids:
-            node_result = await self._execute_node_recursive(
-                node_id,
-                node_instances,
-                edge_map,
-                context,
-                input_data or {},
-            )
-            results[node_id] = node_result
-
-        return results
-
-    async def _execute_node_recursive(
+    async def _execute_node(
         self,
         node_id: str,
-        node_instances: Dict[str, BaseNode],
-        edge_map: Dict[str, list],
-        context: ExecutionContext,
-        input_data: dict,
-    ) -> dict:
-        """递归执行节点及其下游节点。
+        context: ExecutionContext
+    ):
+        """执行单个节点。"""
+        # 检查是否取消
+        if context.is_cancelled():
+            context.set_node_status(node_id, "cancelled")
+            return
 
-        Args:
-            node_id: 当前节点ID
-            node_instances: 节点实例映射
-            edge_map: 边映射
-            context: 执行上下文
-            input_data: 输入数据
+        # 获取节点信息
+        node = context.config.get("nodes", {}).get(node_id)
+        if not node:
+            raise ExecutorError(f"节点 {node_id} 不存在", node_id=node_id)
 
-        Returns:
-            节点执行结果
-        """
-        node = node_instances.get(node_id)
-        if node is None:
-            return {"status": "failed", "error": f"节点不存在: {node_id}"}
+        node_type = node.get("type")
+        node_data = node.get("data", {})
+        params = node_data.get("params", {})
+        inputs_config = node_data.get("inputs", {})
 
-        # 记录节点执行日志
-        node_log_id = None
-        if self.db and context.execution_id:
-            node_log_id = self._create_node_log(
+        # 更新状态为 running
+        context.set_node_status(node_id, "running")
+        await self._broadcast_node_started(context.execution_id, node_id, node_type)
+
+        try:
+            # 解析输入数据
+            inputs = self._resolve_inputs(inputs_config, context)
+
+            # 合并默认参数
+            merged_inputs = {**inputs, **params}
+
+            # 获取执行器
+            registry = get_registry()
+            executor = registry.get(node_type)
+
+            if not executor:
+                raise ExecutorError(f"未知的节点类型: {node_type}", node_id=node_id, node_type=node_type)
+
+            # 校验输入
+            is_valid, error_msg = executor.validate_inputs(merged_inputs)
+            if not is_valid:
+                raise ExecutorError(
+                    f"输入校验失败: {error_msg}",
+                    node_id=node_id,
+                    node_type=node_type
+                )
+
+            # 执行（所有 BaseExecutor.execute 必须是 async）
+            outputs = await executor.execute(merged_inputs, context)
+
+            # 保存结果
+            context.set_node_result(node_id, outputs)
+            context.set_node_status(node_id, "completed")
+
+            # 推送节点完成
+            await self._broadcast_node_executed(
                 context.execution_id,
                 node_id,
-                node.node_type,
-                "running",
-                input_data,
+                "success",
+                outputs
             )
 
-        # 执行节点
-        node_result = await node.execute(context, input_data)
+        except Exception as e:
+            context.set_node_status(node_id, "failed")
+            await self._broadcast_node_failed(context.execution_id, node_id, str(e))
 
-        # 更新节点执行日志
-        if self.db and node_log_id:
-            self._update_node_log(
-                node_log_id,
-                status=node_result.status.value,
-                output_data=node_result.output_data,
-                error_message=node_result.error_message,
-            )
+            if isinstance(e, ExecutorError):
+                raise
 
-        # 根据节点类型决定下游执行
-        if node_result.status == NodeStatus.FAILED:
-            return {
-                "status": "failed",
-                "error": node_result.error_message,
-                "output": node_result.output_data,
-            }
+            raise ExecutorError(
+                f"节点执行失败: {str(e)}",
+                node_id=node_id,
+                node_type=node_type
+            ) from e
 
-        # 获取下游节点
-        downstream = edge_map.get(node_id, [])
-        if not downstream:
-            return {
-                "status": "completed",
-                "output": node_result.output_data,
-            }
+    def _resolve_inputs(
+        self,
+        inputs_config: Dict[str, Any],
+        context: ExecutionContext
+    ) -> Dict[str, Any]:
+        """解析节点的输入数据。
 
-        # 处理下游节点
-        # 根据节点类型决定执行策略
-        if node.category.value == "condition":
-            # 条件节点：根据输出数据选择分支
-            condition_result = node_result.output_data.get("result", False)
-            branch = "true" if condition_result else "false"
+        从已完成的节点结果或默认值中获取输入。
+        """
+        inputs = {}
 
-            # 找到对应分支的边
-            for edge in downstream:
-                if edge.get("target_handle") == branch or edge.get("source_handle") == branch:
-                    return await self._execute_node_recursive(
-                        edge["target"],
-                        node_instances,
-                        edge_map,
-                        context,
-                        node_result.output_data,
-                    )
-        else:
-            # 其他节点：执行所有下游
-            all_results = {}
-            for edge in downstream:
-                result = await self._execute_node_recursive(
-                    edge["target"],
-                    node_instances,
-                    edge_map,
-                    context,
-                    node_result.output_data,
-                )
-                all_results[edge["target"]] = result
+        for port_name, config in inputs_config.items():
+            if not isinstance(config, dict):
+                config = {}
+            # 优先从连接的节点获取
+            if config.get("node_id"):
+                source_node = config["node_id"]
+                source_output = config.get("output", "result")
+                inputs[port_name] = context.get_node_result(source_node, source_output)
+            # 其次使用默认值
+            elif "value" in config:
+                inputs[port_name] = config["value"]
+            # 否则为 None
 
-            return {
-                "status": "completed",
-                "output": node_result.output_data,
-                "downstream": all_results,
-            }
+        return inputs
 
-        return {
-            "status": "completed",
-            "output": node_result.output_data,
-        }
+    # ============================================================
+    # WebSocket 广播
+    # ============================================================
 
-    def _create_node_log(
+    async def _broadcast_node_started(
         self,
         execution_id: int,
         node_id: str,
-        node_type: str,
-        status: str,
-        input_data: dict,
-    ) -> Optional[int]:
-        """创建节点执行日志记录。"""
-        try:
-            log = NodeExecutionLog(
-                execution_id=execution_id,
-                node_id=node_id,
-                node_type=node_type,
-                status=status,
-                input_data_json=json.dumps(input_data),
-            )
-            self.db.add(log)
-            self.db.commit()
-            self.db.refresh(log)
-            return log.id
-        except Exception:
-            return None
+        node_type: str
+    ):
+        """广播节点开始执行。"""
+        if self.ws_manager:
+            await self.ws_manager.broadcast({
+                "type": "node_started",
+                "execution_id": execution_id,
+                "node_id": node_id,
+                "node_type": node_type,
+                "timestamp": datetime.now().isoformat()
+            })
 
-    def _update_node_log(
+    async def _broadcast_node_executed(
         self,
-        log_id: int,
+        execution_id: int,
+        node_id: str,
         status: str,
-        output_data: dict = None,
-        error_message: str = None,
-    ) -> None:
-        """更新节点执行日志。"""
-        try:
-            log = self.db.query(NodeExecutionLog).filter(NodeExecutionLog.id == log_id).first()
-            if log:
-                log.status = status
-                log.end_time = datetime.utcnow()
-                if output_data:
-                    log.output_data_json = json.dumps(output_data)
-                if error_message:
-                    log.error_message = error_message
-                self.db.commit()
-        except Exception:
-            pass
+        outputs: Dict[str, Any]
+    ):
+        """广播节点执行完成。"""
+        if self.ws_manager:
+            await self.ws_manager.broadcast({
+                "type": "node_executed",
+                "execution_id": execution_id,
+                "node_id": node_id,
+                "status": status,
+                "outputs": outputs,
+                "timestamp": datetime.now().isoformat()
+            })
 
-    def _update_execution(
+    async def _broadcast_node_failed(
+        self,
+        execution_id: int,
+        node_id: str,
+        error: str
+    ):
+        """广播节点执行失败。"""
+        if self.ws_manager:
+            await self.ws_manager.broadcast({
+                "type": "node_failed",
+                "execution_id": execution_id,
+                "node_id": node_id,
+                "error": error,
+                "timestamp": datetime.now().isoformat()
+            })
+
+    async def _broadcast_progress(
+        self,
+        execution_id: int,
+        current_level: int,
+        total_levels: int,
+        nodes_in_level: int,
+        total_nodes: int
+    ):
+        """广播执行进度。"""
+        if self.ws_manager:
+            completed_nodes = sum(len(levels[i]) for i in range(current_level))
+
+            await self.ws_manager.broadcast({
+                "type": "execution_progress",
+                "execution_id": execution_id,
+                "progress": int((current_level + 1) / total_levels * 100) if total_levels > 0 else 0,
+                "current_level": current_level + 1,
+                "total_levels": total_levels,
+                "completed_nodes": completed_nodes,
+                "total_nodes": total_nodes,
+                "timestamp": datetime.now().isoformat()
+            })
+
+    async def _broadcast_complete(
+        self,
+        execution_id: int,
+        result: Dict[str, Any]
+    ):
+        """广播执行完成。"""
+        if self.ws_manager:
+            await self.ws_manager.broadcast({
+                "type": "execution_complete",
+                "execution_id": execution_id,
+                "status": result.get("status", "completed"),
+                "result": result,
+                "timestamp": datetime.now().isoformat()
+            })
+
+    # ============================================================
+    # 数据库操作
+    # ============================================================
+
+    async def _update_execution_status(
         self,
         execution_id: int,
         status: str,
-        result: dict,
-        logs: list,
-    ) -> None:
-        """更新执行记录。"""
-        try:
-            execution = self.db.query(ExecutionHistory).filter(ExecutionHistory.id == execution_id).first()
-            if execution:
-                execution.status = status
-                execution.end_time = datetime.utcnow()
-                execution.result_json = json.dumps(result)
-                execution.logs_json = json.dumps(logs)
-                self.db.commit()
-        except Exception:
-            pass
-
-    def create_execution_record(
-        self,
-        graph_id: int,
-        trigger_type: str,
-        trigger_data: dict = None,
-    ) -> Optional[int]:
-        """创建执行记录。
-
-        Args:
-            graph_id: 规则图ID
-            trigger_type: 触发类型
-            trigger_data: 触发数据
-
-        Returns:
-            执行记录ID
-        """
+        result: Dict[str, Any] = None
+    ):
+        """更新执行记录状态。"""
         if not self.db:
-            return None
+            return
 
-        try:
-            execution = ExecutionHistory(
-                graph_id=graph_id,
-                status="running",
-                trigger_type=trigger_type,
-                trigger_data_json=json.dumps(trigger_data) if trigger_data else None,
-            )
-            self.db.add(execution)
+        record = self.db.query(ExecutionHistory).filter(
+            ExecutionHistory.id == execution_id
+        ).first()
+
+        if record:
+            record.status = status
+
+            if status == "running" and not record.start_time:
+                record.start_time = datetime.now()
+
+            if status in ("completed", "failed", "cancelled"):
+                record.end_time = datetime.now()
+                if record.start_time:
+                    delta = record.end_time - record.start_time
+                    # 尝试更新 logs_json
+                    pass
+
+            if result:
+                record.result_json = json.dumps(result, default=str)
+
             self.db.commit()
-            self.db.refresh(execution)
-            return execution.id
-        except Exception:
-            return None
+
+    async def _handle_cancellation(
+        self,
+        execution_id: int,
+        context: ExecutionContext
+    ):
+        """处理执行取消。"""
+        await self._update_execution_status(execution_id, "cancelled")
+
+        if self.ws_manager:
+            await self.ws_manager.broadcast({
+                "type": "execution_complete",
+                "execution_id": execution_id,
+                "status": "cancelled",
+                "message": "执行已被用户取消",
+                "node_results": context.node_results,
+                "timestamp": datetime.now().isoformat()
+            })
+
+    async def _handle_execution_error(
+        self,
+        execution_id: int,
+        context: ExecutionContext,
+        error: Exception
+    ):
+        """处理执行错误。"""
+        error_message = str(error)
+
+        if self.db:
+            record = self.db.query(ExecutionHistory).filter(
+                ExecutionHistory.id == execution_id
+            ).first()
+
+            if record:
+                record.status = "failed"
+                record.end_time = datetime.now()
+                record.result_json = json.dumps({
+                    "error": error_message,
+                    "node_results": context.node_results
+                }, default=str)
+                self.db.commit()
+
+        if self.ws_manager:
+            await self.ws_manager.broadcast({
+                "type": "execution_complete",
+                "execution_id": execution_id,
+                "status": "failed",
+                "error": error_message,
+                "timestamp": datetime.now().isoformat()
+            })

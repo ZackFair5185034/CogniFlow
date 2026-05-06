@@ -101,6 +101,15 @@ class NodeRegistry:
         ]
 
 
+def get_registry() -> NodeRegistry:
+    """获取全局节点注册表实例。
+
+    Returns:
+        NodeRegistry 单例实例
+    """
+    return NodeRegistry()
+
+
 def init_builtin_executors() -> NodeRegistry:
     """初始化内置节点注册表。
 
