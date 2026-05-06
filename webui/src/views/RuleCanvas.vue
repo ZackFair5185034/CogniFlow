@@ -126,6 +126,45 @@
               </div>
             </div>
           </div>
+
+          <!-- 变量管理面板 -->
+          <div class="variables-section">
+            <div class="section-header" @click="showVariables = !showVariables">
+              <span class="section-title">📌 变量</span>
+              <span class="section-count">{{ variables.length }}</span>
+              <SvgIcon class="chevron" :class="{ expanded: showVariables }" name="chevron" />
+            </div>
+            <div v-show="showVariables" class="variables-list">
+              <div
+                v-for="(variable, index) in variables"
+                :key="index"
+                class="variable-item"
+              >
+                <input
+                  type="text"
+                  :value="variable.name"
+                  @input="updateVariable(index, 'name', ($event.target as HTMLInputElement).value)"
+                  class="var-name-input"
+                  placeholder="变量名"
+                />
+                <select
+                  :value="variable.type"
+                  @change="updateVariable(index, 'type', ($event.target as HTMLSelectElement).value)"
+                  class="var-type-select"
+                >
+                  <option value="STRING">STRING</option>
+                  <option value="NUMBER">NUMBER</option>
+                  <option value="BOOLEAN">BOOLEAN</option>
+                  <option value="IMAGE">IMAGE</option>
+                  <option value="BBOX">BBOX</option>
+                </select>
+                <button class="var-remove-btn" @click="removeVariable(index)" title="删除变量">×</button>
+              </div>
+              <button class="add-var-btn" @click="addVariable">
+                <SvgIcon name="plus" /> 添加变量
+              </button>
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -283,84 +322,89 @@
                 >
                   <label class="field-label">{{ schema.title || key }}</label>
 
-                  <!-- 字符串输入 -->
+                  <!-- 所有输入类型统一包装，确保 v-if/v-else-if 链完整 -->
                   <div class="field-input-wrapper">
-                    <input
-                      v-if="schema.type === 'string' && !schema.enum"
-                      type="text"
-                      :value="nodeConfig[key]"
-                      @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
-                      class="field-input"
-                      placeholder="请输入..."
-                    />
-                    <button
-                      class="var-btn"
-                      @click="showVariableMenu(key, $event)"
-                      title="插入变量"
-                    >📎</button>
-                  </div>
-
-                  <!-- 数字输入 -->
-                  <div class="field-input-wrapper">
-                    <input
-                      v-else-if="schema.type === 'number' || schema.type === 'integer'"
-                      type="number"
-                      :min="schema.minimum"
-                      :max="schema.maximum"
-                      :step="schema.type === 'integer' ? 1 : 0.1"
-                      :value="nodeConfig[key]"
-                      @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
-                      class="field-input"
-                    />
-                    <button
-                      class="var-btn"
-                      @click="showVariableMenu(key, $event)"
-                      title="插入变量"
-                    >📎</button>
-                  </div>
-
-                  <!-- 布尔选择 -->
-                  <select
-                    v-else-if="schema.type === 'boolean'"
-                    :value="String(nodeConfig[key])"
-                    @change="updateConfig(key, ($event.target as HTMLSelectElement).value === 'true')"
-                    class="field-select"
-                  >
-                    <option value="true">是</option>
-                    <option value="false">否</option>
-                  </select>
-
-                  <!-- 枚举选择 -->
-                  <select
-                    v-else-if="schema.enum"
-                    :value="nodeConfig[key]"
-                    @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
-                    class="field-select"
-                  >
-                    <option v-for="opt in schema.enum" :key="opt" :value="opt">{{ opt }}</option>
-                  </select>
-
-                  <!-- 数组输入 -->
-                  <div v-else-if="schema.type === 'array'" class="array-field">
-                    <div
-                      v-for="(item, idx) in (nodeConfig[key] || [])"
-                      :key="idx"
-                      class="array-item"
-                    >
+                    <!-- 字符串输入 -->
+                    <template v-if="schema.type === 'string' && !schema.enum">
                       <input
                         type="text"
-                        :value="item"
-                        @input="updateArrayItem(key, idx, ($event.target as HTMLInputElement).value)"
+                        :value="nodeConfig[key]"
+                        @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
+                        class="field-input"
+                        placeholder="请输入..."
+                      />
+                      <button
+                        class="var-btn"
+                        @click="showVariableMenu(key, $event)"
+                        title="插入变量"
+                      >📎</button>
+                    </template>
+
+                    <!-- 数字输入 -->
+                    <template v-else-if="schema.type === 'number' || schema.type === 'integer'">
+                      <input
+                        type="number"
+                        :min="schema.minimum"
+                        :max="schema.maximum"
+                        :step="schema.type === 'integer' ? 1 : 0.1"
+                        :value="nodeConfig[key]"
+                        @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
                         class="field-input"
                       />
-                      <button class="remove-btn" @click="removeArrayItem(key, idx)">
-                        <SvgIcon name="close" />
-                      </button>
-                    </div>
-                    <button class="add-item-btn" @click="addArrayItem(key)">
-                      <SvgIcon name="plus" />
-                      添加
-                    </button>
+                      <button
+                        class="var-btn"
+                        @click="showVariableMenu(key, $event)"
+                        title="插入变量"
+                      >📎</button>
+                    </template>
+
+                    <!-- 布尔选择 -->
+                    <template v-else-if="schema.type === 'boolean'">
+                      <select
+                        :value="String(nodeConfig[key])"
+                        @change="updateConfig(key, ($event.target as HTMLSelectElement).value === 'true')"
+                        class="field-select"
+                      >
+                        <option value="true">是</option>
+                        <option value="false">否</option>
+                      </select>
+                    </template>
+
+                    <!-- 枚举选择 -->
+                    <template v-else-if="schema.enum">
+                      <select
+                        :value="nodeConfig[key]"
+                        @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
+                        class="field-select"
+                      >
+                        <option v-for="opt in schema.enum" :key="opt" :value="opt">{{ opt }}</option>
+                      </select>
+                    </template>
+
+                    <!-- 数组输入 -->
+                    <template v-else-if="schema.type === 'array'">
+                      <div class="array-field">
+                        <div
+                          v-for="(item, idx) in (nodeConfig[key] || [])"
+                          :key="idx"
+                          class="array-item"
+                        >
+                          <input
+                            type="text"
+                            :value="item"
+                            @input="updateArrayItem(key, idx, ($event.target as HTMLInputElement).value)"
+                            class="field-input"
+                          />
+                          <button class="remove-btn" @click="removeArrayItem(key, idx)">
+                            <SvgIcon name="close" />
+                          </button>
+                        </div>
+                        <button class="add-item-btn" @click="addArrayItem(key)">
+                          <SvgIcon name="plus" />
+                          添加
+                        </button>
+                      </div>
+                    </template>
                   </div>
 
                   <span class="field-default" v-if="schema.default !== undefined">
@@ -500,18 +544,12 @@
     <div v-if="contextMenu.show" class="context-menu-overlay" @click="hideContextMenu" @contextmenu.prevent="hideContextMenu" />
 
     <!-- 变量绑定菜单 -->
-    <div
-      v-if="varMenu.show"
-      class="var-menu"
-      :style="{ left: varMenu.x + 'px', top: varMenu.y + 'px' }"
-      @click.stop
-    >
+    <div v-if="varMenu.show" class="var-menu" :style="{ left: varMenu.x + 'px', top: varMenu.y + 'px' }" @click.stop>
       <div class="var-menu-title">插入变量</div>
-      <div class="var-menu-item" @click="insertVariable('counter')">📌 counter</div>
-      <div class="var-menu-item" @click="insertVariable('timestamp')">📌 timestamp</div>
-      <div class="var-menu-item" @click="insertVariable('confidence')">📌 confidence</div>
-      <div class="var-menu-item" @click="insertVariable('image_path')">📌 image_path</div>
-      <div class="var-menu-item" @click="insertVariable('result_count')">📌 result_count</div>
+      <div v-if="variables.length === 0" class="var-menu-empty">暂无变量，请先在左侧添加</div>
+      <div v-for="v in variables" :key="v.name" class="var-menu-item" @click="insertVariable(v.name)">
+        📌 {{ v.name }} <span class="var-type-tag">{{ v.type }}</span>
+      </div>
     </div>
     <div v-if="varMenu.show" class="var-menu-overlay" @click="hideVariableMenu" />
   </div>
@@ -559,6 +597,9 @@ const edges = ref<any[]>([])
 const nodeDefinitions = ref<any[]>([])
 const selectedNode = ref<any>(null)
 const nodeConfig = ref<any>({})
+// 变量列表 - 支持的类型：STRING/NUMBER/BOOLEAN/IMAGE/BBOX
+const variables = ref<Array<{ name: string; type: string; defaultValue: any; description: string }>>([])
+const showVariables = ref(true)
 const isLoading = ref(false)
 const saving = ref(false)
 const executing = ref(false)
@@ -1119,6 +1160,19 @@ async function loadGraph() {
       animated: true,
       markerEnd: MarkerType.ArrowClosed
     }))
+
+    // 加载变量列表
+    try {
+      const vars = JSON.parse(graph.value.variables_json || '{}')
+      variables.value = Object.entries(vars).map(([name, config]: [string, any]) => ({
+        name,
+        type: config.type || 'STRING',
+        defaultValue: config.defaultValue || '',
+        description: config.description || ''
+      }))
+    } catch {
+      variables.value = []
+    }
   } catch (err) {
     console.error('加载规则图失败:', err)
     showToast('加载规则图失败', 'error')
@@ -1409,10 +1463,43 @@ function updateNodeData() {
   if (node) node.data = { ...nodeConfig.value }
 }
 
+// ============ 变量管理 ============
+function addVariable() {
+  const newVar = {
+    name: `var_${variables.value.length + 1}`,
+    type: 'STRING',
+    defaultValue: '',
+    description: ''
+  }
+  variables.value.push(newVar)
+  saveHistory()
+}
+
+function removeVariable(index: number) {
+  variables.value.splice(index, 1)
+  saveHistory()
+}
+
+function updateVariable(index: number, field: string, value: any) {
+  if (variables.value[index]) {
+    variables.value[index][field] = value
+  }
+}
+
 // 保存
 async function handleSave() {
   saving.value = true
   try {
+    // 构建变量 JSON
+    const varsObj: Record<string, any> = {}
+    for (const v of variables.value) {
+      varsObj[v.name] = {
+        type: v.type,
+        defaultValue: v.defaultValue,
+        description: v.description
+      }
+    }
+
     await ruleEngineApi.updateGraph(graphId.value, {
       nodes_json: JSON.stringify(nodes.value.map(n => ({
         id: n.id,
@@ -1426,7 +1513,8 @@ async function handleSave() {
         target: e.target,
         source_handle: e.sourceHandle,
         target_handle: e.targetHandle
-      })))
+      }))),
+      variables_json: JSON.stringify(varsObj)
     })
     // 生成并保存缩略图
     await captureAndSaveThumbnail()
@@ -1897,6 +1985,142 @@ $panel-header-height: 52px;
   flex: 1;
   overflow-y: auto;
   padding: 8px;
+}
+
+// 变量管理面板
+.variables-section {
+  margin-top: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--border-color, #3a3a5c);
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.2s;
+
+    &:hover {
+      background: #1a1a24;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #00f0ff;
+    }
+
+    .section-count {
+      font-size: 11px;
+      color: #888;
+      background: #2a2a3a;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+
+    .chevron {
+      width: 14px;
+      height: 14px;
+      margin-left: auto;
+      transition: transform 0.2s;
+
+      &.expanded {
+        transform: rotate(180deg);
+      }
+    }
+  }
+
+  .variables-list {
+    padding: 4px 0;
+  }
+
+  .variable-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+
+    .var-name-input {
+      flex: 1;
+      min-width: 0;
+      padding: 6px 8px;
+      background: #1a1a24;
+      border: 1px solid #3a3a5c;
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-size: 12px;
+
+      &:focus {
+        outline: none;
+        border-color: #00f0ff;
+      }
+    }
+
+    .var-type-select {
+      width: 80px;
+      padding: 6px 4px;
+      background: #1a1a24;
+      border: 1px solid #3a3a5c;
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-size: 11px;
+
+      &:focus {
+        outline: none;
+        border-color: #00f0ff;
+      }
+    }
+
+    .var-remove-btn {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: #888;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+
+      &:hover {
+        background: rgba(255, 76, 76, 0.2);
+        color: #ff4c4c;
+      }
+    }
+  }
+
+  .add-var-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    background: transparent;
+    border: 1px dashed #3a3a5c;
+    border-radius: 6px;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      border-color: #00f0ff;
+      color: #00f0ff;
+      background: rgba(0, 240, 255, 0.05);
+    }
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
 }
 
 .node-category {
@@ -2880,6 +3104,22 @@ $panel-header-height: 52px;
       background: var(--hover-bg, #2a2a4a);
       color: var(--accent, #00f0ff);
     }
+
+    .var-type-tag {
+      font-size: 10px;
+      padding: 1px 5px;
+      background: rgba(0, 240, 255, 0.15);
+      color: #00f0ff;
+      border-radius: 3px;
+      margin-left: 6px;
+    }
+  }
+
+  .var-menu-empty {
+    padding: 12px;
+    text-align: center;
+    font-size: 12px;
+    color: #888;
   }
 }
 
