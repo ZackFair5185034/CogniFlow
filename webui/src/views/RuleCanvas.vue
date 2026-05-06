@@ -1181,8 +1181,76 @@ function handlePaneClick() {
   selectedNode.value = null
 }
 
+// 端口类型兼容性检查
+const PORT_TYPES = ['IMAGE', 'BBOX', 'MASK', 'SCORES', 'TRIGGER', 'CONTROL', 'MODEL', 'ANY']
+
+function isPortCompatible(sourceType: string, targetType: string): boolean {
+  // ANY 可以连接任何类型
+  if (sourceType === 'ANY' || targetType === 'ANY') return true
+  // 相同类型可以连接
+  if (sourceType === targetType) return true
+  // TRIGGER 可以连接到 TRIGGER 或 CONTROL
+  if (sourceType === 'TRIGGER' && (targetType === 'TRIGGER' || targetType === 'CONTROL')) return true
+  // CONTROL 只能连接到 CONTROL
+  if (sourceType === 'CONTROL' && targetType === 'CONTROL') return true
+  return false
+}
+
+function getNodePortType(nodeId: string, handleId: string | null, isSource: boolean): string | null {
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (!node) return null
+  const ports = isSource ? node.outputs : node.inputs
+  if (!ports) return null
+  // handleId 可以是端口名或端口ID
+  if (handleId && ports[handleId]) {
+    return ports[handleId].type || 'ANY'
+  }
+  // 如果没有指定handle，返回第一个端口的类型
+  const firstKey = Object.keys(ports)[0]
+  return firstKey ? (ports[firstKey]?.type || 'ANY') : 'ANY'
+}
+
+function validateConnection(params: any): { valid: boolean; error?: string } {
+  const { source, target, sourceHandle, targetHandle } = params
+  
+  // 获取源节点和目标节点
+  const sourceNode = nodes.value.find(n => n.id === source)
+  const targetNode = nodes.value.find(n => n.id === target)
+  
+  if (!sourceNode || !targetNode) {
+    return { valid: false, error: '节点不存在' }
+  }
+  
+  // 禁止自己连接自己
+  if (source === target) {
+    return { valid: false, error: '不能连接到自己' }
+  }
+  
+  // 获取端口类型
+  const sourceType = getNodePortType(source, sourceHandle, true)
+  const targetType = getNodePortType(target, targetHandle, false)
+  
+  if (sourceType === null || targetType === null) {
+    return { valid: false, error: '端口定义缺失' }
+  }
+  
+  // 类型兼容性检查
+  if (!isPortCompatible(sourceType, targetType)) {
+    return { valid: false, error: `类型不兼容: ${sourceType} → ${targetType}` }
+  }
+  
+  return { valid: true }
+}
+
 // 连接
 function handleConnect(params: any) {
+  // 验证连接类型兼容性
+  const validation = validateConnection(params)
+  if (!validation.valid) {
+    showToast(validation.error || '连接失败', 'error')
+    return
+  }
+  
   addEdges([{
     ...params,
     type: 'smoothstep',
