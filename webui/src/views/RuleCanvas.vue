@@ -161,7 +161,7 @@
           @mousemove="handleCanvasMouseMove"
           @mouseup="handleCanvasMouseUp"
         >
-          <VueFlow
+            <VueFlow
             ref="vueFlowRef"
             v-model:nodes="nodes"
             v-model:edges="edges"
@@ -179,6 +179,9 @@
             @zoom="handleZoom"
             @nodes-change="handleNodesChange"
             @edges-change="handleEdgesChange"
+            @node-context-menu="(event: any, node: any) => handleContextMenu(event, node, 'node')"
+            @pane-context-menu="(event: any) => handleContextMenu(event, null, 'pane')"
+            @edge-context-menu="(event: any, edge: any) => handleContextMenu(event, edge, 'edge')"
             :pan-on-scroll="true"
             :zoom-on-scroll="true"
             :min-zoom="0.1"
@@ -427,11 +430,47 @@
         {{ toast.message }}
       </div>
     </transition>
+
+    <!-- 右键菜单 -->
+    <div
+      v-if="contextMenu.show"
+      class="context-menu"
+      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+      @contextmenu.prevent
+    >
+      <template v-if="contextMenu.targetType === 'node'">
+        <div class="context-menu-item" @click="handleContextAction('copy')">
+          <SvgIcon name="copy" /> 复制
+        </div>
+        <div class="context-menu-item" @click="handleContextAction('cut')">
+          <SvgIcon name="cut" /> 剪切
+        </div>
+        <div class="context-menu-item danger" @click="handleContextAction('delete')">
+          <SvgIcon name="delete" /> 删除
+        </div>
+        <div class="context-menu-divider" />
+      </template>
+      <template v-if="contextMenu.targetType === 'edge'">
+        <div class="context-menu-item danger" @click="handleContextAction('delete')">
+          <SvgIcon name="delete" /> 删除连线
+        </div>
+        <div class="context-menu-divider" />
+      </template>
+      <div class="context-menu-item" @click="handleContextAction('paste')">
+        <SvgIcon name="paste" /> 粘贴
+      </div>
+      <div class="context-menu-item" @click="handleContextAction('selectAll')">
+        <SvgIcon name="select" /> 全选
+      </div>
+    </div>
+
+    <!-- 点击其他区域隐藏右键菜单 -->
+    <div v-if="contextMenu.show" class="context-menu-overlay" @click="hideContextMenu" @contextmenu.prevent="hideContextMenu" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, markRaw, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, markRaw, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow, Position, MarkerType } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -490,6 +529,19 @@ const panY = ref(0)
 const zoomLevel = ref(1)
 const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
+
+// 复制粘贴
+const clipboard = ref<any[]>([])
+const clipboardMode = ref<'copy' | 'cut'>('copy')
+
+// 右键菜单
+const contextMenu = reactive({
+  show: false,
+  x: 0,
+  y: 0,
+  target: null as any,
+  targetType: null as 'node' | 'edge' | 'pane'
+})
 
 // 撤销/重做
 const historyStack = ref<{ nodes: any[], edges: any[] }[]>([])
@@ -585,6 +637,201 @@ function saveHistory() {
   }
 }
 
+// 键盘事件处理
+function handleKeyDown(event: KeyboardEvent) {
+  // 忽略输入框内的按键
+  const target = event.target as HTMLElement
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+    return
+  }
+
+  const isCtrl = event.ctrlKey || event.metaKey
+
+  // Ctrl+C: 复制
+  if (isCtrl && event.key === 'c') {
+    event.preventDefault()
+    handleCopy()
+    return
+  }
+
+  // Ctrl+X: 剪切
+  if (isCtrl && event.key === 'x') {
+    event.preventDefault()
+    handleCut()
+    return
+  }
+
+  // Ctrl+V: 粘贴
+  if (isCtrl && event.key === 'v') {
+    event.preventDefault()
+    handlePaste()
+    return
+  }
+
+  // Ctrl+Z: 撤销
+  if (isCtrl && event.key === 'z' && !event.shiftKey) {
+    event.preventDefault()
+    handleUndo()
+    return
+  }
+
+  // Ctrl+Y / Ctrl+Shift+Z: 重做
+  if (isCtrl && (event.key === 'y' || (event.key === 'z' && event.shiftKey))) {
+    event.preventDefault()
+    handleRedo()
+    return
+  }
+
+  // Delete / Backspace: 删除选中
+  if (event.key === 'Delete' || event.key === 'Backspace') {
+    event.preventDefault()
+    handleDelete()
+    return
+  }
+}
+
+// 复制
+function handleCopy() {
+  const selected = nodes.value.filter((n: any) => n.selected)
+  if (selected.length === 0) {
+    showToast('请先选择要复制的节点', 'info')
+    return
+  }
+  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
+  clipboardMode.value = 'copy'
+  showToast(`已复制 ${selected.length} 个节点`, 'info')
+}
+
+// 剪切
+function handleCut() {
+  const selected = nodes.value.filter((n: any) => n.selected)
+  if (selected.length === 0) {
+    showToast('请先选择要剪切的节点', 'info')
+    return
+  }
+  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
+  clipboardMode.value = 'cut'
+  // 立即删除
+  removeNodes(selected.map((n: any) => n.id))
+  edges.value = edges.value.filter((e: any) =>
+    !selected.some((n: any) => n.id === e.source || n.id === e.target)
+  )
+  selected.forEach((n: any) => {
+    const idx = nodes.value.findIndex((node: any) => node.id === n.id)
+    if (idx !== -1) nodes.value.splice(idx, 1)
+  })
+  showToast(`已剪切 ${selected.length} 个节点`, 'info')
+}
+
+// 粘贴
+function handlePaste() {
+  if (clipboard.value.length === 0) {
+    showToast('剪贴板为空', 'info')
+    return
+  }
+
+  const container = flowContainer.value
+  if (!container) return
+
+  const rect = container.getBoundingClientRect()
+  const offsetX = 50
+  const offsetY = 50
+
+  const newNodes = clipboard.value.map((n: any) => ({
+    ...JSON.parse(JSON.stringify(n)),
+    id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    position: {
+      x: n.position.x + offsetX,
+      y: n.position.y + offsetY
+    },
+    selected: false
+  }))
+
+  // 如果是剪切模式，清除原选中节点
+  if (clipboardMode.value === 'cut') {
+    clipboard.value = []
+  }
+
+  addNodes(newNodes)
+  saveHistory()
+  showToast(`已粘贴 ${newNodes.length} 个节点`, 'info')
+}
+
+// 删除选中
+function handleDelete() {
+  const selectedNodes = nodes.value.filter((n: any) => n.selected)
+  const selectedEdges = edges.value.filter((e: any) => e.selected)
+
+  if (selectedNodes.length === 0 && selectedEdges.length === 0) {
+    return
+  }
+
+  // 删除节点时同步删除关联的边
+  const nodeIds = selectedNodes.map((n: any) => n.id)
+  edges.value = edges.value.filter((e: any) =>
+    !nodeIds.includes(e.source) && !nodeIds.includes(e.target) && !e.selected
+  )
+
+  // 删除节点
+  selectedNodes.forEach((n: any) => {
+    const idx = nodes.value.findIndex((node: any) => node.id === n.id)
+    if (idx !== -1) nodes.value.splice(idx, 1)
+  })
+
+  selectedEdges.forEach((e: any) => {
+    const idx = edges.value.findIndex((edge: any) => edge.id === e.id)
+    if (idx !== -1) edges.value.splice(idx, 1)
+  })
+
+  selectedNode.value = null
+  saveHistory()
+  showToast(`已删除 ${selectedNodes.length} 个节点`, 'info')
+}
+
+// 右键菜单
+function handleContextMenu(event: MouseEvent, target: any, type: 'node' | 'edge' | 'pane') {
+  event.preventDefault()
+  event.stopPropagation()
+  contextMenu.show = true
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.target = target
+  contextMenu.targetType = type
+}
+
+// 隐藏右键菜单
+function hideContextMenu() {
+  contextMenu.show = false
+}
+
+// 右键菜单操作
+function handleContextAction(action: string) {
+  hideContextMenu()
+  switch (action) {
+    case 'copy':
+      if (contextMenu.targetType === 'node') {
+        nodes.value.forEach((n: any) => { n.selected = n.id === contextMenu.target?.id })
+        handleCopy()
+      }
+      break
+    case 'paste':
+      handlePaste()
+      break
+    case 'delete':
+      if (contextMenu.targetType === 'node') {
+        nodes.value.forEach((n: any) => { n.selected = n.id === contextMenu.target?.id })
+      } else if (contextMenu.targetType === 'edge') {
+        edges.value.forEach((e: any) => { e.selected = e.id === contextMenu.target?.id })
+      }
+      handleDelete()
+      break
+    case 'selectAll':
+      nodes.value.forEach((n: any) => { n.selected = true })
+      edges.value.forEach((e: any) => { e.selected = true })
+      break
+  }
+}
+
 // 撤销
 function handleUndo() {
   if (canUndo.value) {
@@ -625,6 +872,12 @@ onMounted(async () => {
   await loadGraph()
   await loadNodeDefinitions()
   saveHistory()
+  // 键盘事件
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeyDown)
 })
 
 // 加载规则图
@@ -2171,5 +2424,52 @@ $panel-header-height: 52px;
 .toast-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(20px);
+}
+
+/* 右键菜单 */
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-card, #1a1a2e);
+  border: 1px solid var(--border-color, #2a2a4a);
+  border-radius: 8px;
+  padding: 4px 0;
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary, #e0e0e0);
+  transition: background 0.15s;
+}
+
+.context-menu-item:hover {
+  background: var(--bg-hover, #2a2a4a);
+}
+
+.context-menu-item.danger {
+  color: #ff4c4c;
+}
+
+.context-menu-item.danger:hover {
+  background: rgba(255, 76, 76, 0.1);
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: var(--border-color, #2a2a4a);
+  margin: 4px 0;
+}
+
+.context-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
 }
 </style>
