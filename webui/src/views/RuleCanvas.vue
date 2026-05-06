@@ -594,6 +594,9 @@ const OutputIcon = () => h('path', { d: 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4
 
 import { h } from 'vue'
 
+// 导入自定义节点组件
+import RuleNode from '@/components/rule-engine/RuleNode.vue'
+
 const router = useRouter()
 const route = useRoute()
 const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate, getZoom, getPan } = useVueFlow()
@@ -739,8 +742,10 @@ const connectionLineStyle = {
   strokeWidth: 2
 }
 
-// 节点类型
-const nodeTypes = {}
+// 节点类型 - 注册自定义节点组件
+const nodeTypes = {
+  ruleNode: RuleNode
+}
 
 // 小地图颜色 - 6色分类体系
 function miniMapNodeColor(node: any) {
@@ -982,15 +987,19 @@ function handlePaste() {
   const offsetX = 50
   const offsetY = 50
 
-  const newNodes = clipboard.value.map((n: any) => ({
-    ...JSON.parse(JSON.stringify(n)),
-    id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    position: {
-      x: n.position.x + offsetX,
-      y: n.position.y + offsetY
-    },
-    selected: false
-  }))
+  const newNodes = clipboard.value.map((n: any) => {
+    const cloned = JSON.parse(JSON.stringify(n))
+    return {
+      ...cloned,
+      id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      type: 'ruleNode',  // 确保使用自定义节点组件
+      position: {
+        x: n.position.x + offsetX,
+        y: n.position.y + offsetY
+      },
+      selected: false
+    }
+  })
 
   // 如果是剪切模式，清除原选中节点
   if (clipboardMode.value === 'cut') {
@@ -1287,15 +1296,19 @@ function handleDrop(event: DragEvent) {
 
   const newNode = {
     id: `node_${Date.now()}`,
-    type: nodeDef.type,
+    type: 'ruleNode',
     position,
-    data: {},
-    category: nodeDef.category,
-    label: nodeDef.label,
-    description: nodeDef.description,
-    configSchema: nodeDef.config_schema,
-    inputs: nodeDef.inputs,
-    outputs: nodeDef.outputs
+    data: {
+      id: `node_${Date.now()}`,
+      type: nodeDef.type,
+      category: nodeDef.category,
+      label: nodeDef.label,
+      description: nodeDef.description,
+      configSchema: nodeDef.config_schema,
+      inputs: nodeDef.inputs,
+      outputs: nodeDef.outputs,
+      config: {}
+    }
   }
 
   addNodes([newNode])
@@ -1309,18 +1322,22 @@ function quickAddNode(nodeDef: any) {
 
   const newNode = {
     id: `node_${Date.now()}`,
-    type: nodeDef.type,
+    type: 'ruleNode',
     position: {
       x: centerX + Math.random() * 100 - 50,
       y: centerY + Math.random() * 100 - 50
     },
-    data: {},
-    category: nodeDef.category,
-    label: nodeDef.label,
-    description: nodeDef.description,
-    configSchema: nodeDef.config_schema,
-    inputs: nodeDef.inputs,
-    outputs: nodeDef.outputs
+    data: {
+      id: `node_${Date.now()}`,
+      type: nodeDef.type,
+      category: nodeDef.category,
+      label: nodeDef.label,
+      description: nodeDef.description,
+      configSchema: nodeDef.config_schema,
+      inputs: nodeDef.inputs,
+      outputs: nodeDef.outputs,
+      config: {}
+    }
   }
 
   addNodes([newNode])

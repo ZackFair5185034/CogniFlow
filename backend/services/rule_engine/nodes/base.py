@@ -17,6 +17,7 @@ from backend.services.rule_engine.models import (
     NodeDefinition,
     NodeCategory,
     PortDefinition,
+    ConfigSchemaProperty,
     ExecutionContextData,
 )
 
@@ -195,6 +196,14 @@ class BaseExecutor(ABC):
             for name, port in definition.inputs.items()
             if not port.required and port.default is not None
         }
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        """返回节点的可配置参数 schema。
+        
+        子类可以覆盖此方法定义自己的配置项。
+        返回空字典表示该节点无需配置。
+        """
+        return {}
 
     def merge_with_defaults(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """将可选输入与默认值合并。"""

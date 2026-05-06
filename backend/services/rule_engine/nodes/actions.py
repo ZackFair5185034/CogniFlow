@@ -9,8 +9,9 @@ import asyncio
 from typing import Any, Dict, Optional, Tuple
 
 from backend.services.rule_engine.models import (
-    NodeDefinition, NodeCategory, PortDefinition, PortType
+    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
 )
+from typing import Dict
 from .base import BaseExecutor
 
 
@@ -56,8 +57,41 @@ class KeyboardActionNode(BaseExecutor):
                     type="ARRAY",
                     description="已执行的按键列表"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "keys": ConfigSchemaProperty(
+                type="array",
+                title="按键列表",
+                description="要模拟按下的键列表",
+                default=[],
+                widget="multiselect",
+                enum=["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "enter", "escape", "space", "tab", "shift", "ctrl", "alt"],
+            ),
+            "hold_duration": ConfigSchemaProperty(
+                type="number",
+                title="按住时长",
+                description="每个按键按住的时长（秒）",
+                default=0.1,
+                minimum=0.01,
+                maximum=5.0,
+                step=0.05,
+                widget="number",
+            ),
+            "interval": ConfigSchemaProperty(
+                type="number",
+                title="按键间隔",
+                description="按键之间的间隔时间（秒）",
+                default=0,
+                minimum=0,
+                maximum=10.0,
+                step=0.1,
+                widget="number",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -130,8 +164,49 @@ class MouseActionNode(BaseExecutor):
                     type="BOOLEAN",
                     description="是否执行成功"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "action": ConfigSchemaProperty(
+                type="string",
+                title="动作类型",
+                description="鼠标动作类型",
+                default="click",
+                widget="dropdown",
+                enum=["click", "move", "scroll", "double_click", "right_click"],
+            ),
+            "x": ConfigSchemaProperty(
+                type="number",
+                title="X坐标",
+                description="鼠标 X 坐标",
+                default=0,
+                minimum=0,
+                maximum=9999,
+                step=1,
+                widget="number",
+            ),
+            "y": ConfigSchemaProperty(
+                type="number",
+                title="Y坐标",
+                description="鼠标 Y 坐标",
+                default=0,
+                minimum=0,
+                maximum=9999,
+                step=1,
+                widget="number",
+            ),
+            "button": ConfigSchemaProperty(
+                type="string",
+                title="鼠标按钮",
+                description="使用的鼠标按钮",
+                default="left",
+                widget="dropdown",
+                enum=["left", "right", "middle"],
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -198,8 +273,23 @@ class WaitActionNode(BaseExecutor):
                     type="BOOLEAN",
                     description="等待完成"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "duration": ConfigSchemaProperty(
+                type="number",
+                title="等待时长",
+                description="等待多少秒后继续",
+                default=1.0,
+                minimum=0.1,
+                maximum=300.0,
+                step=0.5,
+                widget="slider",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -268,8 +358,52 @@ class HttpRequestActionNode(BaseExecutor):
                     type="ANY",
                     description="响应内容"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "url": ConfigSchemaProperty(
+                type="string",
+                title="请求URL",
+                description="HTTP 请求的目标 URL",
+                default="",
+                widget="text",
+            ),
+            "method": ConfigSchemaProperty(
+                type="string",
+                title="请求方法",
+                description="HTTP 请求方法",
+                default="GET",
+                widget="dropdown",
+                enum=["GET", "POST", "PUT", "DELETE", "PATCH"],
+            ),
+            "headers": ConfigSchemaProperty(
+                type="string",
+                title="请求头",
+                description="HTTP 请求头（JSON 格式）",
+                default="{}",
+                widget="text",
+            ),
+            "body": ConfigSchemaProperty(
+                type="string",
+                title="请求体",
+                description="HTTP 请求体（JSON 格式）",
+                default="{}",
+                widget="textarea",
+            ),
+            "timeout": ConfigSchemaProperty(
+                type="number",
+                title="超时时间",
+                description="请求超时时间（秒）",
+                default=30,
+                minimum=1,
+                maximum=300,
+                step=1,
+                widget="number",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -345,8 +479,28 @@ class LogActionNode(BaseExecutor):
                     type="BOOLEAN",
                     description="是否记录成功"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "message": ConfigSchemaProperty(
+                type="string",
+                title="日志消息",
+                description="要记录的日志消息，支持 {变量名} 插值",
+                default="",
+                widget="textarea",
+            ),
+            "level": ConfigSchemaProperty(
+                type="string",
+                title="日志级别",
+                description="日志输出级别",
+                default="info",
+                widget="dropdown",
+                enum=["debug", "info", "warning", "error"],
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None

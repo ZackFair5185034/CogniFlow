@@ -10,7 +10,8 @@ import json
 from typing import Any, Dict, Optional, Tuple
 from datetime import datetime
 
-from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType
+from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+from typing import Dict
 from .base import BaseExecutor
 
 
@@ -56,8 +57,28 @@ class SaveResultNode(BaseExecutor):
                     type="STRING",
                     description="保存的文件路径"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "output_path": ConfigSchemaProperty(
+                type="string",
+                title="输出路径",
+                description="保存文件的完整路径",
+                default="/tmp/rule_result.json",
+                widget="text",
+            ),
+            "format": ConfigSchemaProperty(
+                type="string",
+                title="文件格式",
+                description="保存数据的格式",
+                default="json",
+                widget="dropdown",
+                enum=["json", "csv"],
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -137,8 +158,35 @@ class NotificationNode(BaseExecutor):
                     type="BOOLEAN",
                     description="是否发送成功"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "notification_type": ConfigSchemaProperty(
+                type="string",
+                title="通知类型",
+                description="发送通知的方式",
+                default="console",
+                widget="dropdown",
+                enum=["console", "webhook", "email", "sms"],
+            ),
+            "recipients": ConfigSchemaProperty(
+                type="string",
+                title="接收者",
+                description="通知接收者（webhook填URL，email填邮箱）",
+                default="",
+                widget="text",
+            ),
+            "message": ConfigSchemaProperty(
+                type="string",
+                title="消息内容",
+                description="通知消息内容，支持 {{变量名}} 插值",
+                default="规则执行完成",
+                widget="text",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -214,8 +262,20 @@ class DisplayNode(BaseExecutor):
                     type="BOOLEAN",
                     description="是否显示成功"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "title": ConfigSchemaProperty(
+                type="string",
+                title="显示标题",
+                description="调试信息的标题",
+                default="调试信息",
+                widget="text",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None

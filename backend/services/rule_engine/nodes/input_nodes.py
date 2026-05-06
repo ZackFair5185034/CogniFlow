@@ -9,7 +9,8 @@ docs/research/rule-engine-phase1-node-registry.md
 import asyncio
 from typing import Any, Dict, Optional, Tuple
 
-from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType
+from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+from typing import Dict
 from .base import BaseExecutor
 
 
@@ -52,8 +53,20 @@ class ImageCaptureNode(BaseExecutor):
                     type="INT",
                     description="图片高度（像素）"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "source": ConfigSchemaProperty(
+                type="string",
+                title="图片路径",
+                description="本地文件路径或 HTTP/HTTPS URL",
+                default="",
+                widget="text",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -143,8 +156,30 @@ class VideoCaptureNode(BaseExecutor):
                     type="FLOAT",
                     description="时间戳（秒）"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "source": ConfigSchemaProperty(
+                type="string",
+                title="视频源",
+                description="/dev/video0 或视频文件路径",
+                default="video0",
+                widget="text",
+            ),
+            "fps": ConfigSchemaProperty(
+                type="number",
+                title="帧率",
+                description="每秒采集帧数",
+                default=30,
+                minimum=1,
+                maximum=120,
+                step=1,
+                widget="number",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -205,8 +240,21 @@ class ScreenCaptureNode(BaseExecutor):
                     description="采集区域信息",
                     required=False
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "source": ConfigSchemaProperty(
+                type="string",
+                title="采集源",
+                description="screen(全屏) 或 window(窗口)",
+                default="screen",
+                enum=["screen", "window"],
+                widget="dropdown",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None

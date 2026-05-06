@@ -8,7 +8,8 @@ docs/research/rule-engine-phase1-node-registry.md
 """
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType
+from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+from typing import Dict
 from .base import BaseExecutor
 
 
@@ -53,8 +54,20 @@ class CategoryEncodeNode(BaseExecutor):
                     type="ARRAY",
                     description="类别名称列表（带映射）"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "class_mapping": ConfigSchemaProperty(
+                type="string",
+                title="类别映射",
+                description="格式: name:id, 如 person:0,car:1",
+                default="",
+                widget="text",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         if "class_names" not in inputs:
@@ -125,8 +138,51 @@ class FilterNode(BaseExecutor):
                     type="INT",
                     description="过滤后数量"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "filter_by": ConfigSchemaProperty(
+                type="string",
+                title="过滤方式",
+                description="按什么条件过滤",
+                default="confidence",
+                widget="dropdown",
+                enum=["class", "confidence", "count"],
+            ),
+            "min_confidence": ConfigSchemaProperty(
+                type="number",
+                title="最小置信度",
+                description="只保留置信度 >= 此值的结果",
+                default=0.5,
+                minimum=0.0,
+                maximum=1.0,
+                step=0.05,
+                widget="slider",
+            ),
+            "min_count": ConfigSchemaProperty(
+                type="integer",
+                title="最小数量",
+                description="最少保留多少个结果",
+                default=0,
+                minimum=0,
+                maximum=100,
+                step=1,
+                widget="number",
+            ),
+            "max_count": ConfigSchemaProperty(
+                type="integer",
+                title="最大数量",
+                description="最多保留多少个结果",
+                default=999,
+                minimum=1,
+                maximum=1000,
+                step=1,
+                widget="number",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -210,8 +266,31 @@ class TrackerNode(BaseExecutor):
                     type="ARRAY",
                     description="跟踪 ID 列表"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "tracker_type": ConfigSchemaProperty(
+                type="string",
+                title="跟踪算法",
+                description="目标跟踪算法",
+                default="sort",
+                widget="dropdown",
+                enum=["sort", "deepsort", "bytetrack"],
+            ),
+            "max_age": ConfigSchemaProperty(
+                type="integer",
+                title="最大丢失帧数",
+                description="目标丢失多少帧后删除",
+                default=30,
+                minimum=1,
+                maximum=100,
+                step=1,
+                widget="number",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -268,8 +347,41 @@ class ImagePreprocessorNode(BaseExecutor):
                     type=PortType.IMAGE.value,
                     description="处理后的图片"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "operation": ConfigSchemaProperty(
+                type="string",
+                title="操作类型",
+                description="图像预处理操作",
+                default="resize",
+                widget="dropdown",
+                enum=["resize", "crop", "normalize", "augment"],
+            ),
+            "width": ConfigSchemaProperty(
+                type="integer",
+                title="目标宽度",
+                description="预处理后图片宽度",
+                default=640,
+                minimum=16,
+                maximum=4096,
+                step=1,
+                widget="number",
+            ),
+            "height": ConfigSchemaProperty(
+                type="integer",
+                title="目标高度",
+                description="预处理后图片高度",
+                default=640,
+                minimum=16,
+                maximum=4096,
+                step=1,
+                widget="number",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None

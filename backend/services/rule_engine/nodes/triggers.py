@@ -7,8 +7,9 @@ import time
 from typing import Any, Dict, Optional, Tuple
 
 from backend.services.rule_engine.models import (
-    NodeDefinition, NodeCategory, PortDefinition, PortType
+    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
 )
+from typing import Dict
 from .base import BaseExecutor
 
 
@@ -40,8 +41,12 @@ class ManualTriggerNode(BaseExecutor):
                     type="BOOLEAN",
                     description="是否触发"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {}  # 手动触发器无需配置
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -92,8 +97,31 @@ class TimerTriggerNode(BaseExecutor):
                     type="FLOAT",
                     description="触发时间戳"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "interval": ConfigSchemaProperty(
+                type="number",
+                title="触发间隔",
+                description="触发间隔时间（秒）",
+                default=5.0,
+                minimum=0.1,
+                maximum=3600,
+                step=0.5,
+                widget="slider",
+            ),
+            "enabled": ConfigSchemaProperty(
+                type="boolean",
+                title="启用状态",
+                description="是否启用定时器",
+                default=True,
+                widget="dropdown",
+                enum=["true", "false"],
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -153,8 +181,28 @@ class CronTriggerNode(BaseExecutor):
                     type="FLOAT",
                     description="触发时间戳"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "cron": ConfigSchemaProperty(
+                type="string",
+                title="Cron 表达式",
+                description="标准 Cron 格式，如 0 * * * *",
+                default="0 * * * *",
+                widget="text",
+            ),
+            "timezone": ConfigSchemaProperty(
+                type="string",
+                title="时区",
+                description="时区名称，如 Asia/Shanghai",
+                default="Asia/Shanghai",
+                widget="dropdown",
+                enum=["Asia/Shanghai", "UTC", "America/New_York", "Europe/London", "Japan"],
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -216,8 +264,28 @@ class WebhookTriggerNode(BaseExecutor):
                     type="ANY",
                     description="HTTP 请求数据"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "path": ConfigSchemaProperty(
+                type="string",
+                title="Webhook 路径",
+                description="Webhook 端点路径，如 /webhook/myrule",
+                default="/webhook/trigger",
+                widget="text",
+            ),
+            "method": ConfigSchemaProperty(
+                type="string",
+                title="HTTP 方法",
+                description="支持的 HTTP 方法",
+                default="POST",
+                widget="dropdown",
+                enum=["GET", "POST", "PUT", "DELETE"],
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -280,8 +348,20 @@ class ApiTriggerNode(BaseExecutor):
                     type="ANY",
                     description="API 响应数据"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "api_name": ConfigSchemaProperty(
+                type="string",
+                title="API 名称",
+                description="调用的 API 名称",
+                default="",
+                widget="text",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None

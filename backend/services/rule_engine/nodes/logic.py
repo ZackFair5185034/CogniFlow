@@ -9,8 +9,9 @@ import asyncio
 from typing import Any, Dict, Optional, Tuple
 
 from backend.services.rule_engine.models import (
-    NodeDefinition, NodeCategory, PortDefinition, PortType
+    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
 )
+from typing import Dict
 from .base import BaseExecutor
 
 
@@ -173,8 +174,23 @@ class DelayNode(BaseExecutor):
                     type=PortType.CONTROL.value,
                     description="延迟后的输出"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "delay": ConfigSchemaProperty(
+                type="number",
+                title="延迟时间",
+                description="延迟多少秒后继续执行",
+                default=1.0,
+                minimum=0.1,
+                maximum=60.0,
+                step=0.5,
+                widget="slider",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -244,8 +260,35 @@ class SetVariableNode(BaseExecutor):
                     type=PortType.CONTROL.value,
                     description="完成信号"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "variable_name": ConfigSchemaProperty(
+                type="string",
+                title="变量名",
+                description="要设置的变量名称",
+                default="",
+                widget="text",
+            ),
+            "value": ConfigSchemaProperty(
+                type="string",
+                title="变量值",
+                description="变量的值（静态值或动态变量名）",
+                default="",
+                widget="text",
+            ),
+            "value_type": ConfigSchemaProperty(
+                type="string",
+                title="值类型",
+                description="静态值还是从其他变量获取",
+                default="static",
+                widget="dropdown",
+                enum=["static", "dynamic"],
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -337,8 +380,47 @@ class CounterNode(BaseExecutor):
                     type="BOOLEAN",
                     description="是否达到上限"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "variable_name": ConfigSchemaProperty(
+                type="string",
+                title="计数器变量名",
+                description="存储计数值的变量名",
+                default="_counter",
+                widget="text",
+            ),
+            "increment": ConfigSchemaProperty(
+                type="number",
+                title="增量",
+                description="每次计数增加的数值",
+                default=1,
+                minimum=1,
+                maximum=1000,
+                step=1,
+                widget="number",
+            ),
+            "reset_on_trigger": ConfigSchemaProperty(
+                type="boolean",
+                title="触发时重置",
+                description="每次触发时是否重置为增量值而非累加",
+                default=False,
+                widget="toggle",
+            ),
+            "max_value": ConfigSchemaProperty(
+                type="number",
+                title="最大值",
+                description="计数的最大值，达到后重置为0",
+                default=999999,
+                minimum=1,
+                maximum=999999999,
+                step=1,
+                widget="number",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None

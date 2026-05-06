@@ -265,8 +265,56 @@ class YOLOTriggerNode(BaseExecutor):
                     type="ARRAY",
                     description="检测到的目标列表"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "model_id": ConfigSchemaProperty(
+                type="string",
+                title="模型",
+                description="选择要使用的 YOLO 检测模型",
+                default="",
+                widget="model-select",
+            ),
+            "class_names": ConfigSchemaProperty(
+                type="array",
+                title="目标类别",
+                description="要检测的类别名称列表",
+                default=[],
+                widget="multiselect",
+                enum=["person", "car", "dog", "cat", "bicycle", "truck", "bus"],
+            ),
+            "min_confidence": ConfigSchemaProperty(
+                type="number",
+                title="最小置信度",
+                description="只保留置信度 >= threshold 的检测结果",
+                default=0.5,
+                minimum=0.0,
+                maximum=1.0,
+                step=0.05,
+                widget="slider",
+            ),
+            "max_objects": ConfigSchemaProperty(
+                type="number",
+                title="最大检测数",
+                description="最多检测多少个目标",
+                default=10,
+                minimum=1,
+                maximum=100,
+                step=1,
+                widget="number",
+            ),
+            "device": ConfigSchemaProperty(
+                type="string",
+                title="推理设备",
+                description="选择模型推理使用的设备",
+                default="auto",
+                enum=["auto", "cuda", "cpu"],
+                widget="dropdown",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -407,8 +455,31 @@ class ObjectDetectorNode(BaseExecutor):
                     type="INT",
                     description="检测数量"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "model_type": ConfigSchemaProperty(
+                type="string",
+                title="模型类型",
+                description="选择检测模型类型",
+                default="yolo",
+                widget="dropdown",
+                enum=["yolo", "ssd", "mtcnn"],
+            ),
+            "confidence": ConfigSchemaProperty(
+                type="number",
+                title="置信度阈值",
+                description="只保留置信度 >= threshold 的检测结果",
+                default=0.5,
+                minimum=0.0,
+                maximum=1.0,
+                step=0.05,
+                widget="slider",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         if "image" not in inputs:

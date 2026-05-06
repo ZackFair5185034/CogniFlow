@@ -8,8 +8,9 @@
 from typing import Any, Dict, Optional, Tuple
 
 from backend.services.rule_engine.models import (
-    NodeDefinition, NodeCategory, PortDefinition, PortType
+    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
 )
+from typing import Dict
 from .base import BaseExecutor
 
 
@@ -56,8 +57,39 @@ class ObjectExistsConditionNode(BaseExecutor):
                     type="INT",
                     description="符合条件的数量"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "class_names": ConfigSchemaProperty(
+                type="array",
+                title="目标类别",
+                description="要检查的类别名称列表",
+                default=[],
+                widget="multiselect",
+                enum=["person", "car", "dog", "cat", "bicycle", "truck", "bus"],
+            ),
+            "min_count": ConfigSchemaProperty(
+                type="number",
+                title="最小数量",
+                description="满足条件的最小数量",
+                default=1,
+                minimum=0,
+                maximum=1000,
+                step=1,
+                widget="number",
+            ),
+            "comparison": ConfigSchemaProperty(
+                type="string",
+                title="比较方式",
+                description="数量比较方式",
+                default="gte",
+                widget="dropdown",
+                enum=["gte", "lte", "eq", "gt", "lt"],
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -141,8 +173,23 @@ class ConfidenceThresholdConditionNode(BaseExecutor):
                     type="FLOAT",
                     description="最高置信度值"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "min_confidence": ConfigSchemaProperty(
+                type="number",
+                title="最小置信度",
+                description="要求的最小置信度阈值",
+                default=0.5,
+                minimum=0.0,
+                maximum=1.0,
+                step=0.05,
+                widget="slider",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
@@ -208,8 +255,35 @@ class VariableConditionNode(BaseExecutor):
                     type="ANY",
                     description="变量的实际值"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "variable_name": ConfigSchemaProperty(
+                type="string",
+                title="变量名",
+                description="要检查的变量名称",
+                default="",
+                widget="text",
+            ),
+            "expected_value": ConfigSchemaProperty(
+                type="string",
+                title="期望值",
+                description="与变量比较的期望值",
+                default="",
+                widget="text",
+            ),
+            "comparison": ConfigSchemaProperty(
+                type="string",
+                title="比较方式",
+                description="比较方式",
+                default="eq",
+                widget="dropdown",
+                enum=["eq", "ne", "gt", "lt", "gte", "lte", "contains"],
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None
