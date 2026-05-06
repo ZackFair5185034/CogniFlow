@@ -12,7 +12,9 @@ import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType
+from backend.services.rule_engine.models import (
+    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+)
 from .base import BaseExecutor
 
 logger = logging.getLogger(__name__)
@@ -78,8 +80,60 @@ class YOLOModelNode(BaseExecutor):
                     type="INT",
                     description="检测到的目标数量"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        """返回节点的可配置参数 schema。"""
+        return {
+            "model_id": ConfigSchemaProperty(
+                type="string",
+                title="模型",
+                description="选择要使用的 YOLO 检测模型",
+                default="",
+                widget="model-select",
+                required=True,
+            ),
+            "confidence": ConfigSchemaProperty(
+                type="number",
+                title="置信度阈值",
+                description="只保留置信度 >= threshold 的检测结果",
+                default=0.5,
+                minimum=0.0,
+                maximum=1.0,
+                step=0.05,
+                widget="slider",
+            ),
+            "iou_threshold": ConfigSchemaProperty(
+                type="number",
+                title="IOU 阈值",
+                description="NMS（非极大值抑制）的 IOU 阈值",
+                default=0.45,
+                minimum=0.0,
+                maximum=1.0,
+                step=0.05,
+                widget="slider",
+            ),
+            "max_detections": ConfigSchemaProperty(
+                type="integer",
+                title="最大检测数",
+                description="每张图最多检测多少个目标",
+                default=300,
+                minimum=1,
+                maximum=1000,
+                step=1,
+                widget="number",
+            ),
+            "device": ConfigSchemaProperty(
+                type="string",
+                title="推理设备",
+                description="选择模型推理使用的设备",
+                default="auto",
+                enum=["auto", "cuda", "cpu"],
+                widget="dropdown",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         if "image" not in inputs or inputs["image"] is None:

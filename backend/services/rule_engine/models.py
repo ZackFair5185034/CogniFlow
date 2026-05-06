@@ -53,9 +53,23 @@ class CategoryInfo(BaseModel):
     description: str = ""
 
 
+class ConfigSchemaProperty(BaseModel):
+    """节点配置项的 schema 定义。"""
+    type: str = Field(..., description="类型：string/number/integer/boolean")
+    title: str = Field(..., description="前端显示名称")
+    description: str = Field("", description="配置项说明")
+    default: Any = Field(None, description="默认值")
+    minimum: Optional[float] = Field(None, description="最小值（number/integer）")
+    maximum: Optional[float] = Field(None, description="最大值（number/integer）")
+    step: Optional[float] = Field(None, description="步进值（slider）")
+    enum: Optional[List[Any]] = Field(None, description="枚举选项（dropdown）")
+    widget: str = Field("text", description="控件类型：text/number/slider/dropdown/model-select/checkbox/file-path/textarea/code")
+    required: bool = Field(False, description="是否为必填项")
+
+
 class NodeDefinition(BaseModel):
     """节点定义 - 描述节点类型的元信息。"""
-    type: str = Field(..., description="节点类型标识，如 'YOLOModel'")
+    type: str = Field(..., description="节点类型标识，如 'yolo_model'")
     category: str = Field(..., description="所属类别：input/detection/processing/action/logic/output")
     display_name: str = Field(..., description="前端显示名称")
     description: str = Field("", description="节点功能描述")
@@ -63,6 +77,7 @@ class NodeDefinition(BaseModel):
     color: str = Field("#7D7D7D", description="节点颜色（十六进制）")
     inputs: Dict[str, PortDefinition] = Field(default_factory=dict, description="输入端口定义")
     outputs: Dict[str, PortDefinition] = Field(default_factory=dict, description="输出端口定义")
+    config_schema: Dict[str, ConfigSchemaProperty] = Field(default_factory=dict, description="节点可配置参数定义")
 
 
 class NodeDefinitionsResponse(BaseModel):

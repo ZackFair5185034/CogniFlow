@@ -125,7 +125,21 @@ class NodeRegistry:
                     }
                     for name, port in defn.outputs.items()
                 ],
-                "config_schema": getattr(defn, 'config_schema', {}),
+                "config_schema": {
+                    key: {
+                        "type": prop.type,
+                        "title": prop.title,
+                        "description": prop.description,
+                        "default": prop.default,
+                        "minimum": prop.minimum,
+                        "maximum": prop.maximum,
+                        "step": prop.step,
+                        "enum": prop.enum,
+                        "widget": prop.widget,
+                        "required": prop.required,
+                    }
+                    for key, prop in defn.config_schema.items()
+                } if defn.config_schema else {},
             }
             definitions.append(definition_dict)
         return definitions
