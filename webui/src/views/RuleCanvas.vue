@@ -284,26 +284,40 @@
                   <label class="field-label">{{ schema.title || key }}</label>
 
                   <!-- 字符串输入 -->
-                  <input
-                    v-if="schema.type === 'string' && !schema.enum"
-                    type="text"
-                    :value="nodeConfig[key]"
-                    @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
-                    class="field-input"
-                    placeholder="请输入..."
-                  />
+                  <div class="field-input-wrapper">
+                    <input
+                      v-if="schema.type === 'string' && !schema.enum"
+                      type="text"
+                      :value="nodeConfig[key]"
+                      @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
+                      class="field-input"
+                      placeholder="请输入..."
+                    />
+                    <button
+                      class="var-btn"
+                      @click="showVariableMenu(key, $event)"
+                      title="插入变量"
+                    >📎</button>
+                  </div>
 
                   <!-- 数字输入 -->
-                  <input
-                    v-else-if="schema.type === 'number' || schema.type === 'integer'"
-                    type="number"
-                    :min="schema.minimum"
-                    :max="schema.maximum"
-                    :step="schema.type === 'integer' ? 1 : 0.1"
-                    :value="nodeConfig[key]"
-                    @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
-                    class="field-input"
-                  />
+                  <div class="field-input-wrapper">
+                    <input
+                      v-else-if="schema.type === 'number' || schema.type === 'integer'"
+                      type="number"
+                      :min="schema.minimum"
+                      :max="schema.maximum"
+                      :step="schema.type === 'integer' ? 1 : 0.1"
+                      :value="nodeConfig[key]"
+                      @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
+                      class="field-input"
+                    />
+                    <button
+                      class="var-btn"
+                      @click="showVariableMenu(key, $event)"
+                      title="插入变量"
+                    >📎</button>
+                  </div>
 
                   <!-- 布尔选择 -->
                   <select
@@ -484,6 +498,22 @@
 
     <!-- 点击其他区域隐藏右键菜单 -->
     <div v-if="contextMenu.show" class="context-menu-overlay" @click="hideContextMenu" @contextmenu.prevent="hideContextMenu" />
+
+    <!-- 变量绑定菜单 -->
+    <div
+      v-if="varMenu.show"
+      class="var-menu"
+      :style="{ left: varMenu.x + 'px', top: varMenu.y + 'px' }"
+      @click.stop
+    >
+      <div class="var-menu-title">插入变量</div>
+      <div class="var-menu-item" @click="insertVariable('counter')">📌 counter</div>
+      <div class="var-menu-item" @click="insertVariable('timestamp')">📌 timestamp</div>
+      <div class="var-menu-item" @click="insertVariable('confidence')">📌 confidence</div>
+      <div class="var-menu-item" @click="insertVariable('image_path')">📌 image_path</div>
+      <div class="var-menu-item" @click="insertVariable('result_count')">📌 result_count</div>
+    </div>
+    <div v-if="varMenu.show" class="var-menu-overlay" @click="hideVariableMenu" />
   </div>
 </template>
 
@@ -566,6 +596,14 @@ const contextMenu = reactive({
   y: 0,
   target: null as any,
   targetType: null as 'node' | 'edge' | 'pane'
+})
+
+// 变量绑定菜单
+const varMenu = reactive({
+  show: false,
+  x: 0,
+  y: 0,
+  fieldKey: '' as string
 })
 
 // 撤销/重做
@@ -948,6 +986,35 @@ function disconnectInput(inputName: string) {
   if (idx !== -1) edges.value.splice(idx, 1)
   saveHistory()
   showToast('已断开连接', 'info')
+}
+
+// 显示变量绑定菜单
+function showVariableMenu(key: string, event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  varMenu.show = true
+  varMenu.x = event.clientX
+  varMenu.y = event.clientY
+  varMenu.fieldKey = key
+}
+
+// 隐藏变量菜单
+function hideVariableMenu() {
+  varMenu.show = false
+}
+
+// 插入变量到字段
+function insertVariable(varName: string) {
+  if (!varMenu.fieldKey) return
+  const currentValue = nodeConfig.value[varMenu.fieldKey] || ''
+  // 如果当前值已包含 {{}}，则追加；否则添加 {{varName}}
+  if (currentValue.includes('{{') && currentValue.includes('}}')) {
+    nodeConfig.value[varMenu.fieldKey] = currentValue + `{{${varName}}}`
+  } else {
+    nodeConfig.value[varMenu.fieldKey] = `{{${varName}}}`
+  }
+  updateConfig(varMenu.fieldKey, nodeConfig.value[varMenu.fieldKey])
+  hideVariableMenu()
 }
 
 // 右键菜单操作
@@ -2781,5 +2848,72 @@ $panel-header-height: 52px;
   position: fixed;
   inset: 0;
   z-index: 9998;
+}
+
+// 变量绑定菜单
+.var-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border-color, #3a3a5c);
+  border-radius: 8px;
+  padding: 8px 0;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+  .var-menu-title {
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--text-secondary, #888);
+    border-bottom: 1px solid var(--border-color, #3a3a5c);
+    margin-bottom: 4px;
+  }
+
+  .var-menu-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary, #e0e0e0);
+    transition: background 0.15s;
+
+    &:hover {
+      background: var(--hover-bg, #2a2a4a);
+      color: var(--accent, #00f0ff);
+    }
+  }
+}
+
+.var-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+}
+
+// 字段输入包装（带变量按钮）
+.field-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  .field-input {
+    flex: 1;
+  }
+
+  .var-btn {
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid var(--border-color, #3a3a5c);
+    border-radius: 4px;
+    color: var(--text-secondary, #888);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+
+    &:hover {
+      background: var(--hover-bg, #2a2a4a);
+      color: var(--accent, #00f0ff);
+      border-color: var(--accent, #00f0ff);
+    }
+  }
 }
 </style>
