@@ -53,6 +53,15 @@
                 <span class="card-version" v-if="graph.version">v{{ graph.version }}</span>
               </div>
               <div class="card-actions" @click.stop>
+                <!-- 激活/停用开关 -->
+                <button
+                  class="action-btn"
+                  :class="{ active: graph.is_active }"
+                  @click="toggleActive(graph)"
+                  :title="graph.is_active ? '停用规则' : '激活规则'"
+                >
+                  <SvgIcon :name="graph.is_active ? 'pause' : 'play'" />
+                </button>
                 <button class="action-btn" @click="goToDesign(graph.id)" title="编辑规则">
                   <SvgIcon name="edit" />
                 </button>
@@ -62,10 +71,25 @@
               </div>
             </div>
 
+            <!-- 规则状态标签 -->
+            <div class="rule-status-tags">
+              <span class="status-tag" :class="graph.is_active ? 'active' : 'inactive'">
+                {{ graph.is_active ? '已激活' : '未激活' }}
+              </span>
+              <span class="cron-tag" v-if="graph.cron_expression">
+                <SvgIcon name="clock" />
+                {{ graph.cron_expression }}
+              </span>
+            </div>
+
             <p class="card-desc">{{ graph.description || '暂无描述' }}</p>
 
             <div class="card-footer">
               <div class="card-meta">
+                <span class="meta-item" v-if="graph.last_executed_at">
+                  <SvgIcon name="clock" />
+                  {{ formatDate(graph.last_executed_at) }}
+                </span>
                 <span class="meta-item">
                   <SvgIcon name="clock" />
                   {{ formatDate(graph.updated_at) }}
@@ -192,6 +216,22 @@ async function handleCreate() {
 
 function goToDesign(id: number) {
   router.push(`/rule-engine/design/${id}`)
+}
+
+async function toggleActive(graph: any) {
+  try {
+    if (graph.is_active) {
+      await ruleEngineApi.deactivateGraph(graph.id)
+      graph.is_active = false
+      showToast('规则已停用', 'info')
+    } else {
+      await ruleEngineApi.activateGraph(graph.id)
+      graph.is_active = true
+      showToast('规则已激活', 'success')
+    }
+  } catch (err: any) {
+    showToast(err?.response?.data?.detail || '操作失败', 'error')
+  }
 }
 
 async function handleDelete(graph: any) {
@@ -428,6 +468,46 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.rule-status-tags {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+
+  .status-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+
+    &.active {
+      background: rgba(0, 255, 136, 0.15);
+      color: #00ff88;
+      border: 1px solid rgba(0, 255, 136, 0.3);
+    }
+
+    &.inactive {
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  }
+
+  .cron-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255, 193, 7, 0.1);
+    color: #ffc107;
+    border: 1px solid rgba(255, 193, 7, 0.2);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    svg { width: 12px; height: 12px; }
+  }
 }
 
 .card-footer {

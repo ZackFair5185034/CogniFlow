@@ -197,6 +197,7 @@ export const ruleEngineApi = {
   validateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/validate`),
   activateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/activate`),
   deactivateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/deactivate`),
+  getWebhookUrl: (id: number) => api.get(`/rule-engine/graphs/${id}/webhook-url`),
 
   // 执行
   execute: (data: {
