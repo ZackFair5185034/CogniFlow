@@ -427,7 +427,853 @@ LogNode:
 
 ---
 
-## 七、结论
+## 七、技术细节规范
+
+### 6.1 SvgIcon 图标使用规范
+
+**组件引入方式：**
+
+```typescript
+// 方式一：全局组件（已在 main.ts 注册，可直接使用）
+// 无需 import，在模板中直接使用
+<SvgIcon name="icon-name" />
+
+// 方式二：需要显式引入 SvgIcon（如果 IDE 报类型错误）
+import SvgIcon from '@/components/SvgIcon.vue'
+```
+
+**使用方式：**
+
+```html
+<!-- 基本用法 -->
+<SvgIcon name="play" />
+<SvgIcon name="zoom-in" />
+<SvgIcon name="save" />
+
+<!-- 指定尺寸 -->
+<SvgIcon name="image" :size="20" />
+<SvgIcon name="close" :size="16" />
+
+<!-- 配合样式使用 -->
+<SvgIcon name="chevron-right" class="breadcrumb-sep" />
+```
+
+**已有图标清单（`webui/src/icons/`）：**
+
+| 类别 | 图标名称 |
+|------|----------|
+| 导航 | `back`, `chevron-left`, `chevron-right`, `chevron-up`, `chevron-down`, `menu`, `home` |
+| 操作 | `save`, `edit`, `delete/trash`, `copy`, `plus`, `close`, `refresh`, `upload`, `download` |
+| 视图 | `zoom-in`, `zoom-out`, `fit-view`, `grid`, `minimap` |
+| 状态 | `play`, `pause`, `stop`, `check`, `alert`, `star` |
+| 文件 | `folder`, `file-text`, `image`, `video`, `tag` |
+| 规则引擎专用 | `flow`, `trigger`, `condition`, `action`, `logic`, `brain`, `rocket` |
+| 其他 | `clock`, `terminal`, `lightbulb`, `chart`, `box`, `eye`, `undo`, `redo`, `snap` |
+
+**RuleNode 图标迁移方案：**
+
+当前 `icons.ts` 使用 `h()` 渲染函数，需改为使用 `SvgIcon` 组件：
+
+```typescript
+// 修改前
+import { h } from 'vue'
+export const DetectionIcon = () => h('circle', {
+  cx: '12', cy: '12', r: '10',
+  fill: 'none', stroke: 'currentColor', 'stroke-width': '2'
+})
+
+// 修改后 - 复用 icons 目录下已有的 svg 文件
+// 可新增专用图标到 icons/ 目录，或使用现有图标组合
+```
+
+**新增规则引擎专用图标建议：**
+
+```bash
+# webui/src/icons/ 目录下新增
+input.svg      # 输入节点图标
+detection.svg  # 检测节点图标（靶心）
+processing.svg # 处理节点图标（齿轮）
+action.svg    # 动作节点图标（闪电）
+logic.svg     # 逻辑节点图标（分支）
+output.svg    # 输出节点图标（下载）
+```
+
+**图标命名规范：**
+- 使用 kebab-case 命名（如 `arrow-right.svg`）
+- 名称应语义化，反映图标用途
+- 避免使用数字或无意义字符
+
+### 6.2 API 端点详细规格
+
+#### 节点定义
+
+```
+GET /api/rule-engine/nodes/definitions
+
+Response 200:
+[
+  {
+    "type": "yolo_model",
+    "category": "detection",
+    "label": "YOLO 检测",
+    "description": "使用 YOLO 模型进行目标检测",
+    "icon": "detection",
+    "inputs": [
+      { "name": "image", "type": "image", "label": "图片" },
+      { "name": "trigger", "type": "trigger", "label": "触发" }
+    ],
+    "outputs": [
+      { "name": "bboxes", "type": "bbox[]", "label": "边界框" },
+      { "name": "scores", "type": "number[]", "label": "置信度" },
+      { "name": "categories", "type": "string[]", "label": "类别" }
+    ],
+    "config_schema": {
+      "model_id": {
+        "type": "string",
+        "title": "模型",
+        "widget": "model-select",
+        "default": "yolov8n"
+      },
+      "confidence": {
+        "type": "number",
+        "title": "置信度阈值",
+        "widget": "slider",
+        "minimum": 0,
+        "maximum": 1,
+        "step": 0.05,
+        "default": 0.5
+      }
+    }
+  }
+]
+```
+
+#### 规则图 CRUD
+
+```
+POST /api/rule-engine/graphs
+
+Request Body:
+{
+  "name": "My Rule",
+  "description": "规则描述",
+  "nodes_json": "[{\"id\":\"n1\",\"type\":\"input\",\"position\":{\"x\":0,\"y\":0},\"data\":{}}]",
+  "edges_json": "[]",
+  "variables_json": "[]",
+  "version": "2.0"
+}
+
+Response 201:
+{
+  "id": 1,
+  "name": "My Rule",
+  "description": "规则描述",
+  "is_active": false,
+  "version": "2.0",
+  "created_at": "2026-05-06T00:00:00Z",
+  "updated_at": "2026-05-06T00:00:00Z"
+}
+```
+
+```
+GET /api/rule-engine/graphs/{graph_id}
+
+Response 200:
+{
+  "id": 1,
+  "name": "My Rule",
+  ...
+}
+
+GET /api/rule-engine/graphs/{graph_id}/detail
+
+Response 200:
+{
+  "id": 1,
+  "name": "My Rule",
+  "nodes": [...],   # 解析后的节点数组
+  "edges": [...],   # 解析后的边数组
+  "variables": [...]  # 变量列表
+}
+
+PUT /api/rule-engine/graphs/{graph_id}
+
+Request Body:
+{
+  "name": "Updated Name",
+  "nodes_json": "...",
+  "edges_json": "...",
+  "is_active": true
+}
+
+DELETE /api/rule-engine/graphs/{graph_id}
+
+Response 200:
+{ "message": "规则图已删除" }
+```
+
+#### 规则图校验/激活
+
+```
+POST /api/rule-engine/graphs/{graph_id}/validate
+
+Response 200:
+{
+  "valid": true,
+  "error": null
+}
+
+POST /api/rule-engine/graphs/{graph_id}/activate
+
+Response 200:
+{
+  "id": 1,
+  "is_active": true,
+  ...
+}
+
+POST /api/rule-engine/graphs/{graph_id}/deactivate
+
+Response 200:
+{
+  "id": 1,
+  "is_active": false,
+  ...
+}
+```
+
+#### 执行
+
+```
+POST /api/rule-engine/execute
+
+Request Body:
+{
+  "graph_id": 1,
+  "trigger_type": "manual",
+  "trigger_data": null
+}
+
+Response 202:
+{
+  "execution_id": 123,
+  "status": "running",
+  "result": { "message": "执行已启动" }
+}
+
+GET /api/rule-engine/executions?graph_id=1&limit=50
+
+Response 200:
+[
+  {
+    "id": 123,
+    "graph_id": 1,
+    "status": "success",
+    "start_time": "2026-05-06T00:00:00Z",
+    "end_time": "2026-05-06T00:00:05Z",
+    "trigger_type": "manual"
+  }
+]
+
+GET /api/rule-engine/executions/{execution_id}
+
+Response 200:
+{
+  "id": 123,
+  "graph_id": 1,
+  "status": "success",
+  "start_time": "...",
+  "end_time": "...",
+  "trigger_type": "manual"
+}
+
+GET /api/rule-engine/executions/{execution_id}/logs
+
+Response 200:
+{
+  "execution": { ... },
+  "node_logs": [
+    {
+      "node_id": "n1",
+      "node_type": "image_input",
+      "status": "success",
+      "input_data": { ... },
+      "output_data": { ... },
+      "error_message": null,
+      "start_time": "...",
+      "end_time": "..."
+    }
+  ]
+}
+```
+
+### 6.3 Pinia Store 设计
+
+```typescript
+// webui/src/stores/ruleEngine.ts
+
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { ruleEngineApi } from '@/api'
+
+// ============ 类型定义 ============
+
+interface NodeDefinition {
+  type: string
+  category: string
+  label: string
+  description?: string
+  icon?: string
+  inputs: Array<{ name: string; type: string; label?: string }>
+  outputs: Array<{ name: string; type: string; label?: string }>
+  config_schema: Record<string, ConfigSchemaProperty>
+}
+
+interface ConfigSchemaProperty {
+  type: string
+  title?: string
+  description?: string
+  default?: any
+  minimum?: number
+  maximum?: number
+  step?: number
+  enum?: string[]
+  widget?: string
+  visible?: string  // 条件可见，如 "source=file"
+}
+
+interface GraphNode {
+  id: string
+  type: string
+  position: { x: number; y: number }
+  data: {
+    type: string
+    label?: string
+    category: string
+    inputs?: Array<{ name: string; type: string; label?: string }>
+    outputs?: Array<{ name: string; type: string; label?: string }>
+    configSchema?: Record<string, ConfigSchemaProperty>
+    config?: Record<string, any>
+    status?: 'idle' | 'running' | 'success' | 'failed'
+  }
+}
+
+interface GraphEdge {
+  id: string
+  source: string
+  target: string
+  source_handle?: string
+  target_handle?: string
+}
+
+interface Variable {
+  name: string
+  type: string
+  defaultValue?: any
+  description?: string
+}
+
+// ============ Store 定义 ============
+
+export const useRuleEngineStore = defineStore('ruleEngine', () => {
+  // ---- 状态 ----
+  const nodeDefinitions = ref<NodeDefinition[]>([])
+  const currentGraph = ref<{
+    id: number
+    name: string
+    description?: string
+    is_active: boolean
+    nodes: GraphNode[]
+    edges: GraphEdge[]
+    variables: Variable[]
+  } | null>(null)
+  const selectedNodeId = ref<string | null>(null)
+
+  // 执行状态
+  const executingGraphId = ref<number | null>(null)
+  const executionHistory = ref<Array<{
+    id: number
+    status: string
+    start_time: string
+    end_time?: string
+  }>>([])
+
+  // Undo/Redo 栈
+  const historyStack = ref<Array<{ nodes: GraphNode[]; edges: GraphEdge[] }>>([])
+  const historyIndex = ref(-1)
+  const maxHistorySize = 20
+
+  // 变量列表
+  const variables = ref<Variable[]>([])
+
+  // ---- 计算属性 ----
+  const selectedNode = computed(() =>
+    currentGraph.value?.nodes.find(n => n.id === selectedNodeId.value) ?? null
+  )
+
+  const canUndo = computed(() => historyIndex.value > 0)
+  const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
+
+  const nodeDefinitionsByCategory = computed(() => {
+    const map: Record<string, NodeDefinition[]> = {}
+    for (const def of nodeDefinitions.value) {
+      if (!map[def.category]) map[def.category] = []
+      map[def.category].push(def)
+    }
+    return map
+  })
+
+  // ---- Actions ----
+  async function fetchNodeDefinitions() {
+    const res = await ruleEngineApi.getNodeDefinitions()
+    nodeDefinitions.value = res.data
+    return res.data
+  }
+
+  async function fetchGraph(id: number) {
+    const res = await ruleEngineApi.getGraphDetail(id)
+    currentGraph.value = res.data
+    // 初始化撤销栈
+    saveToHistory()
+    return res.data
+  }
+
+  async function saveGraph() {
+    if (!currentGraph.value) return
+    const nodesJson = JSON.stringify(currentGraph.value.nodes)
+    const edgesJson = JSON.stringify(currentGraph.value.edges)
+    const variablesJson = JSON.stringify(currentGraph.value.variables)
+
+    await ruleEngineApi.updateGraph(currentGraph.value.id, {
+      name: currentGraph.value.name,
+      nodes_json: nodesJson,
+      edges_json: edgesJson,
+      variables_json: variablesJson,
+    })
+  }
+
+  // ---- 节点操作 ----
+  function addNode(def: NodeDefinition, position: { x: number; y: number }) {
+    if (!currentGraph.value) return
+
+    const id = `node_${Date.now()}`
+    const newNode: GraphNode = {
+      id,
+      type: 'rule-node',
+      position,
+      data: {
+        type: def.type,
+        label: def.label,
+        category: def.category,
+        inputs: def.inputs,
+        outputs: def.outputs,
+        configSchema: def.config_schema,
+        config: getDefaultConfig(def.config_schema),
+        status: 'idle',
+      },
+    }
+
+    currentGraph.value.nodes.push(newNode)
+    saveToHistory()
+    return id
+  }
+
+  function updateNodeConfig(nodeId: string, key: string, value: any) {
+    const node = currentGraph.value?.nodes.find(n => n.id === nodeId)
+    if (node) {
+      node.data.config = node.data.config || {}
+      node.data.config[key] = value
+    }
+  }
+
+  function removeNode(nodeId: string) {
+    if (!currentGraph.value) return
+    currentGraph.value.nodes = currentGraph.value.nodes.filter(n => n.id !== nodeId)
+    currentGraph.value.edges = currentGraph.value.edges.filter(
+      e => e.source !== nodeId && e.target !== nodeId
+    )
+    if (selectedNodeId.value === nodeId) selectedNodeId.value = null
+    saveToHistory()
+  }
+
+  function selectNode(nodeId: string | null) {
+    selectedNodeId.value = nodeId
+  }
+
+  // ---- 边操作 ----
+  function addEdge(edge: Omit<GraphEdge, 'id'>) {
+    if (!currentGraph.value) return
+    const id = `edge_${Date.now()}`
+    currentGraph.value.edges.push({ ...edge, id })
+    saveToHistory()
+  }
+
+  function removeEdge(edgeId: string) {
+    if (!currentGraph.value) return
+    currentGraph.value.edges = currentGraph.value.edges.filter(e => e.id !== edgeId)
+    saveToHistory()
+  }
+
+  // ---- Undo/Redo ----
+  function saveToHistory() {
+    if (!currentGraph.value) return
+
+    const snapshot = {
+      nodes: JSON.parse(JSON.stringify(currentGraph.value.nodes)),
+      edges: JSON.parse(JSON.stringify(currentGraph.value.edges)),
+    }
+
+    // 截断 redo 栈
+    historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+    historyStack.value.push(snapshot)
+
+    // 限制栈大小
+    if (historyStack.value.length > maxHistorySize) {
+      historyStack.value.shift()
+    } else {
+      historyIndex.value++
+    }
+  }
+
+  function undo() {
+    if (!canUndo.value || !currentGraph.value) return
+    historyIndex.value--
+    const snapshot = historyStack.value[historyIndex.value]
+    currentGraph.value.nodes = JSON.parse(JSON.stringify(snapshot.nodes))
+    currentGraph.value.edges = JSON.parse(JSON.stringify(snapshot.edges))
+  }
+
+  function redo() {
+    if (!canRedo.value || !currentGraph.value) return
+    historyIndex.value++
+    const snapshot = historyStack.value[historyIndex.value]
+    currentGraph.value.nodes = JSON.parse(JSON.stringify(snapshot.nodes))
+    currentGraph.value.edges = JSON.parse(JSON.stringify(snapshot.edges))
+  }
+
+  // ---- 变量操作 ----
+  function addVariable(variable: Variable) {
+    variables.value.push(variable)
+  }
+
+  function removeVariable(name: string) {
+    variables.value = variables.value.filter(v => v.name !== name)
+  }
+
+  function updateVariable(name: string, updates: Partial<Variable>) {
+    const v = variables.value.find(var => var.name === name)
+    if (v) Object.assign(v, updates)
+  }
+
+  // ---- 辅助函数 ----
+  function getDefaultConfig(schema: Record<string, ConfigSchemaProperty>): Record<string, any> {
+    const config: Record<string, any> = {}
+    for (const [key, prop] of Object.entries(schema)) {
+      if (prop.default !== undefined) {
+        config[key] = prop.default
+      }
+    }
+    return config
+  }
+
+  return {
+    // 状态
+    nodeDefinitions,
+    currentGraph,
+    selectedNodeId,
+    executingGraphId,
+    executionHistory,
+    variables,
+
+    // 计算属性
+    selectedNode,
+    canUndo,
+    canRedo,
+    nodeDefinitionsByCategory,
+
+    // Actions
+    fetchNodeDefinitions,
+    fetchGraph,
+    saveGraph,
+    addNode,
+    updateNodeConfig,
+    removeNode,
+    selectNode,
+    addEdge,
+    removeEdge,
+    undo,
+    redo,
+    addVariable,
+    removeVariable,
+    updateVariable,
+  }
+})
+```
+
+### 6.4 变量绑定表达式语法
+
+#### 变量引用格式
+
+```
+{{variable_name}}           # 引用简单变量
+{{object.property}}         # 引用对象属性
+{{array[index]}}            # 引用数组元素
+{{object.property.nested}}  # 深層属性访问
+```
+
+#### 支持的数据类型
+
+| 类型 | 示例 | 说明 |
+|------|------|------|
+| `string` | `{{input_path}}` | 字符串变量 |
+| `number` | `{{confidence}}` | 数字变量 |
+| `boolean` | `{{enable_flag}}` | 布尔变量 |
+| `image` | `{{image_data}}` | 图像数据 |
+| `bbox[]` | `{{detections}}` | 边界框数组 |
+| `trigger` | `{{trigger_signal}}` | 触发信号 |
+
+#### 内置变量
+
+| 变量名 | 类型 | 说明 |
+|--------|------|------|
+| `$now` | datetime | 当前时间戳 |
+| `$graph.id` | number | 当前规则图 ID |
+| `$execution.id` | number | 当前执行记录 ID |
+| `$node.id` | string | 当前节点 ID |
+| `$node.label` | string | 当前节点名称 |
+
+#### 表达式示例
+
+```
+# 条件判断
+{{score}} > 0.5
+{{label}} == "person"
+{{enable_flag}} == true
+
+# 数值计算
+{{confidence}} * 100
+{{min({{scores}})}}
+
+# 字符串操作
+{{filename}}.startsWith("img_")
+{{path}}.split("/").last()
+
+# 数组操作
+{{bboxes}}.length > 0
+{{labels}}[0] == "car"
+```
+
+#### 表达式引擎要求
+
+- 使用 JavaScript 表达式语法
+- 支持基本的数学运算：`+`, `-`, `*`, `/`, `%`
+- 支持比较运算：`==`, `===`, `!=`, `!==`, `>`, `<`, `>=`, `<=`
+- 支持逻辑运算：`&&`, `||`, `!`
+- 支持三元运算符：`condition ? true_val : false_val`
+- 支持括号分组：`(a + b) * c`
+
+### 6.5 执行状态机
+
+#### 节点状态
+
+```
+┌─────────┐     ┌─────────┐     ┌─────────┐     ┌─────────┐
+│  idle   │ ──> │ running │ ──> │ success │ ──> │  idle   │
+└─────────┘     └─────────┘     └─────────┘     └─────────┘
+     │               │               │
+     │               │               │
+     v               v               v
+┌─────────────────────────────────────────┐
+│                  failed                  │
+└─────────────────────────────────────────┘
+```
+
+| 状态 | 说明 | 触发条件 |
+|------|------|----------|
+| `idle` | 空闲/等待执行 | 初始状态 / 执行完成后重置 |
+| `running` | 执行中 | 节点开始处理 |
+| `success` | 执行成功 | 节点正常完成 |
+| `failed` | 执行失败 | 节点处理出错 |
+
+#### 节点执行流程
+
+```
+1. 接收上游节点数据
+   ↓
+2. 检查必填输入端口是否已连接
+   ↓ (未连接则 failed)
+3. 从 config 读取节点配置
+   ↓
+4. 执行节点逻辑
+   ↓
+5. 产出生效数据到输出端口
+   ↓
+6. 通知下游节点数据就绪
+```
+
+#### 图执行流程
+
+```
+1. 找出所有 INPUT/TRIGGER 节点（无上游依赖）
+   ↓
+2. 并行执行这些节点
+   ↓
+3. 节点完成后，通知依赖它的下游节点
+   ↓
+4. 下游节点检查所有输入是否就绪
+   ↓ (全部就绪)
+5. 执行下游节点
+   ↓
+6. 重复直到所有节点完成或遇到错误
+   ↓
+7. 图执行结束，更新执行状态
+```
+
+#### WebSocket 进度推送
+
+```typescript
+// 连接 WebSocket
+ws://host/api/rule-engine/ws/executions/{execution_id}
+
+// 推送消息格式
+{
+  "type": "node_start" | "node_complete" | "node_error" | "execution_complete" | "execution_error",
+  "execution_id": 123,
+  "node_id": "n1",
+  "data": { ... },
+  "timestamp": "2026-05-06T00:00:00Z"
+}
+
+// node_start
+{ "type": "node_start", "node_id": "n1", "timestamp": "..." }
+
+// node_complete
+{ "type": "node_complete", "node_id": "n1", "output_data": {...}, "duration_ms": 123, "timestamp": "..." }
+
+// node_error
+{ "type": "node_error", "node_id": "n1", "error": "Error message", "timestamp": "..." }
+
+// execution_complete
+{ "type": "execution_complete", "status": "success", "total_duration_ms": 1234, "timestamp": "..." }
+
+// execution_error
+{ "type": "execution_error", "status": "failed", "error": "Error message", "failed_node_id": "n1", "timestamp": "..." }
+```
+
+---
+
+## 八、Phase A-G 详细实施步骤
+
+### Phase A: 后端 config_schema 补全
+
+**目标：** 补全 18 个节点的 `get_definition()`，完善 config_schema
+
+**修改文件：**
+
+| 文件 | 改动内容 |
+|------|----------|
+| `backend/services/rule_engine/nodes/input_nodes.py` | 补全 ImageCaptureNode, VideoCaptureNode, WebhookTriggerNode 的 config_schema |
+| `backend/services/rule_engine/nodes/detection_nodes.py` | 补全 YOLOModelNode, ObjectDetectorNode, YOLOTriggerNode 的 config_schema |
+| `backend/services/rule_engine/nodes/processing_nodes.py` | 补全 CropNode, ResizeNode, NormalizeNode, FilterNode 的 config_schema |
+| `backend/services/rule_engine/nodes/actions.py` | 补全 MouseClickNode, KeyPressNode, NotificationNode, SaveImageNode, HttpRequestNode 的 config_schema |
+| `backend/services/rule_engine/nodes/logic.py` | 补全 ConditionNode, DelayNode, TimerNode 的 config_schema |
+| `backend/services/rule_engine/nodes/output_nodes.py` | 补全 ActionOutputNode, SaveResultNode, LogNode 的 config_schema |
+
+**验收标准：** `GET /api/rule-engine/nodes/definitions` 返回所有节点的完整 config_schema
+
+### Phase B: 前端节点样式重构
+
+**目标：** 创建自定义 RuleNode.vue，节点面板卡片化
+
+**修改文件：**
+
+| 文件 | 改动内容 |
+|------|----------|
+| `webui/src/components/rule-engine/RuleNode.vue` | 重写节点模板，使用 SvgIcon，样式对齐设计规范 |
+| `webui/src/components/rule-engine/icons.ts` | 迁移到使用 SvgIcon 组件 |
+| `webui/src/icons/` | 新增 `detection.svg`, `processing.svg`, `action.svg`, `logic.svg`, `output.svg` |
+| `webui/src/views/RuleCanvas.vue` | 适配新的节点组件，节点拖拽使用自定义节点类型 |
+
+**验收标准：** 节点显示 3px 色条、图标、标题、内嵌控件、底部摘要
+
+### Phase C: 节点内嵌配置控件
+
+**目标：** 根据 config_schema 动态渲染控件
+
+**修改文件：**
+
+| 文件 | 改动内容 |
+|------|----------|
+| `webui/src/components/rule-engine/WidgetRenderer.vue` | 新建通用控件渲染组件 |
+| `webui/src/components/rule-engine/RuleNode.vue` | 使用 WidgetRenderer 替代手写控件 |
+| `webui/src/components/rule-engine/SliderWidget.vue` | 新建 slider 控件 |
+| `webui/src/components/rule-engine/DropdownWidget.vue` | 新建下拉选择控件 |
+| `webui/src/components/rule-engine/NumberWidget.vue` | 新建数字输入控件 |
+| `webui/src/components/rule-engine/CheckboxWidget.vue` | 新建开关控件 |
+| `webui/src/components/rule-engine/TextareaWidget.vue` | 新建多行文本控件 |
+| `webui/src/components/rule-engine/CodeWidget.vue` | 新建代码编辑器控件 |
+| `webui/src/components/rule-engine/ModelSelectWidget.vue` | 新建模型选择控件 |
+
+**验收标准：** 根据 config_schema 自动渲染对应控件，支持 slider/dropdown/number/checkbox/textarea/code/model-select
+
+### Phase D: 属性面板完善
+
+**目标：** 完善右侧属性面板
+
+**修改文件：**
+
+| 文件 | 改动内容 |
+|------|----------|
+| `webui/src/components/rule-engine/PropertyPanel.vue` | 新建属性面板组件 |
+| `webui/src/components/rule-engine/VariableBinder.vue` | 新建变量绑定组件 |
+| `webui/src/components/rule-engine/ExecutionStatus.vue` | 新建执行状态展示组件 |
+| `webui/src/views/RuleCanvas.vue` | 集成属性面板 |
+
+**验收标准：** 属性面板显示选中节点的完整配置，支持变量绑定（📎按钮），显示执行状态
+
+### Phase E: 交互完善
+
+**目标：** 复制粘贴、撤销重做、右键菜单、快捷键
+
+**修改文件：**
+
+| 文件 | 改动内容 |
+|------|----------|
+| `webui/src/stores/ruleEngine.ts` | 实现 undo/redo 栈（已在本文档 6.3 节定义） |
+| `webui/src/views/RuleCanvas.vue` | 添加 Ctrl+C/V 复制粘贴、右键菜单、快捷键监听 |
+
+**验收标准：** 支持 Ctrl+Z 撤销、Ctrl+Y 重做、Ctrl+C/V 复制粘贴节点、右键菜单
+
+### Phase F: 变量系统
+
+**目标：** 变量 CRUD 面板、表达式求值
+
+**修改文件：**
+
+| 文件 | 改动内容 |
+|------|----------|
+| `webui/src/components/rule-engine/VariablePanel.vue` | 新建变量管理面板 |
+| `webui/src/stores/ruleEngine.ts` | 变量相关状态和操作（已在本文档 6.3 节定义） |
+| `webui/src/utils/variableExpression.ts` | 新建变量表达式解析/求值工具 |
+
+**验收标准：** 可创建/编辑/删除变量，节点配置中可引用变量
+
+### Phase G: 优化增强
+
+**目标：** Toast 通知、MiniMap 类别色点、节点搜索优化
+
+**修改文件：**
+
+| 文件 | 改动内容 |
+|------|----------|
+| `webui/src/components/common/Toast.vue` | 复用或新建 Toast 通知组件 |
+| `webui/src/views/RuleCanvas.vue` | MiniMap 显示类别色点 |
+
+**验收标准：** 执行完成/失败有 Toast 通知，MiniMap 上显示彩色节点点
+
+---
+
+## 九、结论
 
 本次重构解决三个核心问题：
 
@@ -436,3 +1282,5 @@ LogNode:
 3. **属性面板实用** — 动态表单+变量绑定+执行状态+断连操作
 
 **建议先从 YOLO 检测节点走一遍完整流程（Phase A→B），验证方案后再批量复制到其他 17 个节点。**
+
+**前端图标规范：** 统一使用 `SvgIcon` 组件，图标名称对应 `webui/src/icons/` 目录下的 SVG 文件名。
