@@ -88,9 +88,25 @@
           </button>
         </div>
 
+        <div class="palette-search" v-show="showPalette">
+          <input
+            v-model="nodeSearchQuery"
+            type="text"
+            placeholder="搜索节点..."
+            class="search-input"
+            @input="handleSearchInput"
+          />
+          <button
+            v-if="nodeSearchQuery"
+            class="search-clear"
+            @click="nodeSearchQuery = ''"
+            title="清除搜索"
+          >×</button>
+        </div>
+
         <div class="palette-content" v-show="showPalette">
           <div
-            v-for="category in nodeCategories"
+            v-for="category in filteredCategories"
             :key="category.name"
             class="node-category"
           >
@@ -665,6 +681,35 @@ const nodeCategories = computed(() => [
   ...cat,
   nodes: nodeDefinitions.value.filter((d: any) => d.category === cat.name)
 })))
+
+// 节点搜索
+const nodeSearchQuery = ref('')
+const filteredCategories = computed(() => {
+  const query = nodeSearchQuery.value.trim().toLowerCase()
+  if (!query) {
+    // 无搜索词：显示所有分类和节点，展开状态由用户控制
+    return nodeCategories.value
+  }
+  // 搜索模式：展开所有有匹配节点的分类
+  return nodeCategories.value
+    .map(cat => ({
+      ...cat,
+      nodes: cat.nodes.filter((n: any) =>
+        n.label?.toLowerCase().includes(query) ||
+        n.type?.toLowerCase().includes(query) ||
+        n.description?.toLowerCase().includes(query)
+      ),
+      expanded: true // 搜索时强制展开
+    }))
+    .filter(cat => cat.nodes.length > 0) // 隐藏空分类
+})
+
+function handleSearchInput() {
+  // 搜索时自动展开所有分类（用户体验更好）
+  if (nodeSearchQuery.value.trim()) {
+    nodeCategories.value.forEach(cat => cat.expanded = true)
+  }
+}
 
 // 快速添加
 const quickAddNodes = computed(() => nodeDefinitions.value.slice(0, 4))
@@ -1933,7 +1978,8 @@ $panel-header-height: 52px;
   &.collapsed {
     width: 48px;
 
-    .palette-content { display: none; }
+    .palette-content,
+    .palette-search { display: none; }
   }
 }
 
@@ -1978,6 +2024,55 @@ $panel-header-height: 52px;
   &:hover {
     background: #1e1e2e;
     color: #fff;
+  }
+}
+
+.palette-search {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e1e2e;
+  gap: 6px;
+
+  .search-input {
+    flex: 1;
+    height: 30px;
+    padding: 0 10px;
+    background: #12121a;
+    border: 1px solid #2a2a3e;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+
+    &::placeholder {
+      color: #555;
+    }
+
+    &:focus {
+      border-color: #4a4a6e;
+    }
+  }
+
+  .search-clear {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #2a2a3e;
+    border: none;
+    border-radius: 50%;
+    color: #888;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+
+    &:hover {
+      background: #3a3a5e;
+      color: #fff;
+    }
   }
 }
 
