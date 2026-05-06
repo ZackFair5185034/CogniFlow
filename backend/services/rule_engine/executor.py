@@ -4,6 +4,7 @@
 """
 import asyncio
 import json
+import re
 from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -445,6 +446,7 @@ class RuleGraphExecutor:
         """解析节点的输入数据。
 
         从已完成的节点结果或默认值中获取输入。
+        支持 {{variable}} 语法变量插值。
         """
         inputs = {}
 
@@ -456,12 +458,60 @@ class RuleGraphExecutor:
                 source_node = config["node_id"]
                 source_output = config.get("output", "result")
                 inputs[port_name] = context.get_node_result(source_node, source_output)
-            # 其次使用默认值
+            # 其次使用默认值（支持 {{variable}} 变量插值）
             elif "value" in config:
-                inputs[port_name] = config["value"]
+                inputs[port_name] = self._interpolate(config["value"], context)
             # 否则为 None
 
         return inputs
+
+    def _interpolate(self, value: Any, context: ExecutionContext) -> Any:
+        """解析 {{variable}} 变量插值语法。
+
+        Args:
+            value: 原始值，可能是字符串或普通类型
+            context: 执行上下文，包含 variables
+
+        Returns:
+            解析后的值。如果 value 不是字符串或不含 {{}}，直接返回原值。
+        """
+        if not isinstance(value, str):
+            return value
+
+        # 匹配 {{variable_name}} 格式
+        pattern = r'\{\{([^}]+)\}\}'
+        matches = re.findall(pattern, value)
+
+        if not matches:
+            return value
+
+        result = value
+        for var_name in matches:
+            var_value = context.variables.get(var_name, f'{{{{{var_name}}}}}')
+            # 替换所有 {{var_name}} 为变量值
+            result = result.replace(f'{{{{{var_name}}}}}', str(var_value))
+
+        # 尝试转换类型
+        return self._try_convert(result)
+
+    def _try_convert(self, value: str) -> Any:
+        """尝试将字符串转换为适当类型。"""
+        # 布尔值
+        if value.lower() == 'true':
+            return True
+        if value.lower() == 'false':
+            return False
+
+        # 数字
+        try:
+            if '.' in value:
+                return float(value)
+            return int(value)
+        except ValueError:
+            pass
+
+        # 返回字符串
+        return value
 
     # ============================================================
     # WebSocket 广播

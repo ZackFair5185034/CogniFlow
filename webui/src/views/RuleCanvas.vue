@@ -946,6 +946,7 @@ function disconnectInput(inputName: string) {
   if (!edge) return
   const idx = edges.value.findIndex((e: any) => e.id === edge.id)
   if (idx !== -1) edges.value.splice(idx, 1)
+  saveHistory()
   showToast('已断开连接', 'info')
 }
 
