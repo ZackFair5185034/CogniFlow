@@ -1,0 +1,52 @@
+# 规则引擎 UI 迭代计划 & TODO
+
+> **当前阶段：** UI 问题修复 & 端口连接规范落地
+> **更新时间：** 2026-05-07
+
+---
+
+## Phase 1: 端口连接规范落地（依据端口连接设计文档）
+
+| # | 任务 | 文件 | 状态 |
+|---|------|------|------|
+| 1.1 | 后端 `PortType` 枚举补充完整 14 种类型 | `backend/services/rule_engine/models.py` | ⏳ 待开始 |
+| 1.2 | 前端 `PORT_TYPES` 添加缺失类型 | `webui/src/views/RuleCanvas.vue` | ⏳ 待开始 |
+| 1.3 | 前端 `isPortCompatible` 补全全部类型的兼容规则 | `webui/src/views/RuleCanvas.vue` | ⏳ 待开始 |
+| 1.4 | 前端 CSS 补充 `.type-int/.type-float/.type-string/.type-object/.type-model` 颜色 | `webui/src/components/rule-engine/RuleNode.vue` | ⏳ 待开始 |
+| 1.5 | Handle 模板添加动态类型 class | `webui/src/components/rule-engine/RuleNode.vue` | ⏳ 待开始 |
+| 1.6 | 已连接端口颜色不覆盖类型颜色 | `webui/src/components/rule-engine/RuleNode.vue` | ⏳ 待开始 |
+
+## Phase 2: P0 问题修复
+
+| # | 任务 | 文件 | 状态 |
+|---|------|------|------|
+| 2.1 | 节点分类展开状态持久化（computed → reactive） | `webui/src/views/RuleCanvas.vue` | ⏳ 待开始 |
+| 2.2 | 框选功能修复（移除事件冲突） | `webui/src/views/RuleCanvas.vue` | ⏳ 待开始 |
+| 2.3 | 右键菜单冒泡修复 | `webui/src/components/rule-engine/RuleNode.vue` | ⏳ 待开始 |
+| 2.4 | 节点圆角溢出修复 | `webui/src/components/rule-engine/RuleNode.vue` | ⏳ 待开始 |
+| 2.5 | Handle 位置修正 | `webui/src/components/rule-engine/RuleNode.vue` | ⏳ 待开始 |
+
+## Phase 3: P1 改进
+
+| # | 任务 | 文件 | 状态 |
+|---|------|------|------|
+| 3.1 | 连接功能修正（`getNodePortType` 数组 vs 对象 bug） | `webui/src/views/RuleCanvas.vue` | ⏳ 待开始 |
+| 3.2 | 工具栏重新规划 | `webui/src/views/RuleCanvas.vue` | ⏳ 待开始 |
+| 3.3 | 折叠按钮位置移动 | `webui/src/views/RuleCanvas.vue` | ⏳ 待开始 |
+
+## Phase 4: P2 体验优化
+
+| # | 任务 | 文件 | 状态 |
+|---|------|------|------|
+| 4.1 | 控制台拖拽调整高度 | `webui/src/views/RuleCanvas.vue` | ⏳ 待开始 |
+| 4.2 | 侧栏收纳宽度适配 | `webui/src/views/RuleCanvas.vue` | ⏳ 待开始 |
+
+---
+
+## 已完成
+
+| 日期 | 内容 | 提交 |
+|------|------|------|
+| 2026-05-07 | 端口连接设计规范文档 | `ca46fea` |
+| 2026-05-07 | UI 整改方案文档 | `ca46fea` |
+| 2026-05-07 | RuleNode + RuleCanvas 代码提交（Handle/删除按钮/框选/右键菜单等） | `339496f` |
