@@ -167,7 +167,10 @@ async def execute_graph(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """手动触发规则图执行。"""
+    """手动触发规则图执行。
+
+    立即返回 execution_id，执行在后台异步进行，通过 WebSocket 推送进度。
+    """
     manager = GraphManager(db)
 
     # 获取规则图
@@ -178,7 +181,7 @@ async def execute_graph(
     # 解析图数据
     graph_data = manager.parse_graph_data(graph)
 
-    # 创建执行记录
+    # 创建执行记录（同步，拿到 execution_id）
     executor = RuleGraphExecutor(db)
     execution_id = executor.create_execution_record(
         graph_id=trigger.graph_id,
@@ -186,9 +189,12 @@ async def execute_graph(
         trigger_data=trigger.trigger_data,
     )
 
-    # 在后台执行
+    # 在后台异步执行，传入 rule_ws_manager
+    from backend.services.rule_engine.websocket_manager import rule_ws_manager
+
     async def run_execution():
-        result = await executor.execute(
+        ex = RuleGraphExecutor(db, ws_manager=rule_ws_manager)
+        result = await ex.execute(
             graph_data=graph_data,
             execution_id=execution_id,
             trigger_type=trigger.trigger_type,
@@ -196,13 +202,13 @@ async def execute_graph(
         )
         return result
 
-    # 执行并返回结果
-    result = await run_execution()
+    background_tasks.add_task(run_execution)
 
+    # 立即返回，前端通过 WebSocket 订阅进度
     return ExecutionResponse(
         execution_id=execution_id or 0,
-        status=result["status"],
-        result=result,
+        status="running",
+        result={"message": "执行已启动，请通过 WebSocket 订阅进度"},
     )
 
 

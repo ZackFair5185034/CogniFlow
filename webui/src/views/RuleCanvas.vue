@@ -415,6 +415,14 @@
       </div>
 
       <div class="execution-content" v-show="showExecutionPanel">
+        <!-- 进度条 -->
+        <div class="progress-bar-wrapper" v-if="executionStatus === 'running'">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: executionProgress + '%' }"></div>
+          </div>
+          <span class="progress-text">{{ executionProgress }}%</span>
+        </div>
+
         <div class="logs-list">
           <div
             v-for="(log, idx) in executionLogs"
@@ -529,6 +537,8 @@ const showGrid = ref(true)
 const showExecutionPanel = ref(false)
 const executionLogs = ref<any[]>([])
 const executionStatus = ref<'idle' | 'running' | 'success' | 'failed'>('idle')
+const executionProgress = ref(0)
+const executionId = ref<number | null>(null)
 const flowContainer = ref<HTMLElement | null>(null)
 const vueFlowRef = ref<any>(null)
 const canvasWrapper = ref<HTMLElement | null>(null)
@@ -539,6 +549,9 @@ const panY = ref(0)
 const zoomLevel = ref(1)
 const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
+
+// 节点执行状态: nodeId -> 'pending' | 'running' | 'success' | 'failed'
+const nodeStates = ref<Record<string, string>>({})
 
 // 复制粘贴
 const clipboard = ref<any[]>([])
@@ -629,11 +642,101 @@ const toast = reactive({ show: false, message: '', type: 'info' as 'success' | '
 function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
   toast.message = message
   toast.type = type
-  toast.show = true
-  setTimeout(() => { toast.show = false }, 3000)
+  toast.visible = true
+  setTimeout(() => { toast.visible = false }, 3000)
 }
 
-// 保存历史
+// WebSocket 连接（Phase 5 实时推送）
+let ws: WebSocket | null = null
+let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+function getWsUrl() {
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${proto}//${window.location.host}/ws/rule-execution`
+}
+
+function connectWebSocket(execId: number) {
+  if (ws) {
+    ws.close()
+    ws = null
+  }
+
+  try {
+    ws = new WebSocket(getWsUrl())
+
+    ws.onopen = () => {
+      // 订阅该 execution_id
+      ws?.send(JSON.stringify({ action: 'subscribe', execution_id: execId }))
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data)
+        handleWsMessage(msg)
+      } catch (e) {
+        console.error('[WS] 解析消息失败', e)
+      }
+    }
+
+    ws.onerror = () => {
+      // 自动重连
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
+      wsReconnectTimer = setTimeout(() => {
+        if (executionStatus.value === 'running' && executionId.value) {
+          connectWebSocket(executionId.value)
+        }
+      }, 3000)
+    }
+
+    ws.onclose = () => {
+      ws = null
+    }
+  } catch (e) {
+    console.error('[WS] 连接失败', e)
+  }
+}
+
+function disconnectWebSocket() {
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer)
+    wsReconnectTimer = null
+  }
+  if (ws) {
+    ws.close()
+    ws = null
+  }
+}
+
+function handleWsMessage(msg: any) {
+  switch (msg.type) {
+    case 'node_started':
+      nodeStates.value[msg.node_id] = 'running'
+      break
+    case 'node_executed':
+      nodeStates.value[msg.node_id] = 'success'
+      break
+    case 'node_failed':
+      nodeStates.value[msg.node_id] = 'failed'
+      showToast(`节点执行失败: ${msg.error}`, 'error')
+      break
+    case 'execution_progress':
+      executionProgress.value = msg.progress
+      break
+    case 'execution_complete':
+      executionStatus.value = msg.status === 'completed' ? 'success' : 'failed'
+      executionProgress.value = 100
+      showToast(
+        msg.status === 'completed' ? '执行成功' : `执行失败: ${msg.error || ''}`,
+        msg.status === 'completed' ? 'success' : 'error'
+      )
+      // 重置节点状态
+      setTimeout(() => { nodeStates.value = {} }, 2000)
+      disconnectWebSocket()
+      break
+  }
+}
+
+// 右键菜单操作
 function saveHistory() {
   historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
   historyStack.value.push({
@@ -1329,8 +1432,10 @@ async function handleExecute() {
 
   executing.value = true
   executionStatus.value = 'running'
+  executionProgress.value = 0
   showExecutionPanel.value = true
   executionLogs.value = []
+  nodeStates.value = {}
 
   try {
     const res = await ruleEngineApi.execute({
@@ -1338,12 +1443,14 @@ async function handleExecute() {
       trigger_type: 'manual'
     })
 
-    if (res.data.result?.logs) {
-      executionLogs.value = res.data.result.logs
-    }
+    // Phase 5: WebSocket 实时推送
+    const execId = res.data.execution_id
+    executionId.value = execId
+    connectWebSocket(execId)
 
-    executionStatus.value = res.data.status === 'completed' ? 'success' : 'failed'
-    showToast(`执行${executionStatus.value === 'success' ? '成功' : '完成'}`, 'success')
+    // 前端轮询作为降级（备用）
+    pollExecutionStatus(execId)
+
   } catch (err: any) {
     executionStatus.value = 'failed'
     executionLogs.value.push({
@@ -1352,9 +1459,14 @@ async function handleExecute() {
       message: err?.response?.data?.detail || '执行失败'
     })
     showToast('执行失败', 'error')
-  } finally {
     executing.value = false
   }
+}
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+async function pollExecutionStatus(execId: number) {
+  // WebSocket 足够可靠，仅在连接失败时启用轮询备用
 }
 
 // 清空日志
@@ -2393,6 +2505,38 @@ $panel-header-height: 52px;
 .execution-content {
   max-height: 200px;
   overflow-y: auto;
+}
+
+/* 执行进度条 */
+.progress-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: rgba(0, 240, 255, 0.03);
+  border-bottom: 1px solid #1a1a24;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 4px;
+  background: #2a2a3a;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00f0ff, #00ff88);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 11px;
+  color: #00f0ff;
+  min-width: 32px;
+  text-align: right;
 }
 
 .logs-list {
