@@ -82,6 +82,10 @@ async def lifespan(app: FastAPI):
     os.makedirs(YOLO_RUNS_DIR, exist_ok=True)
 
     init_db()
+    # 启动规则引擎调度器
+    from backend.services.rule_engine.scheduler import rule_scheduler
+    rule_scheduler.start()
+
     # 设置事件循环给流式推理 WebSocket 管理器
     import asyncio
     try:
@@ -90,6 +94,9 @@ async def lifespan(app: FastAPI):
     except RuntimeError:
         pass
     yield
+
+    # 关闭规则引擎调度器
+    rule_scheduler.stop()
 
 
 # 创建 FastAPI 应用
