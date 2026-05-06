@@ -46,6 +46,7 @@ docs/research/
 │   ├── rule-engine-api-design.md            API 设计文档
 │   ├── rule-engine-data-models.md           数据模型文档
 │   ├── rule-engine-dev-guide.md            开发规范
+│   ├── rule-engine-port-connection-design.md  端口连接设计规范
 │   └── rule-engine-ui-ux-spec.md          UI/UX 交互规范
 │
 ├── 🔧 阶段实现（详细技术文档）
