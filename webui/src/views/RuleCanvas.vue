@@ -564,7 +564,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, markRaw, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow, Position, MarkerType } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -655,12 +655,12 @@ const canRedo = computed(() => historyIndex.value < historyStack.value.length - 
 
 // 节点分类 - 6色体系 (按设计文档)
 const nodeCategories = computed(() => [
-  { name: 'input', label: '输入', icon: markRaw(InputIcon), expanded: true, nodes: [] as any[] },
-  { name: 'detection', label: '检测', icon: markRaw(DetectionIcon), expanded: true, nodes: [] as any[] },
-  { name: 'processing', label: '处理', icon: markRaw(ProcessingIcon), expanded: true, nodes: [] as any[] },
-  { name: 'action', label: '动作', icon: markRaw(ActionIcon), expanded: true, nodes: [] as any[] },
-  { name: 'logic', label: '逻辑', icon: markRaw(LogicIcon), expanded: true, nodes: [] as any[] },
-  { name: 'output', label: '输出', icon: markRaw(OutputIcon), expanded: true, nodes: [] as any[] },
+  { name: 'input', label: '输入', expanded: true, nodes: [] as any[] },
+  { name: 'detection', label: '检测', expanded: true, nodes: [] as any[] },
+  { name: 'processing', label: '处理', expanded: true, nodes: [] as any[] },
+  { name: 'action', label: '动作', expanded: true, nodes: [] as any[] },
+  { name: 'logic', label: '逻辑', expanded: true, nodes: [] as any[] },
+  { name: 'output', label: '输出', expanded: true, nodes: [] as any[] },
 ].map(cat => ({
   ...cat,
   nodes: nodeDefinitions.value.filter((d: any) => d.category === cat.name)
@@ -739,19 +739,6 @@ function miniMapNodeColor(node: any) {
     output: '#FF4C4C'       // output (#FF4C4C)
   }
   return colors[node.category] || '#888'
-}
-
-// 获取分类图标
-function getCategoryIcon(category: string) {
-  const icons: Record<string, any> = {
-    input: markRaw(InputIcon),
-    detection: markRaw(DetectionIcon),
-    processing: markRaw(ProcessingIcon),
-    action: markRaw(ActionIcon),
-    logic: markRaw(LogicIcon),
-    output: markRaw(OutputIcon)
-  }
-  return icons[category] || icons.action
 }
 
 // Toast
