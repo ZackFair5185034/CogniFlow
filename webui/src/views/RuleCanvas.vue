@@ -112,9 +112,7 @@
           >
             <div class="category-header" @click="category.expanded = !category.expanded">
               <div class="category-icon-wrapper" :class="category.name">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <component :is="category.icon" />
-                </svg>
+                <SvgIcon :name="category.name" />
               </div>
               <span class="category-name">{{ category.label }}</span>
               <span class="category-count">{{ category.nodes.length }}</span>
@@ -131,9 +129,7 @@
                 @dblclick="quickAddNode(node)"
               >
                 <div class="node-icon-wrapper" :class="category.name">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <component :is="category.icon" />
-                  </svg>
+                  <SvgIcon :name="node.category || category.name" />
                 </div>
                 <div class="node-info">
                   <span class="node-label">{{ node.label }}</span>
@@ -283,9 +279,7 @@
                 @click="quickAddNode(node)"
               >
                 <span class="btn-icon" :class="node.category">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <component :is="getCategoryIcon(node.category)" />
-                  </svg>
+                  <SvgIcon :name="node.category" />
                 </span>
                 {{ node.label }}
               </button>
@@ -306,9 +300,7 @@
           <div class="panel-header">
             <div class="panel-title">
               <span class="panel-icon" :class="selectedNode.category">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <component :is="getCategoryIcon(selectedNode.category)" />
-                </svg>
+                <SvgIcon :name="selectedNode.category" />
               </span>
               <div class="panel-title-text">
                 <span class="node-name">{{ selectedNode.label }}</span>
@@ -584,17 +576,6 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 
-// 图标 - 6色分类体系 (按设计文档)
-const InputIcon = () => h('path', { d: 'M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' })  // input (#4CFF4C)
-const DetectionIcon = () => h('circle', { cx: '12', cy: '12', r: '10', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' })  // detection (#00f0FF)
-const ProcessingIcon = () => h('polygon', { points: '13 2 3 14 12 14 11 22 21 10 12 10 13 2', fill: 'currentColor' })  // processing (#FFFF4C)
-const ActionIcon = () => h('polygon', { points: '5 3 19 12 5 21 5 3', fill: 'currentColor' })  // action (#FF7F4C)
-const LogicIcon = () => h('rect', { x: '3', y: '3', width: '7', height: '7', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' })  // logic (#DC4FDC)
-const OutputIcon = () => h('path', { d: 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4L12 14.01l-3-3', fill: 'none', stroke: 'currentColor', 'stroke-width': '2' })  // output (#FF4C4C)
-
-import { h } from 'vue'
-
-// 导入自定义节点组件
 import RuleNode from '@/components/rule-engine/RuleNode.vue'
 
 const router = useRouter()

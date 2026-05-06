@@ -6,39 +6,7 @@
     <!-- 标题栏 -->
     <div class="node-header">
       <div class="node-icon" :class="data.category">
-        <!-- Input: 箭头 -->
-        <svg v-if="data.category === 'input'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-        </svg>
-        <!-- Detection: 靶心 -->
-        <svg v-else-if="data.category === 'detection'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <circle cx="12" cy="12" r="6"/>
-          <circle cx="12" cy="12" r="2"/>
-        </svg>
-        <!-- Processing: 齿轮 -->
-        <svg v-else-if="data.category === 'processing'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"/>
-          <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
-        </svg>
-        <!-- Action: 闪电 -->
-        <svg v-else-if="data.category === 'action'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-        </svg>
-        <!-- Logic: 分支 -->
-        <svg v-else-if="data.category === 'logic'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6 4v16M18 4v16"/>
-          <circle cx="6" cy="12" r="2"/>
-          <circle cx="18" cy="12" r="2"/>
-        </svg>
-        <!-- Output: 下载 -->
-        <svg v-else-if="data.category === 'output'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-        </svg>
-        <!-- Fallback -->
-        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-        </svg>
+        <SvgIcon :name="data.category" />
       </div>
       <div class="node-title">
         <span class="node-label">{{ data.label || data.type }}</span>
@@ -224,14 +192,7 @@
 
 <script setup lang="ts">
 import { computed, inject, ref } from 'vue'
-import {
-  InputIcon,
-  DetectionIcon,
-  ProcessingIcon,
-  ActionIcon,
-  LogicIcon,
-  OutputIcon
-} from './icons'
+import SvgIcon from '@/components/SvgIcon.vue'
 
 interface ConfigSchemaProperty {
   type: string
@@ -275,20 +236,7 @@ const emit = defineEmits<{
   (e: 'update:config', key: string, value: any): void
 }>()
 
-// 分类图标映射
-function getCategoryIcon(category: string) {
-  const icons: Record<string, any> = {
-    input: InputIcon,
-    detection: DetectionIcon,
-    processing: ProcessingIcon,
-    action: ActionIcon,
-    logic: LogicIcon,
-    output: OutputIcon
-  }
-  return icons[category] || icons.action
-}
-
-// 配置属性 - 后端返回扁平格式 {key: ConfigSchemaProperty}
+// 可用模型（model-select用）
 const configProperties = computed(() => {
   return props.data.configSchema || {}
 })
