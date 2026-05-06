@@ -332,7 +332,7 @@
               <div class="section-label">参数配置</div>
               <div class="config-form">
                 <div
-                  v-for="(schema, key) in selectedNode.configSchema?.properties || {}"
+                  v-for="(schema, key) in (selectedNode.configSchema || selectedNode.data?.configSchema || {})"
                   :key="key"
                   class="form-field"
                 >
@@ -1499,7 +1499,8 @@ function updateConfig(key: string, value: any) {
   nodeConfig.value[key] = value
   const node = nodes.value.find(n => n.id === selectedNode.value?.id)
   if (node) {
-    node.data = { ...nodeConfig.value }
+    node.data = node.data || {}
+    node.data.config = { ...nodeConfig.value }
   }
 }
 
