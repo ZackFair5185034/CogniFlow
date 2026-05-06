@@ -224,8 +224,8 @@
             :nodes-connectable="true"
             :elements-selectable="true"
             :select-nodes-on-drag="true"
-            :selection-key-code="true"
-            :multi-selection-key-code="'Control'"
+            :selection-mode="SelectionMode.Partial"
+            @selection-change="handleSelectionChange"
           >
             
             <!-- 小地图 -->
@@ -382,7 +382,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { VueFlow, useVueFlow, Position, MarkerType } from '@vue-flow/core'
+import { VueFlow, useVueFlow, Position, MarkerType, SelectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -812,6 +812,12 @@ function handlePaste() {
   addNodes(newNodes)
   saveHistory()
   showToast(`已粘贴 ${newNodes.length} 个节点`, 'info')
+}
+
+// 框选变化
+function handleSelectionChange({ nodes: selectedNodes }: any) {
+  // 可在这里同步更新选中节点状态
+  // console.log('Selected nodes:', selectedNodes)
 }
 
 // 删除选中

@@ -21,7 +21,7 @@
 | # | 任务 | 文件 | 状态 |
 |---|------|------|------|
 | 2.1 | 节点分类展开状态持久化（computed → reactive） | `webui/src/views/RuleCanvas.vue` | ✅ 已完成 |
-| 2.2 | 框选功能修复（移除事件冲突） | `webui/src/views/RuleCanvas.vue` | ⏳ 待开始 |
+| 2.2 | 框选功能修复（SelectionMode.Partial + handleSelectionChange） | `webui/src/views/RuleCanvas.vue` | ✅ 已完成 |
 | 2.3 | 右键菜单冒泡修复 | `webui/src/components/rule-engine/RuleNode.vue` | ✅ 已完成 |
 | 2.4 | 节点圆角溢出修复 | `webui/src/components/rule-engine/RuleNode.vue` | ✅ 已完成 |
 | 2.5 | Handle 位置修正 | `webui/src/components/rule-engine/RuleNode.vue` | ✅ 已完成 |
