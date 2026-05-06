@@ -357,6 +357,13 @@ function updateConfig(key: string, value: any) {
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
     0 2px 8px rgba(0,0,0,0.3);
+  /* 圆角裁剪（但 Handle 超出节点时需要特殊处理，见下方） */
+  overflow: hidden;
+}
+
+/* Handle 使用 overflow: visible 避免被裁剪 */
+.vue-flow__handle {
+  overflow: visible !important;
 }
 
 .rule-node:hover {
@@ -655,7 +662,7 @@ function updateConfig(key: string, value: any) {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 8px;
+  padding: 0;
   position: relative;
 }
 

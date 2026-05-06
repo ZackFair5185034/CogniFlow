@@ -82,10 +82,10 @@
       <!-- 左侧节点面板 -->
       <aside class="node-palette" :class="{ collapsed: !showPalette }">
         <div class="palette-header">
-          <h3 v-if="showPalette">节点库</h3>
           <button class="collapse-btn" @click="showPalette = !showPalette">
             <SvgIcon name="chevron-left" :class="{ rotated: !showPalette }" />
           </button>
+          <h3 v-if="showPalette">节点库</h3>
         </div>
 
         <div class="palette-search" v-show="showPalette">
@@ -275,7 +275,13 @@
           </div>
 
     <!-- 执行日志面板 -->
-    <div class="execution-panel" :class="{ expanded: showExecutionPanel }">
+    <div class="execution-panel" :class="{ expanded: showExecutionPanel }"
+      :style="{
+        height: showExecutionPanel ? panelHeight + 'px' : '44px',
+        left: showPalette ? EXPANDED_WIDTH + 'px' : COLLAPSED_WIDTH + 'px'
+      }">
+      <!-- 拖拽调整高度 -->
+      <div class="panel-resize-handle" @mousedown="startPanelResize"></div>
       <div class="execution-header" @click="showExecutionPanel = !showExecutionPanel">
         <div class="execution-title">
           <SvgIcon name="file-text" />
@@ -448,6 +454,14 @@ const contextMenu = reactive({
   target: null as any,
   targetType: null as 'node' | 'edge' | 'pane'
 })
+
+// 执行日志面板高度
+const panelHeight = ref(200)
+const isResizingPanel = ref(false)
+
+// palette 折叠后的宽度（配合 execution-panel left 动态响应）
+const COLLAPSED_WIDTH = 48
+const EXPANDED_WIDTH = 280
 
 // 变量绑定菜单
 const varMenu = reactive({
@@ -1281,6 +1295,24 @@ function handleCanvasMouseMove(event: MouseEvent) {
 
 function handleCanvasMouseUp() {
   isPanning.value = false
+  isResizingPanel.value = false
+}
+
+function startPanelResize(e: MouseEvent) {
+  isResizingPanel.value = true
+  const startY = e.clientY
+  const startHeight = panelHeight.value
+  const onMove = (ev: MouseEvent) => {
+    const newHeight = startHeight + (startY - ev.clientY)
+    panelHeight.value = Math.max(100, Math.min(500, newHeight))
+  }
+  const onUp = () => {
+    isResizingPanel.value = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
 }
 
 // 更新配置
@@ -1796,8 +1828,8 @@ $panel-header-height: 52px;
   height: $panel-header-height;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
+  gap: 8px;
+  padding: 0 8px;
   border-bottom: 1px solid #1e1e2e;
 
   h3 {
@@ -1806,6 +1838,7 @@ $panel-header-height: 52px;
     color: #888;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    flex: 1;
   }
 }
 
@@ -2721,7 +2754,6 @@ $panel-header-height: 52px;
 .execution-panel {
   position: fixed;
   bottom: 0;
-  left: $palette-width;
   right: 0;
   background: #0e0e14;
   border-top: 1px solid #1e1e2e;
@@ -2730,6 +2762,20 @@ $panel-header-height: 52px;
 
   &:not(.expanded) {
     .execution-content { display: none; }
+  }
+}
+
+.panel-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  cursor: ns-resize;
+  z-index: 10;
+
+  &:hover {
+    background: rgba(0, 240, 255, 0.3);
   }
 }
 
