@@ -33,6 +33,38 @@ class RuleGraphExecutor:
         self.db = db
         self.ws_manager = ws_manager
 
+    def create_execution_record(
+        self,
+        graph_id: int,
+        trigger_type: str = "manual",
+        trigger_data: dict = None
+    ) -> int:
+        """创建执行记录。
+
+        Args:
+            graph_id: 规则图ID
+            trigger_type: 触发类型
+            trigger_data: 触发数据
+
+        Returns:
+            执行记录ID
+        """
+        if not self.db:
+            return 0
+
+        from backend.database import ExecutionHistory
+
+        record = ExecutionHistory(
+            graph_id=graph_id,
+            status="pending",
+            trigger_type=trigger_type,
+            trigger_data_json=json.dumps(trigger_data or {}, default=str),
+        )
+        self.db.add(record)
+        self.db.commit()
+        self.db.refresh(record)
+        return record.id
+
     # ============================================================
     # Kahn 拓扑排序
     # ============================================================
