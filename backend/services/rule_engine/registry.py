@@ -180,10 +180,14 @@ def init_builtin_executors() -> NodeRegistry:
         ManualTriggerNode,
         TimerTriggerNode,
         CronTriggerNode,
+        WebhookTriggerNode,
+        ApiTriggerNode,
     )
     registry.register(ManualTriggerNode)
     registry.register(TimerTriggerNode)
     registry.register(CronTriggerNode)
+    registry.register(WebhookTriggerNode)
+    registry.register(ApiTriggerNode)
 
     # ===== 检测类节点 =====
     from .nodes.detection_nodes import (

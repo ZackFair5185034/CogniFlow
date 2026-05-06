@@ -175,3 +175,133 @@ class CronTriggerNode(BaseExecutor):
             "timestamp": time.time(),
             "cron": cron_expr,
         }
+
+
+class WebhookTriggerNode(BaseExecutor):
+    """Webhook 触发器 - 接收 HTTP 请求触发规则。
+
+    配置项:
+        path: str - Webhook 路径
+        method: str - HTTP 方法 (GET/POST)
+        auth_token: str - 认证令牌（可选）
+
+    注意: Webhook 触发器的实际 HTTP 端点由调度器/路由器创建。
+    此节点在接收请求时返回结果。
+    """
+
+    node_type = "webhook_trigger"
+    category = NodeCategory.INPUT
+    display_name = "Webhook 触发"
+    description = "接收 HTTP 请求触发规则执行"
+    icon = "webhook"
+    color = "#4CFF4C"
+
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={},
+            outputs={
+                "triggered": PortDefinition(
+                    name="触发",
+                    type="BOOLEAN",
+                    description="是否触发"
+                ),
+                "request_data": PortDefinition(
+                    name="请求数据",
+                    type="ANY",
+                    description="HTTP 请求数据"
+                ),
+            }
+        )
+
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
+
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
+        params = self.config.get("params", {})
+        path = params.get("path", "")
+        method = params.get("method", "POST")
+
+        # 从上下文获取触发数据
+        request_data = context.trigger_data or {}
+
+        return {
+            "triggered": True,
+            "path": path,
+            "method": method,
+            "request_data": request_data,
+            "timestamp": time.time(),
+        }
+
+
+class ApiTriggerNode(BaseExecutor):
+    """API 触发器 - 通过内部 API 调用触发规则。
+
+    配置项:
+        api_name: str - API 名称
+        api_params: dict - API 参数
+
+    用于规则之间的内部调用或消息队列触发。
+    """
+
+    node_type = "api_trigger"
+    category = NodeCategory.INPUT
+    display_name = "API 触发"
+    description = "通过 API 调用触发规则执行"
+    icon = "api"
+    color = "#4CFF4C"
+
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={},
+            outputs={
+                "triggered": PortDefinition(
+                    name="触发",
+                    type="BOOLEAN",
+                    description="是否触发"
+                ),
+                "api_response": PortDefinition(
+                    name="API响应",
+                    type="ANY",
+                    description="API 响应数据"
+                ),
+            }
+        )
+
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
+
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
+        params = self.config.get("params", {})
+        api_name = params.get("api_name", "")
+        api_params = params.get("api_params", {})
+
+        # 从上下文获取触发数据
+        trigger_data = context.trigger_data or {}
+
+        return {
+            "triggered": True,
+            "api_name": api_name,
+            "api_params": api_params,
+            "trigger_data": trigger_data,
+            "timestamp": time.time(),
+        }

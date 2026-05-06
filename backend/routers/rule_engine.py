@@ -194,11 +194,13 @@ async def get_webhook_url(graph_id: int):
 async def webhook_trigger(
     graph_id: int,
     background_tasks: BackgroundTasks,
+    request_data: dict = None,
     db: Session = Depends(get_db),
 ):
     """Webhook 触发规则图执行。
 
     外部系统（如 GitHub CI、其他服务）可通过此端点触发规则。
+    支持传递 JSON 数据作为 trigger_data。
     """
     manager = GraphManager(db)
     graph = manager.get_graph(graph_id)
@@ -210,11 +212,14 @@ async def webhook_trigger(
 
     graph_data = manager.parse_graph_data(graph)
 
+    # 传递请求数据到触发器节点
+    trigger_data = request_data or {}
+
     executor = RuleGraphExecutor(db)
     execution_id = executor.create_execution_record(
         graph_id=graph_id,
         trigger_type="webhook",
-        trigger_data={},
+        trigger_data=trigger_data,
     )
 
     from backend.services.rule_engine.websocket_manager import rule_ws_manager
@@ -225,7 +230,7 @@ async def webhook_trigger(
             graph_data=graph_data,
             execution_id=execution_id,
             trigger_type="webhook",
-            trigger_data={},
+            trigger_data=trigger_data,
         )
 
     background_tasks.add_task(run_execution)
@@ -233,7 +238,7 @@ async def webhook_trigger(
     return ExecutionResponse(
         execution_id=execution_id or 0,
         status="running",
-        result={"message": "Webhook 触发执行已启动"},
+        result={"message": "Webhook 触发执行已启动", "trigger_data": trigger_data},
     )
 
 
