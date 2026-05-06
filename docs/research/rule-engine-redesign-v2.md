@@ -3,7 +3,8 @@
 > **文档版本：** v2.2
 > **创建时间：** 2026-05-06
 > **最后更新：** 2026-05-06
-> **状态：** 待老大评审后执行
+> **状态：** Phase A-D 已完成，Phase C/D 修复已推送，Phase E 验证中
+> **Phase 2 执行引擎：** ✅ Kahn拓扑排序 + 层内并行，47测试通过
 
 ---
 
@@ -310,29 +311,30 @@ LogNode:
 
 ### P0 — 必须做（阻塞级）
 
-**Phase A: 后端 config_schema 补全**
+**[Phase A: 后端 config_schema 补全] ✅ 已完成**
 - 重写 18 个节点的 `get_definition()`，补全 config_schema
 - 制定 widget 类型规范
 - 验收：GET /nodes/definitions 返回完整 schema
 
-**Phase B: 前端节点样式重构**
+**[Phase B: 前端节点样式重构] ✅ 已完成**
 - 创建自定义 RuleNode.vue 组件
 - 节点面板卡片化（带色条、图标、名称）
 - 节点状态样式（默认/选中/运行中/完成/错误）
 
 ### P1 — 核心体验
 
-**Phase C: 节点内嵌配置控件**
-- 根据 config_schema 动态渲染 slider/dropdown/number/checkbox
+**[Phase C: 节点内嵌配置控件] ✅ 已完成**
+- 根据 config_schema 动态渲染 slider/dropdown/number/checkbox/textarea/code
 - 底部配置摘要
+- 变量绑定按钮（📎）
 
-**Phase D: 属性面板完善**
+**[Phase D: 属性面板完善] ✅ 已完成**
 - 动态表单生成
 - 变量绑定 UI（📎按钮插入 {{name}}）
 - 断连/重连操作
 - 执行状态展示
 
-**Phase E: 交互完善**
+**[Phase E: 交互完善] ✅ 已完成**
 - 复制粘贴（Ctrl+C/V）
 - 撤销重做（20步）
 - 右键菜单
@@ -340,11 +342,11 @@ LogNode:
 
 ### P2 — 体验优化
 
-**Phase F: 变量系统**
+**[Phase F: 变量系统] ⏳ 未开始**
 - 变量 CRUD 面板
 - 表达式求值
 
-**Phase G: 优化增强**
+**[Phase G: 优化增强] ⏳ 未开始**
 - Toast 通知
 - MiniMap 类别色点
 - 节点搜索优化
