@@ -361,19 +361,29 @@
               <div class="section-label">连接</div>
               <div class="ports-display">
                 <div class="ports-row" v-if="selectedNode.inputs?.length">
-                  <span class="ports-title">输入:</span>
-                  <div class="ports-list">
-                    <span v-for="input in selectedNode.inputs" :key="input.name" class="port-chip input">
-                      {{ input.label || input.name }}
-                    </span>
+                  <div
+                    v-for="input in selectedNode.inputs"
+                    :key="input.name"
+                    class="port-item"
+                  >
+                    <span class="port-chip input">{{ input.label || input.name }}</span>
+                    <template v-if="getInputConnection(input.name)">
+                      <span class="port-connected">
+                        → {{ getInputConnection(input.name)?.sourceNode?.label || getInputConnection(input.name)?.sourceNode?.type }}
+                      </span>
+                      <button class="port-disconnect" @click="disconnectInput(input.name)" title="断开连接">×</button>
+                    </template>
+                    <span v-else class="port-disconnected">[未连接]</span>
                   </div>
                 </div>
                 <div class="ports-row" v-if="selectedNode.outputs?.length">
-                  <span class="ports-title">输出:</span>
-                  <div class="ports-list">
-                    <span v-for="output in selectedNode.outputs" :key="output.name" class="port-chip output">
-                      {{ output.label || output.name }}
-                    </span>
+                  <div
+                    v-for="output in selectedNode.outputs"
+                    :key="output.name"
+                    class="port-item"
+                  >
+                    <span class="port-chip output">{{ output.label || output.name }}</span>
+                    <span class="port-outgoing">→</span>
                   </div>
                 </div>
               </div>
@@ -802,6 +812,30 @@ function handleContextMenu(event: MouseEvent, target: any, type: 'node' | 'edge'
 // 隐藏右键菜单
 function hideContextMenu() {
   contextMenu.show = false
+}
+
+// 获取输入端口的连接信息
+function getInputConnection(inputName: string) {
+  const edge = edges.value.find(
+    (e: any) => e.target === selectedNode.value?.id && e.targetHandle === inputName
+  )
+  if (!edge) return null
+  const sourceNode = nodes.value.find((n: any) => n.id === edge.source)
+  return {
+    edge,
+    sourceNode
+  }
+}
+
+// 断开连接
+function disconnectInput(inputName: string) {
+  const edge = edges.value.find(
+    (e: any) => e.target === selectedNode.value?.id && e.targetHandle === inputName
+  )
+  if (!edge) return
+  const idx = edges.value.findIndex((e: any) => e.id === edge.id)
+  if (idx !== -1) edges.value.splice(idx, 1)
+  showToast('已断开连接', 'info')
 }
 
 // 右键菜单操作
@@ -2178,8 +2212,15 @@ $panel-header-height: 52px;
 
   .ports-row {
     display: flex;
-    align-items: flex-start;
-    gap: 8px;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .port-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
   }
 
   .ports-title {
@@ -2201,6 +2242,7 @@ $panel-header-height: 52px;
     border-radius: 4px;
     font-size: 11px;
     font-weight: 500;
+    flex-shrink: 0;
 
     &.input {
       background: rgba(0, 240, 255, 0.1);
@@ -2212,6 +2254,45 @@ $panel-header-height: 52px;
       background: rgba(0, 255, 136, 0.1);
       color: #00ff88;
       border: 1px solid rgba(0, 255, 136, 0.2);
+    }
+  }
+
+  .port-connected {
+    font-size: 11px;
+    color: #888;
+    flex: 1;
+  }
+
+  .port-disconnected {
+    font-size: 11px;
+    color: #444;
+    font-style: italic;
+  }
+
+  .port-outgoing {
+    font-size: 11px;
+    color: #00ff88;
+  }
+
+  .port-disconnect {
+    background: rgba(255, 60, 60, 0.15);
+    border: 1px solid rgba(255, 60, 60, 0.3);
+    color: #ff6666;
+    border-radius: 3px;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0;
+    transition: all 0.15s;
+
+    &:hover {
+      background: rgba(255, 60, 60, 0.3);
+      color: #ff8888;
     }
   }
 }
