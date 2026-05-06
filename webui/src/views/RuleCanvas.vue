@@ -110,7 +110,7 @@
             :key="category.name"
             class="node-category"
           >
-            <div class="category-header" @click="category.expanded = !category.expanded">
+            <div class="category-header" @click="toggleCategory(category.name)">
               <div class="category-icon-wrapper" :class="category.name">
                 <SvgIcon :name="category.name" />
               </div>
@@ -463,16 +463,23 @@ const historyIndex = ref(-1)
 const canUndo = computed(() => historyIndex.value > 0)
 const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
 
+// 节点分类展开状态（reactive，分离避免循环引用）
+const categoryExpanded = reactive({
+  input: true, detection: true, processing: true,
+  action: true, logic: true, output: true
+})
+
 // 节点分类 - 6色体系 (按设计文档)
 const nodeCategories = computed(() => [
-  { name: 'input', label: '输入', expanded: true, nodes: [] as any[] },
-  { name: 'detection', label: '检测', expanded: true, nodes: [] as any[] },
-  { name: 'processing', label: '处理', expanded: true, nodes: [] as any[] },
-  { name: 'action', label: '动作', expanded: true, nodes: [] as any[] },
-  { name: 'logic', label: '逻辑', expanded: true, nodes: [] as any[] },
-  { name: 'output', label: '输出', expanded: true, nodes: [] as any[] },
+  { name: 'input', label: '输入' },
+  { name: 'detection', label: '检测' },
+  { name: 'processing', label: '处理' },
+  { name: 'action', label: '动作' },
+  { name: 'logic', label: '逻辑' },
+  { name: 'output', label: '输出' },
 ].map(cat => ({
   ...cat,
+  expanded: categoryExpanded[cat.name],
   nodes: nodeDefinitions.value.filter((d: any) => d.category === cat.name)
 })))
 
@@ -499,10 +506,14 @@ const filteredCategories = computed(() => {
 })
 
 function handleSearchInput() {
-  // 搜索时自动展开所有分类（用户体验更好）
+  // 搜索时自动展开所有分类
   if (nodeSearchQuery.value.trim()) {
-    nodeCategories.value.forEach(cat => cat.expanded = true)
+    Object.keys(categoryExpanded).forEach(key => categoryExpanded[key as keyof typeof categoryExpanded] = true)
   }
+}
+
+function toggleCategory(name: string) {
+  categoryExpanded[name as keyof typeof categoryExpanded] = !categoryExpanded[name as keyof typeof categoryExpanded]
 }
 
 // 快速添加
@@ -1143,8 +1154,8 @@ function handlePaneClick() {
   selectedNode.value = null
 }
 
-// 端口类型兼容性检查
-const PORT_TYPES = ['IMAGE', 'BBOX', 'MASK', 'SCORES', 'TRIGGER', 'CONTROL', 'MODEL', 'ANY']
+// 端口类型兼容性检查（14种类型 + ANY通配）
+const PORT_TYPES = ['IMAGE', 'BBOX', 'MASK', 'SCORES', 'TRIGGER', 'CONTROL', 'MODEL', 'ANY', 'INT', 'FLOAT', 'BOOLEAN', 'STRING', 'ARRAY', 'OBJECT']
 
 function isPortCompatible(sourceType: string, targetType: string): boolean {
   // ANY 可以连接任何类型
@@ -1161,15 +1172,15 @@ function isPortCompatible(sourceType: string, targetType: string): boolean {
 function getNodePortType(nodeId: string, handleId: string | null, isSource: boolean): string | null {
   const node = nodes.value.find(n => n.id === nodeId)
   if (!node) return null
-  const ports = isSource ? node.outputs : node.inputs
-  if (!ports) return null
-  // handleId 可以是端口名或端口ID
-  if (handleId && ports[handleId]) {
-    return ports[handleId].type || 'ANY'
+  const ports = isSource ? (node.data?.outputs || []) : (node.data?.inputs || [])
+  if (!ports?.length) return null
+  // handleId 是端口名，需要用 find 匹配（ports 是数组，不是对象）
+  if (handleId) {
+    const port = ports.find((p: any) => p.name === handleId)
+    return port?.type || 'ANY'
   }
   // 如果没有指定handle，返回第一个端口的类型
-  const firstKey = Object.keys(ports)[0]
-  return firstKey ? (ports[firstKey]?.type || 'ANY') : 'ANY'
+  return ports[0]?.type || 'ANY'
 }
 
 function validateConnection(params: any): { valid: boolean; error?: string } {

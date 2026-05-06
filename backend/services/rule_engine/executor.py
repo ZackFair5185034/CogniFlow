@@ -27,7 +27,9 @@ class RuleGraphExecutor:
     # 端口类型兼容性矩阵
     PORT_COMPATIBILITY = {
         # 源类型: [兼容的目标类型]
-        "ANY": ["ANY", "IMAGE", "BBOX", "MASK", "SCORES", "TRIGGER", "CONTROL", "MODEL"],
+        # ANY 可连接到所有类型
+        "ANY": ["ANY", "IMAGE", "BBOX", "MASK", "SCORES", "TRIGGER", "CONTROL", "MODEL",
+                "INT", "FLOAT", "BOOLEAN", "STRING", "ARRAY", "OBJECT"],
         "IMAGE": ["ANY", "IMAGE"],
         "BBOX": ["ANY", "BBOX"],
         "MASK": ["ANY", "MASK"],
@@ -35,6 +37,12 @@ class RuleGraphExecutor:
         "TRIGGER": ["ANY", "TRIGGER", "CONTROL"],
         "CONTROL": ["ANY", "CONTROL"],
         "MODEL": ["ANY", "MODEL"],
+        "INT": ["ANY", "INT"],
+        "FLOAT": ["ANY", "FLOAT"],
+        "BOOLEAN": ["ANY", "BOOLEAN"],
+        "STRING": ["ANY", "STRING"],
+        "ARRAY": ["ANY", "ARRAY"],
+        "OBJECT": ["ANY", "OBJECT"],
     }
 
     def __init__(self, db=None, ws_manager=None):

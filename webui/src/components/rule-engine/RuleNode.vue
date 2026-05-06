@@ -1,5 +1,5 @@
 <template>
-  <div class="rule-node" :class="[`category-${data.category}`, { selected }]" @contextmenu.prevent>
+  <div class="rule-node" :class="[`category-${data.category}`, { selected }]" @contextmenu.prevent="handleContextMenu">
     <!-- 标题栏 -->
     <div class="node-header">
       <div class="node-icon" :class="data.category">
@@ -166,7 +166,7 @@
             type="target"
             :position="Position.Left"
             :id="input.name"
-            class="node-handle"
+            :class="['node-handle', `type-${(input.type || 'any').toLowerCase()}`]"
           />
           <span class="port-label">{{ input.label || input.name }}</span>
         </div>
@@ -184,7 +184,7 @@
             type="source"
             :position="Position.Right"
             :id="output.name"
-            class="node-handle"
+            :class="['node-handle', `type-${(output.type || 'any').toLowerCase()}`]"
           />
         </div>
       </div>
@@ -246,7 +246,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:config', key: string, value: any): void
   (e: 'delete', nodeId: string): void
+  (e: 'contextmenu', event: MouseEvent): void
 }>()
+
+function handleContextMenu(event: MouseEvent) {
+  event.preventDefault()
+  emit('contextmenu', event)
+}
 
 // 可用模型（model-select用）
 const configProperties = computed(() => {
@@ -672,20 +678,27 @@ function updateConfig(key: string, value: any) {
   box-shadow: 0 0 12px rgba(0, 240, 255, 0.6) !important;
 }
 
+/* 端口类型颜色 — 同色可连（Blender风格） */
+.node-handle.type-image    { border-color: #4CFF4C; }   /* 绿色 */
+.node-handle.type-bbox     { border-color: #00f0FF; }   /* 青色 */
+.node-handle.type-mask     { border-color: #00f0FF; }   /* 青色 */
+.node-handle.type-scores   { border-color: #FF7F4C; }   /* 橙色 */
+.node-handle.type-trigger  { border-color: #DC4FDC; }   /* 紫色 */
+.node-handle.type-control  { border-color: #DC4FDC; }   /* 紫色 */
+.node-handle.type-int      { border-color: #3B82F6; }   /* 蓝色 */
+.node-handle.type-float    { border-color: #14B8A6; }  /* 青色 */
+.node-handle.type-boolean  { border-color: #FF4C4C; }   /* 红色 */
+.node-handle.type-string   { border-color: #8B5CF6; }   /* 紫色 */
+.node-handle.type-array    { border-color: #FFFF4C; }   /* 黄色 */
+.node-handle.type-object   { border-color: #FFFF4C; }   /* 黄色 */
+.node-handle.type-model    { border-color: #888888; }   /* 灰色 */
+.node-handle.type-any      { border-color: #E0E0E0; }   /* 浅灰 */
+
+/* 已连接端口：类型色 + 绿色边框叠加，不覆盖类型色本身 */
 .node-handle.vue-flow-handle-connected {
   border-color: #00ff88 !important;
+  background: #1e1e2e !important;
 }
-
-/* 端口类型颜色 */
-.node-handle.type-image { border-color: #4CFF4C; }
-.node-handle.type-bbox { border-color: #00f0FF; }
-.node-handle.type-mask { border-color: #FFFF4C; }
-.node-handle.type-scores { border-color: #FF7F4C; }
-.node-handle.type-trigger { border-color: #DC4FDC; }
-.node-handle.type-control { border-color: #DC4FDC; }
-.node-handle.type-boolean { border-color: #FF4C4C; }
-.node-handle.type-array { border-color: #4CFF4C; }
-.node-handle.type-any { border-color: #888; }
 
 .port-label {
   font-size: 11px;

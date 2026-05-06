@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 
 class PortType(str, Enum):
-    """端口数据类型枚举。"""
+    """端口数据类型枚举（14种类型）。"""
     IMAGE = "IMAGE"
     BBOX = "BBOX"
     MASK = "MASK"
@@ -21,6 +21,12 @@ class PortType(str, Enum):
     CONTROL = "CONTROL"
     MODEL = "MODEL"
     ANY = "ANY"
+    INT = "INT"
+    FLOAT = "FLOAT"
+    BOOLEAN = "BOOLEAN"
+    STRING = "STRING"
+    ARRAY = "ARRAY"
+    OBJECT = "OBJECT"
 
 
 class PortDefinition(BaseModel):
