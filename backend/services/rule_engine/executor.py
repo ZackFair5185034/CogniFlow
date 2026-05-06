@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.database import ExecutionHistory, NodeExecutionLog
 from .exceptions import CycleError, ExecutorError, ValidationError
-from .nodes.base import BaseNode, ExecutionContext, NodeStatus
+from .nodes.base import BaseExecutor, ExecutionContext, NodeStatus
 from .registry import NodeRegistry, get_registry
 
 

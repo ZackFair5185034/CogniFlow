@@ -1,13 +1,20 @@
 # -*- coding: utf-8 -*-
-"""动作节点 - 执行各种操作动作。"""
+"""动作类节点 - 外部操作执行节点。
+
+按 Phase 1 设计文档实现 BaseExecutor 模式。
+
+节点分类: action (#FF7F4C)
+"""
 import asyncio
-from typing import Optional
-from .base import (
-    BaseNode, NodeCategory, NodeResult, NodeStatus, ExecutionContext
+from typing import Any, Dict, Optional, Tuple
+
+from backend.services.rule_engine.models import (
+    NodeDefinition, NodeCategory, PortDefinition, PortType
 )
+from .base import BaseExecutor
 
 
-class KeyboardActionNode(BaseNode):
+class KeyboardActionNode(BaseExecutor):
     """键盘动作 - 模拟键盘按键。
 
     配置项:
@@ -15,45 +22,55 @@ class KeyboardActionNode(BaseNode):
         hold_duration: float - 按住时长(秒)
         interval: float - 按键间隔(秒)
     """
+
     node_type = "keyboard_action"
     category = NodeCategory.ACTION
-    label = "键盘动作"
+    display_name = "键盘动作"
     description = "模拟键盘按键"
-    icon = "mdi:keyboard"
+    icon = "keyboard"
+    color = "#FF7F4C"
 
-    inputs = [
-        {"name": "trigger", "type": "flow", "label": "触发"},
-    ]
-    outputs = [
-        {"name": "next", "type": "flow", "label": "完成"},
-    ]
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={
+                "trigger": PortDefinition(
+                    name="触发",
+                    type=PortType.TRIGGER.value,
+                    description="触发信号"
+                ),
+            },
+            outputs={
+                "success": PortDefinition(
+                    name="成功",
+                    type="BOOLEAN",
+                    description="是否执行成功"
+                ),
+                "executed_keys": PortDefinition(
+                    name="按键列表",
+                    type="ARRAY",
+                    description="已执行的按键列表"
+                ),
+            }
+        )
 
-    config_schema = {
-        "type": "object",
-        "properties": {
-            "keys": {
-                "type": "array",
-                "items": {"type": "string"},
-                "default": []
-            },
-            "hold_duration": {
-                "type": "number",
-                "minimum": 0,
-                "default": 0.1
-            },
-            "interval": {
-                "type": "number",
-                "minimum": 0,
-                "default": 0
-            },
-        }
-    }
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
 
-    async def _execute(self, context: ExecutionContext, input_data: dict) -> NodeResult:
-        """执行键盘动作。"""
-        keys = self.config.get("keys", [])
-        hold_duration = self.config.get("hold_duration", 0.1)
-        interval = self.config.get("interval", 0)
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
+        params = self.config.get("params", {})
+        keys = params.get("keys", [])
+        hold_duration = params.get("hold_duration", 0.1)
+        interval = params.get("interval", 0)
 
         executed_keys = []
 
@@ -69,18 +86,13 @@ class KeyboardActionNode(BaseNode):
             if interval > 0:
                 await asyncio.sleep(interval)
 
-            context.logs.append(f"按键: {key}")
-
-        return NodeResult(
-            status=NodeStatus.COMPLETED,
-            output_data={
-                "executed_keys": executed_keys,
-                "success": True,
-            }
-        )
+        return {
+            "executed_keys": executed_keys,
+            "success": True,
+        }
 
 
-class MouseActionNode(BaseNode):
+class MouseActionNode(BaseExecutor):
     """鼠标动作 - 模拟鼠标操作。
 
     配置项:
@@ -89,53 +101,51 @@ class MouseActionNode(BaseNode):
         y: int - Y坐标
         button: str - 鼠标按钮 (left/right/middle)
     """
+
     node_type = "mouse_action"
     category = NodeCategory.ACTION
-    label = "鼠标动作"
+    display_name = "鼠标动作"
     description = "模拟鼠标操作"
-    icon = "mdi:mouse"
+    icon = "mouse"
+    color = "#FF7F4C"
 
-    inputs = [
-        {"name": "trigger", "type": "flow", "label": "触发"},
-    ]
-    outputs = [
-        {"name": "next", "type": "flow", "label": "完成"},
-    ]
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={
+                "trigger": PortDefinition(
+                    name="触发",
+                    type=PortType.TRIGGER.value,
+                    description="触发信号"
+                ),
+            },
+            outputs={
+                "success": PortDefinition(
+                    name="成功",
+                    type="BOOLEAN",
+                    description="是否执行成功"
+                ),
+            }
+        )
 
-    config_schema = {
-        "type": "object",
-        "properties": {
-            "action": {
-                "type": "string",
-                "enum": ["click", "move", "scroll", "double_click", "right_click"],
-                "default": "click"
-            },
-            "x": {
-                "type": "integer",
-                "default": 0
-            },
-            "y": {
-                "type": "integer",
-                "default": 0
-            },
-            "button": {
-                "type": "string",
-                "enum": ["left", "right", "middle"],
-                "default": "left"
-            },
-            "scroll_amount": {
-                "type": "integer",
-                "default": 0
-            },
-        }
-    }
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
 
-    async def _execute(self, context: ExecutionContext, input_data: dict) -> NodeResult:
-        """执行鼠标动作。"""
-        action = self.config.get("action", "click")
-        x = self.config.get("x", 0)
-        y = self.config.get("y", 0)
-        button = self.config.get("button", "left")
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
+        params = self.config.get("params", {})
+        action = params.get("action", "click")
+        x = params.get("x", 0)
+        y = params.get("y", 0)
+        button = params.get("button", "left")
 
         # TODO: 对接鼠标模拟
         # from engine.core.control.input_emulator import MouseEmulator
@@ -145,60 +155,72 @@ class MouseActionNode(BaseNode):
         # elif action == "move":
         #     mouse.move(x, y)
 
-        return NodeResult(
-            status=NodeStatus.COMPLETED,
-            output_data={
-                "action": action,
-                "position": {"x": x, "y": y},
-                "success": True,
-            }
-        )
+        return {
+            "action": action,
+            "position": {"x": x, "y": y},
+            "button": button,
+            "success": True,
+        }
 
 
-class WaitActionNode(BaseNode):
+class WaitActionNode(BaseExecutor):
     """等待动作 - 等待指定时间。
 
     配置项:
         duration: float - 等待时长(秒)
     """
+
     node_type = "wait_action"
     category = NodeCategory.ACTION
-    label = "等待"
+    display_name = "等待"
     description = "等待指定时间"
-    icon = "mdi:clock-outline"
+    icon = "clock"
+    color = "#FF7F4C"
 
-    inputs = [
-        {"name": "trigger", "type": "flow", "label": "触发"},
-    ]
-    outputs = [
-        {"name": "next", "type": "flow", "label": "完成"},
-    ]
-
-    config_schema = {
-        "type": "object",
-        "properties": {
-            "duration": {
-                "type": "number",
-                "minimum": 0,
-                "default": 1.0
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={
+                "trigger": PortDefinition(
+                    name="触发",
+                    type=PortType.TRIGGER.value,
+                    description="触发信号"
+                ),
             },
-        }
-    }
-
-    async def _execute(self, context: ExecutionContext, input_data: dict) -> NodeResult:
-        """执行等待。"""
-        duration = self.config.get("duration", 1.0)
-        await asyncio.sleep(duration)
-
-        return NodeResult(
-            status=NodeStatus.COMPLETED,
-            output_data={
-                "waited_seconds": duration,
+            outputs={
+                "completed": PortDefinition(
+                    name="完成",
+                    type="BOOLEAN",
+                    description="等待完成"
+                ),
             }
         )
 
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
 
-class HttpRequestActionNode(BaseNode):
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
+        params = self.config.get("params", {})
+        duration = params.get("duration", 1.0)
+
+        await asyncio.sleep(duration)
+
+        return {
+            "waited_seconds": duration,
+            "completed": True,
+        }
+
+
+class HttpRequestActionNode(BaseExecutor):
     """HTTP 请求动作 - 发送 HTTP 请求。
 
     配置项:
@@ -207,64 +229,67 @@ class HttpRequestActionNode(BaseNode):
         headers: dict - 请求头
         body: dict - 请求体
     """
+
     node_type = "http_request_action"
     category = NodeCategory.ACTION
-    label = "HTTP 请求"
+    display_name = "HTTP 请求"
     description = "发送 HTTP 请求"
-    icon = "mdi:http"
+    icon = "http"
+    color = "#FF7F4C"
 
-    inputs = [
-        {"name": "trigger", "type": "flow", "label": "触发"},
-    ]
-    outputs = [
-        {"name": "next", "type": "flow", "label": "完成"},
-        {"name": "response", "type": "object", "label": "响应"},
-    ]
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={
+                "trigger": PortDefinition(
+                    name="触发",
+                    type=PortType.TRIGGER.value,
+                    description="触发信号"
+                ),
+            },
+            outputs={
+                "success": PortDefinition(
+                    name="成功",
+                    type="BOOLEAN",
+                    description="请求是否成功"
+                ),
+                "status_code": PortDefinition(
+                    name="状态码",
+                    type="INT",
+                    description="HTTP 状态码"
+                ),
+                "response": PortDefinition(
+                    name="响应",
+                    type="ANY",
+                    description="响应内容"
+                ),
+            }
+        )
 
-    config_schema = {
-        "type": "object",
-        "properties": {
-            "url": {
-                "type": "string",
-                "format": "uri",
-                "default": ""
-            },
-            "method": {
-                "type": "string",
-                "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"],
-                "default": "GET"
-            },
-            "headers": {
-                "type": "object",
-                "default": {}
-            },
-            "body": {
-                "type": "object",
-                "default": {}
-            },
-            "timeout": {
-                "type": "number",
-                "minimum": 1,
-                "default": 30
-            },
-        }
-    }
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
 
-    async def _execute(self, context: ExecutionContext, input_data: dict) -> NodeResult:
-        """执行 HTTP 请求。"""
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
         import httpx
 
-        url = self.config.get("url", "")
-        method = self.config.get("method", "GET")
-        headers = self.config.get("headers", {})
-        body = self.config.get("body", {})
-        timeout = self.config.get("timeout", 30)
+        params = self.config.get("params", {})
+        url = params.get("url", "")
+        method = params.get("method", "GET")
+        headers = params.get("headers", {})
+        body = params.get("body", {})
+        timeout = params.get("timeout", 30)
 
         if not url:
-            return NodeResult(
-                status=NodeStatus.FAILED,
-                error_message="URL is required"
-            )
+            return {"success": False, "error": "URL 不能为空"}
 
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -275,62 +300,67 @@ class HttpRequestActionNode(BaseNode):
                     json=body if body else None
                 )
 
-                return NodeResult(
-                    status=NodeStatus.COMPLETED,
-                    output_data={
-                        "status_code": response.status_code,
-                        "response": response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text,
-                        "success": True,
-                    }
-                )
+                return {
+                    "status_code": response.status_code,
+                    "response": response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text,
+                    "success": response.status_code < 400,
+                }
         except Exception as e:
-            return NodeResult(
-                status=NodeStatus.FAILED,
-                error_message=str(e)
-            )
+            return {"success": False, "error": str(e)}
 
 
-class LogActionNode(BaseNode):
+class LogActionNode(BaseExecutor):
     """日志动作 - 记录日志信息。
 
     配置项:
         message: str - 日志消息
         level: str - 日志级别 (info/warning/error)
     """
+
     node_type = "log_action"
     category = NodeCategory.ACTION
-    label = "日志"
+    display_name = "日志"
     description = "记录日志信息"
-    icon = "mdi:note-text"
+    icon = "note-text"
+    color = "#FF7F4C"
 
-    inputs = [
-        {"name": "trigger", "type": "flow", "label": "触发"},
-    ]
-    outputs = [
-        {"name": "next", "type": "flow", "label": "完成"},
-    ]
-
-    config_schema = {
-        "type": "object",
-        "properties": {
-            "message": {
-                "type": "string",
-                "default": ""
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={
+                "trigger": PortDefinition(
+                    name="触发",
+                    type=PortType.TRIGGER.value,
+                    description="触发信号"
+                ),
             },
-            "level": {
-                "type": "string",
-                "enum": ["info", "warning", "error"],
-                "default": "info"
-            },
-        }
-    }
+            outputs={
+                "logged": PortDefinition(
+                    name="已记录",
+                    type="BOOLEAN",
+                    description="是否记录成功"
+                ),
+            }
+        )
 
-    async def _execute(self, context: ExecutionContext, input_data: dict) -> NodeResult:
-        """执行日志记录。"""
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
+
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
         import logging
 
-        message = self.config.get("message", "")
-        level = self.config.get("level", "info")
+        params = self.config.get("params", {})
+        message = params.get("message", "")
+        level = params.get("level", "info")
 
         # 模板变量替换
         try:
@@ -338,21 +368,12 @@ class LogActionNode(BaseNode):
         except (KeyError, ValueError):
             rendered_message = message
 
-        log_entry = {
-            "level": level,
-            "message": rendered_message,
-            "timestamp": context.trigger_data.get("timestamp", None),
-        }
-        context.logs.append(log_entry)
-
         logger = logging.getLogger("rule_engine")
         log_func = getattr(logger, level, logger.info)
         log_func(rendered_message)
 
-        return NodeResult(
-            status=NodeStatus.COMPLETED,
-            output_data={
-                "logged": True,
-                "message": rendered_message,
-            }
-        )
+        return {
+            "logged": True,
+            "message": rendered_message,
+            "level": level,
+        }
