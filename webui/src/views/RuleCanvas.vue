@@ -242,6 +242,22 @@
             <Controls position="bottom-left" />
           </VueFlow>
 
+          <!-- 快捷添加栏（始终显示） -->
+          <div class="quick-add-toolbar" v-if="nodes.length > 0">
+            <button
+              v-for="node in quickAddNodes"
+              :key="node.type"
+              class="quick-add-toolbar-btn"
+              @click="quickAddNode(node)"
+              :title="`添加 ${node.label}`"
+            >
+              <span class="btn-icon" :class="node.category">
+                <SvgIcon :name="node.category" />
+              </span>
+              <span class="btn-label">{{ node.label }}</span>
+            </button>
+          </div>
+
           <!-- 空画布提示 -->
           <div class="empty-state" v-if="nodes.length === 0 && !isLoading">
             <div class="empty-icon">
@@ -2388,6 +2404,71 @@ $panel-header-height: 52px;
     &:hover {
       border-color: #00f0ff;
       color: #fff;
+    }
+  }
+}
+
+// 快捷添加工具栏（画布上有节点时显示）
+.quick-add-toolbar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(18, 18, 26, 0.95);
+  border: 1px solid #2a2a3a;
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  z-index: 10;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+
+  .quick-add-toolbar-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+
+    .btn-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      svg { width: 12px; height: 12px; }
+
+      &.input { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
+      &.detection { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
+      &.processing { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
+      &.action { background: rgba(255, 127, 76, 0.15); color: #FF7F4C; }
+      &.logic { background: rgba(220, 79, 220, 0.15); color: #DC4FDC; }
+      &.output { background: rgba(255, 76, 76, 0.15); color: #FF4C4C; }
+    }
+
+    .btn-label {
+      color: #e0e0e8;
+    }
+
+    &:hover {
+      border-color: #00f0ff;
+      background: #22222e;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 240, 255, 0.15);
+    }
+
+    &:active {
+      transform: translateY(0);
     }
   }
 }
