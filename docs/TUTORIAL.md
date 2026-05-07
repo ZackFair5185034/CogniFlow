@@ -145,8 +145,11 @@ CogniFlow/
 │   ├── annotation/         # 标注工具
 │   └── config/             # 配置管理
 ├── docs/
+│   ├── TUTORIAL.md          # 使用教程
 │   ├── project-analysis-2026.md  # 项目分析文档
-│   └── research/           # 规则引擎研发文档
+│   ├── plans/               # 进行中的开发计划
+│   ├── archives/            # 已完成的计划/设计文档
+│   └── research/            # 规则引擎研发文档
 └── tests/
 ```
 
