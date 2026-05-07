@@ -41,6 +41,13 @@
 | 4.1 | 控制台拖拽调整高度 | `webui/src/views/RuleCanvas.vue` | ✅ 已完成 |
 | 4.2 | 侧栏收纳宽度适配 | `webui/src/views/RuleCanvas.vue` | ✅ 已完成 |
 
+## Phase 5: 新增修复
+
+| # | 任务 | 文件 | 状态 |
+|---|------|------|------|
+| 5.1 | 快捷添加栏（画布有节点后仍可快速添加） | `webui/src/views/RuleCanvas.vue` | ✅ 已完成 |
+| 5.2 | 数据库路径修复（`data/database/engine.db`） | `backend/database.py` | ✅ 已完成 |
+
 ---
 
 ## 已完成
@@ -53,3 +60,5 @@
 | 2026-05-08 | Phase 1 端口类型规范（14种类型+兼容性矩阵） | `944c9a8` |
 | 2026-05-08 | Phase 2.1/2.3/2.4/2.5（分类展开/右键菜单/圆角/Handle位置） | `944c9a8` |
 | 2026-05-08 | Phase 2.4/2.5/3.2/3.3/4.1/4.2（圆角溢出/控制台拖拽/侧栏宽度） | `9dcb6ec` |
+| 2026-05-08 | Phase 2.2 框选功能（SelectionMode.Partial） | `8c3ff3b` |
+| 2026-05-08 | Phase 5 快捷添加栏 + 数据库路径修复 | `23df2e2` |
