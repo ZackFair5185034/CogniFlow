@@ -32,7 +32,10 @@
       <div class="config-panel ui-card">
         <div class="panel-header">
           <div class="header-left">
-            <SvgIcon name="brain" class="panel-icon" />
+            <SvgIcon
+              name="brain"
+              class="panel-icon"
+            />
             <h3>检测配置</h3>
           </div>
         </div>
@@ -42,16 +45,34 @@
           <div class="config-section">
             <label class="section-label">选择模型</label>
             <div class="select-wrapper">
-              <select v-model="selectedModelId" :disabled="detecting || streamConnected">
-                <option :value="null" disabled>选择已训练的模型</option>
-                <option v-for="m in trainedModels" :key="m.id" :value="m.id">
+              <select
+                v-model="selectedModelId"
+                :disabled="detecting || streamConnected"
+              >
+                <option
+                  :value="null"
+                  disabled
+                >
+                  选择已训练的模型
+                </option>
+                <option
+                  v-for="m in trainedModels"
+                  :key="m.id"
+                  :value="m.id"
+                >
                   {{ m.name }}{{ m.version ? ` (${m.version})` : '' }}
                 </option>
               </select>
             </div>
-            <div class="model-info" v-if="selectedModel">
+            <div
+              v-if="selectedModel"
+              class="model-info"
+            >
               <span class="info-tag">类别: {{ getModelClasses(selectedModel) }}</span>
-              <span class="info-tag" v-if="selectedModel.metrics?.mAP50">mAP50: {{ (selectedModel.metrics.mAP50 * 100).toFixed(1) }}%</span>
+              <span
+                v-if="selectedModel.metrics?.mAP50"
+                class="info-tag"
+              >mAP50: {{ (selectedModel.metrics.mAP50 * 100).toFixed(1) }}%</span>
             </div>
           </div>
 
@@ -59,14 +80,27 @@
           <div class="config-section">
             <label class="section-label">推理后端</label>
             <div class="select-wrapper">
-              <select v-model="device" :disabled="detecting || streamConnected">
-                <option value="auto">自动选择</option>
-                <option v-for="d in availableDevices" :key="d.value" :value="d.value" :disabled="d.disabled">
+              <select
+                v-model="device"
+                :disabled="detecting || streamConnected"
+              >
+                <option value="auto">
+                  自动选择
+                </option>
+                <option
+                  v-for="d in availableDevices"
+                  :key="d.value"
+                  :value="d.value"
+                  :disabled="d.disabled"
+                >
                   {{ d.label }} {{ d.value === 'cuda' ? '(推荐)' : '' }}
                 </option>
               </select>
             </div>
-            <span class="device-hint" v-if="deviceInfo.devices?.cuda && device === 'auto'">
+            <span
+              v-if="deviceInfo.devices?.cuda && device === 'auto'"
+              class="device-hint"
+            >
               将使用 GPU 推理
             </span>
           </div>
@@ -75,9 +109,19 @@
           <div class="config-section">
             <label class="section-label">推理精度</label>
             <div class="select-wrapper">
-              <select v-model="precision" :disabled="detecting || streamConnected">
-                <option value="fp32">FP32 (兼容最好)</option>
-                <option value="fp16" :disabled="device === 'cpu'">FP16 (加速50%, 精度略降)</option>
+              <select
+                v-model="precision"
+                :disabled="detecting || streamConnected"
+              >
+                <option value="fp32">
+                  FP32 (兼容最好)
+                </option>
+                <option
+                  value="fp16"
+                  :disabled="device === 'cpu'"
+                >
+                  FP16 (加速50%, 精度略降)
+                </option>
               </select>
             </div>
           </div>
@@ -86,17 +130,33 @@
           <div class="config-section">
             <label class="section-label">模型格式</label>
             <div class="select-wrapper">
-              <select v-model="modelFormat" :disabled="detecting || streamConnected">
-                <option value="auto">自动选择</option>
-                <option v-for="f in availableFormats" :key="f.value" :value="f.value" :disabled="f.disabled">
+              <select
+                v-model="modelFormat"
+                :disabled="detecting || streamConnected"
+              >
+                <option value="auto">
+                  自动选择
+                </option>
+                <option
+                  v-for="f in availableFormats"
+                  :key="f.value"
+                  :value="f.value"
+                  :disabled="f.disabled"
+                >
                   {{ f.label }} {{ f.is_default ? '(默认)' : '' }}
                 </option>
               </select>
             </div>
-            <span class="device-hint" v-if="modelFormat === 'auto' && selectedModel?.files?.length">
+            <span
+              v-if="modelFormat === 'auto' && selectedModel?.files?.length"
+              class="device-hint"
+            >
               将自动选择最优格式
             </span>
-            <span class="device-hint" v-else-if="usedFormat">
+            <span
+              v-else-if="usedFormat"
+              class="device-hint"
+            >
               当前使用: {{ usedFormat.toUpperCase() }}
             </span>
           </div>
@@ -105,13 +165,13 @@
           <div class="config-section">
             <label class="section-label">置信度阈值: {{ (confThreshold * 100).toFixed(0) }}%</label>
             <input
-              type="range"
               v-model.number="confThreshold"
+              type="range"
               min="0.05"
               max="0.95"
               step="0.05"
               class="range-slider"
-            />
+            >
           </div>
 
           <!-- 图片模式 -->
@@ -130,13 +190,16 @@
                   ref="fileInputRef"
                   type="file"
                   accept="image/*"
-                  @change="handleFileSelect"
                   style="display: none"
-                />
+                  @change="handleFileSelect"
+                >
                 <div class="upload-hint">
                   <SvgIcon name="upload" />
                   <span v-if="!selectedFile">拖拽或点击上传</span>
-                  <span v-else class="file-name">{{ selectedFile.name }}</span>
+                  <span
+                    v-else
+                    class="file-name"
+                  >{{ selectedFile.name }}</span>
                 </div>
               </div>
             </div>
@@ -158,19 +221,25 @@
                   ref="streamInputRef"
                   type="file"
                   accept="video/*"
-                  @change="handleStreamSelect"
                   style="display: none"
-                />
+                  @change="handleStreamSelect"
+                >
                 <div class="upload-hint">
                   <SvgIcon name="upload" />
                   <span v-if="!selectedStreamFile">拖拽或点击上传视频</span>
-                  <span v-else class="file-name">{{ selectedStreamFile.name }}</span>
+                  <span
+                    v-else
+                    class="file-name"
+                  >{{ selectedStreamFile.name }}</span>
                 </div>
               </div>
             </div>
 
             <!-- 视频状态 -->
-            <div class="stream-stats" v-if="streamConnected">
+            <div
+              v-if="streamConnected"
+              class="stream-stats"
+            >
               <div class="stat-item">
                 <span class="stat-label">帧率</span>
                 <span class="stat-value">{{ streamStats.fps }} fps</span>
@@ -179,7 +248,10 @@
                 <span class="stat-label">已处理</span>
                 <span class="stat-value">{{ streamStats.current_frame }} / {{ streamStats.total_frames }}</span>
               </div>
-              <div class="stat-item" v-if="streamStats.buffered_frames">
+              <div
+                v-if="streamStats.buffered_frames"
+                class="stat-item"
+              >
                 <span class="stat-label">缓冲</span>
                 <span class="stat-value buffer-stat">{{ streamStats.buffered_frames }} 帧</span>
               </div>
@@ -192,26 +264,47 @@
 
           <!-- 最近记录 -->
           <div class="config-section">
-            <div class="section-label-row" @click="recentRecordsExpanded = !recentRecordsExpanded">
+            <div
+              class="section-label-row"
+              @click="recentRecordsExpanded = !recentRecordsExpanded"
+            >
               <span class="section-label">最近记录</span>
               <div class="flex items-center gap-2">
                 <button
                   v-if="recentRecords.length > 0"
                   class="clear-btn"
-                  @click.stop="handleClearRecords"
                   title="清除历史"
-                >清空</button>
-                <SvgIcon :name="recentRecordsExpanded ? 'chevron-up' : 'chevron-down'" class="chevron-icon" />
+                  @click.stop="handleClearRecords"
+                >
+                  清空
+                </button>
+                <SvgIcon
+                  :name="recentRecordsExpanded ? 'chevron-up' : 'chevron-down'"
+                  class="chevron-icon"
+                />
               </div>
             </div>
-            <div class="recent-records" v-if="recentRecordsExpanded">
-              <div v-if="filteredRecords.length === 0" class="records-empty">暂无{{ mode === 'stream' ? '视频' : '图片' }}检测记录</div>
+            <div
+              v-if="recentRecordsExpanded"
+              class="recent-records"
+            >
+              <div
+                v-if="filteredRecords.length === 0"
+                class="records-empty"
+              >
+                暂无{{ mode === 'stream' ? '视频' : '图片' }}检测记录
+              </div>
               <div
                 v-for="rec in filteredRecords"
                 :key="rec.job_id"
                 class="record-item"
               >
-                <img v-if="rec.thumbnail" :src="rec.thumbnail" class="record-thumb" alt="缩略图" />
+                <img
+                  v-if="rec.thumbnail"
+                  :src="rec.thumbnail"
+                  class="record-thumb"
+                  alt="缩略图"
+                >
                 <div class="record-info">
                   <span class="record-name">{{ rec.file_name }}</span>
                   <span class="record-meta">{{ rec.model_name }} · {{ rec.total_detections }} 个目标</span>
@@ -269,18 +362,34 @@
       <div class="result-panel ui-card">
         <div class="panel-header">
           <div class="header-left">
-            <SvgIcon name="eye" class="panel-icon" />
+            <SvgIcon
+              name="eye"
+              class="panel-icon"
+            />
             <h3>检测结果</h3>
           </div>
         </div>
 
         <div class="result-body">
           <!-- 图片检测结果 -->
-          <div v-if="resultImage" class="result-image-wrapper">
+          <div
+            v-if="resultImage"
+            class="result-image-wrapper"
+          >
             <div class="image-area">
-              <img :src="resultImage" alt="检测结果" class="result-image" />
-              <svg class="bbox-overlay" :viewBox="`0 0 ${imageSize.width} ${imageSize.height}`">
-                <g v-for="(det, idx) in detections" :key="idx">
+              <img
+                :src="resultImage"
+                alt="检测结果"
+                class="result-image"
+              >
+              <svg
+                class="bbox-overlay"
+                :viewBox="`0 0 ${imageSize.width} ${imageSize.height}`"
+              >
+                <g
+                  v-for="(det, idx) in detections"
+                  :key="idx"
+                >
                   <rect
                     :x="det.bbox[0]"
                     :y="det.bbox[1]"
@@ -308,102 +417,199 @@
               </svg>
             </div>
             <div class="zoom-controls">
-              <button class="zoom-btn" @click="zoomLevel = Math.min(2, zoomLevel + 0.25)">+</button>
+              <button
+                class="zoom-btn"
+                @click="zoomLevel = Math.min(2, zoomLevel + 0.25)"
+              >
+                +
+              </button>
               <span class="zoom-level">{{ (zoomLevel * 100).toFixed(0) }}%</span>
-              <button class="zoom-btn" @click="zoomLevel = Math.max(0.5, zoomLevel - 0.25)">-</button>
+              <button
+                class="zoom-btn"
+                @click="zoomLevel = Math.max(0.5, zoomLevel - 0.25)"
+              >
+                -
+              </button>
             </div>
           </div>
 
-        <!-- 视频检测结果 - Canvas 渲染 -->
-        <div v-else-if="mode === 'stream' && (streamConnected || streamComplete)" class="result-stream-wrapper">
-          <div class="stream-container">
-            <canvas ref="streamCanvasRef" class="stream-canvas"></canvas>
-          </div>
-          <div class="stream-progress" v-if="!streamComplete">
-            <div class="progress-bar-dual">
-              <div class="progress-buffer" :style="{ width: `${bufferProgress}%` }"></div>
-              <div class="progress-playback" :style="{ width: `${streamStats.progress}%` }"></div>
+          <!-- 视频检测结果 - Canvas 渲染 -->
+          <div
+            v-else-if="mode === 'stream' && (streamConnected || streamComplete)"
+            class="result-stream-wrapper"
+          >
+            <div class="stream-container">
+              <canvas
+                ref="streamCanvasRef"
+                class="stream-canvas"
+              />
             </div>
-            <div class="progress-controls">
-              <button
-                class="ctrl-btn"
-                :title="streamPaused ? '继续' : '暂停'"
-                @click="togglePause"
-              >
-                <SvgIcon :name="streamPaused ? 'play' : 'pause'" />
-              </button>
-              <span class="progress-text">帧 {{ streamStats.current_frame }} / {{ streamStats.total_frames }}</span>
-              <span class="buffer-info" v-if="streamStats.buffer_frame">缓冲 {{ streamStats.buffer_frame }}</span>
-              <div class="fps-control">
-                <button class="ctrl-btn-sm" @click="adjustFps(-5)" :disabled="videoFps <= 1">-</button>
-                <span class="fps-value">{{ videoFps }} fps</span>
-                <button class="ctrl-btn-sm" @click="adjustFps(5)" :disabled="videoFps >= 60">+</button>
+            <div
+              v-if="!streamComplete"
+              class="stream-progress"
+            >
+              <div class="progress-bar-dual">
+                <div
+                  class="progress-buffer"
+                  :style="{ width: `${bufferProgress}%` }"
+                />
+                <div
+                  class="progress-playback"
+                  :style="{ width: `${streamStats.progress}%` }"
+                />
+              </div>
+              <div class="progress-controls">
+                <button
+                  class="ctrl-btn"
+                  :title="streamPaused ? '继续' : '暂停'"
+                  @click="togglePause"
+                >
+                  <SvgIcon :name="streamPaused ? 'play' : 'pause'" />
+                </button>
+                <span class="progress-text">帧 {{ streamStats.current_frame }} / {{ streamStats.total_frames }}</span>
+                <span
+                  v-if="streamStats.buffer_frame"
+                  class="buffer-info"
+                >缓冲 {{ streamStats.buffer_frame }}</span>
+                <div class="fps-control">
+                  <button
+                    class="ctrl-btn-sm"
+                    :disabled="videoFps <= 1"
+                    @click="adjustFps(-5)"
+                  >
+                    -
+                  </button>
+                  <span class="fps-value">{{ videoFps }} fps</span>
+                  <button
+                    class="ctrl-btn-sm"
+                    :disabled="videoFps >= 60"
+                    @click="adjustFps(5)"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </div>
+            <div
+              v-else
+              class="stream-complete"
+            >
+              <span>检测完成，共 {{ streamStats.total_detections }} 个目标</span>
+            </div>
           </div>
-          <div class="stream-complete" v-else>
-            <span>检测完成，共 {{ streamStats.total_detections }} 个目标</span>
-          </div>
-        </div>
 
-        <!-- 加载状态（图片检测用） -->
-        <div v-else-if="detecting" class="result-loading">
-          <div class="loading-spinner"></div>
-          <span>图片检测中...</span>
-        </div>
-
-        <!-- 空状态 -->
-        <div v-else class="empty-result">
-          <div class="empty-icon">
-            <SvgIcon name="image" v-if="mode === 'image'" />
-            <SvgIcon name="stream" v-else />
+          <!-- 加载状态（图片检测用） -->
+          <div
+            v-else-if="detecting"
+            class="result-loading"
+          >
+            <div class="loading-spinner" />
+            <span>图片检测中...</span>
           </div>
-          <p>暂无检测结果</p>
-          <span>{{ mode === 'image' ? '上传图片开始检测' : '上传视频开始检测' }}</span>
-        </div>
+
+          <!-- 空状态 -->
+          <div
+            v-else
+            class="empty-result"
+          >
+            <div class="empty-icon">
+              <SvgIcon
+                v-if="mode === 'image'"
+                name="image"
+              />
+              <SvgIcon
+                v-else
+                name="stream"
+              />
+            </div>
+            <p>暂无检测结果</p>
+            <span>{{ mode === 'image' ? '上传图片开始检测' : '上传视频开始检测' }}</span>
+          </div>
         </div>
 
         <!-- 分割拖拽条 -->
         <div
-          class="console-divider"
           v-show="consoleExpanded"
+          class="console-divider"
           @mousedown.prevent="startDrag"
-        ></div>
+        />
 
         <!-- 监控台 -->
-        <div class="console-panel" :class="{ expanded: consoleExpanded }" :style="consoleStyle">
-          <div class="console-header" @click="consoleExpanded = !consoleExpanded">
+        <div
+          class="console-panel"
+          :class="{ expanded: consoleExpanded }"
+          :style="consoleStyle"
+        >
+          <div
+            class="console-header"
+            @click="consoleExpanded = !consoleExpanded"
+          >
             <div class="console-header-left">
-              <SvgIcon name="terminal" class="console-icon" />
+              <SvgIcon
+                name="terminal"
+                class="console-icon"
+              />
               <span>监控台</span>
-              <span class="console-count" v-if="consoleEntries.length">{{ consoleEntries.length }} 条</span>
+              <span
+                v-if="consoleEntries.length"
+                class="console-count"
+              >{{ consoleEntries.length }} 条</span>
             </div>
             <div class="console-header-right">
-              <button class="console-clear-btn" @click.stop="clearConsole" title="清空">清空</button>
-              <SvgIcon :name="consoleExpanded ? 'chevron-down' : 'chevron-up'" class="console-toggle" />
+              <button
+                class="console-clear-btn"
+                title="清空"
+                @click.stop="clearConsole"
+              >
+                清空
+              </button>
+              <SvgIcon
+                :name="consoleExpanded ? 'chevron-down' : 'chevron-up'"
+                class="console-toggle"
+              />
             </div>
           </div>
-          <div class="console-body" v-show="consoleExpanded" ref="consoleBodyRef">
+          <div
+            v-show="consoleExpanded"
+            ref="consoleBodyRef"
+            class="console-body"
+          >
             <div
               v-for="(entry, idx) in consoleEntries"
               :key="entry.id"
               class="console-entry"
               :class="{ expanded: entry.expanded }"
             >
-              <div class="console-entry-header" @click="entry.expanded = !entry.expanded">
+              <div
+                class="console-entry-header"
+                @click="entry.expanded = !entry.expanded"
+              >
                 <span class="entry-time">{{ entry.time }}</span>
-                <span class="entry-source" :class="entry.source === '图片检测' ? 'src-image' : 'src-video'">{{ entry.source }}</span>
+                <span
+                  class="entry-source"
+                  :class="entry.source === '图片检测' ? 'src-image' : 'src-video'"
+                >{{ entry.source }}</span>
                 <span class="entry-summary">{{ entry.summary }}</span>
-                <button class="entry-copy-btn" @click.stop="copyEntry(entry)" title="复制 JSON">
+                <button
+                  class="entry-copy-btn"
+                  title="复制 JSON"
+                  @click.stop="copyEntry(entry)"
+                >
                   <SvgIcon name="copy" />
                 </button>
                 <span class="entry-toggle">{{ entry.expanded ? '−' : '+' }}</span>
               </div>
-              <div class="console-entry-body" v-show="entry.expanded">
+              <div
+                v-show="entry.expanded"
+                class="console-entry-body"
+              >
                 <pre class="console-json">{{ formatJSON(entry.data) }}</pre>
               </div>
             </div>
-            <div class="console-empty" v-if="consoleEntries.length === 0">
+            <div
+              v-if="consoleEntries.length === 0"
+              class="console-empty"
+            >
               <span>暂无数据，执行检测后将自动显示</span>
             </div>
           </div>
@@ -685,7 +891,7 @@ const loadRecentRecords = async () => {
 // 相对时间格式化
 const formatRelativeTime = (isoString: string): string => {
   if (!isoString) return '未知'
-  const serverTime = new Date(isoString.endsWith('Z') ? isoString : isoString + 'Z').getTime()
+  const serverTime = new Date(isoString.endsWith('Z') ? isoString : `${isoString  }Z`).getTime()
   if (isNaN(serverTime)) return '未知'
   const diff = Date.now() - serverTime
   const seconds = Math.floor(diff / 1000)

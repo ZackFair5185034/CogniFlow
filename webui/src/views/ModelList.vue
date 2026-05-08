@@ -6,123 +6,227 @@
         <h2>模型管理</h2>
         <span class="subtitle">管理训练模型</span>
       </div>
-      <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
-        <SvgIcon name="plus"/>
+      <button
+        class="ui-btn ui-btn-primary"
+        @click="showCreateDialog = true"
+      >
+        <SvgIcon name="plus" />
         注册模型
       </button>
     </div>
 
     <!-- 模型列表 -->
-    <div class="ui-card" style="width: 100%; min-width: 0;">
+    <div
+      class="ui-card"
+      style="width: 100%; min-width: 0;"
+    >
       <div class="table-wrapper">
-        <el-table :data="models" v-loading="loading" :row-class-name="tableRowClassName" style="width: 100%">
-          <el-table-column prop="id" label="ID" width="100">
+        <el-table
+          v-loading="loading"
+          :data="models"
+          :row-class-name="tableRowClassName"
+          style="width: 100%"
+        >
+          <el-table-column
+            prop="id"
+            label="ID"
+            width="100"
+          >
             <template #default="{ row }">
               <span class="id-badge">#{{ row.id }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="name" label="名称" min-width="200">
+          <el-table-column
+            prop="name"
+            label="名称"
+            min-width="200"
+          >
             <template #default="{ row }">
               <div class="name-cell">
-                <SvgIcon name="box" class="model-icon"/>
+                <SvgIcon
+                  name="box"
+                  class="model-icon"
+                />
                 <span>{{ row.name }}</span>
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="version" label="版本" width="100">
+          <el-table-column
+            prop="version"
+            label="版本"
+            width="100"
+          >
             <template #default="{ row }">
-              <span class="version-badge" v-if="row.version">{{ row.version }}</span>
-              <span v-else class="text-muted">-</span>
+              <span
+                v-if="row.version"
+                class="version-badge"
+              >{{ row.version }}</span>
+              <span
+                v-else
+                class="text-muted"
+              >-</span>
             </template>
           </el-table-column>
-          <el-table-column prop="pretrained_model" label="预训练" width="120">
+          <el-table-column
+            prop="pretrained_model"
+            label="预训练"
+            width="120"
+          >
             <template #default="{ row }">
-              <span class="text-muted" v-if="!row.pretrained_model">-</span>
+              <span
+                v-if="!row.pretrained_model"
+                class="text-muted"
+              >-</span>
               <span v-else>{{ row.pretrained_model.replace('.pt', '') }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="100">
+          <el-table-column
+            label="状态"
+            width="100"
+          >
             <template #default="{ row }">
-              <span class="status-badge" :class="row.file_path ? 'trained' : 'untrained'">
+              <span
+                class="status-badge"
+                :class="row.file_path ? 'trained' : 'untrained'"
+              >
                 {{ row.file_path ? '已训练' : '未训练' }}
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="格式" width="150">
+          <el-table-column
+            label="格式"
+            width="150"
+          >
             <template #default="{ row }">
-              <div class="format-badges" v-if="row.files?.length">
+              <div
+                v-if="row.files?.length"
+                class="format-badges"
+              >
                 <span
-                  class="format-badge"
                   v-for="file in row.files.slice(0, 3)"
                   :key="file.id"
+                  class="format-badge"
                   :class="{ 'is-default': file.is_default }"
                   :title="`${file.format.toUpperCase()}${file.is_default ? ' (默认)' : ''}`"
                 >
                   {{ file.format.toUpperCase() }}
                 </span>
-                <span class="format-badge more" v-if="row.files.length > 3">
+                <span
+                  v-if="row.files.length > 3"
+                  class="format-badge more"
+                >
                   +{{ row.files.length - 3 }}
                 </span>
               </div>
-              <span v-else class="text-muted">-</span>
+              <span
+                v-else
+                class="text-muted"
+              >-</span>
             </template>
           </el-table-column>
-          <el-table-column label="性能指标" width="200">
+          <el-table-column
+            label="性能指标"
+            width="200"
+          >
             <template #default="{ row }">
-              <div v-if="row.metrics?.mAP50" class="metrics-cell">
+              <div
+                v-if="row.metrics?.mAP50"
+                class="metrics-cell"
+              >
                 <span class="metric-item">
                   <span class="metric-label">mAP50:</span>
                   <span class="metric-value">{{ (row.metrics.mAP50 * 100).toFixed(1) }}%</span>
                 </span>
-                <span class="metric-item" v-if="row.metrics?.mAP50_95">
+                <span
+                  v-if="row.metrics?.mAP50_95"
+                  class="metric-item"
+                >
                   <span class="metric-label">mAP:</span>
                   <span class="metric-value">{{ (row.metrics.mAP50_95 * 100).toFixed(1) }}%</span>
                 </span>
               </div>
-              <span v-else class="text-muted">-</span>
+              <span
+                v-else
+                class="text-muted"
+              >-</span>
             </template>
           </el-table-column>
-          <el-table-column label="模型文件" min-width="240">
+          <el-table-column
+            label="模型文件"
+            min-width="240"
+          >
             <template #default="{ row }">
-              <span v-if="row.file_path" class="file-path" :title="row.file_path">
+              <span
+                v-if="row.file_path"
+                class="file-path"
+                :title="row.file_path"
+              >
                 {{ shortenPath(row.file_path) }}
               </span>
-              <span v-else class="text-muted">-</span>
+              <span
+                v-else
+                class="text-muted"
+              >-</span>
             </template>
           </el-table-column>
-          <el-table-column label="训练时间" width="140">
+          <el-table-column
+            label="训练时间"
+            width="140"
+          >
             <template #default="{ row }">
-              <span v-if="row.metrics?.trained_at" class="time-badge">
+              <span
+                v-if="row.metrics?.trained_at"
+                class="time-badge"
+              >
                 {{ formatTrainedAt(row.metrics.trained_at) }}
               </span>
-              <span v-else class="text-muted">-</span>
+              <span
+                v-else
+                class="text-muted"
+              >-</span>
             </template>
           </el-table-column>
-          <el-table-column prop="created_at" label="创建时间" width="140">
+          <el-table-column
+            prop="created_at"
+            label="创建时间"
+            width="140"
+          >
             <template #default="{ row }">
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column
+            label="操作"
+            width="150"
+            fixed="right"
+          >
             <template #default="{ row }">
               <div class="action-cell">
                 <!-- 直接显示第1个操作 -->
-                <el-button class="action-text" @click.stop="handleAction('rename', row)">
+                <el-button
+                  class="action-text"
+                  @click.stop="handleAction('rename', row)"
+                >
                   编辑
                 </el-button>
                 <!-- 收纳剩余操作 -->
-                <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)"
-                             v-if="getVisibleActions(row).length > 0">
-                  <el-button class="action-text">更多</el-button>
+                <el-dropdown
+                  v-if="getVisibleActions(row).length > 0"
+                  trigger="click"
+                  @command="(cmd: string) => handleAction(cmd, row)"
+                >
+                  <el-button class="action-text">
+                    更多
+                  </el-button>
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item
-                          v-for="action in getVisibleActions(row)"
-                          :key="action.command"
-                          :command="action.command"
-                          :divided="action.command === 'delete'"
-                          :disabled="action.disabled"
-                          :class="{ 'delete-item': action.command === 'delete' }"
+                        v-for="action in getVisibleActions(row)"
+                        :key="action.command"
+                        :command="action.command"
+                        :divided="action.command === 'delete'"
+                        :disabled="action.disabled"
+                        :class="{ 'delete-item': action.command === 'delete' }"
                       >
                         {{ action.label }}
                       </el-dropdown-item>
@@ -134,9 +238,12 @@
           </el-table-column>
         </el-table>
 
-        <div class="empty-state" v-if="!loading && models.length === 0">
+        <div
+          v-if="!loading && models.length === 0"
+          class="empty-state"
+        >
           <div class="empty-icon">
-            <SvgIcon name="box"/>
+            <SvgIcon name="box" />
           </div>
           <p>暂无模型</p>
           <span>注册第一个模型开始训练</span>
@@ -145,29 +252,50 @@
     </div>
 
     <!-- 创建对话框 -->
-    <div class="dialog-overlay" v-if="showCreateDialog" @click.self="showCreateDialog = false">
+    <div
+      v-if="showCreateDialog"
+      class="dialog-overlay"
+      @click.self="showCreateDialog = false"
+    >
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>注册模型</h3>
-          <button class="close-btn" @click="showCreateDialog = false">
-            <SvgIcon name="close"/>
+          <button
+            class="close-btn"
+            @click="showCreateDialog = false"
+          >
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
           <div class="form-group">
             <label>模型名称</label>
-            <input type="text" v-model="createForm.name" placeholder="输入模型名称"/>
+            <input
+              v-model="createForm.name"
+              type="text"
+              placeholder="输入模型名称"
+            >
           </div>
           <div class="form-group">
             <label>版本</label>
-            <input type="text" v-model="createForm.version" placeholder="如 v1, v2"/>
+            <input
+              v-model="createForm.version"
+              type="text"
+              placeholder="如 v1, v2"
+            >
           </div>
           <div class="form-group">
             <label>训练图集（可选）</label>
             <div class="select-wrapper">
               <select v-model="createForm.atlas_id">
-                <option :value="null">不关联图集</option>
-                <option v-for="atlas in atlases" :key="atlas.id" :value="atlas.id">
+                <option :value="null">
+                  不关联图集
+                </option>
+                <option
+                  v-for="atlas in atlases"
+                  :key="atlas.id"
+                  :value="atlas.id"
+                >
                   {{ atlas.name }}
                 </option>
               </select>
@@ -177,18 +305,37 @@
             <label>预训练模型</label>
             <div class="select-wrapper">
               <select v-model="createForm.pretrained_model">
-                <option value="yolov8n.pt">YOLOv8n (最小最快)</option>
-                <option value="yolov8s.pt">YOLOv8s (小，推荐)</option>
-                <option value="yolov8m.pt">YOLOv8m (中)</option>
-                <option value="yolov8l.pt">YOLOv8l (大)</option>
-                <option value="yolov8x.pt">YOLOv8x (最大最准)</option>
+                <option value="yolov8n.pt">
+                  YOLOv8n (最小最快)
+                </option>
+                <option value="yolov8s.pt">
+                  YOLOv8s (小，推荐)
+                </option>
+                <option value="yolov8m.pt">
+                  YOLOv8m (中)
+                </option>
+                <option value="yolov8l.pt">
+                  YOLOv8l (大)
+                </option>
+                <option value="yolov8x.pt">
+                  YOLOv8x (最大最准)
+                </option>
               </select>
             </div>
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="ui-btn" @click="showCreateDialog = false">取消</button>
-          <button class="ui-btn ui-btn-primary" @click="handleCreate" :disabled="creating">
+          <button
+            class="ui-btn"
+            @click="showCreateDialog = false"
+          >
+            取消
+          </button>
+          <button
+            class="ui-btn ui-btn-primary"
+            :disabled="creating"
+            @click="handleCreate"
+          >
             {{ creating ? '注册中...' : '注册' }}
           </button>
         </div>
@@ -196,28 +343,54 @@
     </div>
 
     <!-- 上传对话框 -->
-    <div class="dialog-overlay" v-if="showUploadDialog" @click.self="showUploadDialog = false">
+    <div
+      v-if="showUploadDialog"
+      class="dialog-overlay"
+      @click.self="showUploadDialog = false"
+    >
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>上传模型文件</h3>
-          <button class="close-btn" @click="showUploadDialog = false">
-            <SvgIcon name="close"/>
+          <button
+            class="close-btn"
+            @click="showUploadDialog = false"
+          >
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
           <div class="upload-area">
-            <input ref="fileInputRef" type="file" accept=".pt,.pth,.onnx" style="display: none"
-                   @change="handleFileChange"/>
-            <button class="upload-btn" @click="fileInputRef?.click()">
-              <SvgIcon name="upload"/>
+            <input
+              ref="fileInputRef"
+              type="file"
+              accept=".pt,.pth,.onnx"
+              style="display: none"
+              @change="handleFileChange"
+            >
+            <button
+              class="upload-btn"
+              @click="fileInputRef?.click()"
+            >
+              <SvgIcon name="upload" />
               <span>{{ uploadFile ? uploadFile.name : '选择模型文件' }}</span>
             </button>
-            <p class="upload-hint">支持 .pt, .pth, .onnx 格式</p>
+            <p class="upload-hint">
+              支持 .pt, .pth, .onnx 格式
+            </p>
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="ui-btn" @click="showUploadDialog = false">取消</button>
-          <button class="ui-btn ui-btn-primary" @click="handleUploadSubmit" :disabled="!uploadFile || uploading">
+          <button
+            class="ui-btn"
+            @click="showUploadDialog = false"
+          >
+            取消
+          </button>
+          <button
+            class="ui-btn ui-btn-primary"
+            :disabled="!uploadFile || uploading"
+            @click="handleUploadSubmit"
+          >
             {{ uploading ? '上传中...' : '上传' }}
           </button>
         </div>
@@ -225,27 +398,51 @@
     </div>
 
     <!-- 编辑对话框 -->
-    <div class="dialog-overlay" v-if="showRenameDialog" @click.self="showRenameDialog = false">
+    <div
+      v-if="showRenameDialog"
+      class="dialog-overlay"
+      @click.self="showRenameDialog = false"
+    >
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>编辑模型</h3>
-          <button class="close-btn" @click="showRenameDialog = false">
-            <SvgIcon name="close"/>
+          <button
+            class="close-btn"
+            @click="showRenameDialog = false"
+          >
+            <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
           <div class="form-group">
             <label>模型名称</label>
-            <input type="text" v-model="renameForm.name" placeholder="输入模型名称"/>
+            <input
+              v-model="renameForm.name"
+              type="text"
+              placeholder="输入模型名称"
+            >
           </div>
           <div class="form-group">
             <label>版本</label>
-            <input type="text" v-model="renameForm.version" placeholder="如 v1, v2"/>
+            <input
+              v-model="renameForm.version"
+              type="text"
+              placeholder="如 v1, v2"
+            >
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="ui-btn" @click="showRenameDialog = false">取消</button>
-          <button class="ui-btn ui-btn-primary" @click="handleRenameSubmit" :disabled="renaming">
+          <button
+            class="ui-btn"
+            @click="showRenameDialog = false"
+          >
+            取消
+          </button>
+          <button
+            class="ui-btn ui-btn-primary"
+            :disabled="renaming"
+            @click="handleRenameSubmit"
+          >
             {{ renaming ? '保存中...' : '保存' }}
           </button>
         </div>
@@ -253,45 +450,75 @@
     </div>
 
     <!-- 导出对话框 -->
-    <div class="dialog-overlay" v-if="showExportDialog" @click.self="handleExportClose">
+    <div
+      v-if="showExportDialog"
+      class="dialog-overlay"
+      @click.self="handleExportClose"
+    >
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>导出模型</h3>
-          <button class="close-btn" @click="handleExportClose">
-            <SvgIcon name="close"/>
+          <button
+            class="close-btn"
+            @click="handleExportClose"
+          >
+            <SvgIcon name="close" />
           </button>
         </div>
-        <div class="dialog-body" v-if="exportTargetModel">
-          <p class="export-model-name">导出模型: {{ exportTargetModel.name }}</p>
+        <div
+          v-if="exportTargetModel"
+          class="dialog-body"
+        >
+          <p class="export-model-name">
+            导出模型: {{ exportTargetModel.name }}
+          </p>
 
           <!-- 导出进度（导出中显示） -->
-          <div v-if="exportStatus !== 'idle'" class="export-progress">
+          <div
+            v-if="exportStatus !== 'idle'"
+            class="export-progress"
+          >
             <div class="progress-info">
-              <span class="progress-status" :class="exportStatus">
+              <span
+                class="progress-status"
+                :class="exportStatus"
+              >
                 {{ exportStatusText }}
               </span>
               <span class="progress-percent">{{ exportProgress }}%</span>
             </div>
             <div class="progress-bar">
-              <div class="progress-fill" :class="exportStatus" :style="{ width: exportProgress + '%' }"></div>
+              <div
+                class="progress-fill"
+                :class="exportStatus"
+                :style="{ width: exportProgress + '%' }"
+              />
             </div>
-            <p class="progress-message">{{ exportMessage }}</p>
+            <p class="progress-message">
+              {{ exportMessage }}
+            </p>
           </div>
 
           <!-- 导出配置（未开始或完成后显示） -->
           <template v-else>
             <!-- 显示已有格式 -->
-            <div class="form-group" v-if="exportTargetModel.files?.length">
+            <div
+              v-if="exportTargetModel.files?.length"
+              class="form-group"
+            >
               <label>已有格式</label>
               <div class="existing-formats">
                 <span
-                  class="format-tag"
                   v-for="f in exportTargetModel.files"
                   :key="f.id"
+                  class="format-tag"
                   :class="{ 'is-default': f.is_default }"
                 >
                   {{ f.format.toUpperCase() }}
-                  <span v-if="f.is_default" class="default-tag">默认</span>
+                  <span
+                    v-if="f.is_default"
+                    class="default-tag"
+                  >默认</span>
                 </span>
               </div>
             </div>
@@ -300,29 +527,41 @@
               <label>目标格式</label>
               <div class="select-wrapper">
                 <select v-model="exportForm.target_format">
-                  <option value="onnx">ONNX (跨平台，CPU/GPU)</option>
-                  <option value="openvino">OpenVINO (Intel 硬件加速)</option>
-                  <option value="tensorrt">TensorRT (NVIDIA GPU 高性能)</option>
+                  <option value="onnx">
+                    ONNX (跨平台，CPU/GPU)
+                  </option>
+                  <option value="openvino">
+                    OpenVINO (Intel 硬件加速)
+                  </option>
+                  <option value="tensorrt">
+                    TensorRT (NVIDIA GPU 高性能)
+                  </option>
                 </select>
               </div>
             </div>
             <div class="form-group">
               <label>
-                <input type="checkbox" v-model="exportForm.half"/>
+                <input
+                  v-model="exportForm.half"
+                  type="checkbox"
+                >
                 导出为 FP16 半精度（减小模型体积，加速推理）
               </label>
             </div>
           </template>
         </div>
         <div class="dialog-footer">
-          <button class="ui-btn" @click="handleExportClose">
+          <button
+            class="ui-btn"
+            @click="handleExportClose"
+          >
             {{ exportStatus !== 'idle' && exportStatus !== 'completed' ? '取消' : '关闭' }}
           </button>
           <button
             v-if="exportStatus === 'idle'"
             class="ui-btn ui-btn-primary"
-            @click="handleExportSubmit"
             :disabled="exporting"
+            @click="handleExportSubmit"
           >
             {{ exporting ? '准备中...' : '开始导出' }}
           </button>
@@ -333,11 +572,10 @@
 </template>
 
 <script setup lang="ts">
-import {ref, computed, onMounted, onUnmounted} from 'vue'
+import {computed, onMounted, ref} from 'vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
-import {modelApi, atlasApi} from '@/api'
+import {atlasApi, modelApi} from '@/api'
 import SvgIcon from '@/components/SvgIcon.vue'
-import {ArrowDown} from '@element-plus/icons-vue'
 
 const models = ref<any[]>([])
 const atlases = ref<any[]>([])
@@ -601,7 +839,7 @@ const handleDownload = (row: any) => {
   const url = modelApi.getDownloadUrl(row.id)
   const link = document.createElement('a')
   link.href = url
-  link.download = row.name + (row.version ? `_${row.version}` : '') + '.pt'
+  link.download = `${row.name + (row.version ? `_${row.version}` : '')  }.pt`
   link.click()
 }
 

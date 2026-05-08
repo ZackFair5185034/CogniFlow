@@ -8,16 +8,29 @@
         class="stat-card"
         :style="{ animationDelay: `${index * 0.1}s` }"
       >
-        <div class="stat-glow" :style="{ background: stat.gradient }"></div>
-        <div class="stat-icon" :style="{ color: stat.color }">
+        <div
+          class="stat-glow"
+          :style="{ background: stat.gradient }"
+        />
+        <div
+          class="stat-icon"
+          :style="{ color: stat.color }"
+        >
           <SvgIcon :name="stat.icon" />
         </div>
         <div class="stat-content">
-          <div class="stat-value" :style="{ color: stat.color }">{{ stat.value }}</div>
-          <div class="stat-label">{{ stat.label }}</div>
+          <div
+            class="stat-value"
+            :style="{ color: stat.color }"
+          >
+            {{ stat.value }}
+          </div>
+          <div class="stat-label">
+            {{ stat.label }}
+          </div>
         </div>
         <div class="stat-decoration">
-          <div class="decoration-line"></div>
+          <div class="decoration-line" />
         </div>
       </div>
     </div>
@@ -27,23 +40,23 @@
       <!-- 快速操作 -->
       <div class="quick-actions ui-card">
         <div class="card-header">
-          <span class="header-line"></span>
+          <span class="header-line" />
           <h3>快速操作</h3>
           <span class="header-badge">QUICK ACTIONS</span>
         </div>
         <div class="action-grid">
           <button
-            class="action-tile"
             v-for="action in quickActions"
             :key="action.label"
-            @click="$router.push(action.path)"
+            class="action-tile"
             :style="{ '--accent': action.color }"
+            @click="$router.push(action.path)"
           >
             <div class="action-icon">
               <SvgIcon :name="action.icon" />
             </div>
             <span class="action-label">{{ action.label }}</span>
-            <div class="action-hover-effect"></div>
+            <div class="action-hover-effect" />
           </button>
         </div>
       </div>
@@ -51,7 +64,7 @@
       <!-- 系统状态 -->
       <div class="system-status ui-card">
         <div class="card-header">
-          <span class="header-line"></span>
+          <span class="header-line" />
           <h3>系统状态</h3>
           <span class="header-badge">SYSTEM STATUS</span>
         </div>
@@ -63,7 +76,10 @@
               <span class="status-value">{{ systemStats.cpu.percent.toFixed(1) }}%</span>
             </div>
             <div class="status-bar">
-              <div class="status-fill" :style="{ width: systemStats.cpu.percent + '%', background: systemStats.cpu.percent > 80 ? '#ff4466' : '#00f0ff' }"></div>
+              <div
+                class="status-fill"
+                :style="{ width: systemStats.cpu.percent + '%', background: systemStats.cpu.percent > 80 ? '#ff4466' : '#00f0ff' }"
+              />
             </div>
           </div>
           <!-- 内存 -->
@@ -73,7 +89,10 @@
               <span class="status-value">{{ formatBytes(systemStats.memory.used) }} / {{ formatBytes(systemStats.memory.total) }}</span>
             </div>
             <div class="status-bar">
-              <div class="status-fill" :style="{ width: systemStats.memory.percent + '%', background: systemStats.memory.percent > 80 ? '#ff4466' : '#ff00aa' }"></div>
+              <div
+                class="status-fill"
+                :style="{ width: systemStats.memory.percent + '%', background: systemStats.memory.percent > 80 ? '#ff4466' : '#ff00aa' }"
+              />
             </div>
           </div>
           <!-- 磁盘 -->
@@ -83,7 +102,10 @@
               <span class="status-value">{{ formatBytes(systemStats.disk.used) }} / {{ formatBytes(systemStats.disk.total) }}</span>
             </div>
             <div class="status-bar">
-              <div class="status-fill" :style="{ width: systemStats.disk.percent + '%', background: systemStats.disk.percent > 90 ? '#ff4466' : '#ffdd00' }"></div>
+              <div
+                class="status-fill"
+                :style="{ width: systemStats.disk.percent + '%', background: systemStats.disk.percent > 90 ? '#ff4466' : '#ffdd00' }"
+              />
             </div>
           </div>
         </div>
@@ -93,23 +115,36 @@
     <!-- 训练进度 -->
     <div class="training-section ui-card">
       <div class="card-header">
-        <span class="header-line"></span>
+        <span class="header-line" />
         <h3>训练进度</h3>
         <span class="header-badge">TRAINING PROGRESS</span>
       </div>
       <div class="training-content">
-        <div class="training-list" v-if="recentJobs.length > 0">
-          <div class="training-item" v-for="job in recentJobs" :key="job.id">
+        <div
+          v-if="recentJobs.length > 0"
+          class="training-list"
+        >
+          <div
+            v-for="job in recentJobs"
+            :key="job.id"
+            class="training-item"
+          >
             <div class="training-info">
               <span class="training-id">TASK #{{ job.id.toString().padStart(4, '0') }}</span>
-              <span class="training-status" :class="job.status">
+              <span
+                class="training-status"
+                :class="job.status"
+              >
                 {{ statusText[job.status] }}
               </span>
             </div>
             <div class="training-progress">
               <div class="progress-bar">
-                <div class="progress-fill" :class="job.status"
-                     :style="{ width: getProgress(job) + '%' }"></div>
+                <div
+                  class="progress-fill"
+                  :class="job.status"
+                  :style="{ width: getProgress(job) + '%' }"
+                />
               </div>
               <span class="progress-text">{{ job.current_step }} / {{ job.total_steps }}</span>
             </div>
@@ -119,7 +154,10 @@
             </div>
           </div>
         </div>
-        <div class="empty-state" v-else>
+        <div
+          v-else
+          class="empty-state"
+        >
           <div class="empty-icon">
             <SvgIcon name="clock" />
           </div>
@@ -173,7 +211,7 @@ const formatBytes = (bytes: number) => {
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))  } ${  sizes[i]}`
 }
 
 const connectSystemWs = () => {

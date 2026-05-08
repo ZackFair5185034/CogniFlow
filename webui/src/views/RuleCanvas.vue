@@ -3,19 +3,26 @@
     <!-- 顶部工具栏 -->
     <header class="canvas-header">
       <div class="header-left">
-        <button class="icon-btn back-btn" @click="goBack" title="返回规则列表">
+        <button
+          class="icon-btn back-btn"
+          title="返回规则列表"
+          @click="goBack"
+        >
           <SvgIcon name="back" />
         </button>
         <div class="rule-name-section">
           <input
+            v-model="graphName"
             type="text"
             class="rule-name-input"
-            v-model="graphName"
+            placeholder="规则名称..."
             @blur="handleNameChange"
             @keyup.enter="$event.target.blur()"
-            placeholder="规则名称..."
-          />
-          <span class="rule-status-badge" :class="{ active: graph?.is_active }">
+          >
+          <span
+            class="rule-status-badge"
+            :class="{ active: graph?.is_active }"
+          >
             {{ graph?.is_active ? '运行中' : '已停止' }}
           </span>
         </div>
@@ -23,54 +30,102 @@
 
       <div class="header-center">
         <div class="tool-group">
-          <button class="icon-btn" @click="handleUndo" :disabled="!canUndo" title="撤销 (Ctrl+Z)">
+          <button
+            class="icon-btn"
+            :disabled="!canUndo"
+            title="撤销 (Ctrl+Z)"
+            @click="handleUndo"
+          >
             <SvgIcon name="undo" />
           </button>
-          <button class="icon-btn" @click="handleRedo" :disabled="!canRedo" title="重做 (Ctrl+Y)">
+          <button
+            class="icon-btn"
+            :disabled="!canRedo"
+            title="重做 (Ctrl+Y)"
+            @click="handleRedo"
+          >
             <SvgIcon name="redo" />
           </button>
         </div>
 
-        <div class="tool-divider"></div>
+        <div class="tool-divider" />
 
         <div class="tool-group">
-          <button class="icon-btn" @click="zoomIn" title="放大">
+          <button
+            class="icon-btn"
+            title="放大"
+            @click="zoomIn"
+          >
             <SvgIcon name="zoom-in" />
           </button>
           <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button class="icon-btn" @click="zoomOut" title="缩小">
+          <button
+            class="icon-btn"
+            title="缩小"
+            @click="zoomOut"
+          >
             <SvgIcon name="zoom-out" />
           </button>
-          <button class="icon-btn" @click="fitView" title="适应画布">
+          <button
+            class="icon-btn"
+            title="适应画布"
+            @click="fitView"
+          >
             <SvgIcon name="fit-view" />
           </button>
         </div>
 
-        <div class="tool-divider"></div>
+        <div class="tool-divider" />
 
         <div class="tool-group">
-          <button class="icon-btn" :class="{ active: showGrid }" @click="showGrid = !showGrid" title="显示网格">
+          <button
+            class="icon-btn"
+            :class="{ active: showGrid }"
+            title="显示网格"
+            @click="showGrid = !showGrid"
+          >
             <SvgIcon name="grid" />
           </button>
-          <button class="icon-btn" :class="{ active: snapGrid }" @click="snapGrid = !snapGrid" title="网格吸附">
+          <button
+            class="icon-btn"
+            :class="{ active: snapGrid }"
+            title="网格吸附"
+            @click="snapGrid = !snapGrid"
+          >
             <SvgIcon name="snap" />
           </button>
-          <button class="icon-btn" :class="{ active: showMiniMap }" @click="showMiniMap = !showMiniMap" title="小地图">
+          <button
+            class="icon-btn"
+            :class="{ active: showMiniMap }"
+            title="小地图"
+            @click="showMiniMap = !showMiniMap"
+          >
             <SvgIcon name="minimap" />
           </button>
         </div>
       </div>
 
       <div class="header-right">
-        <button class="action-btn secondary" @click="handleValidate">
+        <button
+          class="action-btn secondary"
+          @click="handleValidate"
+        >
           <SvgIcon name="check" />
           校验
         </button>
-        <button class="action-btn secondary" @click="handleSave" :disabled="saving">
+        <button
+          class="action-btn secondary"
+          :disabled="saving"
+          @click="handleSave"
+        >
           <SvgIcon name="save" />
           {{ saving ? '保存中...' : '保存' }}
         </button>
-        <button class="action-btn primary" @click="handleExecute" :disabled="executing || !hasNodes">
+        <button
+          class="action-btn primary"
+          :disabled="executing || !hasNodes"
+          @click="handleExecute"
+        >
           <SvgIcon name="play" />
           {{ executing ? '执行中...' : '执行' }}
         </button>
@@ -80,32 +135,64 @@
     <!-- 主体区域 -->
     <div class="canvas-body">
       <!-- 左侧节点面板 -->
-      <aside class="node-palette" :class="{ collapsed: !showPalette }">
+      <aside
+        class="node-palette"
+        :class="{ collapsed: !showPalette }"
+      >
         <div class="palette-header">
-          <h3 v-if="showPalette">节点库</h3>
-          <button class="collapse-btn" @click="showPalette = !showPalette">
-            <SvgIcon name="chevron-left" :class="{ rotated: !showPalette }" />
+          <h3 v-if="showPalette">
+            节点库
+          </h3>
+          <button
+            class="collapse-btn"
+            @click="showPalette = !showPalette"
+          >
+            <SvgIcon
+              name="chevron-left"
+              :class="{ rotated: !showPalette }"
+            />
           </button>
         </div>
 
-        <div class="palette-content" v-show="showPalette">
+        <div
+          v-show="showPalette"
+          class="palette-content"
+        >
           <div
             v-for="category in nodeCategories"
             :key="category.name"
             class="node-category"
           >
-            <div class="category-header" @click="category.expanded = !category.expanded">
-              <div class="category-icon-wrapper" :class="category.name">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <div
+              class="category-header"
+              @click="category.expanded = !category.expanded"
+            >
+              <div
+                class="category-icon-wrapper"
+                :class="category.name"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <component :is="category.icon" />
                 </svg>
               </div>
               <span class="category-name">{{ category.label }}</span>
               <span class="category-count">{{ category.nodes.length }}</span>
-              <SvgIcon class="chevron" :class="{ expanded: category.expanded }" name="chevron" />
+              <SvgIcon
+                class="chevron"
+                :class="{ expanded: category.expanded }"
+                name="chevron"
+              />
             </div>
 
-            <div v-show="category.expanded" class="node-list">
+            <div
+              v-show="category.expanded"
+              class="node-list"
+            >
               <div
                 v-for="node in category.nodes"
                 :key="node.type"
@@ -114,8 +201,16 @@
                 @dragstart="handleDragStart($event, node)"
                 @dblclick="quickAddNode(node)"
               >
-                <div class="node-icon-wrapper" :class="category.name">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <div
+                  class="node-icon-wrapper"
+                  :class="category.name"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     <component :is="category.icon" />
                   </svg>
                 </div>
@@ -130,20 +225,45 @@
       </aside>
 
       <!-- 画布区域 -->
-      <div class="canvas-wrapper" ref="canvasWrapper">
+      <div
+        ref="canvasWrapper"
+        class="canvas-wrapper"
+      >
         <!-- 顶部标尺 -->
-        <div class="ruler ruler-horizontal" v-if="showRulers">
-          <div class="ruler-content" :style="{ width: canvasWidth + 'px', transform: `translateX(${-panX}px)` }">
-            <span v-for="i in Math.ceil(canvasWidth / rulerStep)" :key="i" class="ruler-mark" :style="{ left: (i - 1) * rulerStep + 'px' }">
+        <div
+          v-if="showRulers"
+          class="ruler ruler-horizontal"
+        >
+          <div
+            class="ruler-content"
+            :style="{ width: canvasWidth + 'px', transform: `translateX(${-panX}px)` }"
+          >
+            <span
+              v-for="i in Math.ceil(canvasWidth / rulerStep)"
+              :key="i"
+              class="ruler-mark"
+              :style="{ left: (i - 1) * rulerStep + 'px' }"
+            >
               {{ (i - 1) * rulerStep }}
             </span>
           </div>
         </div>
 
         <!-- 左侧标尺 -->
-        <div class="ruler ruler-vertical" v-if="showRulers">
-          <div class="ruler-content" :style="{ height: canvasHeight + 'px', transform: `translateY(${-panY}px)` }">
-            <span v-for="i in Math.ceil(canvasHeight / rulerStep)" :key="i" class="ruler-mark" :style="{ top: (i - 1) * rulerStep + 'px' }">
+        <div
+          v-if="showRulers"
+          class="ruler ruler-vertical"
+        >
+          <div
+            class="ruler-content"
+            :style="{ height: canvasHeight + 'px', transform: `translateY(${-panY}px)` }"
+          >
+            <span
+              v-for="i in Math.ceil(canvasHeight / rulerStep)"
+              :key="i"
+              class="ruler-mark"
+              :style="{ top: (i - 1) * rulerStep + 'px' }"
+            >
               {{ (i - 1) * rulerStep }}
             </span>
           </div>
@@ -151,8 +271,8 @@
 
         <!-- VueFlow 画布 -->
         <div
-          class="flow-container"
           ref="flowContainer"
+          class="flow-container"
           @drop="handleDrop"
           @dragover.prevent
           @dragenter.prevent
@@ -171,14 +291,6 @@
             :snap-to-grid="snapGrid"
             :snap-grid="[gridSize, gridSize]"
             fit-view-on-init
-            @node-click="handleNodeClick"
-            @node-drag-stop="handleNodeDragStop"
-            @pane-click="handlePaneClick"
-            @connect="handleConnect"
-            @move="handlePan"
-            @zoom="handleZoom"
-            @nodes-change="handleNodesChange"
-            @edges-change="handleEdgesChange"
             :pan-on-scroll="true"
             :zoom-on-scroll="true"
             :min-zoom="0.1"
@@ -187,6 +299,14 @@
             :nodes-connectable="true"
             :elements-selectable="true"
             :select-nodes-on-drag="true"
+            @node-click="handleNodeClick"
+            @node-drag-stop="handleNodeDragStop"
+            @pane-click="handlePaneClick"
+            @connect="handleConnect"
+            @move="handlePan"
+            @zoom="handleZoom"
+            @nodes-change="handleNodesChange"
+            @edges-change="handleEdgesChange"
           >
             <!-- 点阵背景 -->
             <Background
@@ -211,7 +331,10 @@
           </VueFlow>
 
           <!-- 空画布提示 -->
-          <div class="empty-state" v-if="nodes.length === 0 && !isLoading">
+          <div
+            v-if="nodes.length === 0 && !isLoading"
+            class="empty-state"
+          >
             <div class="empty-icon">
               <SvgIcon name="stream" />
             </div>
@@ -224,8 +347,16 @@
                 class="quick-add-btn"
                 @click="quickAddNode(node)"
               >
-                <span class="btn-icon" :class="node.category">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <span
+                  class="btn-icon"
+                  :class="node.category"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     <component :is="getCategoryIcon(node.category)" />
                   </svg>
                 </span>
@@ -235,20 +366,34 @@
           </div>
 
           <!-- 加载状态 -->
-          <div class="loading-state" v-if="isLoading">
-            <div class="spinner"></div>
+          <div
+            v-if="isLoading"
+            class="loading-state"
+          >
+            <div class="spinner" />
             <span>加载规则图...</span>
           </div>
         </div>
       </div>
 
       <!-- 右侧属性面板 -->
-      <aside class="properties-panel" :class="{ visible: selectedNode }">
+      <aside
+        class="properties-panel"
+        :class="{ visible: selectedNode }"
+      >
         <template v-if="selectedNode">
           <div class="panel-header">
             <div class="panel-title">
-              <span class="panel-icon" :class="selectedNode.category">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <span
+                class="panel-icon"
+                :class="selectedNode.category"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
                   <component :is="getCategoryIcon(selectedNode.category)" />
                 </svg>
               </span>
@@ -257,21 +402,33 @@
                 <span class="node-type-label">{{ selectedNode.type }}</span>
               </div>
             </div>
-            <button class="close-btn" @click="selectedNode = null">
+            <button
+              class="close-btn"
+              @click="selectedNode = null"
+            >
               <SvgIcon name="close" />
             </button>
           </div>
 
           <div class="panel-body">
             <!-- 节点描述 -->
-            <div class="config-section" v-if="selectedNode.description">
-              <div class="section-label">描述</div>
-              <p class="node-description">{{ selectedNode.description }}</p>
+            <div
+              v-if="selectedNode.description"
+              class="config-section"
+            >
+              <div class="section-label">
+                描述
+              </div>
+              <p class="node-description">
+                {{ selectedNode.description }}
+              </p>
             </div>
 
             <!-- 参数配置 -->
             <div class="config-section">
-              <div class="section-label">参数配置</div>
+              <div class="section-label">
+                参数配置
+              </div>
               <div class="config-form">
                 <div
                   v-for="(schema, key) in selectedNode.configSchema?.properties || {}"
@@ -285,10 +442,10 @@
                     v-if="schema.type === 'string' && !schema.enum"
                     type="text"
                     :value="nodeConfig[key]"
-                    @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
                     class="field-input"
                     placeholder="请输入..."
-                  />
+                    @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
+                  >
 
                   <!-- 数字输入 -->
                   <input
@@ -298,33 +455,46 @@
                     :max="schema.maximum"
                     :step="schema.type === 'integer' ? 1 : 0.1"
                     :value="nodeConfig[key]"
-                    @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
                     class="field-input"
-                  />
+                    @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
+                  >
 
                   <!-- 布尔选择 -->
                   <select
                     v-else-if="schema.type === 'boolean'"
                     :value="String(nodeConfig[key])"
-                    @change="updateConfig(key, ($event.target as HTMLSelectElement).value === 'true')"
                     class="field-select"
+                    @change="updateConfig(key, ($event.target as HTMLSelectElement).value === 'true')"
                   >
-                    <option value="true">是</option>
-                    <option value="false">否</option>
+                    <option value="true">
+                      是
+                    </option>
+                    <option value="false">
+                      否
+                    </option>
                   </select>
 
                   <!-- 枚举选择 -->
                   <select
                     v-else-if="schema.enum"
                     :value="nodeConfig[key]"
-                    @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
                     class="field-select"
+                    @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
                   >
-                    <option v-for="opt in schema.enum" :key="opt" :value="opt">{{ opt }}</option>
+                    <option
+                      v-for="opt in schema.enum"
+                      :key="opt"
+                      :value="opt"
+                    >
+                      {{ opt }}
+                    </option>
                   </select>
 
                   <!-- 数组输入 -->
-                  <div v-else-if="schema.type === 'array'" class="array-field">
+                  <div
+                    v-else-if="schema.type === 'array'"
+                    class="array-field"
+                  >
                     <div
                       v-for="(item, idx) in (nodeConfig[key] || [])"
                       :key="idx"
@@ -333,20 +503,29 @@
                       <input
                         type="text"
                         :value="item"
-                        @input="updateArrayItem(key, idx, ($event.target as HTMLInputElement).value)"
                         class="field-input"
-                      />
-                      <button class="remove-btn" @click="removeArrayItem(key, idx)">
+                        @input="updateArrayItem(key, idx, ($event.target as HTMLInputElement).value)"
+                      >
+                      <button
+                        class="remove-btn"
+                        @click="removeArrayItem(key, idx)"
+                      >
                         <SvgIcon name="close" />
                       </button>
                     </div>
-                    <button class="add-item-btn" @click="addArrayItem(key)">
+                    <button
+                      class="add-item-btn"
+                      @click="addArrayItem(key)"
+                    >
                       <SvgIcon name="plus" />
                       添加
                     </button>
                   </div>
 
-                  <span class="field-default" v-if="schema.default !== undefined">
+                  <span
+                    v-if="schema.default !== undefined"
+                    class="field-default"
+                  >
                     默认: {{ JSON.stringify(schema.default) }}
                   </span>
                 </div>
@@ -355,20 +534,36 @@
 
             <!-- 连接信息 -->
             <div class="config-section">
-              <div class="section-label">连接</div>
+              <div class="section-label">
+                连接
+              </div>
               <div class="ports-display">
-                <div class="ports-row" v-if="selectedNode.inputs?.length">
+                <div
+                  v-if="selectedNode.inputs?.length"
+                  class="ports-row"
+                >
                   <span class="ports-title">输入:</span>
                   <div class="ports-list">
-                    <span v-for="input in selectedNode.inputs" :key="input.name" class="port-chip input">
+                    <span
+                      v-for="input in selectedNode.inputs"
+                      :key="input.name"
+                      class="port-chip input"
+                    >
                       {{ input.label || input.name }}
                     </span>
                   </div>
                 </div>
-                <div class="ports-row" v-if="selectedNode.outputs?.length">
+                <div
+                  v-if="selectedNode.outputs?.length"
+                  class="ports-row"
+                >
                   <span class="ports-title">输出:</span>
                   <div class="ports-list">
-                    <span v-for="output in selectedNode.outputs" :key="output.name" class="port-chip output">
+                    <span
+                      v-for="output in selectedNode.outputs"
+                      :key="output.name"
+                      class="port-chip output"
+                    >
                       {{ output.label || output.name }}
                     </span>
                   </div>
@@ -378,7 +573,10 @@
           </div>
         </template>
 
-        <div class="no-selection" v-else>
+        <div
+          v-else
+          class="no-selection"
+        >
           <SvgIcon name="alert" />
           <p>选择画布上的节点<br>查看和编辑属性</p>
         </div>
@@ -386,22 +584,42 @@
     </div>
 
     <!-- 执行日志面板 -->
-    <div class="execution-panel" :class="{ expanded: showExecutionPanel }">
-      <div class="execution-header" @click="showExecutionPanel = !showExecutionPanel">
+    <div
+      class="execution-panel"
+      :class="{ expanded: showExecutionPanel }"
+    >
+      <div
+        class="execution-header"
+        @click="showExecutionPanel = !showExecutionPanel"
+      >
         <div class="execution-title">
           <SvgIcon name="file-text" />
           <span>执行日志</span>
-          <span class="execution-status" :class="executionStatus">{{ executionStatusText }}</span>
+          <span
+            class="execution-status"
+            :class="executionStatus"
+          >{{ executionStatusText }}</span>
         </div>
         <div class="execution-actions">
-          <button class="icon-btn small" @click.stop="clearLogs" v-if="showExecutionPanel">
+          <button
+            v-if="showExecutionPanel"
+            class="icon-btn small"
+            @click.stop="clearLogs"
+          >
             <SvgIcon name="trash" />
           </button>
-          <SvgIcon class="expand-icon" :class="{ expanded: showExecutionPanel }" name="chevron" />
+          <SvgIcon
+            class="expand-icon"
+            :class="{ expanded: showExecutionPanel }"
+            name="chevron"
+          />
         </div>
       </div>
 
-      <div class="execution-content" v-show="showExecutionPanel">
+      <div
+        v-show="showExecutionPanel"
+        class="execution-content"
+      >
         <div class="logs-list">
           <div
             v-for="(log, idx) in executionLogs"
@@ -411,10 +629,16 @@
           >
             <span class="log-time">{{ log.timestamp }}</span>
             <span class="log-level-badge">{{ log.level.toUpperCase() }}</span>
-            <span class="log-node" v-if="log.node_type">{{ log.node_type }}</span>
+            <span
+              v-if="log.node_type"
+              class="log-node"
+            >{{ log.node_type }}</span>
             <span class="log-message">{{ log.message }}</span>
           </div>
-          <div v-if="executionLogs.length === 0" class="no-logs">
+          <div
+            v-if="executionLogs.length === 0"
+            class="no-logs"
+          >
             暂无执行日志
           </div>
         </div>
@@ -423,7 +647,11 @@
 
     <!-- Toast 提示 -->
     <transition name="toast">
-      <div class="toast-notification" v-if="toast.show" :class="toast.type">
+      <div
+        v-if="toast.show"
+        class="toast-notification"
+        :class="toast.type"
+      >
         {{ toast.message }}
       </div>
     </transition>

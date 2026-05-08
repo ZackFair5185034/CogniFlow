@@ -3,19 +3,34 @@
   <router-view v-if="$route.meta.layout === 'none'" />
 
   <!-- 普通页面 - 带 App 布局 -->
-  <div v-else class="app-container">
+  <div
+    v-else
+    class="app-container"
+  >
     <!-- 背景效果 -->
-    <div class="bg-grid"></div>
-    <div class="bg-glow"></div>
-    <div class="scanline"></div>
+    <div class="bg-grid" />
+    <div class="bg-glow" />
+    <div class="scanline" />
 
     <!-- 侧边导航 -->
-    <aside class="sidebar" :class="{ collapsed }">
-      <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
+    <aside
+      class="sidebar"
+      :class="{ collapsed }"
+    >
+      <button
+        class="collapse-btn"
+        :class="{ collapsed }"
+        :title="collapsed ? '展开菜单' : '收起菜单'"
+        @click="toggleSidebar"
+      >
         <SvgIcon :name="collapsed ? 'chevron-right' : 'chevron-left'" />
       </button>
       <div class="logo">
-        <img class="logo-icon" src="/logo.svg" alt="CogniFlow">
+        <img
+          class="logo-icon"
+          src="/logo.svg"
+          alt="CogniFlow"
+        >
         <div class="logo-text">
           <span class="logo-title">CogniFlow</span>
           <span class="logo-sub">Visual Perception</span>
@@ -30,17 +45,22 @@
           class="nav-item"
           :class="{ active: isNavActive(item.path) }"
         >
-          <SvgIcon :name="item.icon" class="nav-icon" />
+          <SvgIcon
+            :name="item.icon"
+            class="nav-icon"
+          />
           <span class="nav-text">{{ item.label }}</span>
-          <span class="nav-indicator"></span>
+          <span class="nav-indicator" />
         </router-link>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="status-dot" :class="{ online: isOnline }"></div>
+        <div
+          class="status-dot"
+          :class="{ online: isOnline }"
+        />
         <span class="status-text">{{ isOnline ? '系统在线' : '离线' }}</span>
       </div>
-
     </aside>
 
     <!-- 主内容区 -->
@@ -48,7 +68,10 @@
       <header class="top-bar">
         <div class="top-actions">
           <span class="time-display">{{ currentTime }}</span>
-          <button class="action-btn" @click="refreshData">
+          <button
+            class="action-btn"
+            @click="refreshData"
+          >
             <SvgIcon name="refresh" />
           </button>
         </div>
@@ -56,7 +79,10 @@
 
       <div class="content-area">
         <router-view v-slot="{ Component }">
-          <transition name="page-fade" mode="out-in">
+          <transition
+            name="page-fade"
+            mode="out-in"
+          >
             <component :is="Component" />
           </transition>
         </router-view>
