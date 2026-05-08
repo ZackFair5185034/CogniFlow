@@ -17,6 +17,7 @@ import sys
 import threading
 import logging
 import logging.handlers
+import argparse
 
 from backend.database import init_db
 from backend.routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
@@ -168,7 +169,7 @@ async def health_check():
     return {"status": "ok"}
 
 
-def start_with_tray() -> None:
+def start_with_tray(browser: bool = False) -> None:
     """启动应用并集成系统托盘（仅 Windows）。"""
     import uvicorn
 
@@ -205,9 +206,10 @@ def start_with_tray() -> None:
         import time
         time.sleep(0.5)
 
-        # 自动打开浏览器
-        logger.info("正在打开浏览器...")
-        open_browser()
+        if browser:
+            # 自动打开浏览器
+            logger.info("正在打开浏览器...")
+            open_browser()
         logger.info("CogniFlow WebUI 已启动 http://localhost:8000")
 
         # 启动 FastAPI 应用（阻塞）
@@ -216,10 +218,14 @@ def start_with_tray() -> None:
         server_config["server"].run()
     else:
         # 非 Windows 平台：直接启动
-        open_browser()
+        if browser:
+            open_browser()
         logger.info("CogniFlow WebUI 已启动 http://localhost:8000")
         uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 if __name__ == "__main__":
-    start_with_tray()
+    parser = argparse.ArgumentParser(description="CogniFlow WebUI")
+    parser.add_argument("--browser", action="store_true", help="启动后自动打开浏览器")
+    args = parser.parse_args()
+    start_with_tray(browser=args.browser)
