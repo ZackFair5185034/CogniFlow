@@ -512,3 +512,41 @@ body {
   border-color: var(--accent-cyan) !important;
   color: var(--accent-cyan) !important;
 }
+
+// Element Plus 下拉菜单
+.el-dropdown__popper {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+
+  .el-dropdown-menu {
+    background: var(--bg-card) !important;
+    border: none !important;
+    padding: 4px !important;
+  }
+
+  .el-dropdown-menu__item {
+    color: var(--text-primary) !important;
+    border-radius: 4px;
+    margin: 2px 4px;
+    padding: 8px 12px !important;
+
+    &:not(.is-disabled):hover,
+    &:not(.is-disabled):focus,
+    &.is-active {
+      background: var(--bg-hover) !important;
+      color: var(--accent-cyan) !important;
+    }
+
+    &.delete-item:hover {
+      background: rgba(239, 68, 68, 0.1) !important;
+      color: #ef4444 !important;
+    }
+
+    &.is-divided {
+      border-top: 1px solid var(--border-color) !important;
+      margin-top: 4px;
+      padding-top: 8px !important;
+    }
+  }
+}

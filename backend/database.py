@@ -104,8 +104,32 @@ class Model(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     is_best = Column(Boolean, default=False)
 
+    # 多格式支持字段
+    format = Column(String(20), default="yolo_pt")  # 当前注册格式
+    available_formats = Column(Text, default="[]")  # JSON 数组，可用格式列表
+    device_preference = Column(String(20), default="auto")  # 设备偏好: auto/cpu/cuda
+    precision = Column(String(10), default="fp32")  # 推理精度: fp32/fp16/int8
+    input_shape = Column(String(50), nullable=True)  # 输入尺寸，如 "640x640"
+
     atlas = relationship("Atlas", back_populates=None)
     inference_jobs = relationship("InferenceJob", back_populates="model", cascade="all, delete-orphan")
+    files = relationship("ModelFile", back_populates="model", cascade="all, delete-orphan")
+
+
+class ModelFile(Base):
+    """模型文件模型 - 关联模型与其多种格式的文件。"""
+    __tablename__ = "model_file"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    model_id = Column(Integer, ForeignKey("model.id", ondelete="CASCADE"), nullable=False)
+    format = Column(String(20), nullable=False)  # yolo_pt/onnx/openvino/tensorrt/pytorch
+    file_path = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    precision = Column(String(10), default="fp32")  # fp32/fp16/int8
+    is_default = Column(Boolean, default=False)  # 推理默认格式
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    model = relationship("Model", back_populates="files")
 
 
 class TrainingJob(Base):

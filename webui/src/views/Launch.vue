@@ -55,6 +55,52 @@
             </div>
           </div>
 
+          <!-- 推理后端 -->
+          <div class="config-section">
+            <label class="section-label">推理后端</label>
+            <div class="select-wrapper">
+              <select v-model="device" :disabled="detecting || streamConnected">
+                <option value="auto">自动选择</option>
+                <option v-for="d in availableDevices" :key="d.value" :value="d.value" :disabled="d.disabled">
+                  {{ d.label }} {{ d.value === 'cuda' ? '(推荐)' : '' }}
+                </option>
+              </select>
+            </div>
+            <span class="device-hint" v-if="deviceInfo.devices?.cuda && device === 'auto'">
+              将使用 GPU 推理
+            </span>
+          </div>
+
+          <!-- 推理精度 -->
+          <div class="config-section">
+            <label class="section-label">推理精度</label>
+            <div class="select-wrapper">
+              <select v-model="precision" :disabled="detecting || streamConnected">
+                <option value="fp32">FP32 (兼容最好)</option>
+                <option value="fp16" :disabled="device === 'cpu'">FP16 (加速50%, 精度略降)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 模型格式 -->
+          <div class="config-section">
+            <label class="section-label">模型格式</label>
+            <div class="select-wrapper">
+              <select v-model="modelFormat" :disabled="detecting || streamConnected">
+                <option value="auto">自动选择</option>
+                <option v-for="f in availableFormats" :key="f.value" :value="f.value" :disabled="f.disabled">
+                  {{ f.label }} {{ f.is_default ? '(默认)' : '' }}
+                </option>
+              </select>
+            </div>
+            <span class="device-hint" v-if="modelFormat === 'auto' && selectedModel?.files?.length">
+              将自动选择最优格式
+            </span>
+            <span class="device-hint" v-else-if="usedFormat">
+              当前使用: {{ usedFormat.toUpperCase() }}
+            </span>
+          </div>
+
           <!-- 置信度阈值 -->
           <div class="config-section">
             <label class="section-label">置信度阈值: {{ (confThreshold * 100).toFixed(0) }}%</label>
@@ -370,7 +416,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { inferenceApi } from '@/api'
+import { inferenceApi, trainingApi } from '@/api'
 import { StreamClient, type StreamFrame, type StreamStats } from '@/utils/streamClient'
 import SvgIcon from '@/components/SvgIcon.vue'
 
@@ -384,6 +430,40 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
 const isLoading = ref(false)
 const detecting = ref(false)
+
+// 推理设备和精度
+const device = ref('auto')
+const precision = ref('fp32')
+const modelFormat = ref('auto')  // 模型格式: auto/yolo_pt/onnx/openvino/tensorrt
+const usedFormat = ref<string | null>(null)  // 实际使用的格式
+const deviceInfo = ref<any>({
+  available: false,
+  device: 'cpu',
+  device_name: 'CPU',
+  devices: {}
+})
+
+// 可用设备列表
+const availableDevices = computed(() => {
+  const devices = deviceInfo.value.devices || {}
+  return Object.entries(devices).map(([type, info]: [string, any]) => ({
+    value: type,
+    label: info.device_name || type.toUpperCase(),
+    disabled: type === 'cpu' ? false : !(info.device_type === type)
+  }))
+})
+
+// 可用格式列表（从选中的模型获取）
+const availableFormats = computed(() => {
+  const model = selectedModel.value
+  if (!model?.files?.length) return []
+  return model.files.map((f: any) => ({
+    value: f.format,
+    label: f.format.toUpperCase(),
+    is_default: f.is_default,
+    disabled: false
+  }))
+})
 
 const resultImage = ref<string | null>(null)
 const detections = ref<any[]>([])
@@ -797,10 +877,11 @@ const startDetection = async () => {
 
   try {
     if (mode.value === 'image' && selectedFile.value) {
-      const res = await inferenceApi.detectImage(selectedFile.value, selectedModelId.value!, confThreshold.value)
+      const res = await inferenceApi.detectImage(selectedFile.value, selectedModelId.value!, confThreshold.value, device.value, precision.value, modelFormat.value)
       if (res.data.success) {
         resultImage.value = res.data.result_image_base64
         detections.value = res.data.detections || []
+        usedFormat.value = res.data.used_format || null  // 记录实际使用的格式
         loadImageSize(res.data.result_image_base64)
 
         // 构建类别颜色映射（来自模型配置，使用数组索引作为 key）
@@ -929,7 +1010,10 @@ const startVideoDetection = async () => {
     const res = await inferenceApi.detectVideoStream(
       selectedStreamFile.value,
       selectedModelId.value!,
-      confThreshold.value
+      confThreshold.value,
+      device.value,
+      precision.value,
+      modelFormat.value
     )
 
     if (res.data.success) {
@@ -1130,9 +1214,24 @@ const adjustFps = (delta: number) => {
 
 watch(mode, handleModeChange)
 
+// 加载设备信息
+const loadDeviceInfo = async () => {
+  try {
+    const res = await trainingApi.getDeviceInfo()
+    deviceInfo.value = res.data
+    // 自动设置推荐设备
+    if (res.data.devices?.cuda) {
+      device.value = 'cuda'
+    }
+  } catch (error) {
+    console.error('获取设备信息失败', error)
+  }
+}
+
 onMounted(() => {
   loadTrainedModels()
   loadRecentRecords()
+  loadDeviceInfo()
 })
 
 onUnmounted(() => {

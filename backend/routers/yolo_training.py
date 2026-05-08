@@ -21,7 +21,31 @@ def check_gpu_available() -> Dict:
         - device_name: str，设备名称
         - memory_total: int，总显存(MB)，仅 CUDA 时有效
         - memory_free: int，可用显存(MB)，仅 CUDA 时有效
+        - devices: dict，所有可用设备的详细信息
     """
+    try:
+        from backend.core.backends import DeviceDetector
+
+        # 使用 DeviceDetector 获取完整设备信息
+        summary = DeviceDetector.get_device_info_summary()
+        devices = summary.get("devices", {})
+
+        # 检查 CUDA 是否可用
+        if "cuda" in devices:
+            cuda_info = devices["cuda"]
+            return {
+                "available": True,
+                "device": "cuda",
+                "device_name": cuda_info.get("device_name", "Unknown"),
+                "memory_total": cuda_info.get("memory_total_mb", 0),
+                "memory_free": cuda_info.get("memory_free_mb", 0),
+                "devices": devices,
+            }
+    except ImportError:
+        # 降级：使用原有检测逻辑
+        pass
+
+    # 原有检测逻辑（保持向后兼容）
     try:
         import torch
         if torch.cuda.is_available():
@@ -34,6 +58,7 @@ def check_gpu_available() -> Dict:
                 "device_name": device_name,
                 "memory_total": memory_total,
                 "memory_free": memory_free,
+                "devices": {"cuda": {"device_type": "cuda", "device_name": device_name}},
             }
     except Exception as e:
         print(f"[GPU检测] 失败: {e}")
@@ -44,6 +69,7 @@ def check_gpu_available() -> Dict:
         "device_name": "CPU",
         "memory_total": 0,
         "memory_free": 0,
+        "devices": {"cpu": {"device_type": "cpu", "device_name": "CPU"}},
     }
 
 
@@ -415,10 +441,28 @@ def train_yolo(
     return result
 
 
-def load_yolo_model(model_path: str):
-    """加载 YOLO 模型用于推理。"""
-    from ultralytics import YOLO
-    return YOLO(model_path)
+def load_yolo_model(model_path: str, device: str = "cpu"):
+    """加载 YOLO 模型用于推理。
+
+    Args:
+        model_path: 模型文件路径
+        device: 设备标识 (cpu/cuda)
+
+    Returns:
+        YOLO 模型实例（向后兼容）
+    """
+    from backend.core.model_registry import ModelHandlerRegistry, init_model_handlers
+
+    # 初始化内置处理器
+    init_model_handlers()
+
+    # 通过注册表创建处理器
+    handler = ModelHandlerRegistry().from_path(model_path, device=device)
+
+    # 返回原始 YOLO 实例供现有代码使用（向后兼容）
+    if hasattr(handler, "_model"):
+        return handler._model
+    return handler
 
 
 def inference_yolo(model, image_path: str, conf_threshold: float = 0.25) -> Dict:

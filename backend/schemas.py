@@ -150,6 +150,23 @@ class ModelBase(BaseModel):
     version: Optional[str] = None
     pretrained_model: Optional[str] = "yolov8n.pt"
     file_path: Optional[str] = None
+    format: Optional[str] = "yolo_pt"  # 当前格式
+    device_preference: Optional[str] = "auto"  # 设备偏好
+    precision: Optional[str] = "fp32"  # 推理精度
+
+
+class ModelFileResponse(BaseModel):
+    """模型文件响应。"""
+    id: int
+    model_id: int
+    format: str
+    file_path: str
+    file_size: Optional[int]
+    precision: str
+    is_default: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ModelCreate(ModelBase):
@@ -164,6 +181,11 @@ class ModelUpdate(BaseModel):
     pretrained_model: Optional[str] = None
     file_path: Optional[str] = None
     metrics: Optional[dict] = None
+    format: Optional[str] = None
+    available_formats: Optional[List[str]] = None
+    device_preference: Optional[str] = None
+    precision: Optional[str] = None
+    input_shape: Optional[str] = None
 
 
 class ModelResponse(ModelBase):
@@ -173,8 +195,29 @@ class ModelResponse(ModelBase):
     metrics: Optional[dict]
     is_best: bool
     created_at: datetime
+    files: List[ModelFileResponse] = []
+    input_shape: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ============ Model Export Schemas ============
+
+class ModelExportRequest(BaseModel):
+    """模型导出请求。"""
+    target_format: str  # "onnx", "openvino", "tensorrt"
+    half: bool = False  # 是否导出为 FP16
+    device: str = "cpu"  # 导出设备
+
+
+class ModelExportResponse(BaseModel):
+    """模型导出响应。"""
+    success: bool
+    output_path: str
+    file_size: int
+    available_formats: List[str]
+    target_format: str
+    half: bool
 
 
 # ============ TrainingJob Schemas ============

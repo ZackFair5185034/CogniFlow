@@ -7,7 +7,7 @@
         <span class="subtitle">管理训练模型</span>
       </div>
       <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
-        <SvgIcon name="plus" />
+        <SvgIcon name="plus"/>
         注册模型
       </button>
     </div>
@@ -24,7 +24,7 @@
           <el-table-column prop="name" label="名称" min-width="200">
             <template #default="{ row }">
               <div class="name-cell">
-                <SvgIcon name="box" class="model-icon" />
+                <SvgIcon name="box" class="model-icon"/>
                 <span>{{ row.name }}</span>
               </div>
             </template>
@@ -46,6 +46,25 @@
               <span class="status-badge" :class="row.file_path ? 'trained' : 'untrained'">
                 {{ row.file_path ? '已训练' : '未训练' }}
               </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="格式" width="150">
+            <template #default="{ row }">
+              <div class="format-badges" v-if="row.files?.length">
+                <span
+                  class="format-badge"
+                  v-for="file in row.files.slice(0, 3)"
+                  :key="file.id"
+                  :class="{ 'is-default': file.is_default }"
+                  :title="`${file.format.toUpperCase()}${file.is_default ? ' (默认)' : ''}`"
+                >
+                  {{ file.format.toUpperCase() }}
+                </span>
+                <span class="format-badge more" v-if="row.files.length > 3">
+                  +{{ row.files.length - 3 }}
+                </span>
+              </div>
+              <span v-else class="text-muted">-</span>
             </template>
           </el-table-column>
           <el-table-column label="性能指标" width="200">
@@ -84,14 +103,32 @@
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="240" fixed="right">
+          <el-table-column label="操作" width="150" fixed="right">
             <template #default="{ row }">
-              <div class="action-buttons">
-                <el-button type="text" @click="handleRename(row)">编辑</el-button>
-                <el-button type="text" @click="handleDownload(row)" v-if="row.file_path">下载</el-button>
-                <el-button type="text" @click="handleUpload(row)" v-if="!row.file_path">上传</el-button>
-                <el-button type="text" @click="handleSetBest(row)" :disabled="row.is_best || !row.file_path">最佳</el-button>
-                <el-button type="text" @click="handleDelete(row)">删除</el-button>
+              <div class="action-cell">
+                <!-- 直接显示第1个操作 -->
+                <el-button class="action-text" @click.stop="handleAction('rename', row)">
+                  编辑
+                </el-button>
+                <!-- 收纳剩余操作 -->
+                <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)"
+                             v-if="getVisibleActions(row).length > 0">
+                  <el-button class="action-text">更多</el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item
+                          v-for="action in getVisibleActions(row)"
+                          :key="action.command"
+                          :command="action.command"
+                          :divided="action.command === 'delete'"
+                          :disabled="action.disabled"
+                          :class="{ 'delete-item': action.command === 'delete' }"
+                      >
+                        {{ action.label }}
+                      </el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </div>
             </template>
           </el-table-column>
@@ -99,7 +136,7 @@
 
         <div class="empty-state" v-if="!loading && models.length === 0">
           <div class="empty-icon">
-            <SvgIcon name="box" />
+            <SvgIcon name="box"/>
           </div>
           <p>暂无模型</p>
           <span>注册第一个模型开始训练</span>
@@ -113,17 +150,17 @@
         <div class="dialog-header">
           <h3>注册模型</h3>
           <button class="close-btn" @click="showCreateDialog = false">
-            <SvgIcon name="close" />
+            <SvgIcon name="close"/>
           </button>
         </div>
         <div class="dialog-body">
           <div class="form-group">
             <label>模型名称</label>
-            <input type="text" v-model="createForm.name" placeholder="输入模型名称" />
+            <input type="text" v-model="createForm.name" placeholder="输入模型名称"/>
           </div>
           <div class="form-group">
             <label>版本</label>
-            <input type="text" v-model="createForm.version" placeholder="如 v1, v2" />
+            <input type="text" v-model="createForm.version" placeholder="如 v1, v2"/>
           </div>
           <div class="form-group">
             <label>训练图集（可选）</label>
@@ -164,14 +201,15 @@
         <div class="dialog-header">
           <h3>上传模型文件</h3>
           <button class="close-btn" @click="showUploadDialog = false">
-            <SvgIcon name="close" />
+            <SvgIcon name="close"/>
           </button>
         </div>
         <div class="dialog-body">
           <div class="upload-area">
-            <input ref="fileInputRef" type="file" accept=".pt,.pth,.onnx" style="display: none" @change="handleFileChange" />
+            <input ref="fileInputRef" type="file" accept=".pt,.pth,.onnx" style="display: none"
+                   @change="handleFileChange"/>
             <button class="upload-btn" @click="fileInputRef?.click()">
-              <SvgIcon name="upload" />
+              <SvgIcon name="upload"/>
               <span>{{ uploadFile ? uploadFile.name : '选择模型文件' }}</span>
             </button>
             <p class="upload-hint">支持 .pt, .pth, .onnx 格式</p>
@@ -192,17 +230,17 @@
         <div class="dialog-header">
           <h3>编辑模型</h3>
           <button class="close-btn" @click="showRenameDialog = false">
-            <SvgIcon name="close" />
+            <SvgIcon name="close"/>
           </button>
         </div>
         <div class="dialog-body">
           <div class="form-group">
             <label>模型名称</label>
-            <input type="text" v-model="renameForm.name" placeholder="输入模型名称" />
+            <input type="text" v-model="renameForm.name" placeholder="输入模型名称"/>
           </div>
           <div class="form-group">
             <label>版本</label>
-            <input type="text" v-model="renameForm.version" placeholder="如 v1, v2" />
+            <input type="text" v-model="renameForm.version" placeholder="如 v1, v2"/>
           </div>
         </div>
         <div class="dialog-footer">
@@ -213,14 +251,93 @@
         </div>
       </div>
     </div>
+
+    <!-- 导出对话框 -->
+    <div class="dialog-overlay" v-if="showExportDialog" @click.self="handleExportClose">
+      <div class="dialog-panel ui-card">
+        <div class="dialog-header">
+          <h3>导出模型</h3>
+          <button class="close-btn" @click="handleExportClose">
+            <SvgIcon name="close"/>
+          </button>
+        </div>
+        <div class="dialog-body" v-if="exportTargetModel">
+          <p class="export-model-name">导出模型: {{ exportTargetModel.name }}</p>
+
+          <!-- 导出进度（导出中显示） -->
+          <div v-if="exportStatus !== 'idle'" class="export-progress">
+            <div class="progress-info">
+              <span class="progress-status" :class="exportStatus">
+                {{ exportStatusText }}
+              </span>
+              <span class="progress-percent">{{ exportProgress }}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" :class="exportStatus" :style="{ width: exportProgress + '%' }"></div>
+            </div>
+            <p class="progress-message">{{ exportMessage }}</p>
+          </div>
+
+          <!-- 导出配置（未开始或完成后显示） -->
+          <template v-else>
+            <!-- 显示已有格式 -->
+            <div class="form-group" v-if="exportTargetModel.files?.length">
+              <label>已有格式</label>
+              <div class="existing-formats">
+                <span
+                  class="format-tag"
+                  v-for="f in exportTargetModel.files"
+                  :key="f.id"
+                  :class="{ 'is-default': f.is_default }"
+                >
+                  {{ f.format.toUpperCase() }}
+                  <span v-if="f.is_default" class="default-tag">默认</span>
+                </span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>目标格式</label>
+              <div class="select-wrapper">
+                <select v-model="exportForm.target_format">
+                  <option value="onnx">ONNX (跨平台，CPU/GPU)</option>
+                  <option value="openvino">OpenVINO (Intel 硬件加速)</option>
+                  <option value="tensorrt">TensorRT (NVIDIA GPU 高性能)</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" v-model="exportForm.half"/>
+                导出为 FP16 半精度（减小模型体积，加速推理）
+              </label>
+            </div>
+          </template>
+        </div>
+        <div class="dialog-footer">
+          <button class="ui-btn" @click="handleExportClose">
+            {{ exportStatus !== 'idle' && exportStatus !== 'completed' ? '取消' : '关闭' }}
+          </button>
+          <button
+            v-if="exportStatus === 'idle'"
+            class="ui-btn ui-btn-primary"
+            @click="handleExportSubmit"
+            :disabled="exporting"
+          >
+            {{ exporting ? '准备中...' : '开始导出' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { modelApi, atlasApi } from '@/api'
+import {ref, computed, onMounted, onUnmounted} from 'vue'
+import {ElMessage, ElMessageBox} from 'element-plus'
+import {modelApi, atlasApi} from '@/api'
 import SvgIcon from '@/components/SvgIcon.vue'
+import {ArrowDown} from '@element-plus/icons-vue'
 
 const models = ref<any[]>([])
 const atlases = ref<any[]>([])
@@ -233,13 +350,36 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const selectedModel = ref<any>(null)
 const uploadFile = ref<File | null>(null)
 
-const createForm = ref({ name: '', version: '', pretrained_model: 'yolov8s.pt', atlas_id: null as number | null })
+// 导出相关
+const showExportDialog = ref(false)
+const exporting = ref(false)
+const exportTargetModel = ref<any>(null)
+const exportForm = ref({target_format: 'onnx', half: false})
+const exportStatus = ref<'idle' | 'starting' | 'loading' | 'saving' | 'completed' | 'error'>('idle')
+const exportProgress = ref(0)
+const exportMessage = ref('')
+const exportId = ref<string | null>(null)
+let exportWs: WebSocket | null = null
+
+const exportStatusText = computed(() => {
+  const map: Record<string, string> = {
+    idle: '',
+    starting: '准备中',
+    loading: '加载模型',
+    saving: '保存文件',
+    completed: '导出完成',
+    error: '导出失败',
+  }
+  return map[exportStatus.value] || ''
+})
+
+const createForm = ref({name: '', version: '', pretrained_model: 'yolov8s.pt', atlas_id: null as number | null})
 
 // 编辑状态
 const showRenameDialog = ref(false)
 const renaming = ref(false)
 const renameTarget = ref<any>(null)
-const renameForm = ref({ name: '', version: '' })
+const renameForm = ref({name: '', version: ''})
 
 const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleString('zh-CN', {
@@ -254,8 +394,8 @@ const formatTrainedAt = (dateStr: string) => {
   if (!dateStr) return '-'
   // 后端格式: %Y%m%d_%H%M%S → 20250315_143022
   const formatted = dateStr.replace(
-    /^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/,
-    '$1-$2-$3 $4:$5:$6'
+      /^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/,
+      '$1-$2-$3 $4:$5:$6'
   )
   const date = new Date(formatted)
   if (isNaN(date.getTime())) return '-'
@@ -277,8 +417,29 @@ const shortenPath = (path: string) => {
   return path
 }
 
-const tableRowClassName = ({ rowIndex }: { rowIndex: number }) => {
+const tableRowClassName = ({rowIndex}: { rowIndex: number }) => {
   return rowIndex % 2 === 0 ? 'even-row' : 'odd-row'
+}
+
+// 计算可见操作按钮（编辑始终显示，其余放入折叠菜单）
+const getVisibleActions = (row: any) => {
+  const actions = []
+  if (row.file_path && row.format === 'yolo_pt') {
+    actions.push({command: 'export', label: '导出', disabled: false})
+  }
+  if (row.file_path) {
+    actions.push({command: 'download', label: '下载', disabled: false})
+  }
+  if (!row.file_path) {
+    actions.push({command: 'upload', label: '上传', disabled: false})
+  }
+  if (row.is_best || !row.file_path) {
+    actions.push({command: 'best', label: '设为最佳', disabled: true})
+  } else {
+    actions.push({command: 'best', label: '设为最佳', disabled: false})
+  }
+  actions.push({command: 'delete', label: '删除', disabled: false})
+  return actions
 }
 
 const loadModels = async () => {
@@ -312,7 +473,7 @@ const handleCreate = async () => {
     await modelApi.create(createForm.value)
     ElMessage.success('注册成功')
     showCreateDialog.value = false
-    createForm.value = { name: '', version: '', pretrained_model: 'yolov8s.pt', atlas_id: null }
+    createForm.value = {name: '', version: '', pretrained_model: 'yolov8s.pt', atlas_id: null}
     loadModels()
   } catch (error: any) {
     const msg = error.response?.data?.detail || '注册失败'
@@ -380,9 +541,33 @@ const handleDelete = async (row: any) => {
   }
 }
 
+// 操作处理函数
+const handleAction = (cmd: string, row: any) => {
+  switch (cmd) {
+    case 'rename':
+      handleRename(row)
+      break
+    case 'export':
+      handleExport(row)
+      break
+    case 'download':
+      handleDownload(row)
+      break
+    case 'upload':
+      handleUpload(row)
+      break
+    case 'best':
+      handleSetBest(row)
+      break
+    case 'delete':
+      handleDelete(row)
+      break
+  }
+}
+
 const handleRename = (row: any) => {
   renameTarget.value = row
-  renameForm.value = { name: row.name, version: row.version || '' }
+  renameForm.value = {name: row.name, version: row.version || ''}
   showRenameDialog.value = true
 }
 
@@ -418,6 +603,98 @@ const handleDownload = (row: any) => {
   link.href = url
   link.download = row.name + (row.version ? `_${row.version}` : '') + '.pt'
   link.click()
+}
+
+// 导出模型
+const handleExport = (row: any) => {
+  exportTargetModel.value = row
+  exportForm.value = {target_format: 'onnx', half: false}
+  exportStatus.value = 'idle'
+  exportProgress.value = 0
+  exportMessage.value = ''
+  showExportDialog.value = true
+}
+
+// 关闭导出弹窗
+const handleExportClose = () => {
+  if (exportWs) {
+    exportWs.close()
+    exportWs = null
+  }
+  showExportDialog.value = false
+  exportStatus.value = 'idle'
+  exportProgress.value = 0
+  exportMessage.value = ''
+}
+
+// 连接导出进度 WebSocket
+const connectExportWs = (exportId: string) => {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = window.location.host
+  const wsUrl = `${protocol}//${host}/ws/export/${exportId}`
+
+  exportWs = new WebSocket(wsUrl)
+
+  exportWs.onopen = () => {
+    console.log('导出 WebSocket 已连接')
+  }
+
+  exportWs.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data)
+      if (msg.type === 'export_update') {
+        const data = msg.data
+        exportStatus.value = data.status
+        exportProgress.value = data.progress
+        exportMessage.value = data.message
+
+        if (data.status === 'completed') {
+          ElMessage.success('导出完成')
+          exporting.value = false
+          loadModels()
+        } else if (data.status === 'error') {
+          ElMessage.error(data.message)
+          exporting.value = false
+        }
+      }
+    } catch (e) {
+      console.error('解析导出消息失败', e)
+    }
+  }
+
+  exportWs.onerror = (error) => {
+    console.error('导出 WebSocket 错误', error)
+  }
+
+  exportWs.onclose = () => {
+    console.log('导出 WebSocket 已关闭')
+    exportWs = null
+  }
+}
+
+const handleExportSubmit = async () => {
+  if (!exportTargetModel.value) return
+  exporting.value = true
+  try {
+    // 调用异步导出接口
+    const res = await modelApi.exportAsync(exportTargetModel.value.id, {
+      target_format: exportForm.value.target_format,
+      half: exportForm.value.half,
+    })
+
+    if (res.data.status === 'started') {
+      // 导出已开始，连接 WebSocket 监听进度
+      exportId.value = res.data.export_id
+      exportStatus.value = 'starting'
+      exportProgress.value = 0
+      exportMessage.value = '正在连接...'
+      connectExportWs(res.data.export_id)
+    }
+  } catch (error: any) {
+    const msg = error.response?.data?.detail || '导出失败'
+    ElMessage.error(msg)
+    exporting.value = false
+  }
 }
 
 onMounted(() => {
@@ -565,8 +842,28 @@ onMounted(() => {
   @apply text-[var(--text-muted)];
 }
 
-.action-buttons {
-  @apply flex gap-4 items-center;
+.action-cell {
+  @apply flex items-center gap-1;
+}
+
+.action-text {
+  @apply flex items-center gap-1 text-[var(--accent-cyan)] text-xs font-medium bg-transparent border-none cursor-pointer p-0 transition-all;
+
+  &:hover {
+    opacity: 0.75;
+  }
+
+  .el-icon {
+    @apply text-xs;
+  }
+}
+
+.delete-item {
+  @apply text-red-400;
+
+  &:hover {
+    @apply text-red-300 bg-red-50;
+  }
 }
 
 /* 空状态 */
@@ -696,5 +993,85 @@ onMounted(() => {
 
 .upload-hint {
   @apply mt-3 text-xs text-[var(--text-muted)];
+}
+
+/* 格式列样式 */
+.format-badges {
+  @apply flex gap-1.5 flex-wrap;
+}
+
+.format-badge {
+  @apply text-[10px] px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--text-secondary)] font-mono;
+
+  &.more {
+    @apply text-[var(--text-muted)];
+  }
+
+  &.is-default {
+    @apply text-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)] border border-[rgba(0,240,255,0.3)];
+  }
+}
+
+/* 导出对话框 */
+.export-model-name {
+  @apply mb-4 text-sm text-[var(--text-secondary)];
+}
+
+/* 导出进度 */
+.export-progress {
+  @apply py-4;
+}
+
+.progress-info {
+  @apply flex justify-between items-center mb-2;
+}
+
+.progress-status {
+  @apply text-sm font-medium;
+
+  &.idle { @apply text-[var(--text-muted)]; }
+  &.starting, &.loading { @apply text-[var(--accent-cyan)]; }
+  &.saving { @apply text-[var(--accent-yellow)]; }
+  &.completed { @apply text-[var(--accent-green)]; }
+  &.error { @apply text-red-400; }
+}
+
+.progress-percent {
+  @apply text-sm font-mono text-[var(--text-secondary)];
+}
+
+.progress-bar {
+  @apply w-full h-2 bg-[var(--bg-secondary)] rounded-full overflow-hidden;
+}
+
+.progress-fill {
+  @apply h-full rounded-full transition-all duration-300;
+
+  &.idle { @apply bg-[var(--bg-secondary)]; }
+  &.starting, &.loading { @apply bg-[var(--accent-cyan)]; }
+  &.saving { @apply bg-[var(--accent-yellow)]; }
+  &.completed { @apply bg-[var(--accent-green)]; }
+  &.error { @apply bg-red-400; }
+}
+
+.progress-message {
+  @apply mt-2 text-xs text-[var(--text-muted)];
+}
+
+/* 已有格式标签 */
+.existing-formats {
+  @apply flex flex-wrap gap-2;
+}
+
+.format-tag {
+  @apply inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-[var(--bg-secondary)] text-[var(--text-secondary)];
+
+  &.is-default {
+    @apply text-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)] border border-[rgba(0,240,255,0.25)];
+  }
+
+  .default-tag {
+    @apply text-[10px] px-1 py-0 rounded bg-[var(--accent-cyan)] text-black;
+  }
 }
 </style>

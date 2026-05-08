@@ -101,7 +101,7 @@ export const modelApi = {
   list: () => api.get('/models'),
   get: (id: number) => api.get(`/models/${id}`),
   create: (data: { name: string; version?: string; file_path?: string; atlas_id?: number }) => api.post('/models', data),
-  update: (id: number, data: { name?: string; version?: string; metrics?: object }) => api.put(`/models/${id}`, data),
+  update: (id: number, data: { name?: string; version?: string; metrics?: object; device_preference?: string; precision?: string }) => api.put(`/models/${id}`, data),
   delete: (id: number) => api.delete(`/models/${id}`),
   setBest: (id: number) => api.post(`/models/${id}/set-best`),
   getDownloadUrl: (id: number) => `/api/models/${id}/download`,
@@ -113,6 +113,18 @@ export const modelApi = {
     })
   },
   getTrainingHistory: (id: number) => api.get(`/models/${id}/training-history`),
+  // 异步导出模型（带进度推送）
+  exportAsync: (id: number, data: { target_format: string; half?: boolean; device?: string }) => {
+    return api.post(`/models/${id}/export`, data)
+  },
+  // 同步导出模型（无进度）
+  export: (id: number, data: { target_format: string; half?: boolean; device?: string }) => {
+    return api.post(`/models/${id}/export/sync`, data)
+  },
+  // ModelFile 多格式支持
+  listFiles: (id: number) => api.get(`/models/${id}/files`),
+  deleteFile: (id: number, fileId: number) => api.delete(`/models/${id}/files/${fileId}`),
+  setDefaultFormat: (id: number, fileId: number) => api.post(`/models/${id}/files/${fileId}/set-default`),
 }
 
 // Training API
@@ -138,19 +150,19 @@ export const launchApi = {
 
 // Inference API
 export const inferenceApi = {
-  detectImage: (file: File, modelId: number, confThreshold: number = 0.25) => {
+  detectImage: (file: File, modelId: number, confThreshold: number = 0.25, device: string = 'auto', precision: string = 'fp32', format: string = 'auto') => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post(`/inference/detect/image?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
+    return api.post(`/inference/detect/image?model_id=${modelId}&conf_threshold=${confThreshold}&device=${device}&precision=${precision}&format=${format}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000,
     })
   },
   // 流式视频检测
-  detectVideoStream: (file: File, modelId: number, confThreshold: number = 0.25) => {
+  detectVideoStream: (file: File, modelId: number, confThreshold: number = 0.25, device: string = 'auto', precision: string = 'fp32', format: string = 'auto') => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post(`/inference/detect/video/stream?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
+    return api.post(`/inference/detect/video/stream?model_id=${modelId}&conf_threshold=${confThreshold}&device=${device}&precision=${precision}&format=${format}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000, // 上传视频需要更长超时
     })
@@ -159,8 +171,8 @@ export const inferenceApi = {
   stopVideoStream: (jobId: string) => api.post(`/inference/detect/stop/${jobId}`),
   listTrainedModels: () => api.get('/inference/models'),
   listInferenceJobs: () => api.get('/inference/jobs'),
-  rerunInferenceJob: (jobId: string, modelId: number, confThreshold: number = 0.25) =>
-    api.post(`/inference/jobs/${jobId}/rerun?model_id=${modelId}&conf_threshold=${confThreshold}`),
+  rerunInferenceJob: (jobId: string, modelId: number, confThreshold: number = 0.25, device: string = 'auto') =>
+    api.post(`/inference/jobs/${jobId}/rerun?model_id=${modelId}&conf_threshold=${confThreshold}&device=${device}`),
   clearInferenceJobs: () => api.delete('/inference/jobs'),
 }
 

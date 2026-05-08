@@ -21,6 +21,8 @@ class WebSocketManager:
         self._system_connections: Set[WebSocket] = set()
         # 系统状态推送任务
         self._system_push_task: asyncio.Task | None = None
+        # 导出状态连接: export_id -> set of websockets
+        self._export_connections: Dict[str, Set[WebSocket]] = {}
 
     async def connect_training(self, websocket: WebSocket, job_id: int):
         """连接训练状态 WebSocket。"""
@@ -87,6 +89,35 @@ class WebSocketManager:
                 disconnected.add(websocket)
         for ws in disconnected:
             self._launch_connections.discard(ws)
+
+    # ===== 导出进度 WebSocket =====
+    async def connect_export(self, websocket: WebSocket, export_id: str):
+        """连接导出进度 WebSocket。"""
+        await websocket.accept()
+        if export_id not in self._export_connections:
+            self._export_connections[export_id] = set()
+        self._export_connections[export_id].add(websocket)
+
+    def disconnect_export(self, websocket: WebSocket, export_id: str):
+        """断开导出进度 WebSocket。"""
+        if export_id in self._export_connections:
+            self._export_connections[export_id].discard(websocket)
+
+    async def send_export_update(self, export_id: str, data: dict):
+        """向导出任务连接的客户端发送进度更新。"""
+        if export_id not in self._export_connections:
+            return
+        disconnected = set()
+        for websocket in self._export_connections[export_id]:
+            try:
+                await websocket.send_json({
+                    "type": "export_update",
+                    "data": data
+                })
+            except Exception:
+                disconnected.add(websocket)
+        for ws in disconnected:
+            self._export_connections[export_id].discard(ws)
 
     async def connect_system(self, websocket: WebSocket):
         """连接系统状态 WebSocket。"""

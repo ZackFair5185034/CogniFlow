@@ -8,10 +8,10 @@ import shutil
 import threading
 from pathlib import Path
 from datetime import datetime
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Form, Query
 from sqlalchemy.orm import Session
 
-from backend.database import get_db, SessionLocal, Model, InferenceJob
+from backend.database import get_db, SessionLocal, Model, ModelFile, InferenceJob
 from backend.utils.frame_buffer import stream_job_manager
 
 router = APIRouter()
@@ -23,22 +23,108 @@ INFERENCE_OUTPUT_DIR = Path(os.path.join(_DATA_DIR, "inference_output"))
 INFERENCE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _resolve_device(device_preference: str, model) -> str:
+    """根据用户偏好和硬件情况解析实际设备。
+
+    Args:
+        device_preference: 用户指定偏好 (auto/cpu/cuda)
+        model: 模型对象
+
+    Returns:
+        实际使用的设备字符串
+    """
+    # 如果用户明确指定，优先使用
+    if device_preference in ("cpu", "cuda"):
+        return device_preference
+
+    # 检查 CUDA 是否可用
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda"
+    except ImportError:
+        pass
+
+    # 默认使用 CPU
+    return "cpu"
+
+
+def _select_model_file(db: Session, model: Model, format_preference: str = "auto") -> tuple:
+    """根据格式偏好选择模型文件。
+
+    Args:
+        db: 数据库会话
+        model: 模型对象
+        format_preference: 格式偏好 ("auto"/"yolo_pt"/"onnx"/"openvino"/"tensorrt")
+
+    Returns:
+        (ModelFile, used_format): 选中的模型文件和实际使用的格式
+    """
+    import os
+
+    # 直接查询 ModelFile 表而不是通过关系
+    files = db.query(ModelFile).filter(ModelFile.model_id == model.id).all()
+    if not files:
+        return None, None
+
+    if format_preference == "auto":
+        # 自动模式：按优先级 tensorrt > openvino > onnx > yolo_pt，同时检查文件存在
+        priority = ["tensorrt", "openvino", "onnx", "yolo_pt"]
+        for fmt in priority:
+            for mf in files:
+                if mf.format == fmt and os.path.exists(mf.file_path):
+                    return mf, fmt
+        # 优先格式都无效，返回第一个存在的文件
+        for mf in files:
+            if os.path.exists(mf.file_path):
+                return mf, mf.format
+        return None, None
+    else:
+        # 指定格式
+        for mf in files:
+            if mf.format == format_preference and os.path.exists(mf.file_path):
+                return mf, format_preference
+        # 指定格式文件不存在或格式不存在，返回默认存在的文件
+        for mf in files:
+            if mf.is_default and os.path.exists(mf.file_path):
+                return mf, mf.format
+        for mf in files:
+            if os.path.exists(mf.file_path):
+                return mf, mf.format
+        return None, None
+
+
 # ===== API 端点 =====
 
 
 @router.post("/detect/image")
 async def detect_image(
     file: UploadFile = File(...),
-    model_id: int = Form(default=None),
-    conf_threshold: float = Form(default=0.25),
+    model_id: int = Query(...),
+    conf_threshold: float = Query(default=0.25),
+    device: str = Query(default="auto"),  # 推理设备: auto/cpu/cuda
+    precision: str = Query(default="fp32"),  # 推理精度: fp32/fp16
+    format: str = Query(default="auto"),  # 模型格式: auto/yolo_pt/onnx/openvino/tensorrt
     db: Session = Depends(get_db)
 ):
-    """对单张图片进行目标检测。"""
+    """对单张图片进行目标检测。
+
+    Args:
+        file: 上传的图片文件
+        model_id: 模型 ID
+        conf_threshold: 置信度阈值
+        device: 推理设备 (auto/cpu/cuda)
+        precision: 推理精度 (fp32/fp16)
+        format: 模型格式 (auto=自动选择，否则指定格式)
+    """
     # 验证模型
     model = db.query(Model).filter(Model.id == model_id).first()
     if not model:
         raise HTTPException(status_code=404, detail="模型不存在")
-    if not model.file_path or not os.path.exists(model.file_path):
+
+    # 根据格式偏好选择模型文件
+    model_file, used_format = _select_model_file(db, model, format)
+    if not model_file or not os.path.exists(model_file.file_path):
         raise HTTPException(status_code=400, detail="模型文件不存在")
 
     # 保存上传的图片
@@ -50,7 +136,10 @@ async def detect_image(
     try:
         from backend.routers.yolo_training import load_yolo_model, inference_yolo
 
-        detector = load_yolo_model(model.file_path)
+        # 根据模型格式和设备偏好确定实际设备
+        actual_device = _resolve_device(device, model)
+
+        detector = load_yolo_model(model_file.file_path, device=actual_device)
         result = inference_yolo(detector, str(file_path), conf_threshold)
 
         # 返回原图（画框由前端 SVG overlay 负责）
@@ -108,6 +197,7 @@ async def detect_image(
             "detections": result['detections'],
             "num_detections": result['num_detections'],
             "categories": categories,
+            "used_format": used_format,  # 实际使用的格式
         }
     except Exception:
         # 检测失败时不记录
@@ -130,12 +220,23 @@ async def list_trained_models(db: Session = Depends(get_db)):
             except json.JSONDecodeError:
                 pass
 
+        # 获取模型的所有格式文件（直接查询）
+        files = []
+        model_files = db.query(ModelFile).filter(ModelFile.model_id == m.id).all()
+        for mf in model_files:
+            files.append({
+                "format": mf.format,
+                "file_path": mf.file_path,
+                "is_default": mf.is_default,
+            })
+
         result.append({
             "id": m.id,
             "name": m.name,
             "version": m.version,
-            "file_path": m.file_path,
+            "file_path": m.file_path,  # 兼容字段
             "metrics": metrics,
+            "files": files,
             "created_at": int(m.created_at.timestamp() * 1000) if m.created_at else int(datetime.now().timestamp() * 1000)
         })
 
@@ -325,6 +426,7 @@ def process_video_stream_background(
     conf_threshold: float,
     categories: list,
     input_path: str,
+    device: str = "cpu",
 ):
     """后台线程：流式处理视频，推理与编码分离为流水线。
 
@@ -342,7 +444,7 @@ def process_video_stream_background(
     stream_job_manager.update_job(job_id, status="processing")
 
     # 加载 YOLO 模型
-    detector = load_yolo_model(model_file_path)
+    detector = load_yolo_model(model_file_path, device=device)
 
     # 获取视频信息
     cap = cv2.VideoCapture(input_path)
@@ -393,8 +495,11 @@ def process_video_stream_background(
 @router.post("/detect/video/stream", status_code=202)
 async def detect_video_stream(
     file: UploadFile = File(...),
-    model_id: int = None,
-    conf_threshold: float = 0.25,
+    model_id: int = Query(...),
+    conf_threshold: float = Query(default=0.25),
+    device: str = Query(default="auto"),  # 推理设备: auto/cpu/cuda
+    precision: str = Query(default="fp32"),  # 推理精度: fp32/fp16
+    format: str = Query(default="auto"),  # 模型格式: auto/yolo_pt/onnx/openvino/tensorrt
     db: Session = Depends(get_db)
 ):
     """提交流式视频检测任务。
@@ -406,8 +511,14 @@ async def detect_video_stream(
     model = db.query(Model).filter(Model.id == model_id).first()
     if not model:
         raise HTTPException(status_code=404, detail="模型不存在")
-    if not model.file_path or not os.path.exists(model.file_path):
+
+    # 根据格式偏好选择模型文件
+    model_file, used_format = _select_model_file(db, model, format)
+    if not model_file or not os.path.exists(model_file.file_path):
         raise HTTPException(status_code=400, detail="模型文件不存在")
+
+    # 解析实际设备
+    actual_device = _resolve_device(device, model)
 
     # 获取类别信息
     categories = []
@@ -465,7 +576,7 @@ async def detect_video_stream(
     # 后台线程执行推理
     thread = threading.Thread(
         target=process_video_stream_background,
-        args=(job_id, model.file_path, conf_threshold, categories, str(input_path)),
+        args=(job_id, model_file.file_path, conf_threshold, categories, str(input_path), actual_device),
         daemon=True,
     )
     thread.start()
@@ -535,8 +646,15 @@ async def clear_inference_jobs(db: Session = Depends(get_db)):
 
 
 @router.post("/jobs/{job_id}/rerun")
-async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold: float = 0.25, db: Session = Depends(get_db)):
-    """复用已有记录的配置重新发起检测（图片或视频）。"""
+async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold: float = 0.25, device: str = Form(default="auto"), db: Session = Depends(get_db)):
+    """复用已有记录的配置重新发起检测（图片或视频）。
+
+    Args:
+        job_id: 原有任务 ID
+        model_id: 可选的模型 ID（默认使用原任务的模型）
+        conf_threshold: 置信度阈值
+        device: 推理设备 (auto/cpu/cuda)
+    """
     job = db.query(InferenceJob).filter(InferenceJob.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="记录不存在")
@@ -549,6 +667,9 @@ async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold:
         raise HTTPException(status_code=404, detail="模型不存在")
     if not model.file_path or not os.path.exists(model.file_path):
         raise HTTPException(status_code=400, detail="模型文件不存在")
+
+    # 解析实际设备
+    actual_device = _resolve_device(device, model)
 
     if job.file_type == "video":
         import cv2
@@ -576,7 +697,7 @@ async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold:
 
         thread = threading.Thread(
             target=process_video_stream_background,
-            args=(new_job_id, model.file_path, conf_threshold, categories, job.file_path),
+            args=(new_job_id, model.file_path, conf_threshold, categories, job.file_path, actual_device),
             daemon=True,
         )
         thread.start()
@@ -597,7 +718,7 @@ async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold:
         # 图片：重新执行 detect_image 逻辑（只返回原图，画框由前端负责）
         from backend.routers.yolo_training import load_yolo_model, inference_yolo
 
-        detector = load_yolo_model(model.file_path)
+        detector = load_yolo_model(model.file_path, device=actual_device)
         result = inference_yolo(detector, job.file_path, conf_threshold)
 
         # 返回原图（画框由前端 SVG overlay 负责）
