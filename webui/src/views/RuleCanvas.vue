@@ -81,11 +81,11 @@
     <div class="canvas-body">
       <!-- 左侧节点面板 -->
       <aside class="node-palette" :class="{ collapsed: !showPalette }">
-        <div class="palette-header">
-          <button class="collapse-btn" @click="showPalette = !showPalette">
-            <SvgIcon name="chevron-left" :class="{ rotated: !showPalette }" />
-          </button>
-          <h3 v-if="showPalette">节点库</h3>
+        <button class="collapse-btn" :class="{ collapsed: !showPalette }" @click="showPalette = !showPalette" :title="showPalette ? '收起面板' : '展开面板'">
+          <SvgIcon :name="showPalette ? 'chevron-left' : 'chevron-right'" />
+        </button>
+        <div class="palette-header" v-show="showPalette">
+          <h3>节点库</h3>
         </div>
 
         <div class="palette-search" v-show="showPalette">
@@ -127,6 +127,7 @@
                 draggable="true"
                 @dragstart="handleDragStart($event, node)"
                 @dblclick="quickAddNode(node)"
+                @contextmenu.prevent="handlePaletteContextMenu($event, node)"
               >
                 <div class="node-icon-wrapper" :class="category.name">
                   <SvgIcon :name="node.category || category.name" />
@@ -216,6 +217,7 @@
             @node-context-menu="(event: any, node: any) => handleContextMenu(event, node, 'node')"
             @pane-context-menu="(event: any) => handleContextMenu(event, null, 'pane')"
             @edge-context-menu="(event: any, edge: any) => handleContextMenu(event, edge, 'edge')"
+            @node-delete="handleNodeDelete"
             :pan-on-scroll="true"
             :zoom-on-scroll="true"
             :min-zoom="0.1"
@@ -225,7 +227,9 @@
             :elements-selectable="true"
             :select-nodes-on-drag="true"
             :selection-mode="SelectionMode.Partial"
+            :connection-radius="20"
             @selection-change="handleSelectionChange"
+            :is-valid-connection="isValidConnection"
           >
             
             <!-- 小地图 -->
@@ -242,22 +246,7 @@
             <Controls position="bottom-left" />
           </VueFlow>
 
-          <!-- 快捷添加栏（始终显示） -->
-          <div class="quick-add-toolbar" v-if="nodes.length > 0">
-            <button
-              v-for="node in quickAddNodes"
-              :key="node.type"
-              class="quick-add-toolbar-btn"
-              @click="quickAddNode(node)"
-              :title="`添加 ${node.label}`"
-            >
-              <span class="btn-icon" :class="node.category">
-                <SvgIcon :name="node.category" />
-              </span>
-              <span class="btn-label">{{ node.label }}</span>
-            </button>
-          </div>
-
+          
           <!-- 空画布提示 -->
           <div class="empty-state" v-if="nodes.length === 0 && !isLoading">
             <div class="empty-icon">
@@ -560,10 +549,10 @@ const executionStatusText = computed(() => ({
   failed: '执行失败'
 }[executionStatus.value]))
 
-// 默认边样式
+// 默认边样式 - 使用贝塞尔曲线
 const defaultEdgeOptions = {
-  type: 'smoothstep',
-  animated: true,
+  type: 'default',
+  animated: false,
   markerEnd: MarkerType.ArrowClosed,
   style: { stroke: '#00f0ff', strokeWidth: 2 }
 }
@@ -816,7 +805,11 @@ function handlePaste() {
         x: n.position.x + offsetX,
         y: n.position.y + offsetY
       },
-      selected: false
+      selected: false,
+      data: {
+        ...(cloned.data || {}),
+        onDelete: handleNodeDelete
+      }
     }
   })
 
@@ -830,10 +823,25 @@ function handlePaste() {
   showToast(`已粘贴 ${newNodes.length} 个节点`, 'info')
 }
 
-// 框选变化
+// 框选变化 - 同步 VueFlow 选中状态到 nodes
 function handleSelectionChange({ nodes: selectedNodes }: any) {
-  // 可在这里同步更新选中节点状态
-  // console.log('Selected nodes:', selectedNodes)
+  // 先清除所有节点的选中状态
+  nodes.value.forEach((n: any) => { n.selected = false })
+  // 再设置当前选中的节点
+  selectedNodes.forEach((n: any) => {
+    const node = nodes.value.find((node: any) => node.id === n.id)
+    if (node) node.selected = true
+  })
+}
+
+// 节点删除按钮点击
+function handleNodeDelete(nodeId: string) {
+  // 使用 VueFlow 的 removeNodes 方法删除节点
+  removeNodes(nodeId)
+  // 同时删除关联的边
+  edges.value = edges.value.filter((e: any) => e.source !== nodeId && e.target !== nodeId)
+  saveHistory()
+  showToast('节点已删除', 'info')
 }
 
 // 删除选中
@@ -876,6 +884,16 @@ function handleContextMenu(event: MouseEvent, target: any, type: 'node' | 'edge'
   contextMenu.y = event.clientY
   contextMenu.target = target
   contextMenu.targetType = type
+}
+
+// 节点面板右键菜单
+function handlePaletteContextMenu(event: MouseEvent, node: any) {
+  event.preventDefault()
+  contextMenu.show = true
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.target = node
+  contextMenu.targetType = 'pane'
 }
 
 // 隐藏右键菜单
@@ -1035,8 +1053,8 @@ async function loadGraph() {
       target: e.target,
       sourceHandle: e.source_handle,
       targetHandle: e.target_handle,
-      type: 'smoothstep',
-      animated: true,
+      type: 'default',
+      animated: false,
       markerEnd: MarkerType.ArrowClosed
     }))
 
@@ -1132,7 +1150,8 @@ function handleDrop(event: DragEvent) {
       configSchema: nodeDef.config_schema,
       inputs: nodeDef.inputs,
       outputs: nodeDef.outputs,
-      config: {}
+      config: {},
+      onDelete: handleNodeDelete
     }
   }
 
@@ -1161,7 +1180,8 @@ function quickAddNode(nodeDef: any) {
       configSchema: nodeDef.config_schema,
       inputs: nodeDef.inputs,
       outputs: nodeDef.outputs,
-      config: {}
+      config: {},
+      onDelete: handleNodeDelete
     }
   }
 
@@ -1251,6 +1271,23 @@ function validateConnection(params: any): { valid: boolean; error?: string } {
   return { valid: true }
 }
 
+// VueFlow 专用连接验证（用于高亮和阻止连接）
+function isValidConnection(connection: any): boolean {
+  const { source, target, sourceHandle, targetHandle } = connection
+
+  // 不能连接自己
+  if (source === target) return false
+
+  // 获取端口类型
+  const sourceType = getNodePortType(source, sourceHandle, true)
+  const targetType = getNodePortType(target, targetHandle, false)
+
+  if (sourceType === null || targetType === null) return true // 未知类型允许连接
+
+  // 类型兼容性检查
+  return isPortCompatible(sourceType, targetType)
+}
+
 // 连接
 function handleConnect(params: any) {
   // 验证连接类型兼容性
@@ -1262,8 +1299,8 @@ function handleConnect(params: any) {
   
   addEdges([{
     ...params,
-    type: 'smoothstep',
-    animated: true,
+    type: 'default',
+    animated: false,
     markerEnd: MarkerType.ArrowClosed,
     id: `e-${params.source}-${params.target}-${Date.now()}`
   }])
@@ -1272,7 +1309,17 @@ function handleConnect(params: any) {
 
 // 节点/边变化
 function handleNodesChange(changes: any[]) {
+  // VueFlow 会自动更新 nodes.value，我们需要同步本地状态
   // 只在外部变化时保存历史
+  const hasRemoval = changes.some(c => c.type === 'remove')
+  if (hasRemoval) {
+    // 节点被删除，同步更新本地 edges
+    const remainingNodeIds = nodes.value.map((n: any) => n.id)
+    edges.value = edges.value.filter((e: any) =>
+      remainingNodeIds.includes(e.source) && remainingNodeIds.includes(e.target)
+    )
+    saveHistory()
+  }
 }
 
 function handleEdgesChange(changes: any[]) {
@@ -1837,12 +1884,15 @@ $panel-header-height: 52px;
   transition: width 0.3s ease;
   flex-shrink: 0;
   z-index: 50;
+  position: relative;
+  overflow: visible;
 
   &.collapsed {
     width: 48px;
 
     .palette-content,
-    .palette-search { display: none; }
+    .palette-search,
+    .palette-header { display: none; }
   }
 }
 
@@ -1865,29 +1915,37 @@ $panel-header-height: 52px;
 }
 
 .collapse-btn {
-  width: 28px;
-  height: 28px;
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
+  background: #0e0e14;
+  border: 1px solid #1e1e2e;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
   color: #666;
   cursor: pointer;
-  transition: all 0.2s;
-
-  svg {
-    width: 16px;
-    height: 16px;
-    transition: transform 0.2s;
-
-    &.rotated { transform: rotate(180deg); }
-  }
+  z-index: 20;
+  padding: 0;
 
   &:hover {
-    background: #1e1e2e;
-    color: #fff;
+    color: #00f0ff;
+    border-color: #00f0ff;
+    border-left: none;
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  &.collapsed svg {
+    transform: translateX(1px);
   }
 }
 
@@ -3073,27 +3131,37 @@ $panel-header-height: 52px;
 .context-menu {
   position: fixed;
   z-index: 9999;
-  background: var(--bg-card, #1a1a2e);
-  border: 1px solid var(--border-color, #2a2a4a);
+  background: var(--bg-secondary, #12121a);
+  border: 1px solid var(--border-color, #2a2a3e);
   border-radius: 8px;
-  padding: 4px 0;
-  min-width: 140px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  padding: 6px 0;
+  min-width: 180px;
+  max-width: 220px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 .context-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 10px;
+  padding: 10px 16px;
   cursor: pointer;
   font-size: 13px;
   color: var(--text-primary, #e0e0e0);
   transition: background 0.15s;
-}
 
-.context-menu-item:hover {
-  background: var(--bg-hover, #2a2a4a);
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+
+  &:hover {
+    background: var(--bg-hover, #1e1e2e);
+
+    svg { opacity: 1; }
+  }
 }
 
 .context-menu-item.danger {
@@ -3106,8 +3174,8 @@ $panel-header-height: 52px;
 
 .context-menu-divider {
   height: 1px;
-  background: var(--border-color, #2a2a4a);
-  margin: 4px 0;
+  background: var(--border-color, #2a2a3e);
+  margin: 6px 0;
 }
 
 .context-menu-overlay {

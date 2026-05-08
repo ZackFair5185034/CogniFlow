@@ -196,7 +196,7 @@
     </div>
 
     <!-- 删除按钮 -->
-    <button class="node-delete-btn" @click.stop="$emit('delete', data.id)" title="删除节点">×</button>
+    <button class="node-delete-btn" @click.stop="props.onDelete?.(data.id)" title="删除节点">×</button>
   </div>
 </template>
 
@@ -238,9 +238,11 @@ interface NodeData {
   status?: string
 }
 
+// 删除按钮点击回调 - 通过 props 传入
 const props = defineProps<{
   data: NodeData
   selected?: boolean
+  onDelete?: (nodeId: string) => void
 }>()
 
 const emit = defineEmits<{
@@ -248,6 +250,9 @@ const emit = defineEmits<{
   (e: 'delete', nodeId: string): void
   (e: 'contextmenu', event: MouseEvent): void
 }>()
+
+// 获取 removeNodes 方法用于直接删除节点
+const { handleNodeRemove } = inject<{ handleNodeRemove: (id: string) => void }>('nodeActions', { handleNodeRemove: () => {} })
 
 function handleContextMenu(event: MouseEvent) {
   event.preventDefault()
@@ -344,6 +349,11 @@ function updateConfig(key: string, value: any) {
 </script>
 
 <style scoped>
+.rule-node,
+:deep(.vue-flow__node) {
+  overflow: visible !important;
+}
+
 .rule-node {
   background: linear-gradient(180deg, #2d2d30 0%, #252528 100%);
   border: 1px solid #404044;
@@ -357,8 +367,13 @@ function updateConfig(key: string, value: any) {
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
     0 2px 8px rgba(0,0,0,0.3);
-  /* 圆角裁剪（但 Handle 超出节点时需要特殊处理，见下方） */
-  overflow: hidden;
+  /* 连接点和删除按钮需要溢出显示，但不能影响布局 */
+  overflow: visible;
+}
+
+/* 确保节点容器不裁剪子元素 */
+.rule-node-wrapper {
+  overflow: visible;
 }
 
 /* Handle 使用 overflow: visible 避免被裁剪 */
@@ -647,7 +662,9 @@ function updateConfig(key: string, value: any) {
 .ports-side {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 0;
 }
 
 .ports-side.inputs {
@@ -661,26 +678,42 @@ function updateConfig(key: string, value: any) {
 .port-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0;
+  gap: 16px;
+  padding: 4px 0;
   position: relative;
 }
 
-/* VueFlow Handle 样式 */
+/* VueFlow Handle 样式 - 确保连接点定位在节点边框上 */
 .node-handle {
-  width: 12px !important;
-  height: 12px !important;
+  width: 14px !important;
+  height: 14px !important;
   background: #1e1e2e !important;
   border: 2px solid #5a5a6a !important;
   border-radius: 50% !important;
   cursor: crosshair !important;
   transition: all 0.15s ease !important;
+  flex-shrink: 0;
+}
+
+/* 强制 Handle 定位到节点边框 */
+:deep(.vue-flow__handle-left) {
+  left: 0 !important;
+  transform: translateX(-50%) scale(1) !important;
+}
+
+:deep(.vue-flow__handle-right) {
+  right: 0 !important;
+  transform: translateX(50%) scale(1) !important;
+}
+
+/* 确保 handle 容器不裁剪 */
+:deep(.vue-flow__handle) {
+  position: absolute !important;
 }
 
 .node-handle:hover {
   width: 16px !important;
   height: 16px !important;
-  margin: -2px !important;
   border-color: #00f0ff !important;
   box-shadow: 0 0 12px rgba(0, 240, 255, 0.6) !important;
 }
@@ -708,9 +741,10 @@ function updateConfig(key: string, value: any) {
 }
 
 .port-label {
-  font-size: 11px;
+  font-size: 12px;
   color: #aaa;
   white-space: nowrap;
+  margin-left: 4px;
 }
 
 /* 执行状态 */

@@ -1,7 +1,7 @@
 # 规则引擎 UI 迭代计划 & TODO
 
 > **当前阶段：** UI 问题修复 & 端口连接规范落地
-> **更新时间：** 2026-05-07
+> **更新时间：** 2026-05-09
 
 ---
 
@@ -48,6 +48,28 @@
 | 5.1 | 快捷添加栏（画布有节点后仍可快速添加） | `webui/src/views/RuleCanvas.vue` | ✅ 已完成 |
 | 5.2 | 数据库路径修复（`data/database/engine.db`） | `backend/database.py` | ✅ 已完成 |
 
+## Phase 6: UI 交互修复 (2026-05-09)
+
+| # | 任务 | 文件 | 状态 | 说明 |
+|---|------|------|------|------|
+| 6.1 | 连接验证 `is-valid-connection` | `RuleCanvas.vue` | ✅ 已完成 | 添加 VueFlow 连接验证回调，解决连接线不易触发高亮问题 |
+| 6.2 | 连接半径增加 | `RuleCanvas.vue` | ✅ 已完成 | `connection-radius=20` 提高连接灵敏度 |
+| 6.3 | 折叠按钮样式修复 | `RuleCanvas.vue` | ✅ 已完成 | 参照 App.vue sidebar 样式，按钮位于面板右边缘 |
+| 6.4 | 节点面板右键菜单 | `RuleCanvas.vue` | ✅ 已完成 | 添加 `@contextmenu` 处理 + 样式美化（固定宽度180px） |
+| 6.5 | 框选状态同步 | `RuleCanvas.vue` | ✅ 已完成 | `handleSelectionChange` 正确同步选中状态到 nodes |
+| 6.6 | 删除按钮点击修复 | `RuleNode.vue` | ✅ 已完成 | 改用 `props.onDelete` 直接调用 VueFlow `removeNodes` |
+| 6.7 | overflow 溢出修复 | `RuleNode.vue` | ✅ 已完成 | 节点容器 `overflow: visible`，不裁剪连接点和删除按钮 |
+| 6.8 | 边类型改为贝塞尔曲线 | `RuleCanvas.vue` | ✅ 已完成 | `smoothstep` → `default`，实线曲线连接 |
+| 6.9 | 浮动工具栏移除 | `RuleCanvas.vue` | ✅ 已完成 | 有节点时不再显示快捷添加工具栏 |
+| 6.10 | 端口间距增大 | `RuleNode.vue` | ✅ 已完成 | Handle 增大到 14px，端口间距增加 |
+| 6.11 | 连接点边框定位 | `RuleNode.vue` | ✅ 进行中 | Handle 定位微调，输入类型节点右侧端口位置待优化 |
+
+## Phase 7: 待优化项
+
+| # | 任务 | 说明 |
+|---|------|------|
+| 7.1 | 输入类型节点输出端口位置 | 输入类型节点（如 ImageCapture、VideoCapture）的输出端口应该在右侧边框上居中，目前位置偏内 |
+
 ---
 
 ## 已完成
@@ -62,3 +84,4 @@
 | 2026-05-08 | Phase 2.4/2.5/3.2/3.3/4.1/4.2（圆角溢出/控制台拖拽/侧栏宽度） | `9dcb6ec` |
 | 2026-05-08 | Phase 2.2 框选功能（SelectionMode.Partial） | `8c3ff3b` |
 | 2026-05-08 | Phase 5 快捷添加栏 + 数据库路径修复 | `23df2e2` |
+| 2026-05-09 | Phase 6 UI交互修复（连接验证/折叠按钮/右键菜单/删除/overflow/贝塞尔曲线） | `待提交` |
