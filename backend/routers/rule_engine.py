@@ -22,11 +22,17 @@ router = APIRouter(prefix="/api/rule-engine", tags=["规则引擎"])
 
 # ============ 节点定义 ============
 
-@router.get("/nodes/definitions", response_model=list[NodeDefinition])
+@router.get("/nodes/definitions")
 async def get_node_definitions():
     """获取所有可用节点定义 - 用于前端渲染节点面板。"""
-    registry = init_builtin_executors()
-    return registry.get_definitions()
+    import traceback, sys
+    try:
+        registry = init_builtin_executors()
+        return registry.get_definitions()
+    except Exception as e:
+        traceback.print_exc()
+        # Return 500 with error details
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
 
 
 # ============ 规则图 CRUD ============

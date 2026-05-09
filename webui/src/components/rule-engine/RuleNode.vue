@@ -251,6 +251,9 @@ const emit = defineEmits<{
   (e: 'contextmenu', event: MouseEvent): void
 }>()
 
+// 获取 removeNodes 方法用于直接删除节点
+const { handleNodeRemove } = inject<{ handleNodeRemove: (id: string) => void }>('nodeActions', { handleNodeRemove: () => {} })
+
 function handleContextMenu(event: MouseEvent) {
   event.preventDefault()
   emit('contextmenu', event)
@@ -656,21 +659,19 @@ function updateConfig(key: string, value: any) {
   min-height: 24px;
 }
 
-/* 端口区域垂直居中分布 */
 .ports-side {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 12px;
   padding: 12px 0;
 }
 
-/* 单端口时垂直居中，多端口时均匀分布 */
 .ports-side.inputs {
-  justify-content: center;
+  align-items: flex-start;
 }
 
 .ports-side.outputs {
-  justify-content: center;
   align-items: flex-end;
 }
 
@@ -694,15 +695,15 @@ function updateConfig(key: string, value: any) {
   flex-shrink: 0;
 }
 
-/* 强制 Handle 定位到节点边框（边缘贴齐，无偏移） */
+/* 强制 Handle 定位到节点边框 */
 :deep(.vue-flow__handle-left) {
-  left: -7px !important;
-  transform: none !important;
+  left: 0 !important;
+  transform: translateX(-50%) scale(1) !important;
 }
 
 :deep(.vue-flow__handle-right) {
-  right: -7px !important;
-  transform: none !important;
+  right: 0 !important;
+  transform: translateX(50%) scale(1) !important;
 }
 
 /* 确保 handle 容器不裁剪 */
