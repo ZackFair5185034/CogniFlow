@@ -659,9 +659,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, markRaw, watch } from 'vue'
+import { ref, reactive, computed, onMounted, markRaw } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { VueFlow, useVueFlow, Position, MarkerType } from '@vue-flow/core'
+import { VueFlow, useVueFlow, MarkerType } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -681,7 +681,7 @@ import { h } from 'vue'
 
 const router = useRouter()
 const route = useRoute()
-const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate, getZoom, getPan } = useVueFlow()
+const { fitView, addNodes, addEdges, setCenter, screenToFlowCoordinate } = useVueFlow()
 
 // 常量
 const gridSize = 20
@@ -917,7 +917,7 @@ async function handleNameChange() {
       await ruleEngineApi.updateGraph(graphId.value, { name: graphName.value })
       graph.value.name = graphName.value
       showToast('名称已更新', 'success')
-    } catch (err) {
+    } catch {
       showToast('更新名称失败', 'error')
     }
   }
@@ -1024,11 +1024,11 @@ function handleConnect(params: any) {
 }
 
 // 节点/边变化
-function handleNodesChange(changes: any[]) {
+function handleNodesChange(_changes: any[]) {
   // 只在外部变化时保存历史
 }
 
-function handleEdgesChange(changes: any[]) {
+function handleEdgesChange(_changes: any[]) {
   // 只在外部变化时保存历史
 }
 
@@ -1259,7 +1259,7 @@ async function handleValidate() {
     } else {
       showToast(`校验失败: ${res.data.errors?.join(', ') || '未知错误'}`, 'error')
     }
-  } catch (err) {
+  } catch {
     showToast('校验请求失败', 'error')
   }
 }

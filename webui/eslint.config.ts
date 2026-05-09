@@ -12,6 +12,7 @@ export default tseslint.config(
       'dist/**',
       'node_modules/**',
       '*.config.js',
+      '*.config.ts',
       'uno.config.ts',
       'eslint.config.ts',
     ],

@@ -694,7 +694,7 @@ const handleExport = async () => {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
     ElMessage.success('导出成功')
-  } catch (error) {
+  } catch {
     ElMessage.error('导出失败')
   }
 }
@@ -780,8 +780,6 @@ let isDrawing = false
 let startX = 0
 let startY = 0
 let imgElement: HTMLImageElement | null = null
-let originalWidth = 0
-let originalHeight = 0
 let displayScale = 1
 
 const image_id = computed(() => Number(route.params.image_id))
@@ -810,7 +808,7 @@ const loadCategories = async () => {
         selectedCategoryId.value = firstTag.id
       }
     }
-  } catch (error) {
+  } catch {
     ElMessage.error('加载类别失败')
   }
   // 同时加载树形结构
@@ -875,9 +873,6 @@ const initCanvas = () => {
   const img = new Image()
   imgElement = img
   img.onload = () => {
-    originalWidth = img.width
-    originalHeight = img.height
-
     const containerWidth = container.clientWidth - 40
     const containerHeight = container.clientHeight - 40
 

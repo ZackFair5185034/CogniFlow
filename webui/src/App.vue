@@ -92,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
@@ -112,24 +112,6 @@ const navItems = [
   { path: '/launch', label: '模型测试', icon: 'rocket' },
   { path: '/rule-engine', label: '规则引擎', icon: 'flow' },
 ]
-
-const pageTitles: Record<string, string> = {
-  '/': '控制台',
-  '/atlas': '图集管理',
-  '/atlas/': '图集详情',
-  '/models': '模型管理',
-  '/training': '模型训练',
-  '/launch': '模型测试',
-  '/rule-engine': '规则引擎',
-}
-
-const currentPageTitle = computed(() => {
-  const path = route.path
-  if (path.endsWith('/') && path !== '/') {
-    return pageTitles[path.slice(0, -1)] || '详情'
-  }
-  return pageTitles[path] || 'CogniFlow'
-})
 
 const isNavActive = (path: string) => {
   if (path === '/') {

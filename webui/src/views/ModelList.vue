@@ -685,7 +685,7 @@ const loadModels = async () => {
   try {
     const res = await modelApi.list()
     models.value = res.data
-  } catch (error) {
+  } catch {
     ElMessage.error('加载模型列表失败')
   } finally {
     loading.value = false
@@ -745,7 +745,7 @@ const handleUploadSubmit = async () => {
     ElMessage.success('上传成功')
     showUploadDialog.value = false
     loadModels()
-  } catch (error) {
+  } catch {
     ElMessage.error('上传失败')
   } finally {
     uploading.value = false
@@ -757,7 +757,7 @@ const handleSetBest = async (row: any) => {
     await modelApi.setBest(row.id)
     ElMessage.success('已设为最佳模型')
     loadModels()
-  } catch (error) {
+  } catch {
     ElMessage.error('操作失败')
   }
 }

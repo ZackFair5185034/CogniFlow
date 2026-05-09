@@ -575,7 +575,7 @@
             class="console-body"
           >
             <div
-              v-for="(entry, idx) in consoleEntries"
+              v-for="entry in consoleEntries"
               :key="entry.id"
               class="console-entry"
               :class="{ expanded: entry.expanded }"
@@ -634,7 +634,6 @@ const confThreshold = ref(0.25)
 const selectedFile = ref<File | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
-const isLoading = ref(false)
 const detecting = ref(false)
 
 // 推理设备和精度
@@ -748,7 +747,6 @@ const formatJSON = (data: any) => {
 
 // 复制和拖拽
 const consoleHeight = ref(260)
-const isDraggingDivider = ref(false)
 
 const consoleStyle = computed(() => {
   if (!consoleExpanded.value) return {}
@@ -910,7 +908,7 @@ const handleClearRecords = async () => {
     await inferenceApi.clearInferenceJobs()
     recentRecords.value = []
     ElMessage.success('已清除历史记录')
-  } catch (error: any) {
+  } catch {
     ElMessage.error('清除失败')
   }
 }

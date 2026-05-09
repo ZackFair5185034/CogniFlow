@@ -235,8 +235,8 @@ export class StreamClient {
         this.pendingMeta = {
           frame_id: msg.frame_id,
           timestamp: msg.timestamp,
-          detections: msg.detections || [],
-          stats: msg.stats || { inference_ms: 0, total_detections: 0 },
+          detections: msg.detections ?? [],
+          stats: msg.stats ?? { inference_ms: 0, total_detections: 0 },
           progress: msg.progress,
           replay: msg.replay,
         }
@@ -257,16 +257,16 @@ export class StreamClient {
         break
 
       case 'complete':
-        this.onCompleteCb?.(msg.total_frames || 0, msg.total_detections || 0)
+        this.onCompleteCb?.(msg.total_frames ?? 0, msg.total_detections ?? 0)
         this.disconnect()
         break
 
       case 'stopped':
-        this.onCompleteCb?.(msg.total_frames || 0, msg.total_detections || 0)
+        this.onCompleteCb?.(msg.total_frames ?? 0, msg.total_detections ?? 0)
         break
 
       case 'error':
-        this.onErrorCb?.(msg.error || '未知错误')
+        this.onErrorCb?.(msg.error ?? '未知错误')
         break
 
       case 'paused':
@@ -278,7 +278,7 @@ export class StreamClient {
         break
 
       case 'fps_updated':
-        this.onFpsUpdatedCb?.(msg.fps || 24)
+        this.onFpsUpdatedCb?.(msg.fps ?? 24)
         break
 
       case 'heartbeat':

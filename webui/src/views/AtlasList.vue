@@ -238,7 +238,7 @@ const loadAtlases = async () => {
   try {
     const res = await atlasApi.list()
     atlases.value = res.data
-  } catch (error) {
+  } catch {
     ElMessage.error('加载图集失败')
   } finally {
     loading.value = false

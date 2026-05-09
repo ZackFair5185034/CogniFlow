@@ -817,7 +817,7 @@ const loadAtlas = async () => {
   try {
     const res = await atlasApi.get(id)
     atlas.value = res.data
-  } catch (error) {
+  } catch {
     ElMessage.error('加载图集详情失败')
   }
 }
@@ -841,14 +841,6 @@ const loadImages = async () => {
 }
 
 const onDirectoryChange = () => {
-  pagination.value.page = 1
-  loadImages()
-}
-
-const setSort = (by: 'created_at' | 'name', order: 'asc' | 'desc') => {
-  sortConfig.value.by = by
-  sortConfig.value.order = order
-  showSortMenu.value = false
   pagination.value.page = 1
   loadImages()
 }
@@ -896,7 +888,7 @@ const handleFileSelect = async (event: Event) => {
     ElMessage.success('上传成功')
     loadImages()
     loadDirectories()
-  } catch (error) {
+  } catch {
     ElMessage.error('上传失败')
   }
 
@@ -918,7 +910,7 @@ const handleVideoSelect = async (event: Event) => {
     extractCount.value = res.data.metadata.total_frames
     pendingVideoPath.value = res.data.video_path
     showVideoDialog.value = true
-  } catch (error) {
+  } catch {
     ElMessage.error('视频上传失败')
   }
 
@@ -972,7 +964,7 @@ const startExtractPolling = () => {
           loadDirectories()
         }
       }
-    } catch (error) {
+    } catch {
       stopExtractPolling()
     }
   }, 1000)
@@ -1023,14 +1015,14 @@ const handleDeleteDirectory = async (dir: string) => {
   }
 }
 
-const handleAnnotateImage = (img: any) => {
+const handleAnnotateImage = (img: { id: number }) => {
   const query: Record<string, string> = selectedDirectory.value ? { directory: selectedDirectory.value } : {}
   query.sort_by = sortConfig.value.by
   query.sort_order = sortConfig.value.order
   router.push({ path: `/annotate/${img.id}`, query })
 }
 
-const handleDeleteImage = async (img: any) => {
+const handleDeleteImage = async (img: { file_path: string; id: number }) => {
   try {
     await ElMessageBox.confirm(
       `确定删除图片 "${getFileName(img.file_path)}" 吗？此操作不可撤销。`,
@@ -1076,7 +1068,7 @@ const handleBatchDownload = async () => {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
     ElMessage.success('打包下载完成')
-  } catch (error) {
+  } catch {
     ElMessage.error('打包下载失败')
   }
 }
