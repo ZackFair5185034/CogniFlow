@@ -218,6 +218,7 @@
             @pane-context-menu="(event: any) => handleContextMenu(event, null, 'pane')"
             @edge-context-menu="(event: any, edge: any) => handleContextMenu(event, edge, 'edge')"
             @node-delete="handleNodeDelete"
+            :pan-on-drag="[]"
             :pan-on-scroll="true"
             :zoom-on-scroll="true"
             :min-zoom="0.1"
@@ -2289,6 +2290,24 @@ $panel-header-height: 52px;
     width: 100%;
     height: 100%;
     background: transparent !important;
+  }
+
+  /* 默认画布鼠标样式为默认，只有按住空格/中键/alt才可平移 */
+  :deep(.vue-flow__pane) {
+    cursor: default;
+  }
+
+  :deep(.vue-flow__pane.draggable) {
+    cursor: grab;
+  }
+
+  :deep(.vue-flow__pane.dragging) {
+    cursor: grabbing;
+  }
+
+  /* 只有 selection 模式（框选）才显示十字光标 */
+  :deep(.vue-flow__pane.selection) {
+    cursor: crosshair;
   }
 
   :deep(.vue-flow__edge-path) {
