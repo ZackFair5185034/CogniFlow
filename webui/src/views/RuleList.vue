@@ -195,10 +195,11 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ruleEngineApi } from '@/api'
 import { ElMessageBox } from 'element-plus'
+import type { RuleGraphResponse } from '@/types/api'
 
 const router = useRouter()
 
-const graphs = ref<any[]>([])
+const graphs = ref<RuleGraphResponse[]>([])
 const loading = ref(false)
 const showCreateDialog = ref(false)
 const creating = ref(false)
@@ -247,7 +248,7 @@ function goToDesign(id: number) {
   router.push(`/rule-engine/design/${id}`)
 }
 
-async function handleDelete(graph: any) {
+async function handleDelete(graph: unknown) {
   try {
     await ElMessageBox.confirm(
       `确定要删除规则"${graph.name}"吗？此操作不可恢复。`,
@@ -257,7 +258,7 @@ async function handleDelete(graph: any) {
     await ruleEngineApi.deleteGraph(graph.id)
     showToast('规则已删除', 'success')
     loadGraphs()
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err !== 'cancel') {
       showToast('删除失败', 'error')
     }

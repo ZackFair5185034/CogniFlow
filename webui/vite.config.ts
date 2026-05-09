@@ -48,7 +48,13 @@ export default defineConfig(({ mode }) => {
 
     build: {
       target: 'esnext',
-      minify: 'esbuild',
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+        },
+      },
       chunkSizeWarningLimit: 600,
       rolldownOptions: {
         output: {

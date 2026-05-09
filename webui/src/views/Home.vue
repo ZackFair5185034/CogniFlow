@@ -173,14 +173,14 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { atlasApi, imageApi, modelApi, trainingApi } from '@/api'
 
-const stats = ref<any[]>([
+const stats = ref<{ label: string; value: number; color: string; gradient: string; icon: string }[]>([
   { label: '图集总数', value: 0, color: '#00f0ff', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 240, 255, 0.2), transparent 70%)', icon: 'folder' },
   { label: '图片总数', value: 0, color: '#ff00aa', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 0, 170, 0.2), transparent 70%)', icon: 'image' },
   { label: '模型数量', value: 0, color: '#00ff88', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 255, 136, 0.2), transparent 70%)', icon: 'box' },
   { label: '训练任务', value: 0, color: '#ffdd00', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 221, 0, 0.2), transparent 70%)', icon: 'chart' },
 ])
 
-const recentJobs = ref<any[]>([])
+const recentJobs = ref<Record<string, unknown>[]>([])
 const statusText: Record<string, string> = {
   pending: '等待中',
   running: '进行中',
@@ -286,7 +286,7 @@ const stopTrainingProgressPolling = () => {
   }
 }
 
-const getProgress = (job: any) => {
+const getProgress = (job: Record<string, unknown>) => {
   if (!job || !job.total_steps) return 0
   return Math.round((job.current_step / job.total_steps) * 100)
 }

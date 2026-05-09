@@ -207,8 +207,9 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi } from '@/api'
+import type { AtlasResponse } from '@/types/api'
 
-const atlases = ref<any[]>([])
+const atlases = ref<AtlasResponse[]>([])
 const loading = ref(false)
 const showCreateDialog = ref(false)
 const creating = ref(false)
@@ -217,7 +218,7 @@ const createForm = ref({ name: '', description: '' })
 // 编辑状态
 const showRenameDialog = ref(false)
 const renaming = ref(false)
-const renameTarget = ref<any>(null)
+const renameTarget = ref<AtlasResponse | null>(null)
 const renameForm = ref({ name: '', description: '' })
 
 const formatDate = (dateStr: string) => {
@@ -257,15 +258,15 @@ const handleCreate = async () => {
     showCreateDialog.value = false
     createForm.value = { name: '', description: '' }
     loadAtlases()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '创建失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '创建失败'
     ElMessage.error(msg)
   } finally {
     creating.value = false
   }
 }
 
-const handleRename = (row: any) => {
+const handleRename = (row: AtlasResponse) => {
   renameTarget.value = row
   renameForm.value = { name: row.name, description: row.description || '' }
   showRenameDialog.value = true
@@ -282,15 +283,15 @@ const handleRenameSubmit = async () => {
     ElMessage.success('编辑成功')
     showRenameDialog.value = false
     loadAtlases()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '编辑失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '编辑失败'
     ElMessage.error(msg)
   } finally {
     renaming.value = false
   }
 }
 
-const handleDelete = async (row: any) => {
+const handleDelete = async (row: AtlasResponse) => {
   try {
     await ElMessageBox.confirm(`确定删除图集 "${row.name}" 吗？此操作不可撤销。`, '删除确认', {
       type: 'warning',

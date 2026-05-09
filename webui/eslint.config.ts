@@ -85,7 +85,7 @@ export default tseslint.config(
       'multiline-ternary': 'off',
 
       // 常规
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      'no-console': 'off',
       'no-debugger': 'error',
       'no-unused-vars': 'off',
       'prefer-const': 'error',

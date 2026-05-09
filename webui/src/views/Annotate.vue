@@ -496,6 +496,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { categoryApi, annotationApi, atlasApi } from '@/api'
 import SvgIcon from '@/components/SvgIcon.vue'
+import type { AnnotationResponse } from '@/types/api'
 
 interface Category {
   id: number
@@ -546,7 +547,7 @@ const categoryForm = ref({ name: '', color: '#FF0000', is_directory: false, pare
 const showHeaderMenu = ref(false)
 const closeHeaderMenu = () => { showHeaderMenu.value = false }
 const showImportDialog = ref(false)
-const importPreviewData = ref<any>(null)
+const importPreviewData = ref<unknown>(null)
 const importParseError = ref('')
 const importing = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)
@@ -646,17 +647,17 @@ const deleteCategory = async (id: number) => {
     }
     // 重新加载树
     await loadTree()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '删除失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '删除失败'
     ElMessage.error(msg)
   }
 }
 
 // ============ 导入导出 ============
-const countChildren = (node: any): number => {
+const countChildren = (node: { children?: unknown[] }): number => {
   let count = 0
-  const walk = (nodes: any[]) => {
-    for (const n of nodes) {
+  const walk = (nodes: unknown[]) => {
+    for (const n of nodes as { children?: unknown[] }[]) {
       count++
       if (n.children?.length) walk(n.children)
     }
@@ -669,7 +670,7 @@ const importPreviewStats = computed(() => {
   const data = importPreviewData.value
   if (!data) return { directories: 0, tags: 0, total: 0 }
   let dirs = 0, tags = 0
-  const walk = (nodes: any[]) => {
+  const walk = (nodes: unknown[]) => {
     for (const n of nodes) {
       if (n.is_directory) dirs++
       else tags++
@@ -751,8 +752,8 @@ const handleImport = async () => {
       const stillExists = flatCategories.value.find(c => c.id === selectedCategoryId.value)
       if (!stillExists) selectedCategoryId.value = null
     }
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '导入失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '导入失败'
     ElMessage.error(msg)
   } finally {
     importing.value = false
@@ -837,7 +838,7 @@ const loadImage = async (id: number) => {
 const loadAnnotations = async (imageId: number) => {
   try {
     const res = await annotationApi.getByImage(imageId)
-    localAnnotations.value = res.data.map((ann: any) => ({
+    localAnnotations.value = res.data.map((ann: AnnotationResponse) => ({
       id: ann.id,
       image_id: ann.image_id,
       category_id: ann.category_id,
@@ -1098,8 +1099,8 @@ const saveAnnotations = async () => {
     await loadAnnotations(currentImage.value.id)
     await loadImageList()  // 刷新标注进度
     drawAllBboxes()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '保存失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '保存失败'
     ElMessage.error(msg)
   } finally {
     saving.value = false
@@ -1124,8 +1125,8 @@ const handleCreateCategory = async () => {
     closeCreateDialog()
     // 同时更新 categories 和 treeData
     await loadCategories()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '创建失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '创建失败'
     ElMessage.error(msg)
   } finally {
     creatingCategory.value = false

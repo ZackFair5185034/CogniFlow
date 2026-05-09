@@ -662,10 +662,12 @@
 import { ref, reactive, computed, onMounted, markRaw } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow, MarkerType } from '@vue-flow/core'
+import type { Node, Edge } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { ruleEngineApi } from '@/api'
+import type { RuleGraphDetail, NodeDefinition } from '@/types/api'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -691,13 +693,13 @@ const showRulers = ref(true)
 
 // 状态
 const graphId = computed(() => Number(route.params.id))
-const graph = ref<any>(null)
+const graph = ref<RuleGraphDetail | null>(null)
 const graphName = ref('')
-const nodes = ref<any[]>([])
-const edges = ref<any[]>([])
-const nodeDefinitions = ref<any[]>([])
-const selectedNode = ref<any>(null)
-const nodeConfig = ref<any>({})
+const nodes = ref<Node[]>([])
+const edges = ref<Edge[]>([])
+const nodeDefinitions = ref<NodeDefinition[]>([])
+const selectedNode = ref<Node | null>(null)
+const nodeConfig = ref<Record<string, unknown>>({})
 const isLoading = ref(false)
 const saving = ref(false)
 const executing = ref(false)
@@ -706,10 +708,10 @@ const showMiniMap = ref(true)
 const snapGrid = ref(true)
 const showGrid = ref(true)
 const showExecutionPanel = ref(false)
-const executionLogs = ref<any[]>([])
+const executionLogs = ref<{ level: string; timestamp: string; message: string; node_type?: string }[]>([])
 const executionStatus = ref<'idle' | 'running' | 'success' | 'failed'>('idle')
 const flowContainer = ref<HTMLElement | null>(null)
-const vueFlowRef = ref<any>(null)
+const vueFlowRef = ref<unknown>(null)
 const canvasWrapper = ref<HTMLElement | null>(null)
 const canvasWidth = ref(5000)
 const canvasHeight = ref(5000)
@@ -720,20 +722,20 @@ const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
 
 // 撤销/重做
-const historyStack = ref<{ nodes: any[], edges: any[] }[]>([])
+const historyStack = ref<{ nodes: Node[], edges: Edge[] }[]>([])
 const historyIndex = ref(-1)
 const canUndo = computed(() => historyIndex.value > 0)
 const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
 
 // 节点分类
 const nodeCategories = computed(() => [
-  { name: 'trigger', label: '触发器', icon: markRaw(TriggerIcon), expanded: true, nodes: [] as any[] },
-  { name: 'condition', label: '条件', icon: markRaw(ConditionIcon), expanded: true, nodes: [] as any[] },
-  { name: 'action', label: '动作', icon: markRaw(ActionIcon), expanded: true, nodes: [] as any[] },
-  { name: 'logic', label: '逻辑', icon: markRaw(LogicIcon), expanded: true, nodes: [] as any[] },
+  { name: 'trigger', label: '触发器', icon: markRaw(TriggerIcon), expanded: true, nodes: [] as Node[] },
+  { name: 'condition', label: '条件', icon: markRaw(ConditionIcon), expanded: true, nodes: [] as Node[] },
+  { name: 'action', label: '动作', icon: markRaw(ActionIcon), expanded: true, nodes: [] as Node[] },
+  { name: 'logic', label: '逻辑', icon: markRaw(LogicIcon), expanded: true, nodes: [] as Node[] },
 ].map(cat => ({
   ...cat,
-  nodes: nodeDefinitions.value.filter((d: any) => d.category === cat.name)
+  nodes: nodeDefinitions.value.filter((d) => d.category === cat.name)
 })))
 
 // 快速添加
@@ -768,7 +770,7 @@ const connectionLineStyle = {
 const nodeTypes = {}
 
 // 小地图颜色
-function miniMapNodeColor(node: any) {
+function miniMapNodeColor(node: Node) {
   const colors: Record<string, string> = {
     trigger: '#00f0ff',
     condition: '#ffdd00',
@@ -780,7 +782,7 @@ function miniMapNodeColor(node: any) {
 
 // 获取分类图标
 function getCategoryIcon(category: string) {
-  const icons: Record<string, any> = {
+  const icons: Record<string, unknown> = {
     trigger: markRaw(TriggerIcon),
     condition: markRaw(ConditionIcon),
     action: markRaw(ActionIcon),
@@ -803,7 +805,7 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
 function saveHistory() {
   historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
   historyStack.value.push({
-    nodes: JSON.parse(JSON.stringify(nodes.value.map((n: any) => ({ ...n, selected: false, dragging: false })))),
+    nodes: JSON.parse(JSON.stringify(nodes.value.map((n: Node) => ({ ...n, selected: false, dragging: false })))),
     edges: JSON.parse(JSON.stringify(edges.value))
   })
   historyIndex.value = historyStack.value.length - 1
@@ -863,15 +865,15 @@ async function loadGraph() {
     graph.value = res.data
     graphName.value = graph.value.name
 
-    nodes.value = (graph.value.nodes || []).map((n: any) => ({
+    nodes.value = (graph.value.nodes || []).map((n) => ({
       id: n.id,
       type: n.type,
       position: n.position || { x: 0, y: 0 },
-      data: { ...n.data },
+      data: n.data as Record<string, unknown>,
       category: getNodeCategory(n.type)
     }))
 
-    edges.value = (graph.value.edges || []).map((e: any) => ({
+    edges.value = (graph.value.edges || []).map((e) => ({
       id: e.id,
       source: e.source,
       target: e.target,
@@ -901,7 +903,7 @@ async function loadNodeDefinitions() {
 
 // 获取节点分类
 function getNodeCategory(type: string): string {
-  const def = nodeDefinitions.value.find((d: any) => d.type === type)
+  const def = nodeDefinitions.value.find((d) => d.type === type)
   return def?.category || 'action'
 }
 
@@ -924,7 +926,7 @@ async function handleNameChange() {
 }
 
 // 拖拽
-function handleDragStart(event: DragEvent, nodeDef: any) {
+function handleDragStart(event: DragEvent, nodeDef: NodeDefinition) {
   event.dataTransfer?.setData('application/node-type', JSON.stringify(nodeDef))
 }
 
@@ -966,7 +968,7 @@ function handleDrop(event: DragEvent) {
 }
 
 // 快速添加
-function quickAddNode(nodeDef: any) {
+function quickAddNode(nodeDef: NodeDefinition) {
   const centerX = (flowContainer.value?.clientWidth || 800) / 2 / zoomLevel.value
   const centerY = (flowContainer.value?.clientHeight || 600) / 2 / zoomLevel.value
 
@@ -992,7 +994,7 @@ function quickAddNode(nodeDef: any) {
 }
 
 // 节点点击
-function handleNodeClick(event: any) {
+function handleNodeClick(event: { node: { id: string } }) {
   const nodeId = event.node.id
   const node = nodes.value.find(n => n.id === nodeId)
   if (node) {
@@ -1012,7 +1014,7 @@ function handlePaneClick() {
 }
 
 // 连接
-function handleConnect(params: any) {
+function handleConnect(params: { source: string; target: string; sourceHandle?: string; targetHandle?: string }) {
   addEdges([{
     ...params,
     type: 'smoothstep',
@@ -1024,11 +1026,11 @@ function handleConnect(params: any) {
 }
 
 // 节点/边变化
-function handleNodesChange(_changes: any[]) {
+function handleNodesChange(_changes: unknown[]) {
   // 只在外部变化时保存历史
 }
 
-function handleEdgesChange(_changes: any[]) {
+function handleEdgesChange(_changes: unknown[]) {
   // 只在外部变化时保存历史
 }
 
@@ -1073,7 +1075,7 @@ function handleCanvasMouseUp() {
 }
 
 // 更新配置
-function updateConfig(key: string, value: any) {
+function updateConfig(key: string, value: unknown) {
   nodeConfig.value[key] = value
   const node = nodes.value.find(n => n.id === selectedNode.value?.id)
   if (node) {
@@ -1089,7 +1091,7 @@ function addArrayItem(key: string) {
 }
 
 function removeArrayItem(key: string, index: number) {
-  nodeConfig.value[key] = nodeConfig.value[key].filter((_: any, i: number) => i !== index)
+  nodeConfig.value[key] = nodeConfig.value[key].filter((_: unknown, i: number) => i !== index)
   updateNodeData()
 }
 
@@ -1158,8 +1160,8 @@ async function captureAndSaveThumbnail() {
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
     // 获取所有节点的位置范围
-    const xs = flowExport.nodes.map((n: any) => n.position?.x || 0)
-    const ys = flowExport.nodes.map((n: any) => n.position?.y || 0)
+    const xs = flowExport.nodes.map((n: Node) => n.position?.x || 0)
+    const ys = flowExport.nodes.map((n: Node) => n.position?.y || 0)
     if (!xs.length) return
 
     const minX = Math.min(...xs)
@@ -1187,8 +1189,8 @@ async function captureAndSaveThumbnail() {
     ctx.strokeStyle = '#00f0ff'
     ctx.lineWidth = 2 / scale
     for (const edge of flowExport.edges || []) {
-      const sourceNode = flowExport.nodes.find((n: any) => n.id === edge.source)
-      const targetNode = flowExport.nodes.find((n: any) => n.id === edge.target)
+      const sourceNode = flowExport.nodes.find((n: Node) => n.id === edge.source)
+      const targetNode = flowExport.nodes.find((n: Node) => n.id === edge.target)
       if (sourceNode && targetNode) {
         const sx = (sourceNode.position?.x || 0) + 60
         const sy = (sourceNode.position?.y || 0) + 20
@@ -1285,12 +1287,12 @@ async function handleExecute() {
 
     executionStatus.value = res.data.status === 'completed' ? 'success' : 'failed'
     showToast(`执行${executionStatus.value === 'success' ? '成功' : '完成'}`, 'success')
-  } catch (err: any) {
+  } catch (err: unknown) {
     executionStatus.value = 'failed'
     executionLogs.value.push({
       level: 'error',
       timestamp: new Date().toLocaleTimeString(),
-      message: err?.response?.data?.detail || '执行失败'
+      message: (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '执行失败'
     })
     showToast('执行失败', 'error')
   } finally {

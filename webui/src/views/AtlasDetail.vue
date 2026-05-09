@@ -717,6 +717,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi, imageApi } from '@/api'
+import type { AtlasResponse, ImageResponse } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -724,16 +725,16 @@ const id = Number(route.params.id)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const videoInputRef = ref<HTMLInputElement | null>(null)
 
-const atlas = ref<any>(null)
-const images = ref<any[]>([])
+const atlas = ref<AtlasResponse | null>(null)
+const images = ref<ImageResponse[]>([])
 const directories = ref<string[]>([])
 const loadingImages = ref(false)
 const activeTab = ref('images')
 const selectedDirectory = ref('')
-const sortConfig = ref({ by: 'created_at', order: 'desc' as 'asc' | 'desc' })
+const sortConfig = ref<{ by: string; order: 'asc' | 'desc' }>({ by: 'created_at', order: 'desc' })
 const showSortMenu = ref(false)
 const showImageDialog = ref(false)
-const selectedImage = ref<any>(null)
+const selectedImage = ref<ImageResponse | null>(null)
 const newDirectoryName = ref('')
 
 // 视频提取相关
@@ -805,8 +806,8 @@ const handleSaveDirectory = async () => {
     editingDirectory.value = false
     loadImages()
     loadDirectories()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '修改目录失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '修改目录失败'
     ElMessage.error(msg)
   } finally {
     savingDirectory.value = false
@@ -826,9 +827,7 @@ const loadImages = async () => {
   loadingImages.value = true
   try {
     const directory = selectedDirectory.value || undefined
-    console.log('[DEBUG] loadImages called, directory:', directory, 'page:', pagination.value.page)
     const res = await atlasApi.getImages(id, directory, pagination.value.page, pagination.value.page_size, sortConfig.value.by, sortConfig.value.order)
-    console.log('[DEBUG] getImages response, total:', res.data.total)
     images.value = res.data.items
     pagination.value.total = res.data.total
     pagination.value.total_pages = res.data.total_pages
@@ -863,7 +862,7 @@ const triggerUpload = () => {
   fileInputRef.value?.click()
 }
 
-const openImageDialog = (img: any) => {
+const openImageDialog = (img: ImageResponse) => {
   selectedImage.value = img
   showImageDialog.value = true
 }
@@ -932,8 +931,8 @@ const confirmExtract = async () => {
     extractJobId.value = res.data.job_id
     extractProgress.value.status = 'processing'
     startExtractPolling()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '提交提取任务失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '提交提取任务失败'
     extractProgress.value.status = 'failed'
     extractProgress.value.error = msg
   }
@@ -991,8 +990,8 @@ const handleCreateDirectory = async () => {
     selectedDirectory.value = dirName
     ElMessage.success(`已创建目录 "${dirName}"，上传图片将自动归类到此目录`)
     newDirectoryName.value = ''
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '创建目录失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '创建目录失败'
     ElMessage.error(msg)
   }
 }
@@ -1041,7 +1040,7 @@ const handleDeleteImage = async (img: { file_path: string; id: number }) => {
   }
 }
 
-const handleDownloadImage = (img: any) => {
+const handleDownloadImage = (img: ImageResponse) => {
   const url = getImageUrl(img.file_path)
   const filename = getFileName(img.file_path)
   const link = document.createElement('a')
@@ -1122,9 +1121,9 @@ const handleBatchMoveDirectory = async () => {
     batchTargetDirectory.value = ''
     loadImages()
     loadDirectories()
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error !== 'cancel') {
-      const msg = error.response?.data?.detail || '批量移动失败'
+      const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '批量移动失败'
       ElMessage.error(msg)
     }
   }
@@ -1147,9 +1146,9 @@ const handleBatchDelete = async () => {
     clearSelection()
     loadImages()
     loadDirectories()
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error !== 'cancel') {
-      const msg = error.response?.data?.detail || '批量删除失败'
+      const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '批量删除失败'
       ElMessage.error(msg)
     }
   }

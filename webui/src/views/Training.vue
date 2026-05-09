@@ -285,10 +285,11 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { trainingApi, modelApi, atlasApi } from '@/api'
 import SvgIcon from '@/components/SvgIcon.vue'
+import type { TrainingJobResponse, ModelResponse, AtlasResponse } from '@/types/api'
 
-const jobs = ref<any[]>([])
-const models = ref<any[]>([])
-const atlases = ref<any[]>([])
+const jobs = ref<TrainingJobResponse[]>([])
+const models = ref<ModelResponse[]>([])
+const atlases = ref<AtlasResponse[]>([])
 const loading = ref(false)
 const starting = ref(false)
 const deviceInfo = ref<{ available: boolean; device: string; device_name: string }>({
@@ -323,14 +324,14 @@ const handleClearCompleted = async () => {
     await trainingApi.clearCompleted()
     ElMessage.success('已清理完成和失败的记录')
     loadJobs()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '清理失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '清理失败'
     ElMessage.error(msg)
   }
 }
 
 // 图标
-const getProgress = (job: any) => {
+const getProgress = (job: TrainingJobResponse) => {
   if (!job || !job.total_steps) return 0
   return Math.round((job.current_step / job.total_steps) * 100)
 }
@@ -391,21 +392,21 @@ const handleStart = async () => {
     ElMessage.success('训练已启动')
     loadJobs()
     startProgressPolling()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '启动失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '启动失败'
     ElMessage.error(msg)
   } finally {
     starting.value = false
   }
 }
 
-const handleStop = async (job: any) => {
+const handleStop = async (job: TrainingJobResponse) => {
   try {
     await trainingApi.stop(job.id)
     ElMessage.success('训练已停止')
     loadJobs()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '停止失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '停止失败'
     ElMessage.error(msg)
   }
 }

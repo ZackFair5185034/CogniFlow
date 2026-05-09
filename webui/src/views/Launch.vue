@@ -625,10 +625,11 @@ import { ElMessage } from 'element-plus'
 import { inferenceApi, trainingApi } from '@/api'
 import { StreamClient, type StreamFrame, type StreamStats } from '@/utils/streamClient'
 import SvgIcon from '@/components/SvgIcon.vue'
+import type { ModelResponse } from '@/types/api'
 
 // 状态
 const mode = ref<'image' | 'stream'>('image')
-const trainedModels = ref<any[]>([])
+const trainedModels = ref<ModelResponse[]>([])
 const selectedModelId = ref<number | null>(null)
 const confThreshold = ref(0.25)
 const selectedFile = ref<File | null>(null)
@@ -641,7 +642,12 @@ const device = ref('auto')
 const precision = ref('fp32')
 const modelFormat = ref('auto')  // 模型格式: auto/yolo_pt/onnx/openvino/tensorrt
 const usedFormat = ref<string | null>(null)  // 实际使用的格式
-const deviceInfo = ref<any>({
+const deviceInfo = ref<{
+  available: boolean
+  device: string
+  device_name: string
+  devices: Record<string, unknown>
+}>({
   available: false,
   device: 'cpu',
   device_name: 'CPU',
@@ -651,7 +657,7 @@ const deviceInfo = ref<any>({
 // 可用设备列表
 const availableDevices = computed(() => {
   const devices = deviceInfo.value.devices || {}
-  return Object.entries(devices).map(([type, info]: [string, any]) => ({
+  return Object.entries(devices).map(([type, info]: [string, unknown]) => ({
     value: type,
     label: info.device_name || type.toUpperCase(),
     disabled: type === 'cpu' ? false : !(info.device_type === type)
@@ -662,7 +668,7 @@ const availableDevices = computed(() => {
 const availableFormats = computed(() => {
   const model = selectedModel.value
   if (!model?.files?.length) return []
-  return model.files.map((f: any) => ({
+  return model.files.map((f: unknown) => ({
     value: f.format,
     label: f.format.toUpperCase(),
     is_default: f.is_default,
@@ -671,7 +677,7 @@ const availableFormats = computed(() => {
 })
 
 const resultImage = ref<string | null>(null)
-const detections = ref<any[]>([])
+const detections = ref<unknown[]>([])
 const imageSize = ref({ width: 0, height: 0 })
 const zoomLevel = ref(1)
 
@@ -701,7 +707,7 @@ interface ConsoleEntry {
   source: '图片检测' | '视频帧'
   frameId?: number
   summary: string
-  data: any
+  data: unknown
   expanded: boolean
 }
 const consoleExpanded = ref(false)
@@ -710,7 +716,7 @@ const consoleBodyRef = ref<HTMLDivElement | null>(null)
 let nextEntryId = 0
 let lastVideoLogTime = 0
 
-const addConsoleEntry = (source: ConsoleEntry['source'], summary: string, data: any, frameId?: number) => {
+const addConsoleEntry = (source: ConsoleEntry['source'], summary: string, data: unknown, frameId?: number) => {
   const now = Date.now()
   // 视频检测节流：每秒最多 5 条
   if (source === '视频帧' && now - lastVideoLogTime < 200) return
@@ -737,7 +743,7 @@ const clearConsole = () => {
   nextEntryId = 0
 }
 
-const formatJSON = (data: any) => {
+const formatJSON = (data: unknown) => {
   try {
     return JSON.stringify(data, null, 2)
   } catch {
@@ -815,7 +821,7 @@ const canDetect = computed(() => {
   return selectedModelId.value && selectedFile.value && !detecting.value
 })
 
-const getModelClasses = (model: any) => {
+const getModelClasses = (model: ModelResponse) => {
   if (model.metrics?.categories) {
     return model.metrics.categories.length
   }
@@ -931,7 +937,7 @@ const handleRerun = async (rec: RecentRecord) => {
         // 构建类别颜色映射
         if (res.data.categories) {
           const colors: Record<number, string> = {}
-          res.data.categories.forEach((cat: any, idx: number) => {
+          res.data.categories.forEach((cat: unknown, idx: number) => {
             colors[idx] = cat.color || '#FF0000'
           })
           categoryColors.value = colors
@@ -1035,8 +1041,8 @@ const handleRerun = async (rec: RecentRecord) => {
       streamPaused.value = false
       streamComplete.value = false
     }
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '重新检测失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '重新检测失败'
     ElMessage.error(msg)
   }
 }
@@ -1091,7 +1097,7 @@ const startDetection = async () => {
         // 构建类别颜色映射（来自模型配置，使用数组索引作为 key）
         if (res.data.categories) {
           const colors: Record<number, string> = {}
-          res.data.categories.forEach((cat: any, idx: number) => {
+          res.data.categories.forEach((cat: unknown, idx: number) => {
             colors[idx] = cat.color || '#FF0000'
           })
           categoryColors.value = colors
@@ -1107,8 +1113,8 @@ const startDetection = async () => {
         loadRecentRecords()
       }
     }
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '检测失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '检测失败'
     addConsoleEntry('图片检测', '检测失败', { error: msg })
     ElMessage.error(msg)
   } finally {
@@ -1324,8 +1330,8 @@ const startVideoDetection = async () => {
       streamPaused.value = false
       streamComplete.value = false
     }
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '启动视频检测失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '启动视频检测失败'
     ElMessage.error(msg)
   } finally {
     streamUploading.value = false

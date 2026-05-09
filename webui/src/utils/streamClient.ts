@@ -59,6 +59,11 @@ type ErrorCallback = (error: string) => void
 type PauseCallback = () => void
 type FpsCallback = (fps: number) => void
 
+interface WsMessage {
+  type: string
+  [key: string]: unknown
+}
+
 export class StreamClient {
   private ws: WebSocket | null = null
   private jobId: string | null = null
@@ -228,7 +233,7 @@ export class StreamClient {
     }
   }
 
-  private _handleMessage(msg: any): void {
+  private _handleMessage(msg: WsMessage): void {
     switch (msg.type) {
       case 'frame_meta':
         // 缓存元数据，等待后续的二进制帧数据

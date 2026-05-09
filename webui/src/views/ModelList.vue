@@ -576,22 +576,23 @@ import {computed, onMounted, ref} from 'vue'
 import {ElMessage, ElMessageBox} from 'element-plus'
 import {atlasApi, modelApi} from '@/api'
 import SvgIcon from '@/components/SvgIcon.vue'
+import type {ModelResponse, AtlasResponse} from '@/types/api'
 
-const models = ref<any[]>([])
-const atlases = ref<any[]>([])
+const models = ref<ModelResponse[]>([])
+const atlases = ref<AtlasResponse[]>([])
 const loading = ref(false)
 const showCreateDialog = ref(false)
 const creating = ref(false)
 const showUploadDialog = ref(false)
 const uploading = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
-const selectedModel = ref<any>(null)
+const selectedModel = ref<ModelResponse | null>(null)
 const uploadFile = ref<File | null>(null)
 
 // 导出相关
 const showExportDialog = ref(false)
 const exporting = ref(false)
-const exportTargetModel = ref<any>(null)
+const exportTargetModel = ref<ModelResponse | null>(null)
 const exportForm = ref({target_format: 'onnx', half: false})
 const exportStatus = ref<'idle' | 'starting' | 'loading' | 'saving' | 'completed' | 'error'>('idle')
 const exportProgress = ref(0)
@@ -616,7 +617,7 @@ const createForm = ref({name: '', version: '', pretrained_model: 'yolov8s.pt', a
 // 编辑状态
 const showRenameDialog = ref(false)
 const renaming = ref(false)
-const renameTarget = ref<any>(null)
+const renameTarget = ref<ModelResponse | null>(null)
 const renameForm = ref({name: '', version: ''})
 
 const formatDate = (dateStr: string) => {
@@ -660,7 +661,7 @@ const tableRowClassName = ({rowIndex}: { rowIndex: number }) => {
 }
 
 // 计算可见操作按钮（编辑始终显示，其余放入折叠菜单）
-const getVisibleActions = (row: any) => {
+const getVisibleActions = (row: ModelResponse) => {
   const actions = []
   if (row.file_path && row.format === 'yolo_pt') {
     actions.push({command: 'export', label: '导出', disabled: false})
@@ -713,15 +714,15 @@ const handleCreate = async () => {
     showCreateDialog.value = false
     createForm.value = {name: '', version: '', pretrained_model: 'yolov8s.pt', atlas_id: null}
     loadModels()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '注册失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '注册失败'
     ElMessage.error(msg)
   } finally {
     creating.value = false
   }
 }
 
-const handleUpload = (row: any) => {
+const handleUpload = (row: ModelResponse) => {
   selectedModel.value = row
   uploadFile.value = null
   showUploadDialog.value = true
@@ -752,7 +753,7 @@ const handleUploadSubmit = async () => {
   }
 }
 
-const handleSetBest = async (row: any) => {
+const handleSetBest = async (row: ModelResponse) => {
   try {
     await modelApi.setBest(row.id)
     ElMessage.success('已设为最佳模型')
@@ -762,7 +763,7 @@ const handleSetBest = async (row: any) => {
   }
 }
 
-const handleDelete = async (row: any) => {
+const handleDelete = async (row: ModelResponse) => {
   try {
     await ElMessageBox.confirm(`确定删除模型 "${row.name}" 吗？此操作不可撤销。`, '删除确认', {
       type: 'warning',
@@ -780,7 +781,7 @@ const handleDelete = async (row: any) => {
 }
 
 // 操作处理函数
-const handleAction = (cmd: string, row: any) => {
+const handleAction = (cmd: string, row: ModelResponse) => {
   switch (cmd) {
     case 'rename':
       handleRename(row)
@@ -803,7 +804,7 @@ const handleAction = (cmd: string, row: any) => {
   }
 }
 
-const handleRename = (row: any) => {
+const handleRename = (row: ModelResponse) => {
   renameTarget.value = row
   renameForm.value = {name: row.name, version: row.version || ''}
   showRenameDialog.value = true
@@ -823,15 +824,15 @@ const handleRenameSubmit = async () => {
     ElMessage.success('编辑成功')
     showRenameDialog.value = false
     loadModels()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '编辑失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '编辑失败'
     ElMessage.error(msg)
   } finally {
     renaming.value = false
   }
 }
 
-const handleDownload = (row: any) => {
+const handleDownload = (row: ModelResponse) => {
   if (!row.file_path) {
     ElMessage.warning('模型文件不存在')
     return
@@ -844,7 +845,7 @@ const handleDownload = (row: any) => {
 }
 
 // 导出模型
-const handleExport = (row: any) => {
+const handleExport = (row: ModelResponse) => {
   exportTargetModel.value = row
   exportForm.value = {target_format: 'onnx', half: false}
   exportStatus.value = 'idle'
@@ -874,7 +875,7 @@ const connectExportWs = (exportId: string) => {
   exportWs = new WebSocket(wsUrl)
 
   exportWs.onopen = () => {
-    console.log('导出 WebSocket 已连接')
+    // 连接已建立
   }
 
   exportWs.onmessage = (event) => {
@@ -905,7 +906,6 @@ const connectExportWs = (exportId: string) => {
   }
 
   exportWs.onclose = () => {
-    console.log('导出 WebSocket 已关闭')
     exportWs = null
   }
 }
@@ -928,8 +928,8 @@ const handleExportSubmit = async () => {
       exportMessage.value = '正在连接...'
       connectExportWs(res.data.export_id)
     }
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '导出失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '导出失败'
     ElMessage.error(msg)
     exporting.value = false
   }
