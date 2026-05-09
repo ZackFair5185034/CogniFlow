@@ -61,10 +61,19 @@ def _select_model_file(db: Session, model: Model, format_preference: str = "auto
         (ModelFile, used_format): 选中的模型文件和实际使用的格式
     """
     import os
+    import types
 
     # 直接查询 ModelFile 表而不是通过关系
     files = db.query(ModelFile).filter(ModelFile.model_id == model.id).all()
     if not files:
+        # 兼容旧数据：Model.file_path 存储在 Model 表本身
+        if model.file_path and os.path.exists(model.file_path):
+            fallback = types.SimpleNamespace(
+                file_path=model.file_path,
+                format=getattr(model, 'format', 'yolo_pt') or 'yolo_pt',
+                is_default=True
+            )
+            return fallback, fallback.format
         return None, None
 
     if format_preference == "auto":
