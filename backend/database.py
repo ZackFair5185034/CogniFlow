@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     UniqueConstraint,
+    Index,
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, backref
 from sqlalchemy.pool import StaticPool
@@ -174,6 +175,10 @@ class RuleGraph(Base):
 class ExecutionHistory(Base):
     """执行历史模型 - 记录每次规则执行的详情。"""
     __tablename__ = "execution_history"
+    __table_args__ = (
+        Index('ix_execution_history_graph_id', 'graph_id'),
+        Index('ix_execution_history_status', 'status'),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     graph_id = Column(Integer, ForeignKey("rule_graph.id", ondelete="CASCADE"), nullable=False)
@@ -192,6 +197,9 @@ class ExecutionHistory(Base):
 class NodeExecutionLog(Base):
     """节点执行记录模型 - 记录每个节点的执行详情。"""
     __tablename__ = "node_execution_log"
+    __table_args__ = (
+        Index('ix_node_execution_log_execution_id', 'execution_id'),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     execution_id = Column(Integer, ForeignKey("execution_history.id", ondelete="CASCADE"), nullable=False)

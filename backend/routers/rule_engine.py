@@ -365,3 +365,31 @@ async def get_execution_logs(execution_id: int, db: Session = Depends(get_db)):
             for log in node_logs
         ],
     }
+
+
+@router.delete("/executions/{execution_id}/cancel")
+async def cancel_execution(execution_id: int, db: Session = Depends(get_db)):
+    """取消正在执行的规则图。
+
+    向执行上下文发送取消请求，执行将尽可能快地停止。
+    """
+    from backend.database import ExecutionHistory
+
+    # 检查执行记录是否存在
+    execution = db.query(ExecutionHistory).filter(
+        ExecutionHistory.id == execution_id
+    ).first()
+
+    if execution is None:
+        raise HTTPException(status_code=404, detail="执行记录不存在")
+
+    # 调用执行器的取消方法
+    success = RuleGraphExecutor.cancel_execution(execution_id)
+
+    if success:
+        return {"message": "取消请求已发送", "execution_id": execution_id}
+    else:
+        raise HTTPException(
+            status_code=404,
+            detail="执行上下文不存在或已结束，无法取消"
+        )

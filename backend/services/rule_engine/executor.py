@@ -259,6 +259,50 @@ class RuleGraphExecutor:
 
         return levels
 
+    def _find_all_cycles(
+        self,
+        graph: Dict[str, List[str]],
+        remaining: Set[str]
+    ) -> List[List[str]]:
+        """从剩余节点中用 DFS 检测所有环。
+
+        Args:
+            graph: 邻接表
+            remaining: 还未处理的节点集合
+
+        Returns:
+            所有环的列表，每个环是节点 ID 列表
+        """
+        if not remaining:
+            return []
+
+        all_cycles: List[List[str]] = []
+        visited: Set[str] = set()
+
+        def dfs(node: str, path: List[str], rec_stack: Set[str]):
+            """DFS 检测环，收集所有发现的环"""
+            visited.add(node)
+            rec_stack.add(node)
+            path.append(node)
+
+            for neighbor in graph.get(node, []):
+                if neighbor not in visited:
+                    dfs(neighbor, path, rec_stack)
+                elif neighbor in rec_stack:
+                    # 找到环，记录下来
+                    cycle_start = path.index(neighbor)
+                    cycle = path[cycle_start:] + [neighbor]
+                    all_cycles.append(cycle)
+
+            path.pop()
+            rec_stack.remove(node)
+
+        for node in remaining:
+            if node not in visited:
+                dfs(node, [], set())
+
+        return all_cycles
+
     def _find_cycle_nodes(
         self,
         graph: Dict[str, List[str]],
@@ -271,42 +315,27 @@ class RuleGraphExecutor:
             remaining: 还未处理的节点集合
 
         Returns:
-            环中的节点列表
+            环中的节点列表。如果存在多个环，返回所有环的节点。
         """
-        if not remaining:
-            return []
+        all_cycles = self._find_all_cycles(graph, remaining)
 
-        # DFS 检测环
-        visited: Set[str] = set()
-        rec_stack: Set[str] = set()
-        path: List[str] = []
+        if not all_cycles:
+            return list(remaining)
 
-        def dfs(node: str) -> Optional[List[str]]:
-            visited.add(node)
-            rec_stack.add(node)
-            path.append(node)
+        # 返回所有环的节点（去重后）
+        cycle_nodes = []
+        for cycle in all_cycles:
+            cycle_nodes.extend(cycle[:-1])  # 最后一个和第一个是重复的环节点
 
-            for neighbor in graph.get(node, []):
-                if neighbor not in visited:
-                    result = dfs(neighbor)
-                    if result:
-                        return result
-                elif neighbor in rec_stack:
-                    # 找到环
-                    cycle_start = path.index(neighbor)
-                    return path[cycle_start:] + [neighbor]
+        # 去重并保持顺序
+        seen = set()
+        unique_cycle_nodes = []
+        for node in cycle_nodes:
+            if node not in seen:
+                seen.add(node)
+                unique_cycle_nodes.append(node)
 
-            path.pop()
-            rec_stack.remove(node)
-            return None
-
-        for node in remaining:
-            if node not in visited:
-                result = dfs(node)
-                if result:
-                    return result
-
-        return list(remaining)
+        return unique_cycle_nodes
 
     # ============================================================
     # 主执行流程
@@ -576,18 +605,26 @@ class RuleGraphExecutor:
 
         return inputs
 
-    def _interpolate(self, value: Any, context: ExecutionContext) -> Any:
+    def _interpolate(self, value: Any, context: ExecutionContext, visited: Set[str] = None) -> Any:
         """解析 {{variable}} 变量插值语法。
 
         Args:
             value: 原始值，可能是字符串或普通类型
             context: 执行上下文，包含 variables
+            visited: 已访问的变量集合，用于检测循环引用
 
         Returns:
             解析后的值。如果 value 不是字符串或不含 {{}}，直接返回原值。
+
+        Raises:
+            ExecutorError: 如果检测到循环引用
         """
         if not isinstance(value, str):
             return value
+
+        # 初始化 visited 集合（用于检测循环引用）
+        if visited is None:
+            visited = set()
 
         # 匹配 {{variable_name}} 格式
         pattern = r'\{\{([^}]+)\}\}'
@@ -598,9 +635,25 @@ class RuleGraphExecutor:
 
         result = value
         for var_name in matches:
+            # 检测循环引用：变量已在当前替换路径中
+            if var_name in visited:
+                raise ExecutorError(
+                    f"变量插值存在循环引用: {{{{{var_name}}}}}",
+                    node_id=None,
+                    node_type=None
+                )
+            # 将当前变量加入已访问集合
+            visited.add(var_name)
+
             var_value = context.variables.get(var_name, f'{{{{{var_name}}}}}')
+            # 递归解析变量值（可能包含更多插值）
+            if isinstance(var_value, str) and '{{' in var_value:
+                var_value = self._interpolate(var_value, context, visited)
             # 替换所有 {{var_name}} 为变量值
             result = result.replace(f'{{{{{var_name}}}}}', str(var_value))
+
+            # 从已访问集合中移除（允许同一变量在不同路径中出现）
+            visited.discard(var_name)
 
         # 尝试转换类型
         return self._try_convert(result)

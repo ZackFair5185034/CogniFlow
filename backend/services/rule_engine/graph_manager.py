@@ -188,12 +188,18 @@ class GraphManager:
         edge_targets = {edge["target"] for edge in edges}
 
         # 检查孤立节点（排除没有输入边的节点，因为触发器节点通常没有输入）
+        isolated_nodes = []
         for node in nodes:
             node_id = node["id"]
             # 检查是否有输出边
             if node_id not in edge_sources and node_id not in edge_targets:
-                # 这可能是一个孤立的触发器节点，需要进一步判断类型
-                pass
+                # 如果既没有输入边也没有输出边，则为孤立节点
+                # 排除触发器类型的节点
+                node_type = node.get("type", "")
+                if node_type not in ("yolo_trigger", "timer_trigger", "manual_trigger"):
+                    isolated_nodes.append(node_id)
+        if isolated_nodes:
+            return False, f"存在孤立节点（无输入输出边）: {', '.join(isolated_nodes)}"
 
         # 检查目标节点是否存在
         for target in edge_targets:
