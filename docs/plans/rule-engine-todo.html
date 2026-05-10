@@ -18,7 +18,7 @@
   <div class="doc-container">
 
     <h1 class="doc-title">规则引擎 UI 迭代计划 & TODO</h1>
-    <p class="doc-subtitle">Phase 1-7 任务进度追踪 | 更新: 2026-05-09</p>
+    <p class="doc-subtitle">Phase 1-8 任务进度追踪 | 更新: 2026-05-11</p>
 
     <hr class="doc-divider">
 
@@ -118,7 +118,22 @@
       <table class="doc-table">
         <thead><tr><th>#</th><th>任务</th><th>说明</th></tr></thead>
         <tbody>
-          <tr><td>7.1</td><td>输入类型节点输出端口位置</td><td>输入类型节点（如 ImageCapture、VideoCapture）的输出端口应该在右侧边框上居中，目前位置偏内</td></tr>
+          <tr><td>7.1</td><td>输入类型节点输出端口位置</td><td><span class="doc-badge">已完成</span></td><td>输入类型节点（如 ImageCapture、VideoCapture）的输出端口居中</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Phase 8 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">Phase 8: 代码审查修复 & 优化 (2026-05-11)</h2>
+      <table class="doc-table">
+        <thead><tr><th>#</th><th>任务</th><th>文件</th><th>状态</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>8.1</td><td>代码审查高/中优先级问题修复</td><td>RuleCanvas.vue / RuleNode.vue</td><td><span class="doc-badge">已完成</span></td><td>修复审查中发现的高/中优先级问题</td></tr>
+          <tr><td>8.2</td><td>后端高优先级 Bug 修复</td><td>backend/services/rule_engine/</td><td><span class="doc-badge">已完成</span></td><td>修复后端高优先级 Bug</td></tr>
+          <tr><td>8.3</td><td>Webhook 认证</td><td>backend/routers/</td><td><span class="doc-badge">已完成</span></td><td>实现 Webhook 认证功能</td></tr>
+          <tr><td>8.4</td><td>进度节流</td><td>backend/routers/training.py</td><td><span class="doc-badge">已完成</span></td><td>训练进度推送节流优化</td></tr>
+          <tr><td>8.5</td><td>响应式优化</td><td>webui/src/views/</td><td><span class="doc-badge">已完成</span></td><td>UI 响应式布局优化</td></tr>
         </tbody>
       </table>
     </div>
@@ -138,6 +153,8 @@
           <tr><td>2026-05-08</td><td>Phase 2.2 框选功能（SelectionMode.Partial）</td><td>8c3ff3b</td></tr>
           <tr><td>2026-05-08</td><td>Phase 5 快捷添加栏 + 数据库路径修复</td><td>23df2e2</td></tr>
           <tr><td>2026-05-09</td><td>Phase 6 UI交互修复（连接验证/折叠按钮/右键菜单/删除/overflow/贝塞尔曲线）</td><td>待提交</td></tr>
+          <tr><td>2026-05-11</td><td>Phase 7.1 输入类型节点输出端口居中修复</td><td>今晚</td></tr>
+          <tr><td>2026-05-11</td><td>Phase 8 代码审查高/中优先级问题修复 + 后端Bug + Webhook认证 + 进度节流 + 响应式优化</td><td>今晚</td></tr>
         </tbody>
       </table>
     </div>

@@ -216,7 +216,7 @@ export interface InferenceJob {
 export interface NodePort {
   name: string
   type: string
-  label: string
+  label?: string
 }
 
 /** 节点定义 */
@@ -231,15 +231,56 @@ export interface NodeDefinition {
   config_schema: Record<string, unknown>
 }
 
-/** 规则图节点 */
+/** 变量默认值类型 */
+export type VariableDefaultValue = string | number | boolean | null
+
+/** 节点配置 Schema 属性 */
+export interface ConfigSchemaProperty {
+  type: string
+  title?: string
+  description?: string
+  default?: VariableDefaultValue
+  minimum?: number
+  maximum?: number
+  step?: number
+  enum?: string[]
+  widget?: string
+  visible?: string
+}
+
+/** 规则图节点数据 */
+export interface RuleNodeData {
+  /** 节点类型标识 */
+  type: string
+  /** 节点显示名称 */
+  label?: string
+  /** 节点分类 */
+  category: string
+  /** 输入端口定义 */
+  inputs?: NodePort[]
+  /** 输出端口定义 */
+  outputs?: NodePort[]
+  /** 配置 Schema */
+  configSchema?: Record<string, ConfigSchemaProperty>
+  /** 节点配置值 */
+  config?: Record<string, VariableDefaultValue>
+  /** 执行状态 */
+  status?: 'idle' | 'running' | 'success' | 'failed'
+  /** 是否选中 */
+  selected?: boolean
+  /** 是否拖拽中 */
+  dragging?: boolean
+}
+
+/** 规则图节点 - 用于存储和传输 */
 export interface GraphNode {
   id: string
   type: string
   position: { x: number; y: number }
-  data: Record<string, unknown>
+  data: RuleNodeData
 }
 
-/** 规则图连接边 */
+/** 规则图连接边 - 用于存储和传输 */
 export interface GraphEdge {
   id: string
   source: string

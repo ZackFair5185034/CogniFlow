@@ -8,61 +8,23 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { ruleEngineApi } from '@/api'
+import type {
+  NodeDefinition as NodeDefinitionBase,
+  GraphNode as GraphNodeBase,
+  GraphEdge as GraphEdgeBase,
+  VariableDefaultValue as VariableDefaultValueBase,
+  ConfigSchemaProperty,
+  RuleNodeData,
+  VariableType
+} from '@/types/api'
 
-// ============ 类型定义 ============
+// ============ 类型别名（兼容旧代码）============
 
-/** 变量默认值类型 */
-export type VariableDefaultValue = string | number | boolean | null
-
-export interface ConfigSchemaProperty {
-  type: string
-  title?: string
-  description?: string
-  default?: VariableDefaultValue
-  minimum?: number
-  maximum?: number
-  step?: number
-  enum?: string[]
-  widget?: string
-  visible?: string  // 条件可见，如 "source=file"
-}
-
-export interface NodeDefinition {
-  type: string
-  category: string
-  label: string
-  description?: string
-  icon?: string
-  inputs: Array<{ name: string; type: string; label?: string }>
-  outputs: Array<{ name: string; type: string; label?: string }>
-  config_schema: Record<string, ConfigSchemaProperty>
-}
-
-export interface GraphNode {
-  id: string
-  type: string
-  position: { x: number; y: number }
-  data: {
-    type: string
-    label?: string
-    category: string
-    inputs?: Array<{ name: string; type: string; label?: string }>
-    outputs?: Array<{ name: string; type: string; label?: string }>
-    configSchema?: Record<string, ConfigSchemaProperty>
-    config?: Record<string, VariableDefaultValue>
-    status?: 'idle' | 'running' | 'success' | 'failed'
-  }
-}
-
-export interface GraphEdge {
-  id: string
-  source: string
-  target: string
-  source_handle?: string
-  target_handle?: string
-}
-
-export type VariableType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'IMAGE' | 'BBOX'
+export type VariableDefaultValue = VariableDefaultValueBase
+export { ConfigSchemaProperty, RuleNodeData, VariableType }
+export type NodeDefinition = NodeDefinitionBase
+export type GraphNode = GraphNodeBase
+export type GraphEdge = GraphEdgeBase
 
 export interface Variable {
   name: string

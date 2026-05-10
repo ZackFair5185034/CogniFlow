@@ -615,13 +615,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, shallowRef, onMounted, onBeforeUnmount } from 'vue'
-import { throttle } from 'lodash-es'
+import { throttle, debounce } from 'lodash-es'
 import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow, MarkerType, SelectionMode, type Node, type Edge, type NodeMouseEvent, type EdgeMouseEvent } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { ruleEngineApi } from '@/api'
-import { type NodeDefinition } from '@/stores/ruleEngine'
+import { type NodeDefinition, type RuleNodeData } from '@/stores/ruleEngine'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -643,8 +643,8 @@ const graphName = ref('')
 // 使用 shallowRef 减少大量节点的响应式开销
 // shallowRef 只追踪 .value 的替换，不深度追踪数组内部变化
 // VueFlow 内部已维护节点状态，我们只需要在必要时同步本地副本
-const nodes = shallowRef<any[]>([])
-const edges = shallowRef<any[]>([])
+const nodes = shallowRef<Node<RuleNodeData>[]>([])
+const edges = shallowRef<Edge[]>([])
 const nodeDefinitions = ref<NodeDefinition[]>([])
 const selectedNode = ref<any>(null)
 const nodeConfig = ref<any>({})
@@ -676,7 +676,7 @@ const lastMousePos = ref({ x: 0, y: 0 })
 const nodeStates = ref<Record<string, string>>({})
 
 // 复制粘贴
-const clipboard = ref<any[]>([])
+const clipboard = ref<Node<RuleNodeData>[]>([])
 const clipboardMode = ref<'copy' | 'cut'>('copy')
 
 // 右键菜单
@@ -705,7 +705,7 @@ const varMenu = reactive({
 })
 
 // 撤销/重做
-const historyStack = ref<{ nodes: any[], edges: any[] }[]>([])
+const historyStack = ref<{ nodes: Node<RuleNodeData>[]; edges: Edge[] }[]>([])
 const historyIndex = ref(-1)
 const canUndo = computed(() => historyIndex.value > 0)
 const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
@@ -743,7 +743,7 @@ const filteredCategories = computed(() => {
   return nodeCategories.value
     .map(cat => ({
       ...cat,
-      nodes: cat.nodes.filter((n: any) =>
+      nodes: cat.nodes.filter((n) =>
         n.label?.toLowerCase().includes(query) ||
         n.type?.toLowerCase().includes(query) ||
         n.description?.toLowerCase().includes(query)
@@ -807,8 +807,8 @@ const NODE_CATEGORY_COLORS: Record<string, string> = {
   output: '#FF4C4C'       // output (#FF4C4C)
 }
 
-function miniMapNodeColor(node: any) {
-  return NODE_CATEGORY_COLORS[node.category] || '#888'
+function miniMapNodeColor(node: { category?: string }) {
+  return NODE_CATEGORY_COLORS[node.category || ''] || '#888'
 }
 
 // Toast
@@ -921,11 +921,17 @@ const throttledUpdateProgress = throttle((progress: number) => {
   executionProgress.value = progress
 }, 500)
 
+// 防抖历史记录保存 - 批量处理避免频繁深拷贝
+// 500ms 防抖延迟，组件卸载时取消
+const flushHistory = debounce(() => {
+  saveHistory()
+}, 500)
+
 // 右键菜单操作
 function saveHistory() {
   historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
   historyStack.value.push({
-    nodes: JSON.parse(JSON.stringify(nodes.value.map((n: any) => ({ ...n, selected: false, dragging: false })))),
+    nodes: JSON.parse(JSON.stringify(nodes.value.map((n) => ({ ...n, selected: false, dragging: false })))),
     edges: JSON.parse(JSON.stringify(edges.value))
   })
   historyIndex.value = historyStack.value.length - 1
@@ -990,30 +996,30 @@ function handleKeyDown(event: KeyboardEvent) {
 
 // 复制
 function handleCopy() {
-  const selected = nodes.value.filter((n: any) => n.selected)
+  const selected = nodes.value.filter((n) => (n as any).selected)
   if (selected.length === 0) {
     showToast('请先选择要复制的节点', 'info')
     return
   }
-  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
+  clipboard.value = selected.map((n) => JSON.parse(JSON.stringify(n)))
   clipboardMode.value = 'copy'
   showToast(`已复制 ${selected.length} 个节点`, 'info')
 }
 
 // 剪切
 function handleCut() {
-  const selected = nodes.value.filter((n: any) => n.selected)
+  const selected = nodes.value.filter((n) => (n as any).selected)
   if (selected.length === 0) {
     showToast('请先选择要剪切的节点', 'info')
     return
   }
-  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
+  clipboard.value = selected.map((n) => JSON.parse(JSON.stringify(n)))
   clipboardMode.value = 'cut'
   // 立即删除
-  removeNodes(selected.map((n: any) => n.id))
+  removeNodes(selected.map((n) => n.id))
   // 清理与被删除节点关联的边
-  edges.value = edges.value.filter((e: any) =>
-    !selected.some((n: any) => n.id === e.source || n.id === e.target)
+  edges.value = edges.value.filter((e) =>
+    !selected.some((n) => n.id === e.source || n.id === e.target)
   )
   showToast(`已剪切 ${selected.length} 个节点`, 'info')
 }
@@ -1031,7 +1037,7 @@ function handlePaste() {
   const offsetX = 50
   const offsetY = 50
 
-  const newNodes = clipboard.value.map((n: any) => {
+  const newNodes = clipboard.value.map((n) => {
     const cloned = JSON.parse(JSON.stringify(n))
     return {
       ...cloned,
@@ -1062,13 +1068,13 @@ function handlePaste() {
 }
 
 // 框选变化 - 同步 VueFlow 选中状态到 nodes
-function handleSelectionChange({ nodes: selectedNodes }: any) {
+function handleSelectionChange({ nodes: selectedNodes }: { nodes: Node<RuleNodeData>[] }) {
   // 先清除所有节点的选中状态
-  nodes.value.forEach((n: any) => { n.selected = false })
+  nodes.value.forEach((n) => { (n as any).selected = false })
   // 再设置当前选中的节点
-  selectedNodes.forEach((n: any) => {
-    const node = nodes.value.find((node: any) => node.id === n.id)
-    if (node) node.selected = true
+  selectedNodes.forEach((n) => {
+    const node = nodes.value.find((node) => node.id === n.id)
+    if (node) (node as any).selected = true
   })
 }
 
@@ -1077,34 +1083,34 @@ function handleNodeDelete(nodeId: string) {
   // 使用 VueFlow 的 removeNodes 方法删除节点
   removeNodes(nodeId)
   // 同时删除关联的边
-  edges.value = edges.value.filter((e: any) => e.source !== nodeId && e.target !== nodeId)
+  edges.value = edges.value.filter((e) => e.source !== nodeId && e.target !== nodeId)
   saveHistory()
   showToast('节点已删除', 'info')
 }
 
 // 删除选中
 function handleDelete() {
-  const selectedNodes = nodes.value.filter((n: any) => n.selected)
-  const selectedEdges = edges.value.filter((e: any) => e.selected)
+  const selectedNodes = nodes.value.filter((n) => (n as any).selected)
+  const selectedEdges = edges.value.filter((e) => (e as any).selected)
 
   if (selectedNodes.length === 0 && selectedEdges.length === 0) {
     return
   }
 
   // 删除节点时同步删除关联的边
-  const nodeIds = selectedNodes.map((n: any) => n.id)
-  edges.value = edges.value.filter((e: any) =>
-    !nodeIds.includes(e.source) && !nodeIds.includes(e.target) && !e.selected
+  const nodeIds = selectedNodes.map((n) => n.id)
+  edges.value = edges.value.filter((e) =>
+    !nodeIds.includes(e.source) && !nodeIds.includes(e.target) && !(e as any).selected
   )
 
   // 删除节点
-  selectedNodes.forEach((n: any) => {
-    const idx = nodes.value.findIndex((node: any) => node.id === n.id)
+  selectedNodes.forEach((n) => {
+    const idx = nodes.value.findIndex((node) => node.id === n.id)
     if (idx !== -1) nodes.value.splice(idx, 1)
   })
 
-  selectedEdges.forEach((e: any) => {
-    const idx = edges.value.findIndex((edge: any) => edge.id === e.id)
+  selectedEdges.forEach((e) => {
+    const idx = edges.value.findIndex((edge) => edge.id === e.id)
     if (idx !== -1) edges.value.splice(idx, 1)
   })
 
@@ -1163,7 +1169,7 @@ function handleContextAction(action: string) {
   switch (action) {
     case 'copy':
       if (contextMenu.targetType === 'node') {
-        (nodes.value as unknown as any[]).forEach((n: any) => { n.selected = n.id === (contextMenu.target as any)?.id })
+        nodes.value.forEach((n) => { n.selected = n.id === (contextMenu.target as Node<RuleNodeData>)?.id })
         handleCopy()
       }
       hideContextMenu()
@@ -1174,16 +1180,16 @@ function handleContextAction(action: string) {
       break
     case 'delete':
       if (contextMenu.targetType === 'node') {
-        (nodes.value as unknown as any[]).forEach((n: any) => { n.selected = n.id === (contextMenu.target as any)?.id })
+        nodes.value.forEach((n) => { n.selected = n.id === (contextMenu.target as Node<RuleNodeData>)?.id })
       } else if (contextMenu.targetType === 'edge') {
-        (edges.value as unknown as any[]).forEach((e: any) => { e.selected = e.id === (contextMenu.target as any)?.id })
+        edges.value.forEach((e) => { e.selected = e.id === (contextMenu.target as Edge)?.id })
       }
       handleDelete()
       hideContextMenu()
       break
     case 'selectAll':
-      nodes.value.forEach((n: any) => { n.selected = true })
-      edges.value.forEach((e: any) => { e.selected = true })
+      nodes.value.forEach((n) => { n.selected = true })
+      edges.value.forEach((e) => { e.selected = true })
       hideContextMenu()
       break
   }
@@ -1235,6 +1241,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  // 取消防抖历史记录的挂起调用
+  flushHistory.cancel()
 })
 
 // 加载规则图
@@ -1247,11 +1255,11 @@ async function loadGraph() {
     graph.value = res.data
     graphName.value = graph.value.name
 
-    nodes.value = (graph.value.nodes || []).map((n: any) => ({
+    nodes.value = (graph.value.nodes || []).map((n) => ({
       id: n.id,
       type: n.type,
       position: n.position || { x: 0, y: 0 },
-      data: { ...n.data },
+      data: { ...n.data } as RuleNodeData,
       category: getNodeCategory(n.type)
     }))
 
@@ -1262,7 +1270,7 @@ async function loadGraph() {
       }
     }
 
-    edges.value = (graph.value.edges || []).map((e: any) => ({
+    edges.value = (graph.value.edges || []).map((e) => ({
       id: e.id,
       source: e.source,
       target: e.target,
@@ -1328,7 +1336,7 @@ async function handleNameChange() {
 }
 
 // 拖拽
-function handleDragStart(event: DragEvent, nodeDef: any) {
+function handleDragStart(event: DragEvent, nodeDef: NodeDefinition) {
   event.dataTransfer?.setData('application/node-type', JSON.stringify(nodeDef))
 }
 
@@ -1376,7 +1384,7 @@ function handleDrop(event: DragEvent) {
 }
 
 // 快速添加
-function quickAddNode(nodeDef: any) {
+function quickAddNode(nodeDef: NodeDefinition) {
   const centerX = (flowContainer.value?.clientWidth || 800) / 2 / zoomLevel.value
   const centerY = (flowContainer.value?.clientHeight || 600) / 2 / zoomLevel.value
 
@@ -1519,25 +1527,25 @@ function handleConnect(params: any) {
     markerEnd: MarkerType.ArrowClosed,
     id: `e-${params.source}-${params.target}-${Date.now()}`
   }])
-  saveHistory()
+  flushHistory()
 }
 
 // 节点/边变化
-function handleNodesChange(changes: any[]) {
+function handleNodesChange(changes: Array<{ type: string; id?: string }>) {
   // VueFlow 会自动更新 nodes.value，我们需要同步本地状态
-  // 只在外部变化时保存历史
+  // 只在外部变化时保存历史（使用防抖避免频繁深拷贝）
   const hasRemoval = changes.some(c => c.type === 'remove')
   if (hasRemoval) {
     // 节点被删除，同步更新本地 edges
-    const remainingNodeIds = nodes.value.map((n: any) => n.id)
-    edges.value = edges.value.filter((e: any) =>
+    const remainingNodeIds = nodes.value.map((n) => n.id)
+    edges.value = edges.value.filter((e) =>
       remainingNodeIds.includes(e.source) && remainingNodeIds.includes(e.target)
     )
-    saveHistory()
+    flushHistory()
   }
 }
 
-function handleEdgesChange(_changes: any[]) {
+function handleEdgesChange(_changes: Array<{ type: string; id?: string }>) {
   // 只在外部变化时保存历史
 }
 
