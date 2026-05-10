@@ -76,7 +76,22 @@ pip install -r requirements.txt
 # 启动后端服务（端口 8000）
 cd backend
 python app.py
+
+# 启动后端服务并自动打开浏览器（Windows 打包版本默认行为）
+python app.py --browser
 ```
+
+**启动参数：**
+
+| 参数 | 说明 | 适用平台 |
+|------|------|----------|
+| `--browser` | 启动后自动打开浏览器 | 所有平台 |
+| `DATA_DIR=path` | 数据存储目录 | 环境变量 |
+| `WEBUI_DIST=path` | 前端静态文件目录 | 环境变量 |
+
+**Windows 打包版本说明：**
+
+使用 PyInstaller 打包的 `cogniflow.exe`（通过 `scripts/build.ps1` 构建）默认会启动浏览器。这是通过 `cogniflow.spec` 配置的 `argv=["--browser"]` 实现的。
 
 ### 前端服务
 
@@ -159,6 +174,19 @@ CYTHONIZE=1 ./scripts/build.sh binary
 - **其他**: ffmpeg-python
 
 打包时自动使用虚拟环境 `venv/` 安装所有依赖，确保二进制文件完整运行。
+
+**Windows 打包版本行为：**
+
+通过 `scripts/build.ps1` 打包的 `dist/cogniflow/cogniflow.exe` 默认会自动启动浏览器。这是因为 `cogniflow.spec` 中的 EXE 配置指定了 `argv=["--browser"]`。
+
+如需修改此行为，请编辑 `cogniflow.spec` 文件中 EXE 的 `argv` 参数。
+
+| 平台 | 执行方式 | 浏览器自动启动 |
+|------|----------|---------------|
+| Windows exe (PyInstaller) | `cogniflow.exe` | ✅ 默认启动 |
+| Windows Python | `python app.py --browser` | 需要 `--browser` 参数 |
+| Linux/macOS Python | `python app.py` | 不启动（无桌面环境） |
+| Linux/macOS exe | `./cogniflow --browser` | 需要参数 |
 
 ## WebUI 功能
 

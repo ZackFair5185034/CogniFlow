@@ -6,8 +6,9 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from backend.websocket_manager import ws_manager
+from backend.services.rule_engine.websocket_manager import rule_ws_manager
 
-router = APIRouter()
+router = APIRouter(prefix="/ws", tags=["WebSocket"])
 
 
 @router.websocket("/training")
@@ -74,15 +75,38 @@ async def websocket_system(websocket: WebSocket):
         ws_manager.disconnect_system(websocket)
 
 
-@router.websocket("/export/{export_id}")
-async def websocket_export(websocket: WebSocket, export_id: str):
-    """导出进度 WebSocket 连接。
+@router.websocket("/rule-execution")
+async def websocket_rule_execution(websocket: WebSocket):
+    """规则执行状态 WebSocket 连接。
 
-    客户端连接后接收导出任务的实时进度更新。
+    客户端连接后可订阅特定 execution_id 的执行进度更新。
+
+    客户端发送订阅消息:
+    {
+        "action": "subscribe",
+        "execution_id": 123
+    }
+
+    取消订阅:
+    {
+        "action": "unsubscribe",
+        "execution_id": 123
+    }
     """
-    await ws_manager.connect_export(websocket, export_id)
+    await rule_ws_manager.connect(websocket)
     try:
         while True:
             data = await websocket.receive_text()
+            import json
+            msg = json.loads(data)
+            action = msg.get("action")
+            execution_id = msg.get("execution_id")
+
+            if action == "subscribe" and execution_id:
+                await rule_ws_manager.subscribe(websocket, execution_id)
+            elif action == "unsubscribe" and execution_id:
+                await rule_ws_manager.unsubscribe(websocket, execution_id)
     except WebSocketDisconnect:
-        ws_manager.disconnect_export(websocket, export_id)
+        await rule_ws_manager.disconnect(websocket)
+    except Exception:
+        await rule_ws_manager.disconnect(websocket)

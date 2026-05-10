@@ -17,6 +17,7 @@ import sys
 import threading
 import logging
 import logging.handlers
+import argparse
 
 from backend.database import init_db
 from backend.routers import atlas, image, annotation, category, model, training, launch, websocket, inference, rule_engine, ws_stream
@@ -82,6 +83,10 @@ async def lifespan(app: FastAPI):
     os.makedirs(YOLO_RUNS_DIR, exist_ok=True)
 
     init_db()
+    # 启动规则引擎调度器
+    from backend.services.rule_engine.scheduler import rule_scheduler
+    rule_scheduler.start()
+
     # 设置事件循环给流式推理 WebSocket 管理器
     import asyncio
     try:
@@ -93,6 +98,9 @@ async def lifespan(app: FastAPI):
     from backend.core.backends.auto_detector import init_device_cache
     init_device_cache()
     yield
+
+    # 关闭规则引擎调度器
+    rule_scheduler.stop()
 
 
 # 创建 FastAPI 应用
@@ -140,14 +148,21 @@ app.mount("/inference_output", StaticFiles(directory=INFERENCE_OUTPUT_DIR), name
 # Docker 环境: WEBUI_DIST=/app/webui/dist
 _WEBUI_DIST = os.environ.get("WEBUI_DIST", os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui", "dist"))
 if os.path.exists(_WEBUI_DIST):
-    app.mount("/", StaticFiles(directory=_WEBUI_DIST, html=True), name="frontend")
+    # 注册 catch-all 路由，所有非 API/WebSocket 路径由前端处理
+    @app.get("/{path:path}")
+    async def serve_frontend(path: str):
+        from starlette.responses import FileResponse
+        file_path = os.path.join(_WEBUI_DIST, path)
+        if path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(_WEBUI_DIST, "index.html"))
 
 
 @app.get("/")
 async def root():
     """根路径重定向到前端。"""
     if os.path.exists(_WEBUI_DIST):
-        return RedirectResponse(url="/index.html")
+        return RedirectResponse(url="/webui/index.html")
     return {"message": "CogniFlow API running", "docs": "/docs"}
 
 
@@ -157,7 +172,7 @@ async def health_check():
     return {"status": "ok"}
 
 
-def start_with_tray() -> None:
+def start_with_tray(browser: bool = False) -> None:
     """启动应用并集成系统托盘（仅 Windows）。"""
     import uvicorn
 
@@ -194,9 +209,10 @@ def start_with_tray() -> None:
         import time
         time.sleep(0.5)
 
-        # 自动打开浏览器
-        logger.info("正在打开浏览器...")
-        open_browser()
+        if browser:
+            # 自动打开浏览器
+            logger.info("正在打开浏览器...")
+            open_browser()
         logger.info("CogniFlow WebUI 已启动 http://localhost:8000")
 
         # 启动 FastAPI 应用（阻塞）
@@ -205,10 +221,14 @@ def start_with_tray() -> None:
         server_config["server"].run()
     else:
         # 非 Windows 平台：直接启动
-        open_browser()
+        if browser:
+            open_browser()
         logger.info("CogniFlow WebUI 已启动 http://localhost:8000")
         uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 if __name__ == "__main__":
-    start_with_tray()
+    parser = argparse.ArgumentParser(description="CogniFlow WebUI")
+    parser.add_argument("--browser", action="store_true", help="启动后自动打开浏览器")
+    args = parser.parse_args()
+    start_with_tray(browser=args.browser)

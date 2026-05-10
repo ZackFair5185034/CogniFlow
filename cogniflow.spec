@@ -122,6 +122,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    argv=["--browser"],  # Windows 打包版本默认启动浏览器
 )
 coll = COLLECT(
     exe,

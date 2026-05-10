@@ -6,10 +6,7 @@
         <h2>规则引擎</h2>
         <span class="subtitle">可视化规则流程编排与执行</span>
       </div>
-      <button
-        class="ui-btn ui-btn-primary"
-        @click="showCreateDialog = true"
-      >
+      <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
         <SvgIcon name="plus" />
         新建规则
       </button>
@@ -17,36 +14,24 @@
 
     <!-- 规则列表 -->
     <div class="rules-container">
-      <div
-        v-if="loading"
-        class="loading-state"
-      >
-        <div class="spinner" />
+      <div v-if="loading" class="loading-state">
+        <div class="spinner"></div>
         <span>加载中...</span>
       </div>
 
-      <div
-        v-else-if="graphs.length === 0"
-        class="empty-state"
-      >
+      <div v-else-if="graphs.length === 0" class="empty-state">
         <div class="empty-icon">
           <SvgIcon name="flow" />
         </div>
         <h3>暂无规则</h3>
         <p>创建您的第一条规则，开始自动化流程设计</p>
-        <button
-          class="ui-btn ui-btn-primary"
-          @click="showCreateDialog = true"
-        >
+        <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
           <SvgIcon name="plus" />
           新建规则
         </button>
       </div>
 
-      <div
-        v-else
-        class="rules-grid"
-      >
+      <div v-else class="rules-grid">
         <div
           v-for="graph in graphs"
           :key="graph.id"
@@ -55,60 +40,62 @@
           @click="goToDesign(graph.id)"
         >
           <!-- 无快照时的渐变背景 -->
-          <div
-            v-if="!graph.thumbnail"
-            class="card-placeholder-bg"
-          />
+          <div v-if="!graph.thumbnail" class="card-placeholder-bg"></div>
 
           <!-- 快照遮罩 -->
-          <div class="card-snapshot-overlay" />
+          <div class="card-snapshot-overlay"></div>
 
           <!-- 卡片内容 -->
           <div class="card-content">
             <div class="card-header">
               <div class="card-title">
                 <h3>{{ graph.name }}</h3>
-                <span
-                  v-if="graph.version"
-                  class="card-version"
-                >v{{ graph.version }}</span>
+                <span class="card-version" v-if="graph.version">v{{ graph.version }}</span>
               </div>
-              <div
-                class="card-actions"
-                @click.stop
-              >
+              <div class="card-actions" @click.stop>
+                <!-- 激活/停用开关 -->
                 <button
                   class="action-btn"
-                  title="编辑规则"
-                  @click="goToDesign(graph.id)"
+                  :class="{ active: graph.is_active }"
+                  @click="toggleActive(graph)"
+                  :title="graph.is_active ? '停用规则' : '激活规则'"
                 >
+                  <SvgIcon :name="graph.is_active ? 'pause' : 'play'" />
+                </button>
+                <button class="action-btn" @click="goToDesign(graph.id)" title="编辑规则">
                   <SvgIcon name="edit" />
                 </button>
-                <button
-                  class="action-btn danger"
-                  title="删除规则"
-                  @click="handleDelete(graph)"
-                >
+                <button class="action-btn danger" @click="handleDelete(graph)" title="删除规则">
                   <SvgIcon name="trash" />
                 </button>
               </div>
             </div>
 
-            <p class="card-desc">
-              {{ graph.description || '暂无描述' }}
-            </p>
+            <!-- 规则状态标签 -->
+            <div class="rule-status-tags">
+              <span class="status-tag" :class="graph.is_active ? 'active' : 'inactive'">
+                {{ graph.is_active ? '已激活' : '未激活' }}
+              </span>
+              <span class="cron-tag" v-if="graph.cron_expression">
+                <SvgIcon name="clock" />
+                {{ graph.cron_expression }}
+              </span>
+            </div>
+
+            <p class="card-desc">{{ graph.description || '暂无描述' }}</p>
 
             <div class="card-footer">
               <div class="card-meta">
+                <span class="meta-item" v-if="graph.last_executed_at">
+                  <SvgIcon name="clock" />
+                  {{ formatDate(graph.last_executed_at) }}
+                </span>
                 <span class="meta-item">
                   <SvgIcon name="clock" />
                   {{ formatDate(graph.updated_at) }}
                 </span>
               </div>
-              <span
-                v-if="graph.thumbnail"
-                class="has-snapshot"
-              >
+              <span class="has-snapshot" v-if="graph.thumbnail">
                 <SvgIcon name="image" />
                 快照
               </span>
@@ -119,18 +106,11 @@
     </div>
 
     <!-- 创建规则对话框 -->
-    <div
-      v-if="showCreateDialog"
-      class="dialog-overlay"
-      @click.self="showCreateDialog = false"
-    >
+    <div class="dialog-overlay" v-if="showCreateDialog" @click.self="showCreateDialog = false">
       <div class="dialog">
         <div class="dialog-header">
           <h3>新建规则</h3>
-          <button
-            class="close-btn"
-            @click="showCreateDialog = false"
-          >
+          <button class="close-btn" @click="showCreateDialog = false">
             <SvgIcon name="close" />
           </button>
         </div>
@@ -138,11 +118,11 @@
           <div class="form-group">
             <label>规则名称</label>
             <input
-              v-model="createForm.name"
               type="text"
+              v-model="createForm.name"
               placeholder="例如：目标检测自动响应"
               @keyup.enter="handleCreate"
-            >
+            />
           </div>
           <div class="form-group">
             <label>描述（可选）</label>
@@ -150,28 +130,23 @@
               v-model="createForm.description"
               rows="3"
               placeholder="描述规则的用途..."
-            />
+            ></textarea>
           </div>
           <div class="form-group">
             <label>版本（可选）</label>
             <input
-              v-model="createForm.version"
               type="text"
+              v-model="createForm.version"
               placeholder="例如：1.0.0"
-            >
+            />
           </div>
         </div>
         <div class="dialog-footer">
-          <button
-            class="btn secondary"
-            @click="showCreateDialog = false"
-          >
-            取消
-          </button>
+          <button class="btn secondary" @click="showCreateDialog = false">取消</button>
           <button
             class="btn primary"
-            :disabled="!createForm.name.trim() || creating"
             @click="handleCreate"
+            :disabled="!createForm.name.trim() || creating"
           >
             {{ creating ? '创建中...' : '创建' }}
           </button>
@@ -180,11 +155,7 @@
     </div>
 
     <!-- Toast -->
-    <div
-      v-if="toast.show"
-      class="toast"
-      :class="toast.type"
-    >
+    <div class="toast" v-if="toast.show" :class="toast.type">
       {{ toast.message }}
     </div>
   </div>
@@ -195,11 +166,10 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ruleEngineApi } from '@/api'
 import { ElMessageBox } from 'element-plus'
-import type { RuleGraphResponse } from '@/types/api'
 
 const router = useRouter()
 
-const graphs = ref<RuleGraphResponse[]>([])
+const graphs = ref<any[]>([])
 const loading = ref(false)
 const showCreateDialog = ref(false)
 const creating = ref(false)
@@ -248,7 +218,23 @@ function goToDesign(id: number) {
   router.push(`/rule-engine/design/${id}`)
 }
 
-async function handleDelete(graph: unknown) {
+async function toggleActive(graph: any) {
+  try {
+    if (graph.is_active) {
+      await ruleEngineApi.deactivateGraph(graph.id)
+      graph.is_active = false
+      showToast('规则已停用', 'info')
+    } else {
+      await ruleEngineApi.activateGraph(graph.id)
+      graph.is_active = true
+      showToast('规则已激活', 'success')
+    }
+  } catch (err: any) {
+    showToast(err?.response?.data?.detail || '操作失败', 'error')
+  }
+}
+
+async function handleDelete(graph: any) {
   try {
     await ElMessageBox.confirm(
       `确定要删除规则"${graph.name}"吗？此操作不可恢复。`,
@@ -258,7 +244,7 @@ async function handleDelete(graph: unknown) {
     await ruleEngineApi.deleteGraph(graph.id)
     showToast('规则已删除', 'success')
     loadGraphs()
-  } catch (err: unknown) {
+  } catch (err: any) {
     if (err !== 'cancel') {
       showToast('删除失败', 'error')
     }
@@ -482,6 +468,46 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.rule-status-tags {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+
+  .status-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+
+    &.active {
+      background: rgba(0, 255, 136, 0.15);
+      color: #00ff88;
+      border: 1px solid rgba(0, 255, 136, 0.3);
+    }
+
+    &.inactive {
+      background: rgba(255, 255, 255, 0.05);
+      color: rgba(255, 255, 255, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  }
+
+  .cron-tag {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(255, 193, 7, 0.1);
+    color: #ffc107;
+    border: 1px solid rgba(255, 193, 7, 0.2);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    svg { width: 12px; height: 12px; }
+  }
 }
 
 .card-footer {

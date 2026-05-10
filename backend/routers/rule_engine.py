@@ -22,11 +22,17 @@ router = APIRouter(prefix="/api/rule-engine", tags=["规则引擎"])
 
 # ============ 节点定义 ============
 
-@router.get("/nodes/definitions", response_model=list[NodeDefinition])
+@router.get("/nodes/definitions")
 async def get_node_definitions():
     """获取所有可用节点定义 - 用于前端渲染节点面板。"""
-    registry = init_builtin_executors()
-    return registry.get_definitions()
+    import traceback, sys
+    try:
+        registry = init_builtin_executors()
+        return registry.get_definitions()
+    except Exception as e:
+        traceback.print_exc()
+        # Return 500 with error details
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
 
 
 # ============ 规则图 CRUD ============
@@ -138,7 +144,7 @@ async def validate_graph(graph_id: int, db: Session = Depends(get_db)):
 
 @router.post("/graphs/{graph_id}/activate", response_model=RuleGraphResponse)
 async def activate_graph(graph_id: int, db: Session = Depends(get_db)):
-    """激活规则图。"""
+    """激活规则图，并注册定时任务（如有 Cron 表达式）。"""
     manager = GraphManager(db)
 
     # 验证图的有效性
@@ -148,18 +154,99 @@ async def activate_graph(graph_id: int, db: Session = Depends(get_db)):
 
     # 激活图
     updated_graph = manager.update_graph(graph_id=graph_id, is_active=True)
+
+    # 注册定时任务
+    from backend.services.rule_engine.scheduler import rule_scheduler
+    graph = manager.get_graph(graph_id)
+    if graph and graph.cron_expression:
+        rule_scheduler.add_timer_job(graph_id, graph.cron_expression)
+    elif graph and not graph.cron_expression:
+        # 无 Cron 表达式则只移除旧任务
+        rule_scheduler.remove_timer_job(graph_id)
+
     return updated_graph
 
 
 @router.post("/graphs/{graph_id}/deactivate", response_model=RuleGraphResponse)
 async def deactivate_graph(graph_id: int, db: Session = Depends(get_db)):
-    """停用规则图。"""
+    """停用规则图，并移除定时任务。"""
     manager = GraphManager(db)
     updated_graph = manager.update_graph(graph_id=graph_id, is_active=False)
+
+    # 移除定时任务
+    from backend.services.rule_engine.scheduler import rule_scheduler
+    rule_scheduler.remove_timer_job(graph_id)
+
     return updated_graph
 
 
 # ============ 执行相关 ============
+
+@router.get("/graphs/{graph_id}/webhook-url")
+async def get_webhook_url(graph_id: int):
+    """获取规则的 Webhook 触发 URL。
+
+    外部系统可通过 POST 此 URL 触发规则执行。
+    """
+    # 实际 URL 由反向代理配置，这里只返回路径格式
+    return {
+        "webhook_url": f"/api/rule-engine/webhook/{graph_id}/trigger",
+        "method": "POST",
+        "description": "向此 URL 发送 POST 请求即可触发规则执行"
+    }
+
+
+@router.post("/webhook/{graph_id}/trigger", response_model=ExecutionResponse)
+async def webhook_trigger(
+    graph_id: int,
+    background_tasks: BackgroundTasks,
+    request_data: dict = None,
+    db: Session = Depends(get_db),
+):
+    """Webhook 触发规则图执行。
+
+    外部系统（如 GitHub CI、其他服务）可通过此端点触发规则。
+    支持传递 JSON 数据作为 trigger_data。
+    """
+    manager = GraphManager(db)
+    graph = manager.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="规则图不存在")
+
+    if not graph.is_active:
+        raise HTTPException(status_code=403, detail="规则图未激活，无法通过 Webhook 触发")
+
+    graph_data = manager.parse_graph_data(graph)
+
+    # 传递请求数据到触发器节点
+    trigger_data = request_data or {}
+
+    executor = RuleGraphExecutor(db)
+    execution_id = executor.create_execution_record(
+        graph_id=graph_id,
+        trigger_type="webhook",
+        trigger_data=trigger_data,
+    )
+
+    from backend.services.rule_engine.websocket_manager import rule_ws_manager
+
+    async def run_execution():
+        ex = RuleGraphExecutor(db, ws_manager=rule_ws_manager)
+        await ex.execute(
+            graph_data=graph_data,
+            execution_id=execution_id,
+            trigger_type="webhook",
+            trigger_data=trigger_data,
+        )
+
+    background_tasks.add_task(run_execution)
+
+    return ExecutionResponse(
+        execution_id=execution_id or 0,
+        status="running",
+        result={"message": "Webhook 触发执行已启动", "trigger_data": trigger_data},
+    )
+
 
 @router.post("/execute", response_model=ExecutionResponse)
 async def execute_graph(
@@ -167,7 +254,10 @@ async def execute_graph(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    """手动触发规则图执行。"""
+    """手动触发规则图执行。
+
+    立即返回 execution_id，执行在后台异步进行，通过 WebSocket 推送进度。
+    """
     manager = GraphManager(db)
 
     # 获取规则图
@@ -178,7 +268,7 @@ async def execute_graph(
     # 解析图数据
     graph_data = manager.parse_graph_data(graph)
 
-    # 创建执行记录
+    # 创建执行记录（同步，拿到 execution_id）
     executor = RuleGraphExecutor(db)
     execution_id = executor.create_execution_record(
         graph_id=trigger.graph_id,
@@ -186,9 +276,12 @@ async def execute_graph(
         trigger_data=trigger.trigger_data,
     )
 
-    # 在后台执行
+    # 在后台异步执行，传入 rule_ws_manager
+    from backend.services.rule_engine.websocket_manager import rule_ws_manager
+
     async def run_execution():
-        result = await executor.execute(
+        ex = RuleGraphExecutor(db, ws_manager=rule_ws_manager)
+        result = await ex.execute(
             graph_data=graph_data,
             execution_id=execution_id,
             trigger_type=trigger.trigger_type,
@@ -196,13 +289,13 @@ async def execute_graph(
         )
         return result
 
-    # 执行并返回结果
-    result = await run_execution()
+    background_tasks.add_task(run_execution)
 
+    # 立即返回，前端通过 WebSocket 订阅进度
     return ExecutionResponse(
         execution_id=execution_id or 0,
-        status=result["status"],
-        result=result,
+        status="running",
+        result={"message": "执行已启动，请通过 WebSocket 订阅进度"},
     )
 
 

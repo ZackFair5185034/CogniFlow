@@ -295,6 +295,7 @@ class RuleGraphBase(BaseModel):
     variables_json: Optional[str] = None
     version: str = "1.0.0"
     is_active: bool = False
+    cron_expression: Optional[str] = None  # 定时触发 Cron 表达式
     thumbnail: Optional[str] = None
 
 
@@ -311,6 +312,7 @@ class RuleGraphUpdate(BaseModel):
     edges_json: Optional[str] = None
     variables_json: Optional[str] = None
     is_active: Optional[bool] = None
+    cron_expression: Optional[str] = None
     thumbnail: Optional[str] = None
 
 

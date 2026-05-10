@@ -1,146 +1,224 @@
 # -*- coding: utf-8 -*-
-"""节点基类 - 所有节点类型的父类。
+"""节点执行器基类 - 所有节点类型的父类。
 
-定义了节点的通用接口和执行框架。
+按 Phase 1 设计文档实现 BaseExecutor 模式：
+docs/research/rule-engine-phase1-node-registry.md
+
+所有节点执行器必须继承 BaseExecutor，并实现：
+1. get_definition() - 返回节点定义
+2. validate_inputs() - 校验输入参数
+3. execute() - 执行节点逻辑（必须是 async）
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+from backend.services.rule_engine.models import (
+    NodeDefinition,
+    NodeCategory,
+    PortDefinition,
+    ConfigSchemaProperty,
+    ExecutionContextData,
+)
 
 
-class NodeCategory(Enum):
-    """节点分类枚举。"""
-    TRIGGER = "trigger"  # 触发器 - 规则执行入口
-    CONDITION = "condition"  # 条件 - 判断逻辑
-    ACTION = "action"  # 动作 - 执行操作
-    LOGIC = "logic"  # 逻辑 - 控制流
-    TOOL = "tool"  # 工具 - 辅助功能
-
-
-class NodeStatus(Enum):
-    """节点执行状态枚举。"""
+@dataclass
+class NodeStatus:
+    """节点执行状态。"""
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
+    CANCELLED = "cancelled"
 
 
 @dataclass
 class NodeResult:
     """节点执行结果。"""
-    status: NodeStatus
-    output_data: dict = field(default_factory=dict)
+    status: str
+    output_data: Dict[str, Any] = field(default_factory=dict)
     error_message: Optional[str] = None
-    metadata: dict = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class ExecutionContext:
-    """执行上下文 - 贯穿整个图执行过程。"""
-    variables: dict = field(default_factory=dict)  # 全局变量
-    execution_id: Optional[int] = None  # 当前执行记录ID
-    trigger_data: dict = field(default_factory=dict)  # 触发数据
-    logs: list = field(default_factory=list)  # 执行日志
+    """规则图执行时的上下文，在整个执行期间共享。
 
-    def set_var(self, key: str, value: Any) -> None:
-        """设置变量。"""
-        self.variables[key] = value
+    Attributes:
+        execution_id: 执行记录 ID
+        trigger_type: 触发类型（manual/timer/webhook）
+        trigger_data: 触发时携带的数据
+        node_results: 节点执行结果缓存，node_id -> output_data
+        node_status: 节点状态，node_id -> status
+        variables: 规则变量
+        config: 规则图配置（节点参数等）
+        cancelled: 是否已请求取消
+        ws_manager: WebSocket 管理器（用于进度推送）
+    """
+    execution_id: int
+    trigger_type: str
+    trigger_data: Dict[str, Any]
+    node_results: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    node_status: Dict[str, str] = field(default_factory=dict)
+    variables: Dict[str, Any] = field(default_factory=dict)
+    config: Dict[str, Any] = field(default_factory=dict)
+    cancelled: bool = field(default=False)
+    ws_manager: Any = field(default=None)
 
-    def get_var(self, key: str, default: Any = None) -> Any:
-        """获取变量。"""
-        return self.variables.get(key, default)
+    def get_node_result(self, node_id: str, output_name: str) -> Any:
+        """获取指定节点的输出数据。"""
+        return self.node_results.get(node_id, {}).get(output_name)
+
+    def set_node_result(self, node_id: str, outputs: Dict[str, Any]):
+        """设置节点输出数据。"""
+        self.node_results[node_id] = outputs
+
+    def get_node_status(self, node_id: str) -> str:
+        """获取节点状态。"""
+        return self.node_status.get(node_id, "pending")
+
+    def set_node_status(self, node_id: str, status: str):
+        """设置节点状态。"""
+        self.node_status[node_id] = status
+
+    def is_cancelled(self) -> bool:
+        """检查是否已请求取消。"""
+        return self.cancelled
+
+    def request_cancel(self):
+        """请求取消执行。"""
+        self.cancelled = True
 
 
-class BaseNode(ABC):
-    """节点基类 - 所有节点必须继承此类。
+class BaseExecutor(ABC):
+    """节点执行器基类。
 
-    属性:
-        node_type: 节点类型唯一标识
-        category: 节点分类
-        label: 显示名称
-        description: 节点描述
-        inputs: 输入端口定义 [{name, type, label}]
-        outputs: 输出端口定义 [{name, type, label}]
-        config_schema: 节点配置项
+    所有节点执行器必须继承此类，并实现：
+    1. get_definition() - 返回节点定义
+    2. validate_inputs() - 校验输入参数
+    3. execute() - 执行节点逻辑
+
+    使用示例：
+        class MyNodeExecutor(BaseExecutor):
+            def get_definition(self) -> NodeDefinition:
+                return NodeDefinition(...)
+
+            def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+                if "data" not in inputs:
+                    return False, "缺少必需参数 'data'"
+                return True, None
+
+            async def execute(self, inputs, context) -> Dict[str, Any]:
+                return {"result": process(inputs["data"])}
     """
 
+    # 节点类型标识（子类必须定义）
     node_type: str = ""
     category: NodeCategory = NodeCategory.ACTION
-    label: str = ""
+    display_name: str = ""
     description: str = ""
-    icon: str = ""
+    icon: str = "circle"
+    color: str = "#7D7D7D"
 
-    inputs: list = []
-    outputs: list = []
-
-    def __init__(self, node_id: str, config: dict = None):
-        """初始化节点。
+    def __init__(self, node_id: str = None, config: dict = None):
+        """初始化节点执行器。
 
         Args:
-            node_id: 节点唯一ID
-            config: 节点配置参数
+            node_id: 节点实例ID
+            config: 节点配置
         """
         self.node_id = node_id
         self.config = config or {}
 
-    async def execute(self, context: ExecutionContext, input_data: dict = None) -> NodeResult:
-        """执行节点。
-
-        子类必须实现此方法。
-
-        Args:
-            context: 执行上下文
-            input_data: 上游节点传递的输入数据
-
-        Returns:
-            NodeResult: 执行结果
-        """
-        try:
-            result = await self._execute(context, input_data or {})
-            return result
-        except Exception as e:
-            return NodeResult(
-                status=NodeStatus.FAILED,
-                error_message=str(e)
-            )
-
     @abstractmethod
-    async def _execute(self, context: ExecutionContext, input_data: dict) -> NodeResult:
-        """实际执行逻辑 - 子类实现。
-
-        Args:
-            context: 执行上下文
-            input_data: 输入数据
+    def get_definition(self) -> NodeDefinition:
+        """返回节点的完整定义。
 
         Returns:
-            NodeResult: 执行结果
+            NodeDefinition 对象，包含节点的所有元信息
         """
         pass
 
-    def validate_config(self) -> tuple[bool, Optional[str]]:
-        """验证节点配置。
+    @abstractmethod
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """校验输入参数是否满足要求。
+
+        在节点执行前调用，用于验证输入数据的合法性。
+        不合法的输入应返回 (False, error_message)，而非抛异常。
+
+        Args:
+            inputs: 节点输入数据字典
 
         Returns:
-            (是否有效, 错误信息)
+            (is_valid, error_message) 元组
+            - is_valid: 输入是否合法
+            - error_message: 错误描述（如果非法）
         """
-        return True, None
+        pass
+
+    @abstractmethod
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context: ExecutionContext
+    ) -> Dict[str, Any]:
+        """执行节点逻辑。
+
+        这是节点的核心执行方法，由执行引擎在拓扑排序后调用。
+
+        Args:
+            inputs: 节点输入数据（已解析变量引用）
+            context: 执行上下文（包含变量、执行结果缓存等）
+
+        Returns:
+            节点输出数据字典，key 为输出端口名称
+
+        Raises:
+            ExecutorError: 执行失败时抛出（包含节点 ID 和类型信息）
+        """
+        pass
+
+    def get_required_inputs(self) -> List[str]:
+        """返回必需输入端口名称列表。"""
+        definition = self.get_definition()
+        return [
+            name for name, port in definition.inputs.items()
+            if port.required
+        ]
+
+    def get_optional_defaults(self) -> Dict[str, Any]:
+        """返回有默认值的可选输入端口及其默认值。"""
+        definition = self.get_definition()
+        return {
+            name: port.default
+            for name, port in definition.inputs.items()
+            if not port.required and port.default is not None
+        }
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        """返回节点的可配置参数 schema。
+        
+        子类可以覆盖此方法定义自己的配置项。
+        返回空字典表示该节点无需配置。
+        """
+        return {}
+
+    def merge_with_defaults(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """将可选输入与默认值合并。"""
+        result = dict(inputs)
+        for name, default in self.get_optional_defaults().items():
+            if name not in result or result[name] is None:
+                result[name] = default
+        return result
 
     @classmethod
-    def get_definition(cls) -> dict:
-        """获取节点定义 - 用于前端渲染节点面板。
+    def get_category(cls) -> NodeCategory:
+        """获取节点类别。"""
+        return cls.category
 
-        Returns:
-            节点定义字典
-        """
-        return {
-            "type": cls.node_type,
-            "category": cls.category.value,
-            "label": cls.label,
-            "description": cls.description,
-            "icon": cls.icon,
-            "inputs": cls.inputs,
-            "outputs": cls.outputs,
-            "config_schema": getattr(cls, "config_schema", {}),
-        }
+    @classmethod
+    def get_node_type(cls) -> str:
+        """获取节点类型标识。"""
+        return cls.node_type
