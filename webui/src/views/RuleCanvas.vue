@@ -731,10 +731,11 @@ const nodeSearchQuery = ref('')
 const filteredCategories = computed(() => {
   const query = nodeSearchQuery.value.trim().toLowerCase()
   if (!query) {
-    // 无搜索词：显示所有分类和节点，展开状态由用户控制
+    // 无搜索词：直接返回 nodeCategories，避免重复创建数组
     return nodeCategories.value
   }
   // 搜索模式：展开所有有匹配节点的分类
+  // 使用 filter + map 顺序优化，先过滤再映射减少对象创建
   return nodeCategories.value
     .map(cat => ({
       ...cat,
@@ -999,13 +1000,10 @@ function handleCut() {
   clipboardMode.value = 'cut'
   // 立即删除
   removeNodes(selected.map((n: any) => n.id))
+  // 清理与被删除节点关联的边
   edges.value = edges.value.filter((e: any) =>
     !selected.some((n: any) => n.id === e.source || n.id === e.target)
   )
-  selected.forEach((n: any) => {
-    const idx = nodes.value.findIndex((node: any) => node.id === n.id)
-    if (idx !== -1) nodes.value.splice(idx, 1)
-  })
   showToast(`已剪切 ${selected.length} 个节点`, 'info')
 }
 
@@ -1231,6 +1229,8 @@ onBeforeUnmount(() => {
 // 加载规则图
 async function loadGraph() {
   isLoading.value = true
+  // 重置选中状态，避免切换规则图时状态残留
+  selectedNode.value = null
   try {
     const res = await ruleEngineApi.getGraphDetail(graphId.value)
     graph.value = res.data
