@@ -150,11 +150,12 @@
             v-if="activeTab === 'images'"
             class="header-actions"
           >
-            <div class="select-wrapper">
+            <div class="select-wrapper dir-wrapper">
               <el-select
                 v-model="selectedDirectory"
                 placeholder="全部目录"
                 clearable
+                class="dir-select"
                 @change="onDirectoryChange"
               >
                 <el-option
@@ -1297,7 +1298,7 @@ onMounted(() => {
 }
 
 .select-wrapper {
-  @apply relative;
+  @apply relative flex-1 min-w-0;
 }
 
 .action-btn {

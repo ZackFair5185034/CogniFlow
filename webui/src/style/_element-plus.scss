@@ -161,7 +161,19 @@
   color: var(--accent-cyan) !important;
 }
 
-// el-select 选择器
+// AtlasDetail.vue 目录选择器（撑满容器，显示完整路径）
+// 注意：el-select 组件有 inline style 强制宽度，CSS 无法通过 !important 覆盖，
+// 需要通过 computed 宽度或 JS 设置。min-width 确保最小可见宽度。
+.select-wrapper.dir-wrapper {
+  display: flex !important;
+  flex: 1;
+  min-width: 0;
+}
+
+.select-wrapper.dir-wrapper .dir-select {
+  flex: 1;
+  min-width: 200px;
+}
 .el-select__wrapper {
   background: var(--bg-primary) !important;
   box-shadow: none !important;
