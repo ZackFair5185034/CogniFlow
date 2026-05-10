@@ -308,15 +308,50 @@ CogniFlow WebUI 使用全局统一的 `.ui-btn` 按钮体系，定义在 `webui/
 
 ### 7.5 UnoCSS 样式规范
 
-UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
+UnoCSS 是原子化 CSS 引擎，提供即时按需编译。所有原子化样式直接使用 UnoCSS/Tailwind 工具类，scoped SCSS 仅用于复杂结构样式。
 
-**常用快捷方式（shortcuts）：**
-```typescript
-// uno.config.ts 中定义
-'cf-btn': 'px-4 py-2.5 rounded-[50px] bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] cursor-pointer transition-all duration-200 hover:border-[var(--accent-cyan)] hover:bg-[var(--bg-hover)]'
-'cf-btn-primary': 'px-4 py-2.5 rounded-[50px] bg-[var(--accent-cyan)] text-black border-none cursor-pointer transition-all duration-200 font-semibold'
-'cf-card': 'bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl'
-```
+**前缀规范：`cf-`（CogniFlow）**
+
+所有项目级快捷方式统一使用 `cf-` 前缀，定义在 `uno.config.ts` 的 `shortcuts` 中。
+
+**快捷方式完整列表：**
+
+| 名称 | 用途 | 实际样式 |
+|------|------|----------|
+| `cf-btn` | 默认按钮 | 胶囊形卡片边框按钮 |
+| `cf-btn-primary` | 主操作按钮 | 黑色胶囊背景 |
+| `cf-btn-brand` | 品牌强调按钮 | 青色渐变背景 |
+| `cf-btn-small` | 紧凑按钮 | 小尺寸胶囊 |
+| `cf-btn-icon` | 图标按钮 | 40×40 圆形透明 |
+| `cf-card` | 卡片容器 | 背景+边框+圆角 |
+| `cf-card-header` | 卡片头部 | flex+分隔线 |
+| `cf-card-content` | 卡片内容区 | p-6 |
+| `cf-flex` | flex 容器 | `flex` |
+| `cf-flex-col` | 纵向 flex | `flex flex-col` |
+| `cf-items-center` | 垂直居中 | `items-center` |
+| `cf-justify-center` | 水平居中 | `justify-center` |
+| `cf-justify-between` | 两端对齐 | `justify-between` |
+| `cf-gap-2` ~ `cf-gap-6` | 间距 | `gap-2` ~ `gap-6` |
+| `cf-text-xs` ~ `cf-text-lg` | 文字层级 | 14~20px 不同字重 |
+| `cf-text-muted` | 次要文字 | `text-[var(--text-muted)]` |
+| `cf-text-secondary` | 辅助文字 | `text-[var(--text-secondary)]` |
+| `cf-font-mono` | 等宽字体 | JetBrains Mono |
+| `cf-font-bold` | 加粗 | `font-bold` |
+| `cf-badge` | 徽章 | mono+边框+大写 |
+| `cf-input` | 输入框 | 全宽+边框+聚焦态 |
+| `cf-animate-fade-in` | 淡入动画 | fadeIn keyframes |
+| `cf-transition` | 通用过渡 | `transition-all duration-200` |
+| `cf-page-header` | 页面头部 | flex+间隙+不缩放 |
+| `cf-dialog-overlay` | 对话框遮罩 | 固定定位+模糊 |
+| `cf-dialog-panel` | 对话框面板 | 最大宽度 450px |
+| `cf-table-wrapper` | 表格容器 | 横向滚动 |
+| `cf-toolbar` | 工具栏 | flex+两端对齐 |
+| `cf-content-area` | 内容区 | flex-1+溢出隐藏 |
+| `cf-panel` | 侧边面板 | 固定宽度+背景 |
+| `cf-loading` | 加载状态 | 绝对定位居中 |
+| `cf-empty` | 空状态 | 居中+内边距 |
+| `cf-scroll-y` | 纵向滚动 | `overflow-y-auto` |
+| `cf-scrollbar` | 滚动条样式 | 1.5px 宽度 |
 
 **使用示例：**
 ```html
@@ -324,6 +359,13 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 <button class="cf-btn-primary">主要按钮</button>
 <div class="cf-card">卡片内容</div>
 ```
+
+**样式迁移原则：**
+- 简单结构样式（flex、gap、颜色、边框、圆角）→ UnoCSS 模板类
+- 复杂结构样式（动画 keyframes、复杂选择器、嵌套规则）→ scoped SCSS
+- 动态值（:style 绑定）→ 直接写 CSS 变量或内联样式
+- 组件私有样式（局部使用）→ scoped SCSS
+- 通用样式（多处复用）→ uno.config.ts 添加 cf- 快捷方式
 
 ### 7.6 代码规范
 
@@ -338,11 +380,127 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 - 事件名：camelCase（如 `update:modelValue`）
 - CSS 类名：kebab-case（如 `user-card`）
 
-**TypeScript 规范：**
-- 使用 `interface` 而非 `type` 定义对象类型
-- 使用 `type` 定义联合类型和原始类型别名
-- 避免使用 `any`，使用 `unknown` 代替需要类型检查的场景
-- 使用 `as const` 断言字面量
+**TypeScript 严格规范：**
+
+**tsconfig.json 严格模式（已启用）：**
+```json
+{
+  "strict": true,
+  "strictNullChecks": true,
+  "noUnusedLocals": true,
+  "noUnusedParameters": true,
+  "noFallthroughCasesInSwitch": true
+}
+```
+
+**ESLint 强制规则：**
+| 规则 | 级别 | 说明 |
+|------|------|------|
+| `no-explicit-any` | warn | 禁止 `any`，用 `unknown` 代替 |
+| `@typescript-eslint/consistent-type-definitions` | error | 对象类型用 `interface` |
+| `@typescript-eslint/consistent-type-imports` | error | 类型导入必须用 `import type` |
+| `@typescript-eslint/no-unused-vars` | error | 未使用变量报错（下划线前缀例外） |
+| `@typescript-eslint/prefer-nullish-coalescing` | error | 优先用 `??` 而非 `\|\|` |
+| `@typescript-eslint/prefer-optional-chain` | error | 优先用 `?.` 而非 `&&` 链 |
+| `prefer-const` | error | 变量初始化后不变则用 `const` |
+| `prefer-template` | error | 字符串拼接用模板字面量 |
+| `object-shorthand` | error | 对象方法用简写形式 |
+| `quote-props`: as-needed | error | 仅在必要时引述属性名 |
+
+**类型定义规范：**
+```typescript
+// ✅ 对象类型用 interface
+interface UserProfile {
+  id: number
+  name: string
+  email: string
+  created_at?: string
+}
+
+// ✅ 联合类型和原始类型别名用 type
+type Status = 'pending' | 'running' | 'completed' | 'failed'
+type ID = number | string
+
+// ✅ 类型导入
+import type { TrainingJobResponse } from '@/types/api'
+
+// ✅ 字面量断言
+const statusMap = {
+  pending: '等待中',
+  running: '进行中',
+} as const
+
+// ✅ unknown 代替 any（需要类型守卫）
+function processData(data: unknown) {
+  if (typeof data === 'string') {
+    // data 在这里被收窄为 string
+    console.log(data.toUpperCase())
+  }
+}
+```
+
+**模板中动态索引的类型处理：**
+
+Vue 模板中 `Record<string, T>[key]` 会产生类型错误，应提取为辅助函数：
+```typescript
+// ❌ 模板中直接访问会产生 TS 错误
+// {{ nodeConfig[key] }}
+
+// ✅ 在 script 中定义辅助函数
+function getNodeValue(key: string): string | number | boolean | null {
+  return nodeConfig[key] ?? null
+}
+
+// 模板中
+// {{ getNodeValue(key) }}
+```
+
+**reactive 对象的类型推断：**
+
+显式声明 reactive 对象的类型，避免隐式 `{}`：
+```typescript
+// ❌ 隐式空对象类型
+const contextMenu = reactive({
+  show: false,
+  target: null as unknown,
+})
+
+// ✅ 显式声明字段类型
+const contextMenu = reactive({
+  show: false,
+  x: 0,
+  y: 0,
+  target: null as unknown,
+  targetType: null as 'node' | 'edge' | 'pane' | null
+})
+```
+
+**组件 Props 和 Emit 类型：**
+
+```typescript
+// ✅ Props 使用 defineProps 泛型
+const props = defineProps<{
+  title: string
+  count?: number
+}>()
+
+// ✅ Emit 使用 defineEmits 泛型
+const emit = defineEmits<{
+  (e: 'update', value: string): void
+  (e: 'delete', id: number): void
+}>()
+```
+
+**axios 响应数据类型的处理：**
+
+API 响应数据在运行前类型不确定，应对 `res.data` 做显式类型断言：
+```typescript
+// ✅ 从 @/types/api 导入接口
+import type { TrainingJobResponse } from '@/types/api'
+
+const res = await trainingApi.listJobs()
+const jobs = res.data as TrainingJobResponse[]
+```
 
 **样式规范：**
 - 使用 UnoCSS 原子化类名编写样式
