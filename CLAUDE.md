@@ -247,25 +247,41 @@ webui/
 └── package.json
 ```
 
-### 7.3 按钮体系
+### 7.3 样式体系
 
-CogniFlow WebUI 使用全局统一的 `.ui-btn` 按钮体系，定义在 `webui/src/style/_common.scss` 和 `webui/src/style/index.scss`。
+CogniFlow WebUI 样式系统由 SCSS 模块组成，定义在 `webui/src/style/` 目录：
 
-**按钮层级：**
+```
+style/
+├── _variables.scss         # CSS 变量（:root）+ SCSS 变量
+├── _animations.scss        # @keyframes 动画定义
+├── _element-plus-vars.scss # Element Plus CSS 变量主题
+├── _element-plus.scss      # Element Plus 全局样式覆盖
+├── _common.scss            # .ui-* 组件样式
+└── index.scss              # 主入口，@use 导入所有模块
+```
 
-| 类名 | 用途 | 尺寸 |
+#### 按钮体系
+
+全局统一的 `.ui-btn` 按钮体系，定义在 `_common.scss`：
+
+| 类名 | 用途 | 说明 |
 |------|------|------|
-| `.ui-btn` | 默认按钮 | `padding: 8px 16px`，`font-size: 14px`，`border-radius: 8px` |
-| `.ui-btn-primary` | 主操作按钮（青色渐变） | 继承默认尺寸 |
-| `.ui-btn-secondary` | 次级按钮（透明背景） | 继承默认尺寸 |
-| `.ui-btn-sm` | 紧凑按钮（工具栏等） | `padding: 6px 14px`，`font-size: 13px`，`border-radius: 6px` |
-| `.ui-btn-small` | 与 `.ui-btn-sm` 等效 | 同上 |
-| `.ui-btn-danger` | 危险操作（红色渐变） | 继承默认尺寸 |
-| `.ui-btn-icon` | 图标按钮（36×36） | `width/height: 36px`，`padding: 0` |
+| `.ui-btn` | 默认按钮 | `padding: 10px 20px`，`font-size: 14px`，`border-radius: 8px`，透明背景+边框 |
+| `.ui-btn-primary` | 主操作按钮 | 青色渐变背景 |
+| `.ui-btn-success` | 成功操作 | 绿色渐变背景 |
+| `.ui-btn-danger` | 危险操作 | 红色渐变背景 |
+| `.ui-btn-small` | 紧凑按钮 | `padding: 4px 8px`，`font-size: 13px` |
+| `.ui-btn-icon` | 图标按钮 | 36×36 方形，透明背景 |
+| `.ui-tag` | 标签 | `.ui-tag-cyan`、`.ui-tag-green`、`.ui-tag-yellow`、`.ui-tag-magenta` |
+| `.ui-card` | 卡片容器 | 背景+边框+圆角，悬停顶部渐变条 |
+| `.ui-input` | 输入框 | 全宽，深色背景 |
+| `.ui-badge` | 徽章 | mono 字体，等宽显示 |
+| `.ui-scrollbar` | 滚动条 | 统一滚动条样式 |
 
 **使用规范：**
 - 页面主操作按钮使用 `.ui-btn .ui-btn-primary`
-- 工具栏/卡片内操作使用 `.ui-btn .ui-btn-sm`
+- 工具栏/卡片内操作使用 `.ui-btn .ui-btn-small`
 - 不允许在视图组件中覆盖 `.ui-btn` 的 padding、border-radius 等基础样式
 - 图标按钮使用 `.ui-btn-icon`
 - Element Plus 的 `el-button--text` 已全局统一样式为青色
@@ -308,24 +324,66 @@ CogniFlow WebUI 使用全局统一的 `.ui-btn` 按钮体系，定义在 `webui/
 
 ### 7.5 UnoCSS 样式规范
 
-UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
+UnoCSS 是原子化 CSS 引擎，提供即时按需编译。所有原子化样式直接使用 UnoCSS/Tailwind 工具类，scoped SCSS 仅用于复杂结构样式。
 
-**常用快捷方式（shortcuts）：**
-```typescript
-// uno.config.ts 中定义
-'vg-btn': 'px-4 py-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] cursor-pointer transition-all duration-200 hover:border-[var(--accent-cyan)] hover:bg-[var(--bg-hover)]'
-'vg-btn-primary': 'px-4 py-2 rounded-md bg-[var(--accent-cyan)] border border-[var(--accent-cyan)] text-black cursor-pointer'
-'vg-card': 'bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl'
-```
+**前缀规范：`cf-`（CogniFlow）**
+
+所有项目级快捷方式统一使用 `cf-` 前缀，定义在 `uno.config.ts` 的 `shortcuts` 中。
+
+**快捷方式完整列表：**
+
+| 名称 | 用途 | 实际样式 |
+|------|------|----------|
+| `cf-btn` | 默认按钮 | 胶囊形卡片边框按钮 |
+| `cf-btn-primary` | 主操作按钮 | 黑色胶囊背景 |
+| `cf-btn-brand` | 品牌强调按钮 | 青色渐变背景 |
+| `cf-btn-small` | 紧凑按钮 | 小尺寸胶囊 |
+| `cf-btn-icon` | 图标按钮 | 40×40 圆形透明 |
+| `cf-card` | 卡片容器 | 背景+边框+圆角 |
+| `cf-card-header` | 卡片头部 | flex+分隔线 |
+| `cf-card-content` | 卡片内容区 | p-6 |
+| `cf-flex` | flex 容器 | `flex` |
+| `cf-flex-col` | 纵向 flex | `flex flex-col` |
+| `cf-items-center` | 垂直居中 | `items-center` |
+| `cf-justify-center` | 水平居中 | `justify-center` |
+| `cf-justify-between` | 两端对齐 | `justify-between` |
+| `cf-gap-2` ~ `cf-gap-6` | 间距 | `gap-2` ~ `gap-6` |
+| `cf-text-xs` ~ `cf-text-lg` | 文字层级 | 14~20px 不同字重 |
+| `cf-text-muted` | 次要文字 | `text-[var(--text-muted)]` |
+| `cf-text-secondary` | 辅助文字 | `text-[var(--text-secondary)]` |
+| `cf-font-mono` | 等宽字体 | JetBrains Mono |
+| `cf-font-bold` | 加粗 | `font-bold` |
+| `cf-badge` | 徽章 | mono+边框+大写 |
+| `cf-input` | 输入框 | 全宽+边框+聚焦态 |
+| `cf-animate-fade-in` | 淡入动画 | fadeIn keyframes |
+| `cf-transition` | 通用过渡 | `transition-all duration-200` |
+| `cf-page-header` | 页面头部 | flex+间隙+不缩放 |
+| `cf-dialog-overlay` | 对话框遮罩 | 固定定位+模糊 |
+| `cf-dialog-panel` | 对话框面板 | 最大宽度 450px |
+| `cf-table-wrapper` | 表格容器 | 横向滚动 |
+| `cf-toolbar` | 工具栏 | flex+两端对齐 |
+| `cf-content-area` | 内容区 | flex-1+溢出隐藏 |
+| `cf-panel` | 侧边面板 | 固定宽度+背景 |
+| `cf-loading` | 加载状态 | 绝对定位居中 |
+| `cf-empty` | 空状态 | 居中+内边距 |
+| `cf-scroll-y` | 纵向滚动 | `overflow-y-auto` |
+| `cf-scrollbar` | 滚动条样式 | 1.5px 宽度 |
 
 **使用示例：**
 ```html
-<button class="vg-btn">默认按钮</button>
-<button class="vg-btn-primary">主要按钮</button>
-<div class="vg-card">卡片内容</div>
+<button class="cf-btn">默认按钮</button>
+<button class="cf-btn-primary">主要按钮</button>
+<div class="cf-card">卡片内容</div>
 ```
 
-### 7.6 代码规范
+**样式迁移原则：**
+- 简单结构样式（flex、gap、颜色、边框、圆角）→ UnoCSS 模板类
+- 复杂结构样式（动画 keyframes、复杂选择器、嵌套规则）→ scoped SCSS
+- 动态值（:style 绑定）→ 直接写 CSS 变量或内联样式
+- 组件私有样式（局部使用）→ scoped SCSS
+- 通用样式（多处复用）→ uno.config.ts 添加 cf- 快捷方式
+
+### 7.4 代码规范
 
 **Vue 组件规范：**
 - 使用 `<script setup lang="ts">` 语法
@@ -338,11 +396,127 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 - 事件名：camelCase（如 `update:modelValue`）
 - CSS 类名：kebab-case（如 `user-card`）
 
-**TypeScript 规范：**
-- 使用 `interface` 而非 `type` 定义对象类型
-- 使用 `type` 定义联合类型和原始类型别名
-- 避免使用 `any`，使用 `unknown` 代替需要类型检查的场景
-- 使用 `as const` 断言字面量
+**TypeScript 严格规范：**
+
+**tsconfig.json 严格模式（已启用）：**
+```json
+{
+  "strict": true,
+  "strictNullChecks": true,
+  "noUnusedLocals": true,
+  "noUnusedParameters": true,
+  "noFallthroughCasesInSwitch": true
+}
+```
+
+**ESLint 强制规则：**
+| 规则 | 级别 | 说明 |
+|------|------|------|
+| `no-explicit-any` | warn | 禁止 `any`，用 `unknown` 代替 |
+| `@typescript-eslint/consistent-type-definitions` | error | 对象类型用 `interface` |
+| `@typescript-eslint/consistent-type-imports` | error | 类型导入必须用 `import type` |
+| `@typescript-eslint/no-unused-vars` | error | 未使用变量报错（下划线前缀例外） |
+| `@typescript-eslint/prefer-nullish-coalescing` | error | 优先用 `??` 而非 `\|\|` |
+| `@typescript-eslint/prefer-optional-chain` | error | 优先用 `?.` 而非 `&&` 链 |
+| `prefer-const` | error | 变量初始化后不变则用 `const` |
+| `prefer-template` | error | 字符串拼接用模板字面量 |
+| `object-shorthand` | error | 对象方法用简写形式 |
+| `quote-props`: as-needed | error | 仅在必要时引述属性名 |
+
+**类型定义规范：**
+```typescript
+// ✅ 对象类型用 interface
+interface UserProfile {
+  id: number
+  name: string
+  email: string
+  created_at?: string
+}
+
+// ✅ 联合类型和原始类型别名用 type
+type Status = 'pending' | 'running' | 'completed' | 'failed'
+type ID = number | string
+
+// ✅ 类型导入
+import type { TrainingJobResponse } from '@/types/api'
+
+// ✅ 字面量断言
+const statusMap = {
+  pending: '等待中',
+  running: '进行中',
+} as const
+
+// ✅ unknown 代替 any（需要类型守卫）
+function processData(data: unknown) {
+  if (typeof data === 'string') {
+    // data 在这里被收窄为 string
+    console.log(data.toUpperCase())
+  }
+}
+```
+
+**模板中动态索引的类型处理：**
+
+Vue 模板中 `Record<string, T>[key]` 会产生类型错误，应提取为辅助函数：
+```typescript
+// ❌ 模板中直接访问会产生 TS 错误
+// {{ nodeConfig[key] }}
+
+// ✅ 在 script 中定义辅助函数
+function getNodeValue(key: string): string | number | boolean | null {
+  return nodeConfig[key] ?? null
+}
+
+// 模板中
+// {{ getNodeValue(key) }}
+```
+
+**reactive 对象的类型推断：**
+
+显式声明 reactive 对象的类型，避免隐式 `{}`：
+```typescript
+// ❌ 隐式空对象类型
+const contextMenu = reactive({
+  show: false,
+  target: null as unknown,
+})
+
+// ✅ 显式声明字段类型
+const contextMenu = reactive({
+  show: false,
+  x: 0,
+  y: 0,
+  target: null as unknown,
+  targetType: null as 'node' | 'edge' | 'pane' | null
+})
+```
+
+**组件 Props 和 Emit 类型：**
+
+```typescript
+// ✅ Props 使用 defineProps 泛型
+const props = defineProps<{
+  title: string
+  count?: number
+}>()
+
+// ✅ Emit 使用 defineEmits 泛型
+const emit = defineEmits<{
+  (e: 'update', value: string): void
+  (e: 'delete', id: number): void
+}>()
+```
+
+**axios 响应数据类型的处理：**
+
+API 响应数据在运行前类型不确定，应对 `res.data` 做显式类型断言：
+```typescript
+// ✅ 从 @/types/api 导入接口
+import type { TrainingJobResponse } from '@/types/api'
+
+const res = await trainingApi.listJobs()
+const jobs = res.data as TrainingJobResponse[]
+```
 
 **样式规范：**
 - 使用 UnoCSS 原子化类名编写样式
@@ -350,7 +524,69 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 - 组件样式使用 `scoped`
 - 避免行内样式（除了动态值）
 
-### 7.7 ESLint 规则
+### 7.4.1 Element Plus 表单组件规范
+
+**禁止使用原生 HTML 表单标签，所有表单输入必须使用 Element Plus 组件：**
+
+| 原生标签 | Element Plus 组件 | 说明 |
+|---------|------------------|------|
+| `<input type="text">` | `<el-input>` | 文本输入 |
+| `<input type="number">` | `<el-input-number>` | 数字输入 |
+| `<input type="range">` | `<el-slider>` | 范围滑块 |
+| `<input type="checkbox">` | `<el-checkbox>` | 复选框 |
+| `<input type="file">` | `<el-upload>` | 文件上传 |
+| `<select>` + `<option>` | `<el-select>` + `<el-option>` | 下拉选择 |
+| `<textarea>` | `<el-input type="textarea">` | 多行文本 |
+
+**深色主题适配（CSS 变量方式）：**
+
+在 `src/style/_element-plus-vars.scss` 中覆盖 Element Plus 设计令牌（推荐方式，比 scoped `:deep()` 更优雅）：
+
+```scss
+:root {
+  // CogniFlow 品牌主色替换 EP 默认蓝色
+  --el-color-primary: #00f0ff;
+  --el-text-color-primary: #ffffff;
+  --el-text-color-regular: #d0d0e0;
+  --el-text-color-secondary: #8888aa;
+  --el-text-color-placeholder: #555566;
+  --el-border-color: #2a2a3a;
+  --el-border-color-light: #222230;
+  --el-fill-color-blank: #0a0a0f;
+  --el-bg-color: #0a0a0f;
+  --el-bg-color-page: #0a0a0f;
+  --el-bg-color-overlay: #1a1a24;
+}
+```
+
+全局 `:deep()` 样式覆盖（背景/边框/下拉面板，放在 `src/style/_element-plus.scss` 中）：
+
+```scss
+// el-input / el-select 背景边框适配
+.el-input__wrapper,
+.el-select__wrapper {
+  background: var(--bg-primary) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border-color) !important;
+}
+// 下拉面板（Teleport 渲染，必须全局）
+.el-select-dropdown {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+}
+// el-button link 类型（AtlasList 等操作按钮）
+.el-button.is-link {
+  color: var(--accent-cyan) !important;
+}
+```
+
+**说明：** Element Plus 的 el-select / el-dropdown 下拉面板使用 `<Teleport to="body">` 渲染到 DOM 末尾，Vue scoped 样式无法穿透，必须在全局 `index.scss` 中覆盖。
+
+**例外：`type="file"` 隐藏输入**
+
+`display: none` 的 `<input type="file">` 用于程序化触发文件对话框（如按钮触发），保持原生实现，无需替换为 `el-upload`。
+
+### 7.6 ESLint 规则
 
 ```javascript
 // eslint.config.mjs 核心规则
@@ -363,7 +599,7 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 }
 ```
 
-### 7.8 Git 提交规范（前端）
+### 7.7 Git 提交规范（前端）
 
 提交前端代码时，scope 使用以下值：
 - `webui`: WebUI 通用修改
@@ -371,7 +607,7 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 - `webui/components`: 组件相关
 - `webui/views`: 页面相关
 
-### 7.9 常用命令
+### 7.8 常用命令
 
 ```bash
 cd webui
@@ -383,6 +619,139 @@ pnpm lint           # ESLint 检查
 pnpm lint:fix       # ESLint 自动修复
 ```
 
-## 8. 许可证
+## 8. 文档规范
+
+### 8.1 文档类型
+
+项目文档按用途分为五类，每类有明确的定位和编写要求：
+
+| 类型 | 目录 | 用途 | 示例 |
+|------|------|------|------|
+| **用户文档** | `docs/guides/` | 面向最终用户的操作手册 | 功能使用、配置说明 |
+| **开发文档** | `docs/dev/` | 面向开发者的技术参考 | API 文档、架构说明 |
+| **设计文档** | `docs/design/` | 面向设计师的规范说明 | UI 规范、交互流程 |
+| **研究文档** | `docs/research/` | 探索性文档 | 技术调研、方案对比 |
+| **归档文档** | `docs/archives/` | 历史版本保留 | 旧版本说明 |
+
+**README.md 除外**，所有文档一律使用 **HTML** 编写，禁止使用 Markdown。
+
+**原因：** Markdown 在复杂布局、样式控制和嵌入交互内容时能力有限，HTML 可提供更精细的控制和一致性。
+
+### 8.2 HTML 文档编写规范
+
+**文件组织：**
+```
+docs/
+├── css/
+│   └── main.css          # 文档全局样式（必须）
+├── guides/               # 用户文档
+├── dev/                  # 开发文档
+├── design/               # 设计文档
+├── research/             # 研究文档
+├── archives/            # 归档文档
+└── index.html           # 文档首页入口
+```
+
+**文件命名：**
+- 使用 kebab-case 小写字母 + 连字符（例：`user-guide.html`、`api-reference.html`）
+- 避免使用中文文件名
+- 每个文档目录下应有 `index.html` 作为入口
+
+**HTML 文档头部结构：**
+```html
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  功能名称 - 功能简述
+
+  文档用途说明，包含适用读者、前置条件。
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>功能名称 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+    <!-- 文档内容 -->
+  </div>
+</body>
+</html>
+```
+
+**内容结构规范：**
+
+每个 HTML 文档应按以下层级组织内容：
+
+1. **文档标题**（`.doc-title`）— 文档主标题，仅一个
+2. **文档副标题**（`.doc-subtitle`）— 文档目的和范围说明
+3. **章节**（`.doc-section`）— 按逻辑划分的内容区块
+4. **章节标题**（`.doc-section-title`）— 章节小标题
+5. **段落、列表、表格、代码块**— 具体内容
+
+**禁止事项：**
+- 禁止使用内联 `style` 属性，所有样式必须在 `docs/css/main.css` 中定义
+- 禁止使用 `<font>`、`<center>` 等废弃标签
+- 禁止使用表格做布局（仅用于展示结构化数据）
+- 禁止在文档中硬编码颜色值，统一使用 CSS 变量
+
+**可复用样式类（定义在 `docs/css/main.css`）：**
+
+| 类名 | 用途 |
+|------|------|
+| `.doc-container` | 文档主体容器，居中，最大宽度 900px |
+| `.doc-title` | 文档主标题，渐变色文字 |
+| `.doc-subtitle` | 文档副标题，次要文字色 |
+| `.doc-section` | 内容章节区块，margin-bottom: 32px |
+| `.doc-section-title` | 章节标题，青色下划线分隔 |
+| `.doc-table` | 表格，全宽，深色主题 |
+| `.doc-code` / `.doc-code-block` | 代码块，等宽字体，深色背景 |
+| `.doc-list` | 无序列表，青色圆点前缀 |
+| `.doc-badge` | 徽章，mono 字体，青色边框 |
+| `.doc-divider` | 水平分割线 |
+
+### 8.3 样式编写规范
+
+**文件：`docs/css/main.css`**
+
+- 文件头部包含中文注释说明文件用途
+- 所有颜色使用 CSS 变量，禁止硬编码十六进制值
+- 选择器尽量简短，避免三层以上的嵌套
+- 响应式布局使用相对单位（em、rem、%），避免固定像素值
+
+**CSS 变量命名约定（docs 专用）：**
+```css
+/* 文档专用变量放在 [data-doc] 作用域下 */
+[data-doc] {
+  --doc-bg-primary: #0a0a0f;
+  --doc-text-primary: #ffffff;
+  --doc-accent: #00f0ff;
+}
+```
+
+### 8.4 编写流程
+
+1. **规划** — 确定文档属于哪类（用户/开发/设计/研究），决定放在哪个目录
+2. **编写** — 按 8.2 的头部结构创建 HTML 文件，引用 `docs/css/main.css`
+3. **自审** — 检查是否有内联样式、硬编码颜色、废弃标签
+4. **更新入口** — 如有必要，更新对应目录的 `index.html` 添加链接
+5. **提交** — Git commit message 使用 `docs:` 前缀
+
+### 8.5 评审清单
+
+提交文档前逐项检查：
+
+- [ ] 文件放在正确目录（guides/dev/design/research/archives）
+- [ ] 使用 `.html` 扩展名，非 `.md`
+- [ ] 头部包含中文注释说明文档用途
+- [ ] 引用了 `docs/css/main.css`
+- [ ] 无内联 `style` 属性
+- [ ] 无硬编码十六进制颜色值
+- [ ] 无废弃 HTML 标签
+- [ ] 有对应的 `index.html` 入口链接（若是子文档）
+
+## 9. 许可证
 
 MIT License

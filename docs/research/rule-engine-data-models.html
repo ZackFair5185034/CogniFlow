@@ -1,0 +1,414 @@
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  规则引擎数据模型文档
+
+  数据库 Schema、JSON 图结构、Pydantic 校验模型、节点执行上下文完整定义。
+  版本: v1.0 | 日期: 2026-05-06
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>规则引擎数据模型文档 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+
+    <h1 class="doc-title">规则引擎数据模型文档</h1>
+    <p class="doc-subtitle">数据库 Schema、JSON 图结构、Pydantic 校验模型</p>
+
+    <hr class="doc-divider">
+
+    <!-- 1. 概述 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">一、概述</h2>
+
+      <p style="color: var(--text-secondary);">本文档定义 CogniFlow 规则引擎的核心数据模型，包括数据库 Schema、JSON 图结构、Pydantic 校验模型。设计参考调研报告的节点数据结构设计和数据库设计章节。</p>
+    </div>
+
+    <!-- 2. 数据库 Schema -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">二、数据库 Schema</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">2.1 规则图表（RuleGraph）</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.4;">
+<pre>CREATE TABLE rule_graphs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    nodes_json TEXT NOT NULL DEFAULT '{}',
+    edges_json TEXT NOT NULL DEFAULT '[]',
+    variables_json TEXT NOT NULL DEFAULT '{}',
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
+    trigger_type VARCHAR(50) NOT NULL DEFAULT 'manual',
+    trigger_config TEXT NOT NULL DEFAULT '{}',
+    thumbnail TEXT,
+    version INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);</pre>
+      </div>
+
+      <table class="doc-table">
+        <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>id</td><td>INTEGER</td><td>主键</td></tr>
+          <tr><td>name</td><td>VARCHAR(255)</td><td>规则图名称</td></tr>
+          <tr><td>description</td><td>TEXT</td><td>规则图描述</td></tr>
+          <tr><td>nodes_json</td><td>TEXT</td><td>节点字典（JSON 字符串）</td></tr>
+          <tr><td>edges_json</td><td>TEXT</td><td>边列表（JSON 字符串）</td></tr>
+          <tr><td>variables_json</td><td>TEXT</td><td>变量字典（JSON 字符串）</td></tr>
+          <tr><td>is_active</td><td>BOOLEAN</td><td>是否激活（定时执行等）</td></tr>
+          <tr><td>trigger_type</td><td>VARCHAR(50)</td><td>触发类型：manual / timer / webhook</td></tr>
+          <tr><td>trigger_config</td><td>TEXT</td><td>触发器配置（JSON 字符串）</td></tr>
+          <tr><td>thumbnail</td><td>TEXT</td><td>Base64 缩略图</td></tr>
+          <tr><td>version</td><td>INTEGER</td><td>版本号</td></tr>
+          <tr><td>created_at</td><td>TIMESTAMP</td><td>创建时间</td></tr>
+          <tr><td>updated_at</td><td>TIMESTAMP</td><td>更新时间</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">2.2 执行记录表（ExecutionHistory）</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.4;">
+<pre>CREATE TABLE execution_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    graph_id INTEGER NOT NULL,
+    trigger_type VARCHAR(50) NOT NULL DEFAULT 'manual',
+    trigger_data TEXT NOT NULL DEFAULT '{}',
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
+    total_time_ms INTEGER,
+    error_message TEXT,
+    result_data TEXT,
+    FOREIGN KEY (graph_id) REFERENCES rule_graphs(id)
+);</pre>
+      </div>
+
+      <table class="doc-table">
+        <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>id</td><td>INTEGER</td><td>主键</td></tr>
+          <tr><td>graph_id</td><td>INTEGER</td><td>关联的规则图 ID</td></tr>
+          <tr><td>trigger_type</td><td>VARCHAR(50)</td><td>触发类型</td></tr>
+          <tr><td>trigger_data</td><td>TEXT</td><td>触发时携带的数据（JSON）</td></tr>
+          <tr><td>status</td><td>VARCHAR(50)</td><td>状态：pending / running / completed / failed / cancelled</td></tr>
+          <tr><td>started_at</td><td>TIMESTAMP</td><td>开始时间</td></tr>
+          <tr><td>completed_at</td><td>TIMESTAMP</td><td>完成时间</td></tr>
+          <tr><td>total_time_ms</td><td>INTEGER</td><td>总执行耗时（毫秒）</td></tr>
+          <tr><td>error_message</td><td>TEXT</td><td>错误信息</td></tr>
+          <tr><td>result_data</td><td>TEXT</td><td>执行结果（JSON 字符串）</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">2.3 节点执行日志表（NodeExecutionLog）</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.4;">
+<pre>CREATE TABLE node_execution_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    execution_id INTEGER NOT NULL,
+    node_id VARCHAR(255) NOT NULL,
+    node_type VARCHAR(255) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    execution_time_ms INTEGER,
+    input_data_json TEXT,
+    output_data_json TEXT,
+    error_message TEXT,
+    FOREIGN KEY (execution_id) REFERENCES execution_history(id)
+);</pre>
+      </div>
+
+      <table class="doc-table">
+        <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>id</td><td>INTEGER</td><td>主键</td></tr>
+          <tr><td>execution_id</td><td>INTEGER</td><td>关联的执行记录 ID</td></tr>
+          <tr><td>node_id</td><td>VARCHAR(255)</td><td>节点 ID</td></tr>
+          <tr><td>node_type</td><td>VARCHAR(255)</td><td>节点类型</td></tr>
+          <tr><td>status</td><td>VARCHAR(50)</td><td>状态</td></tr>
+          <tr><td>started_at</td><td>TIMESTAMP</td><td>开始时间</td></tr>
+          <tr><td>completed_at</td><td>TIMESTAMP</td><td>完成时间</td></tr>
+          <tr><td>execution_time_ms</td><td>INTEGER</td><td>执行耗时</td></tr>
+          <tr><td>input_data_json</td><td>TEXT</td><td>输入数据（JSON）</td></tr>
+          <tr><td>output_data_json</td><td>TEXT</td><td>输出数据（JSON）</td></tr>
+          <tr><td>error_message</td><td>TEXT</td><td>错误信息</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 3. 图数据 JSON 结构 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">三、图数据 JSON 结构</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">3.1 节点结构（Node）</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.4;">
+<pre>{
+  "id": "node_001",
+  "type": "ImageCapture",
+  "position": {"x": 100, "y": 200},
+  "data": {
+    "label": "摄像头输入",
+    "params": {
+      "source": "video0",
+      "fps": 30
+    }
+  },
+  "inputs": {
+    "trigger": {
+      "node_id": null,
+      "output": null,
+      "value": null
+    }
+  },
+  "outputs": {
+    "image": {
+      "type": "IMAGE"
+    }
+  }
+}</pre>
+      </div>
+
+      <p style="color: var(--text-secondary); margin-bottom: 8px; margin-top: 8px;"><strong>字段说明：</strong></p>
+      <table class="doc-table">
+        <thead><tr><th>字段</th><th>类型</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>id</td><td>string</td><td>节点唯一标识（前端生成，如 node_xxx）</td></tr>
+          <tr><td>type</td><td>string</td><td>节点类型，对应 NodeDefinition.type</td></tr>
+          <tr><td>position</td><td>{x, y}</td><td>画布坐标（像素）</td></tr>
+          <tr><td>data.label</td><td>string</td><td>节点显示名称（用户可编辑）</td></tr>
+          <tr><td>data.params</td><td>dict</td><td>节点参数值，key 对应 NodeDefinition.inputs</td></tr>
+          <tr><td>inputs</td><td>dict</td><td>输入端口配置</td></tr>
+          <tr><td>inputs[key].node_id</td><td>string?</td><td>连接的源节点 ID，null 表示未连接</td></tr>
+          <tr><td>inputs[key].output</td><td>string?</td><td>连接的源端口名</td></tr>
+          <tr><td>inputs[key].value</td><td>any</td><td>未连接时的默认值</td></tr>
+          <tr><td>outputs</td><td>dict</td><td>输出端口配置，value 为端口类型信息</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.2 边结构（Edge）</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.4;">
+<pre>{
+  "id": "edge_001",
+  "source": "node_001",
+  "source_handle": "image",
+  "target": "node_002",
+  "target_handle": "image",
+  "type": "IMAGE"
+}</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.3 变量结构（Variable）</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.4;">
+<pre>{
+  "CONF_THRESHOLD": {
+    "type": "float",
+    "default": 0.5,
+    "description": "检测置信度阈值"
+  }
+}</pre>
+      </div>
+    </div>
+
+    <!-- 4. Pydantic 数据模型 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">四、Pydantic 数据模型</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">4.1 核心数据类</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.4;">
+<pre>class PortDefinition(BaseModel):
+    """端口定义"""
+    name: str
+    type: str  # IMAGE, BBOX, TRIGGER, etc.
+    required: bool = True
+    default: Any = None
+    description: str = ""
+
+class NodeDefinition(BaseModel):
+    """节点类型定义"""
+    type: str
+    category: str  # input, detection, processing, action, logic, output
+    display_name: str
+    description: str
+    icon: str
+    color: str  # hex color
+    inputs: Dict[str, PortDefinition]
+    outputs: Dict[str, PortDefinition]
+
+class NodeDefinitionsResponse(BaseModel):
+    """节点定义响应"""
+    nodes: List[NodeDefinition]
+    categories: List[dict]  # {name, display_name, color, icon}</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">4.2 规则图 CRUD 模型</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.4;">
+<pre>class RuleGraphCreate(BaseModel):
+    """创建规则图"""
+    name: str
+    description: str = ""
+    nodes_json: str = "{}"
+    edges_json: str = "[]"
+    variables_json: str = "{}"
+    version: int = 1
+
+class RuleGraphUpdate(BaseModel):
+    """更新规则图"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    nodes_json: Optional[str] = None
+    edges_json: Optional[str] = None
+    variables_json: Optional[str] = None
+    is_active: Optional[bool] = None
+    trigger_type: Optional[str] = None
+    trigger_config: Optional[str] = None
+    thumbnail: Optional[str] = None
+
+class RuleGraphDetailResponse(BaseModel):
+    """规则图详情（含解析后数据）"""
+    id: int
+    name: str
+    description: str
+    is_active: bool
+    nodes: Dict[str, Any]  # 解析后的节点字典
+    edges: List[Dict[str, Any]]
+    variables: Dict[str, Any]</pre>
+      </div>
+    </div>
+
+    <!-- 5. 节点执行上下文 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">五、节点执行上下文</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">5.1 ExecutionContext</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.4;">
+<pre>class ExecutionContext:
+    """规则图执行时的上下文，在整个执行期间共享"""
+
+    def __init__(self, execution_id: int, trigger_type: str, trigger_data: Dict[str, Any]):
+        self.execution_id = execution_id
+        self.trigger_type = trigger_type
+        self.trigger_data = trigger_data
+        self.node_results: Dict[str, Dict[str, Any]] = {}  # node_id -> output_data
+        self.node_status: Dict[str, str] = {}  # node_id -> status
+        self.variables: Dict[str, Any] = {}
+        self.config: Dict[str, Any] = {}
+        self.cancelled = False
+
+    def get_node_result(self, node_id: str, output_name: str) -> Any:
+        return self.node_results.get(node_id, {}).get(output_name)
+
+    def set_node_result(self, node_id: str, outputs: Dict[str, Any]):
+        self.node_results[node_id] = outputs
+
+    def is_cancelled(self) -> bool:
+        return self.cancelled
+
+    def cancel(self):
+        self.cancelled = True</pre>
+      </div>
+    </div>
+
+    <!-- 6. 节点类型定义 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">六、节点类型定义</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">6.1 类型兼容性矩阵</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.4;">
+<pre># 类型兼容性：源类型 -> 可连接的目标类型
+TYPE_COMPATIBILITY = {
+    "IMAGE": ["IMAGE", "MASK"],
+    "BBOX": ["BBOX"],
+    "MASK": ["MASK"],
+    "SCORES": ["SCORES"],
+    "CLASS_IDS": ["CLASS_IDS"],
+    "TRIGGER": ["TRIGGER", "BBOX", "IMAGE", "MASK", "SCORES", "CLASS_IDS", "CONTROL"],
+    "CONTROL": ["CONTROL"],
+    "MODEL": ["MODEL"],
+    "ANY": ["IMAGE", "BBOX", "MASK", "SCORES", "CLASS_IDS", "TRIGGER", "CONTROL", "MODEL", "ANY"],
+}
+
+def can_connect(source_type: str, target_type: str) -> bool:
+    compatible_types = TYPE_COMPATIBILITY.get(source_type, [])
+    return target_type in compatible_types or source_type == "ANY"</pre>
+      </div>
+    </div>
+
+    <!-- 7. 拓扑排序数据结构 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">七、拓扑排序数据结构</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">7.1 Kahn 算法输入/输出</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.4;">
+<pre>def build_dependency_graph(nodes, edges):
+    """
+    从节点和边构建依赖图
+
+    Returns:
+        graph: Dict[str, List[str]] - 邻接表，graph[target] = [sources...]
+        in_degree: Dict[str, int] - 入度表
+    """
+    graph = defaultdict(list)
+    in_degree = defaultdict(int)
+    for node_id in nodes:
+        in_degree[node_id] = 0
+    for edge in edges:
+        graph[edge["target"]].append(edge["source"])
+        in_degree[edge["target"]] += 1
+    return dict(graph), dict(in_degree)
+
+def topological_sort_levels(nodes, edges):
+    """
+    Kahn 算法拓扑排序，返回按层级分组的节点列表
+
+    Returns:
+        List of levels, each level is a list of node IDs
+        e.g., [["node_001"], ["node_002", "node_003"], ["node_004"]]
+        同层节点可以并行执行
+    """</pre>
+      </div>
+    </div>
+
+    <!-- 8. 序列化格式对比 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">八、序列化格式对比</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">8.1 ComfyUI 格式 vs CogniFlow 格式</h3>
+      <table class="doc-table">
+        <thead><tr><th>方面</th><th>ComfyUI</th><th>CogniFlow</th></tr></thead>
+        <tbody>
+          <tr><td>节点存储</td><td><span class="doc-badge">nodes: Dict</span></td><td><span class="doc-badge">nodes: Dict</span>（一致）</td></tr>
+          <tr><td>边存储</td><td><span class="doc-badge">links: Dict</span></td><td><span class="doc-badge">edges: List[Edge]</span>（简化）</td></tr>
+          <tr><td>位置</td><td><span class="doc-badge">pos: [x, y]</span></td><td><span class="doc-badge">position: {x, y}</span>（语义更清晰）</td></tr>
+          <tr><td>参数</td><td><span class="doc-badge">widgets_values: []</span></td><td><span class="doc-badge">data.params: Dict</span>（类型化）</td></tr>
+          <tr><td>连接引用</td><td><span class="doc-badge">[node_id, output_index]</span></td><td><span class="doc-badge">{node_id, output}</span>（具名引用）</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">8.2 节点引用格式对比</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;"><strong>ComfyUI（数组索引）：</strong></p>
+      <div class="doc-code">
+<pre>"inputs": {
+  "model": ["checkpoint_loader", 0]
+}</pre>
+      </div>
+
+      <p style="color: var(--text-secondary); margin-bottom: 8px; margin-top: 12px;"><strong>CogniFlow（具名引用）：</strong></p>
+      <div class="doc-code">
+<pre>"inputs": {
+  "image": {"node_id": "node_001", "output": "image"}
+}</pre>
+      </div>
+
+      <p style="color: var(--text-secondary); margin-bottom: 8px; margin-top: 8px;"><strong>CogniFlow 选择具名引用的原因：</strong></p>
+      <ul class="doc-list">
+        <li>更易读和调试</li>
+        <li>支持重命名节点后更新引用</li>
+        <li>便于前端校验连接有效性</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

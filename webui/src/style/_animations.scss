@@ -1,9 +1,9 @@
 // -*- coding: utf-8 -*-
 /**
- * 动画定义
+ * CogniFlow 动画定义
+ *
+ * 所有 @keyframes 动画，供其他模块引用。
  */
-
-// 淡入上浮
 @keyframes fadeInUp {
   from {
     opacity: 0;

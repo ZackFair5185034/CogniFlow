@@ -11,16 +11,19 @@ import SvgIcon from '@/components/SvgIcon.vue'
 
 export type VariableType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'IMAGE' | 'BBOX'
 
+/** 变量默认值类型 */
+export type VariableDefaultValue = string | number | boolean | null
+
 export interface Variable {
   name: string
   type: VariableType
-  defaultValue?: any
+  defaultValue?: VariableDefaultValue
   description?: string
 }
 
 // ============ Props & Emits ============
 
-const props = defineProps<{
+defineProps<{
   variables: Variable[]
   disabled?: boolean
 }>()
@@ -28,7 +31,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'add'): void
   (e: 'remove', index: number): void
-  (e: 'update', index: number, field: keyof Variable, value: any): void
+  (e: 'update', index: number, field: keyof Variable, value: VariableDefaultValue): void
 }>()
 
 // ============ 状态 ============
@@ -55,7 +58,7 @@ function handleRemove(index: number) {
   emit('remove', index)
 }
 
-function handleUpdate(index: number, field: keyof Variable, value: any) {
+function handleUpdate(index: number, field: keyof Variable, value: VariableDefaultValue) {
   emit('update', index, field, value)
 }
 </script>
@@ -63,7 +66,10 @@ function handleUpdate(index: number, field: keyof Variable, value: any) {
 <template>
   <div class="variable-panel">
     <!-- 面板头部 -->
-    <div class="panel-header" @click="expanded = !expanded">
+    <div
+      class="panel-header"
+      @click="expanded = !expanded"
+    >
       <span class="panel-title">📌 变量</span>
       <span class="panel-count">{{ variables.length }}</span>
       <SvgIcon
@@ -74,8 +80,14 @@ function handleUpdate(index: number, field: keyof Variable, value: any) {
     </div>
 
     <!-- 变量列表 -->
-    <div v-show="expanded" class="panel-body">
-      <div v-if="variables.length === 0" class="empty-state">
+    <div
+      v-show="expanded"
+      class="panel-body"
+    >
+      <div
+        v-if="variables.length === 0"
+        class="empty-state"
+      >
         暂无变量，请点击下方按钮添加
       </div>
 
@@ -85,56 +97,60 @@ function handleUpdate(index: number, field: keyof Variable, value: any) {
         class="variable-item"
       >
         <!-- 变量名 -->
-        <input
+        <el-input
           type="text"
-          :value="variable.name"
-          @input="handleUpdate(index, 'name', ($event.target as HTMLInputElement).value)"
-          class="var-name-input"
+          :model-value="variable.name"
           placeholder="变量名"
           :disabled="disabled"
+          @update:model-value="handleUpdate(index, 'name', $event as string)"
         />
 
         <!-- 变量类型 -->
-        <select
-          :value="variable.type"
-          @change="handleUpdate(index, 'type', ($event.target as HTMLSelectElement).value)"
+        <el-select
+          :model-value="variable.type"
           class="var-type-select"
           :disabled="disabled"
+          @update:model-value="handleUpdate(index, 'type', $event as VariableType)"
         >
-          <option
+          <el-option
             v-for="t in VARIABLE_TYPES"
             :key="t.value"
             :value="t.value"
-          >
-            {{ t.label }}
-          </option>
-        </select>
+            :label="t.label"
+          />
+        </el-select>
 
         <!-- 删除按钮 -->
         <button
           class="var-remove-btn"
-          @click="handleRemove(index)"
           :disabled="disabled"
           title="删除变量"
+          @click="handleRemove(index)"
         >
-          <SvgIcon name="close" :size="14" />
+          <SvgIcon
+            name="close"
+            :size="14"
+          />
         </button>
       </div>
 
       <!-- 添加按钮 -->
       <button
         class="add-var-btn"
-        @click="handleAdd"
         :disabled="disabled"
+        @click="handleAdd"
       >
-        <SvgIcon name="plus" :size="14" />
+        <SvgIcon
+          name="plus"
+          :size="14"
+        />
         添加变量
       </button>
     </div>
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .variable-panel {
   background: var(--bg-secondary, #1a1a24);
   border: 1px solid var(--border-color, #2a2a3a);
@@ -202,47 +218,75 @@ function handleUpdate(index: number, field: keyof Variable, value: any) {
   gap: 6px;
 }
 
-.var-name-input {
+:deep(.el-input) {
   flex: 1;
   min-width: 0;
-  background: var(--bg-input, #0e0e16);
-  border: 1px solid var(--border-color, #2a2a3a);
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-size: 12px;
-  color: var(--text-primary, #e0e0e8);
-  font-family: monospace;
-}
 
-.var-name-input:focus {
-  outline: none;
-  border-color: var(--accent-cyan, #00f0ff);
-}
+  .el-input__wrapper {
+    background: var(--bg-input, #0e0e16);
+    border: 1px solid var(--border-color, #2a2a3a);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 12px;
+    color: var(--text-primary, #e0e0e8);
+    font-family: monospace;
+    box-shadow: none;
+  }
 
-.var-name-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  .el-input__wrapper:hover {
+    border-color: var(--accent-cyan, #00f0ff);
+  }
+
+  .el-input__wrapper.is-focus {
+    border-color: var(--accent-cyan, #00f0ff);
+    box-shadow: 0 0 0 1px var(--accent-cyan, #00f0ff) inset;
+  }
+
+  .el-input.is-disabled .el-input__wrapper {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 .var-type-select {
   width: 80px;
-  background: var(--bg-input, #0e0e16);
-  border: 1px solid var(--border-color, #2a2a3a);
-  border-radius: 4px;
-  padding: 6px 4px;
-  font-size: 11px;
-  color: var(--text-primary, #e0e0e8);
-  cursor: pointer;
 }
 
-.var-type-select:focus {
-  outline: none;
-  border-color: var(--accent-cyan, #00f0ff);
-}
+:deep(.el-select) {
+  width: 80px;
 
-.var-type-select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  .el-select__wrapper {
+    background: var(--bg-input, #0e0e16);
+    border: 1px solid var(--border-color, #2a2a3a);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 11px;
+    color: var(--text-primary, #e0e0e8);
+    box-shadow: none;
+    min-height: unset;
+    height: auto;
+  }
+
+  .el-select__wrapper:hover {
+    border-color: var(--accent-cyan, #00f0ff);
+  }
+
+  .el-select__wrapper.is-focus {
+    border-color: var(--accent-cyan, #00f0ff);
+    box-shadow: 0 0 0 1px var(--accent-cyan, #00f0ff) inset;
+  }
+
+  .el-select__caret {
+    color: var(--text-muted, #8888aa);
+  }
+
+  .el-select__selected-item {
+    color: var(--text-primary, #e0e0e8);
+  }
+
+  .el-select__placeholder {
+    color: var(--text-muted, #8888aa);
+  }
 }
 
 .var-remove-btn {

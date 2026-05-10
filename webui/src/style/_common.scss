@@ -2,9 +2,11 @@
 /**
  * 公共样式
  * 包含按钮、卡片、标签等通用样式
+ *
+ * CSS 变量来自 variables，使用 var() 引用。
+ * SCSS 变量（$spacing-* 等）通过 @use 引入。
  */
-
-// ===== 按钮样式 =====
+@use 'variables' as *;
 
 .ui-btn {
   display: inline-flex;

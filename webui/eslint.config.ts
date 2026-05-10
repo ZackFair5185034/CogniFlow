@@ -100,4 +100,12 @@ export default tseslint.config(
     files: ['**/*.vue'],
     processor: vue.processors['.vue'],
   },
+
+  // RuleCanvas 允许 any（动态图数据，运行时类型不确定）
+  {
+    files: ['**/RuleCanvas.vue'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
 )

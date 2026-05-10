@@ -11,11 +11,14 @@ import { ruleEngineApi } from '@/api'
 
 // ============ 类型定义 ============
 
+/** 变量默认值类型 */
+export type VariableDefaultValue = string | number | boolean | null
+
 export interface ConfigSchemaProperty {
   type: string
   title?: string
   description?: string
-  default?: any
+  default?: VariableDefaultValue
   minimum?: number
   maximum?: number
   step?: number
@@ -46,7 +49,7 @@ export interface GraphNode {
     inputs?: Array<{ name: string; type: string; label?: string }>
     outputs?: Array<{ name: string; type: string; label?: string }>
     configSchema?: Record<string, ConfigSchemaProperty>
-    config?: Record<string, any>
+    config?: Record<string, VariableDefaultValue>
     status?: 'idle' | 'running' | 'success' | 'failed'
   }
 }
@@ -64,7 +67,7 @@ export type VariableType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'IMAGE' | 'BBOX'
 export interface Variable {
   name: string
   type: VariableType
-  defaultValue?: any
+  defaultValue?: VariableDefaultValue
   description?: string
 }
 
@@ -152,12 +155,12 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     // 解析变量
     if (res.data.variables_json) {
       try {
-        const vars = JSON.parse(res.data.variables_json)
-        variables.value = Object.entries(vars).map(([name, config]: [string, any]) => ({
+        const vars = JSON.parse(res.data.variables_json) as Record<string, { type?: string; defaultValue?: VariableDefaultValue; description?: string }>
+        variables.value = Object.entries(vars).map(([name, config]) => ({
           name,
-          type: (config.type as VariableType) || 'STRING',
-          defaultValue: config.defaultValue || '',
-          description: config.description || ''
+          type: (config.type as VariableType) ?? 'STRING',
+          defaultValue: config.defaultValue ?? '',
+          description: config.description ?? ''
         }))
       } catch {
         variables.value = []
@@ -178,12 +181,12 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     if (!currentGraph.value) return
 
     // 构建变量 JSON
-    const varsObj: Record<string, any> = {}
+    const varsObj: Record<string, { type: VariableType; defaultValue: VariableDefaultValue; description: string }> = {}
     for (const v of variables.value) {
       varsObj[v.name] = {
         type: v.type,
-        defaultValue: v.defaultValue,
-        description: v.description
+        defaultValue: v.defaultValue ?? null,
+        description: v.description ?? ''
       }
     }
 
@@ -228,10 +231,10 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   /**
    * 更新节点配置
    */
-  function updateNodeConfig(nodeId: string, key: string, value: any) {
+  function updateNodeConfig(nodeId: string, key: string, value: VariableDefaultValue) {
     const node = currentGraph.value?.nodes.find(n => n.id === nodeId)
     if (node) {
-      node.data.config = node.data.config || {}
+      node.data.config = node.data.config ?? {}
       node.data.config[key] = value
     }
   }
@@ -336,10 +339,10 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    */
   function addVariable(variable?: Partial<Variable>): Variable {
     const newVar: Variable = {
-      name: variable?.name || `var_${variables.value.length + 1}`,
-      type: variable?.type || 'STRING',
-      defaultValue: variable?.defaultValue || '',
-      description: variable?.description || ''
+      name: variable?.name ?? `var_${variables.value.length + 1}`,
+      type: variable?.type ?? 'STRING',
+      defaultValue: variable?.defaultValue ?? '',
+      description: variable?.description ?? ''
     }
     variables.value.push(newVar)
     return newVar
@@ -376,8 +379,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    */
   function getDefaultConfig(
     schema: Record<string, ConfigSchemaProperty>
-  ): Record<string, any> {
-    const config: Record<string, any> = {}
+  ): Record<string, VariableDefaultValue> {
+    const config: Record<string, VariableDefaultValue> = {}
     for (const [key, prop] of Object.entries(schema)) {
       if (prop.default !== undefined) {
         config[key] = prop.default

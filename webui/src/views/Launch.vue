@@ -44,26 +44,19 @@
           <!-- 模型选择 -->
           <div class="config-section">
             <label class="section-label">选择模型</label>
-            <div class="select-wrapper">
-              <select
-                v-model="selectedModelId"
-                :disabled="detecting || streamConnected"
-              >
-                <option
-                  :value="null"
-                  disabled
-                >
-                  选择已训练的模型
-                </option>
-                <option
-                  v-for="m in trainedModels"
-                  :key="m.id"
-                  :value="m.id"
-                >
-                  {{ m.name }}{{ m.version ? ` (${m.version})` : '' }}
-                </option>
-              </select>
-            </div>
+            <el-select
+              v-model="selectedModelId"
+              placeholder="选择已训练的模型"
+              :disabled="detecting || streamConnected"
+              class="full-width"
+            >
+              <el-option
+                v-for="m in trainedModels"
+                :key="m.id"
+                :label="m.name + (m.version ? ` (${m.version})` : '')"
+                :value="m.id"
+              />
+            </el-select>
             <div
               v-if="selectedModel"
               class="model-info"
@@ -79,24 +72,23 @@
           <!-- 推理后端 -->
           <div class="config-section">
             <label class="section-label">推理后端</label>
-            <div class="select-wrapper">
-              <select
-                v-model="device"
-                :disabled="detecting || streamConnected"
-              >
-                <option value="auto">
-                  自动选择
-                </option>
-                <option
-                  v-for="d in availableDevices"
-                  :key="d.value"
-                  :value="d.value"
-                  :disabled="d.disabled"
-                >
-                  {{ d.label }} {{ (d.value === 'cuda' || d.value === 'directml') ? '(推荐)' : '' }}
-                </option>
-              </select>
-            </div>
+            <el-select
+              v-model="device"
+              :disabled="detecting || streamConnected"
+              class="full-width"
+            >
+              <el-option
+                value="auto"
+                label="自动选择"
+              />
+              <el-option
+                v-for="d in availableDevices"
+                :key="d.value"
+                :label="`${d.label}${d.value === 'cuda' || d.value === 'directml' ? ' (推荐)' : ''}`"
+                :value="d.value"
+                :disabled="d.disabled"
+              />
+            </el-select>
             <span
               v-if="deviceInfo.devices?.cuda && device === 'auto'"
               class="device-hint"
@@ -108,45 +100,43 @@
           <!-- 推理精度 -->
           <div class="config-section">
             <label class="section-label">推理精度</label>
-            <div class="select-wrapper">
-              <select
-                v-model="precision"
-                :disabled="detecting || streamConnected"
-              >
-                <option value="fp32">
-                  FP32 (兼容最好)
-                </option>
-                <option
-                  value="fp16"
-                  :disabled="device === 'cpu'"
-                >
-                  FP16 (加速50%, 精度略降)
-                </option>
-              </select>
-            </div>
+            <el-select
+              v-model="precision"
+              :disabled="detecting || streamConnected"
+              class="full-width"
+            >
+              <el-option
+                value="fp32"
+                label="FP32 (兼容最好)"
+              />
+              <el-option
+                value="fp16"
+                label="FP16 (加速50%, 精度略降)"
+                :disabled="device === 'cpu'"
+              />
+            </el-select>
           </div>
 
           <!-- 模型格式 -->
           <div class="config-section">
             <label class="section-label">模型格式</label>
-            <div class="select-wrapper">
-              <select
-                v-model="modelFormat"
-                :disabled="detecting || streamConnected"
-              >
-                <option value="auto">
-                  自动选择
-                </option>
-                <option
-                  v-for="f in availableFormats"
-                  :key="f.value"
-                  :value="f.value"
-                  :disabled="f.disabled"
-                >
-                  {{ f.label }} {{ f.is_default ? '(默认)' : '' }}
-                </option>
-              </select>
-            </div>
+            <el-select
+              v-model="modelFormat"
+              :disabled="detecting || streamConnected"
+              class="full-width"
+            >
+              <el-option
+                value="auto"
+                label="自动选择"
+              />
+              <el-option
+                v-for="f in availableFormats"
+                :key="f.value"
+                :label="`${f.label}${f.is_default ? ' (默认)' : ''}`"
+                :value="f.value"
+                :disabled="f.disabled"
+              />
+            </el-select>
             <span
               v-if="modelFormat === 'auto' && selectedModel?.files?.length"
               class="device-hint"
@@ -170,14 +160,12 @@
           <!-- 置信度阈值 -->
           <div class="config-section">
             <label class="section-label">置信度阈值: {{ (confThreshold * 100).toFixed(0) }}%</label>
-            <input
-              v-model.number="confThreshold"
-              type="range"
-              min="0.05"
-              max="0.95"
-              step="0.05"
-              class="range-slider"
-            >
+            <el-slider
+              v-model="confThreshold"
+              :min="0.05"
+              :max="0.95"
+              :step="0.05"
+            />
           </div>
 
           <!-- 图片模式 -->
@@ -697,10 +685,12 @@ const deviceInfo = ref<{
 // 可用设备列表
 const availableDevices = computed(() => {
   const devices = deviceInfo.value.devices || {}
-  return Object.entries(devices).map(([type, info]: [string, unknown]) => ({
+  return Object.entries(devices).map(([type, info]) => ({
     value: type,
-    label: (info as any).display_name || info.device_name || type.toUpperCase(),
-    disabled: type === 'cpu' ? false : !(info.device_type === type)
+    label: (info as { display_name?: string; device_name?: string }).display_name
+      || (info as { device_name?: string }).device_name
+      || type.toUpperCase(),
+    disabled: type === 'cpu' ? false : !((info as { device_type?: string }).device_type === type)
   }))
 })
 
@@ -1542,20 +1532,6 @@ onUnmounted(() => {
   @apply text-xs text-[var(--text-secondary)] uppercase tracking-wide;
 }
 
-.select-wrapper {
-  select {
-    @apply w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] cursor-pointer appearance-none;
-
-    &:focus {
-      @apply outline-none border-[var(--accent-cyan)];
-    }
-
-    option {
-      @apply bg-[var(--bg-card)];
-    }
-  }
-}
-
 .model-info {
   @apply flex gap-2 mt-1;
 }
@@ -1570,6 +1546,10 @@ onUnmounted(() => {
   &::-webkit-slider-thumb {
     @apply w-3.5 h-3.5 bg-[var(--accent-cyan)] rounded-full appearance-none cursor-pointer;
   }
+}
+
+.full-width {
+  width: 100%;
 }
 
 .upload-zone {

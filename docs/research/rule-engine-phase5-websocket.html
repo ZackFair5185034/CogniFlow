@@ -1,0 +1,191 @@
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  Phase 5 技术实现文档：实时通信（WebSocket）
+
+  实现 WebSocket 实时推送机制，让前端实时显示规则执行进度。
+  版本: v1.0 | 日期: 2026-05-06
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phase 5: WebSocket 实时通信 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+
+    <h1 class="doc-title">Phase 5 技术实现文档：实时通信（WebSocket）</h1>
+    <p class="doc-subtitle">实现 WebSocket 实时推送机制，让前端实时显示规则执行进度</p>
+
+    <hr class="doc-divider">
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">一、阶段目标</h2>
+      <p class="doc-text" style="color: var(--text-secondary);"><strong>目标：</strong>实现 WebSocket 实时推送机制，让前端实时显示规则执行进度。</p>
+      <p class="doc-text" style="color: var(--text-secondary); margin-top: 12px;"><strong>验收标准：</strong></p>
+      <ul class="doc-list">
+        <li>WebSocket 连接在打开规则图时自动建立</li>
+        <li>执行开始后，前端实时显示节点执行状态（pending → running → completed/failed）</li>
+        <li>每层执行完成后，进度条更新</li>
+        <li>执行完成后，弹出结果摘要</li>
+        <li>执行失败时，显示错误详情和失败的节点</li>
+        <li>连接断开时自动重连</li>
+      </ul>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">二、WebSocket 协议</h2>
+
+      <h3 class="doc-subsection-title">2.1 消息类型</h3>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>类型</th><th>字段</th></tr></thead>
+        <tbody>
+          <tr><td>客户端 → 服务端</td><td><code class="doc-badge">subscribe</code></td><td>execution_id</td></tr>
+          <tr><td>客户端 → 服务端</td><td><code class="doc-badge">unsubscribe</code></td><td>execution_id</td></tr>
+          <tr><td>客户端 → 服务端</td><td><code class="doc-badge">cancel</code></td><td>execution_id</td></tr>
+          <tr><td>服务端 → 客户端</td><td><code class="doc-badge">node_started</code></td><td>execution_id, node_id, node_type, timestamp</td></tr>
+          <tr><td>服务端 → 客户端</td><td><code class="doc-badge">node_executed</code></td><td>execution_id, node_id, status, outputs, timestamp</td></tr>
+          <tr><td>服务端 → 客户端</td><td><code class="doc-badge">node_failed</code></td><td>execution_id, node_id, error, timestamp</td></tr>
+          <tr><td>服务端 → 客户端</td><td><code class="doc-badge">execution_progress</code></td><td>execution_id, progress, current_level, total_levels, completed_nodes, total_nodes</td></tr>
+          <tr><td>服务端 → 客户端</td><td><code class="doc-badge">execution_complete</code></td><td>execution_id, status, result?, error?</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">三、后端 WebSocket 管理器</h2>
+
+      <h3 class="doc-subsection-title">3.1 ConnectionManager</h3>
+      <p class="doc-text" style="color: var(--text-secondary);">连接管理器负责管理所有活跃的 WebSocket 连接，按 execution_id 订阅/取消订阅：</p>
+      <ul class="doc-list">
+        <li><code class="doc-badge">_connections</code> — websocket → set of execution_ids</li>
+        <li><code class="doc-badge">_subscriptions</code> — execution_id → set of websockets</li>
+        <li><code class="doc-badge">connect()</code> — 客户端连接，自动订阅</li>
+        <li><code class="doc-badge">broadcast()</code> — 向订阅者广播消息</li>
+        <li><code class="doc-badge">subscribe()</code> / <code class="doc-badge">unsubscribe()</code> — 动态订阅/取消</li>
+      </ul>
+
+      <h3 class="doc-subsection-title">3.2 集成到执行引擎</h3>
+      <div class="doc-code" style="font-size: 0.82rem; line-height: 1.4;">
+<pre>class RuleGraphExecutor:
+    def __init__(self, db=None, ws_manager=None):
+        self.db = db
+        self.ws_manager = ws_manager or connection_manager
+
+    async def _broadcast_node_started(self, execution_id, node_id, node_type):
+        await self.ws_manager.broadcast({
+            "type": "node_started",
+            "execution_id": execution_id,
+            "node_id": node_id,
+            "node_type": node_type,
+            "timestamp": datetime.now().isoformat()
+        }, execution_id=execution_id)
+
+    async def _broadcast_progress(self, execution_id, current_level, total_levels, ...):
+        await self.ws_manager.broadcast({
+            "type": "execution_progress",
+            "progress": int((current_level + 1) / total_levels * 100),
+            ...
+        }, execution_id=execution_id)</pre>
+      </div>
+
+      <h3 class="doc-subsection-title">3.3 FastAPI WebSocket 端点</h3>
+      <div class="doc-code" style="font-size: 0.82rem; line-height: 1.4;">
+<pre>@router.websocket("/ws/rule-execution")
+async def rule_execution_websocket(websocket: WebSocket):
+    await connection_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_json()
+            msg_type = data.get("type")
+            if msg_type == "subscribe":
+                await connection_manager.subscribe(websocket, data.get("execution_id"))
+            elif msg_type == "unsubscribe":
+                await connection_manager.unsubscribe(websocket, data.get("execution_id"))
+            elif msg_type == "cancel":
+                RuleGraphExecutor.cancel_execution(data.get("execution_id"))
+    except WebSocketDisconnect:
+        await connection_manager.disconnect(websocket)</pre>
+      </div>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">四、前端 WebSocket 服务</h2>
+
+      <h3 class="doc-subsection-title">4.1 WebSocketService</h3>
+      <p class="doc-text" style="color: var(--text-secondary);">前端 WebSocket 服务封装了连接管理、自动重连和消息分发：</p>
+      <ul class="doc-list">
+        <li><code class="doc-badge">connect()</code> — 建立连接，重连时自动恢复订阅</li>
+        <li><code class="doc-badge">subscribe(executionId)</code> — 订阅执行进度</li>
+        <li><code class="doc-badge">cancel(executionId)</code> — 取消执行</li>
+        <li><code class="doc-badge">on(type, handler)</code> — 注册消息处理器</li>
+        <li><code class="doc-badge">off(type, handler)</code> — 取消消息处理器</li>
+      </ul>
+      <p class="doc-text" style="color: var(--text-muted); margin-top: 8px;"><em>自动重连：最多 5 次，延迟 1s/2s/4s/8s/16s 指数退避</em></p>
+
+      <h3 class="doc-subsection-title">4.2 executionStore</h3>
+      <p class="doc-text" style="color: var(--text-secondary);">Pinia Store 管理执行状态：</p>
+      <ul class="doc-list">
+        <li><code class="doc-badge">nodeStatuses</code> — Map&lt;nodeId, NodeExecutionStatus&gt;</li>
+        <li><code class="doc-badge">progress</code> / <code class="doc-badge">currentLevel</code> / <code class="doc-badge">totalLevels</code></li>
+        <li><code class="doc-badge">executionStatus</code> — idle/running/completed/failed/cancelled</li>
+        <li><code class="doc-badge">startExecution()</code> / <code class="doc-badge">cancelExecution()</code> / <code class="doc-badge">endExecution()</code></li>
+      </ul>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">五、前端执行进度组件</h2>
+
+      <h3 class="doc-subsection-title">5.1 ExecutionProgress 组件</h3>
+      <p class="doc-text" style="color: var(--text-secondary);">执行进度覆盖层（Overlay），包含：</p>
+      <ul class="doc-list">
+        <li>进度百分比和层信息</li>
+        <li>进度条（CSS 渐变动画）</li>
+        <li>正在执行的节点徽章列表</li>
+        <li>失败的节点及其错误信息</li>
+        <li>取消执行按钮</li>
+      </ul>
+
+      <h3 class="doc-subsection-title">5.2 ExecutionStatusBadge 组件</h3>
+      <p class="doc-text" style="color: var(--text-secondary);">节点状态徽章，跟随节点显示在右上角：</p>
+      <table class="doc-table">
+        <thead><tr><th>状态</th><th>样式</th></tr></thead>
+        <tbody>
+          <tr><td><code class="doc-badge">pending</code></td><td>灰色</td></tr>
+          <tr><td><code class="doc-badge">running</code></td><td>青色 + 脉冲动画</td></tr>
+          <tr><td><code class="doc-badge">completed</code></td><td>绿色</td></tr>
+          <tr><td><code class="doc-badge">failed</code></td><td>红色</td></tr>
+          <tr><td><code class="doc-badge">cancelled</code></td><td>红色</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">六、验收检查清单</h2>
+      <table class="doc-table">
+        <thead><tr><th>类别</th><th>验收项</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="3">WebSocket 连接</td><td>连接在打开规则图时自动建立</td></tr>
+          <tr><td>连接断开后自动重连（最多 5 次）</td></tr>
+          <tr><td>重连后自动恢复订阅</td></tr>
+          <tr><td rowspan="4">状态更新</td><td>节点开始执行时状态变为 running</td></tr>
+          <tr><td>节点执行成功时状态变为 completed</td></tr>
+          <tr><td>节点执行失败时状态变为 failed，显示错误</td></tr>
+          <tr><td>执行被取消时状态变为 cancelled</td></tr>
+          <tr><td rowspan="3">进度显示</td><td>进度条实时更新（0-100%）</td></tr>
+          <tr><td>显示当前层/总层数</td></tr>
+          <tr><td>显示已完成节点/总节点数</td></tr>
+          <tr><td rowspan="3">结果展示</td><td>执行完成后弹出结果摘要</td></tr>
+          <tr><td>失败时显示错误详情和失败节点</td></tr>
+          <tr><td>可关闭结果面板</td></tr>
+          <tr><td rowspan="2">取消功能</td><td>取消按钮能终止执行</td></tr>
+          <tr><td>取消后画布状态正确更新</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</body>
+</html>

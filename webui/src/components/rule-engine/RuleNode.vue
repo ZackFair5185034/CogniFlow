@@ -1,8 +1,15 @@
 <template>
-  <div class="rule-node" :class="[`category-${data.category}`, { selected }]" @contextmenu.prevent="handleContextMenu">
+  <div
+    class="rule-node"
+    :class="[`category-${data.category}`, { selected }]"
+    @contextmenu.prevent="handleContextMenu"
+  >
     <!-- 标题栏 -->
     <div class="node-header">
-      <div class="node-icon" :class="data.category">
+      <div
+        class="node-icon"
+        :class="data.category"
+      >
         <SvgIcon :name="data.category" />
       </div>
       <div class="node-title">
@@ -12,7 +19,10 @@
     </div>
 
     <!-- 配置控件区域 -->
-    <div class="node-body" v-if="hasConfig">
+    <div
+      v-if="hasConfig"
+      class="node-body"
+    >
       <div
         v-for="(schema, key) in configProperties"
         :key="key"
@@ -22,105 +32,103 @@
         <div class="field-control">
           <!-- Slider -->
           <template v-if="schema.widget === 'slider'">
-            <input
-              type="range"
+            <el-slider
+              :model-value="getNodeValue(key) as number"
               :min="schema.minimum"
               :max="schema.maximum"
               :step="schema.step"
-              :value="nodeConfig[key]"
-              @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
-              class="slider-input"
+              @update:model-value="updateConfig(key, $event)"
             />
-            <span class="slider-value">{{ nodeConfig[key] }}</span>
+            <span class="slider-value">{{ getNodeValue(key) }}</span>
           </template>
 
           <!-- Number -->
           <template v-else-if="schema.widget === 'number'">
-            <input
-              type="number"
+            <el-input-number
+              :model-value="getNodeValue(key) as number"
               :min="schema.minimum"
               :max="schema.maximum"
               :step="schema.step"
-              :value="nodeConfig[key]"
-              @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
+              :controls="false"
               class="number-input"
+              @update:model-value="updateConfig(key, $event)"
             />
           </template>
 
           <!-- Dropdown -->
           <template v-else-if="schema.widget === 'dropdown'">
-            <select
-              :value="nodeConfig[key]"
-              @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
+            <el-select
+              :model-value="getNodeValue(key)"
               class="select-input"
+              @update:model-value="updateConfig(key, $event)"
             >
-              <option
+              <el-option
                 v-for="opt in schema.enum"
                 :key="opt"
                 :value="opt"
-              >{{ opt }}</option>
-            </select>
+                :label="opt"
+              />
+            </el-select>
           </template>
 
           <!-- Model Select -->
           <template v-else-if="schema.widget === 'model-select'">
-            <select
-              :value="nodeConfig[key]"
-              @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
+            <el-select
+              :model-value="getNodeValue(key)"
               class="select-input model-select"
+              placeholder="选择模型..."
+              @update:model-value="updateConfig(key, $event)"
             >
-              <option value="">选择模型...</option>
-              <option
+              <el-option
                 v-for="model in availableModels"
                 :key="model.id"
                 :value="model.id"
-              >{{ model.name }}</option>
-            </select>
+                :label="model.name"
+              />
+            </el-select>
           </template>
 
           <!-- Textarea -->
           <template v-else-if="schema.widget === 'textarea'">
-            <textarea
-              :value="nodeConfig[key]"
-              @input="updateConfig(key, ($event.target as HTMLTextAreaElement).value)"
-              class="textarea-input"
+            <el-input
+              :model-value="(getNodeValue(key) as string | number | null) ?? ''"
+              type="textarea"
               :placeholder="schema.description || ''"
-              rows="2"
-            ></textarea>
+              :rows="2"
+              class="textarea-input"
+              @update:model-value="updateConfig(key, $event)"
+            />
           </template>
 
           <!-- Code -->
           <template v-else-if="schema.widget === 'code'">
-            <textarea
-              :value="nodeConfig[key]"
-              @input="updateConfig(key, ($event.target as HTMLTextAreaElement).value)"
-              class="code-input"
+            <el-input
+              :model-value="(getNodeValue(key) as string | number | null) ?? ''"
+              type="textarea"
               :placeholder="schema.description || ''"
-              rows="2"
-            ></textarea>
+              :rows="2"
+              class="code-input"
+              @update:model-value="updateConfig(key, $event)"
+            />
           </template>
 
           <!-- Checkbox -->
           <template v-else-if="schema.widget === 'checkbox'">
-            <label class="checkbox-wrapper">
-              <input
-                type="checkbox"
-                :checked="nodeConfig[key]"
-                @change="updateConfig(key, ($event.target as HTMLInputElement).checked)"
-                class="checkbox-input"
-              />
-              <span class="checkbox-label">{{ schema.description || '' }}</span>
-            </label>
+            <el-checkbox
+              :model-value="!!getNodeValue(key)"
+              @update:model-value="updateConfig(key, $event)"
+            >
+              {{ schema.description || '' }}
+            </el-checkbox>
           </template>
 
           <!-- Text / Default -->
           <template v-else>
-            <input
-              type="text"
-              :value="nodeConfig[key]"
-              @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
-              class="text-input"
+            <el-input
+              :model-value="String(getNodeValue(key) ?? '')"
               :placeholder="schema.description || ''"
+              class="text-input"
+              @update:model-value="updateConfig(key, $event)"
             />
           </template>
 
@@ -128,9 +136,11 @@
           <button
             v-if="schema.widget !== 'checkbox'"
             class="var-bind-btn"
-            @click.stop="toggleVarMenu(key)"
             title="绑定变量"
-          >📎</button>
+            @click.stop="toggleVarMenu(key)"
+          >
+            📎
+          </button>
 
           <!-- 变量下拉菜单 -->
           <div
@@ -142,38 +152,49 @@
               :key="v.name"
               class="var-option"
               @click="bindVariable(key, v.name)"
-            >{{ formatVarRef(v.name) }}</div>
+            >
+              {{ formatVarRef(v.name) }}
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 底部配置摘要 -->
-    <div class="node-footer" v-if="configSummary">
+    <div
+      v-if="configSummary"
+      class="node-footer"
+    >
       <span class="summary-text">{{ configSummary }}</span>
     </div>
 
     <!-- 端口区域 - 左进右出 -->
     <div class="node-ports">
       <!-- 左侧输入端口 -->
-      <div class="ports-side inputs" v-if="data.inputs?.length">
+      <div
+        v-if="data.inputs?.length"
+        class="ports-side inputs"
+      >
         <div
           v-for="input in data.inputs"
           :key="input.name"
           class="port-item"
         >
           <Handle
+            :id="input.name"
             type="target"
             :position="Position.Left"
-            :id="input.name"
-            :class="['node-handle', `type-${(input.type || 'any').toLowerCase()}`]"
+            :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`]"
           />
           <span class="port-label">{{ input.label || input.name }}</span>
         </div>
       </div>
 
       <!-- 右侧输出端口 -->
-      <div class="ports-side outputs" v-if="data.outputs?.length">
+      <div
+        v-if="data.outputs?.length"
+        class="ports-side outputs"
+      >
         <div
           v-for="output in data.outputs"
           :key="output.name"
@@ -181,22 +202,34 @@
         >
           <span class="port-label">{{ output.label || output.name }}</span>
           <Handle
+            :id="output.name"
             type="source"
             :position="Position.Right"
-            :id="output.name"
-            :class="['node-handle', `type-${(output.type || 'any').toLowerCase()}`]"
+            :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`]"
           />
         </div>
       </div>
     </div>
 
     <!-- 执行状态指示 -->
-    <div class="node-status" v-if="data.status">
-      <div class="status-indicator" :class="data.status"></div>
+    <div
+      v-if="data.status"
+      class="node-status"
+    >
+      <div
+        class="status-indicator"
+        :class="data.status"
+      />
     </div>
 
     <!-- 删除按钮 -->
-    <button class="node-delete-btn" @click.stop="props.onDelete?.(data.id)" title="删除节点">×</button>
+    <button
+      class="node-delete-btn"
+      title="删除节点"
+      @click.stop="props.onDelete?.(data.id)"
+    >
+      ×
+    </button>
   </div>
 </template>
 
@@ -205,11 +238,14 @@ import { computed, inject, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import SvgIcon from '@/components/SvgIcon.vue'
 
+/** 节点配置值类型（排除 boolean/null，文本输入无法处理） */
+type NodeConfigValue = string | number | boolean | null
+
 interface ConfigSchemaProperty {
   type: string
   title?: string
   description?: string
-  default?: any
+  default?: NodeConfigValue
   minimum?: number
   maximum?: number
   step?: number
@@ -234,7 +270,7 @@ interface NodeData {
   configSchema?: {
     properties?: Record<string, ConfigSchemaProperty>
   }
-  config?: Record<string, any>
+  config?: Record<string, NodeConfigValue>
   status?: string
 }
 
@@ -246,7 +282,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:config', key: string, value: any): void
+  (e: 'update:config', key: string, value: string | number | boolean | null): void
   (e: 'delete', nodeId: string): void
   (e: 'contextmenu', event: MouseEvent): void
 }>()
@@ -257,8 +293,8 @@ function handleContextMenu(event: MouseEvent) {
 }
 
 // 可用模型（model-select用）
-const configProperties = computed(() => {
-  return props.data.configSchema || {}
+const configProperties = computed((): Record<string, ConfigSchemaProperty> => {
+  return props.data.configSchema?.properties ?? Object.create(null) as Record<string, ConfigSchemaProperty>
 })
 
 // 是否有配置
@@ -267,16 +303,21 @@ const hasConfig = computed(() => {
 })
 
 // 节点配置（合并默认值）
-const nodeConfig = computed(() => {
-  const defaults: Record<string, any> = {}
-  const schema = props.data.configSchema || {}
+const nodeConfig = computed((): Record<string, NodeConfigValue> => {
+  const defaults: Record<string, NodeConfigValue> = {}
+  const schema = props.data.configSchema?.properties ?? {}
   for (const [key, prop] of Object.entries(schema)) {
-    if ((prop as any).default !== undefined) {
-      defaults[key] = (prop as any).default
+    if ((prop as ConfigSchemaProperty).default !== undefined) {
+      defaults[key] = (prop as ConfigSchemaProperty).default as NodeConfigValue
     }
   }
-  return { ...defaults, ...props.data.config }
+  return { ...defaults, ...(props.data.config as Record<string, NodeConfigValue>) }
 })
+
+/** 获取节点配置值（辅助方法，解决动态索引类型推断问题） */
+function getNodeValue(key: string): string | number | boolean | null {
+  return (nodeConfig.value as Record<string, string | number | boolean | null>)[key] ?? null
+}
 
 // 可用模型（model-select用）
 const availableModels = inject<Array<{ id: number; name: string }>>('availableModels', [])
@@ -323,13 +364,13 @@ const configSummary = computed(() => {
                         'interval_ms', 'delay_ms', 'expression', 'method', 'url']
 
   for (const key of summaryKeys) {
-    if (schema[key] && config[key] !== undefined) {
+    if (schema.properties?.[key] && config[key] !== undefined) {
       const val = config[key]
-      const label = schema[key].title || key
+      const label = schema.properties[key]?.title || key
       if (val !== '' && val !== null && val !== undefined) {
         // 截断过长值
         const displayVal = String(val).length > 12
-          ? String(val).slice(0, 10) + '...'
+          ? `${String(val).slice(0, 10)}...`
           : String(val)
         parts.push(`${label}: ${displayVal}`)
       }
@@ -340,12 +381,12 @@ const configSummary = computed(() => {
 })
 
 // 更新配置
-function updateConfig(key: string, value: any) {
+function updateConfig(key: string, value: string | number | boolean | null) {
   emit('update:config', key, value)
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .rule-node,
 :deep(.vue-flow__node) {
   overflow: visible !important;
@@ -560,6 +601,7 @@ function updateConfig(key: string, value: any) {
   outline: none;
   border-color: #00f0ff;
 }
+
 
 /* Checkbox */
 .checkbox-wrapper {
@@ -808,5 +850,5 @@ function updateConfig(key: string, value: any) {
     opacity: 0.9;
   }
 }
-  
+
 </style>

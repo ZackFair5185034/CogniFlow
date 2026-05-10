@@ -1,0 +1,301 @@
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  视频流推理设计方案
+
+  实时帧流推理架构、WebSocket 推送、Canvas 渲染的完整方案。
+  日期: 2026-05
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>视频流推理设计方案 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+
+    <h1 class="doc-title">视频流推理设计方案</h1>
+    <p class="doc-subtitle">实时帧流推理架构、WebSocket 推送、Canvas 渲染</p>
+
+    <hr class="doc-divider">
+
+    <!-- 1. 背景与目标 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">一、背景与目标</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">1.1 问题描述</h3>
+      <p style="color: var(--text-secondary);">当前 CogniFlow 的视频检测方案采用<strong>异步批量处理</strong>模式：</p>
+      <ul class="doc-list">
+        <li>用户上传视频 → 等待全部处理完成 → 下载结果视频</li>
+        <li>问题：无法实时预览检测效果，用户体验不连续</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">1.2 目标</h3>
+      <p style="color: var(--text-secondary);">实现<strong>实时帧流推理</strong>：</p>
+      <ul class="doc-list">
+        <li>边推理边在 Web 前端预览检测效果</li>
+        <li>支持 24fps 实时推理与渲染</li>
+        <li>保持与现有图片检测一致的用户体验</li>
+      </ul>
+    </div>
+
+    <!-- 2. 技术方案 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">二、技术方案</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">2.1 整体架构</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.6;">
+<pre>┌─────────────────────────────────────────────────────────────┐
+│                         后端                                 │
+│  ┌──────────┐   ┌─────────────┐   ┌──────────────────┐   │
+│  │ 视频输入  │ → │ YOLO 批量推理 │ → │ WebSocket 推送   │   │
+│  │ (CV读取) │   │  (GPU batch) │   │  (base64 帧数据) │   │
+│  └──────────┘   └─────────────┘   └────────┬─────────┘   │
+└────────────────────────────────────────────┼──────────────┘
+                                             │ WebSocket
+                                             │ ws://host/api/ws/stream
+┌────────────────────────────────────────────┼──────────────┐
+│                         前端               ↓              │
+│  ┌────────────┐   ┌────────────┐   ┌──────────────┐      │
+│  │ WebSocket  │ → │ 帧缓冲区   │ → │ Canvas 渲染  │      │
+│  │  接收帧    │   │ (环形队列)  │   │  + 检测框    │      │
+│  └────────────┘   └────────────┘   └──────────────┘      │
+└─────────────────────────────────────────────────────────────┘</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">2.2 核心设计</h3>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">2.2.1 推理-推送解耦（生产者-消费者模式）</h4>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.6;">
+<pre>推理线程（Producer）：
+  - 不断从视频取帧
+  - 批量推理（如每 8 帧为一批）
+  - 结果放入帧队列
+
+推送线程（Consumer）：
+  - 从帧队列取数据
+  - 通过 WebSocket 发送给前端
+  - 控制推送节奏（24fps）</pre>
+      </div>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">2.2.2 批量推理优化</h4>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.6;">
+<pre>当前（逐帧推理）：
+  每帧：读取 → GPU传输 → 推理 → CPU回传 → 绘制 → 写入
+  耗时：约 17-25ms/帧
+
+优化后（批量推理，batch_size=8）：
+  每批：批量 GPU传输 → 批量推理 → 批量回传
+  耗时：约 3-5ms/帧（提升 5-8 倍）</pre>
+      </div>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">2.2.3 推送频率控制</h4>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.6;">
+<pre>问题：推理速度可能快于/慢于 24fps
+
+解决：
+- 推理快：丢弃中间帧，保持 24fps 推送
+- 推理慢：降帧处理，通知前端当前实际帧率</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">2.3 数据格式</h3>
+
+      <p style="color: var(--text-secondary); margin-bottom: 8px;"><strong>帧数据消息：</strong></p>
+      <div class="doc-code">
+<pre>{
+  "type": "frame",
+  "frame_id": 1234,
+  "timestamp": 51.42,
+  "image": "base64_encoded_jpeg...",
+  "detections": [
+    {
+      "bbox": [x1, y1, x2, y2],
+      "class_id": 0,
+      "class_name": "person",
+      "confidence": 0.95
+    }
+  ],
+  "stats": {
+    "inference_ms": 28,
+    "total_detections": 3
+  }
+}</pre>
+      </div>
+
+      <p style="color: var(--text-secondary); margin-bottom: 8px; margin-top: 16px;"><strong>控制消息：</strong></p>
+      <div class="doc-code">
+<pre>{
+  "type": "complete",
+  "total_frames": 1440,
+  "total_detections": 328
+}
+
+{
+  "type": "error",
+  "error": "模型加载失败"
+}</pre>
+      </div>
+    </div>
+
+    <!-- 3. 接口设计 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">三、接口设计</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">3.1 发起推理请求</h3>
+      <div class="doc-code">
+<pre>POST /inference/detect/video/stream
+Content-Type: multipart/form-data
+
+参数：
+  - file: 视频文件
+  - model_id: 模型 ID
+  - conf_threshold: 置信度阈值（默认 0.25）
+
+响应：
+{
+  "success": true,
+  "job_id": "abc123",
+  "stream_url": "ws://host/api/ws/inference/stream/abc123",
+  "video_info": {
+    "fps": 24,
+    "total_frames": 1440,
+    "duration": 60.0
+  }
+}</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.2 WebSocket 连接</h3>
+      <div class="doc-code">
+<pre>WS /ws/inference/stream/{job_id}
+
+消息类型：
+  - frame: 单帧推理结果
+  - complete: 推理完成
+  - error: 错误信息</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.3 停止推理</h3>
+      <div class="doc-code">
+<pre>POST /inference/stop/{job_id}
+
+响应：
+{
+  "success": true,
+  "message": "推理已停止"
+}</pre>
+      </div>
+    </div>
+
+    <!-- 4. 文件结构 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">四、文件结构</h2>
+      <div class="doc-code">
+<pre>backend/
+├── routers/
+│   ├── ws_stream.py          # WebSocket 流处理（新增）
+│   └── inference.py          # 改造：添加 stream 模式
+└── utils/
+    └── frame_buffer.py       # 帧缓冲管理（新增）
+
+webui/src/
+├── views/
+│   └── Launch.vue            # 改造：添加流模式 UI
+├── api/
+│   └── index.ts              # 改造：添加 stream API
+└── utils/
+    └── streamClient.ts       # WebSocket 客户端（新增）</pre>
+      </div>
+    </div>
+
+    <!-- 5. 前端渲染方案 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">五、前端渲染方案</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">5.1 Canvas 渲染流程</h3>
+      <ol style="color: var(--text-secondary); padding-left: 20px; line-height: 1.8;">
+        <li>WebSocket 接收 base64 帧数据</li>
+        <li>Image 对象加载</li>
+        <li>drawImage 绘制原帧</li>
+        <li>遍历 detections，绘制检测框 + 标签</li>
+        <li>requestAnimationFrame 控制渲染节奏</li>
+      </ol>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">5.2 播放控制</h3>
+      <ul class="doc-list">
+        <li><strong>播放/暂停：</strong>控制 requestAnimationFrame 的执行</li>
+        <li><strong>进度条：</strong>显示已处理帧数 / 总帧数</li>
+        <li><strong>倍速：</strong>调整帧间隔（如 0.5x = 每帧停留 2 个渲染周期）</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">5.3 布局</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;">Launch.vue 视频检测模式：</p>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>┌─────────────────────────────────────────────────┐
+│  [图片检测 Tab]  [视频检测 Tab]  [实时流 Tab]    │
+├─────────────────────────────────────────────────┤
+│ ┌─────────────┐  ┌────────────────────────────┐ │
+│ │  配置面板   │  │     Canvas 渲染区          │ │
+│ │             │  │  ┌──────────────────────┐  │ │
+│ │ 模型选择    │  │  │   实时检测画面       │  │ │
+│ │ 置信度阈值  │  │  │   + 检测框叠加       │  │ │
+│ │             │  │  │                      │  │ │
+│ │ [开始推理]  │  │  └──────────────────────┘  │ │
+│ │             │  │                            │ │
+│ │ 实时统计：   │  │  ▶️ ⏸️  ━━━━●━━━━━━━  🔊 │ │
+│ │ 帧率: 24fps │  │                            │ │
+│ │ 已处理: 500 │  │  检测数: 128              │ │
+│ └─────────────┘  └────────────────────────────┘ │
+└─────────────────────────────────────────────────┘</pre>
+      </div>
+    </div>
+
+    <!-- 6. 兼容性设计 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">六、兼容性设计</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">6.1 双模式并存</h3>
+      <p style="color: var(--text-secondary);">现有模式（异步批量处理）：保留，用户可选择；新增模式（实时流推理）：通过 Tab 切换。</p>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">6.2 降级处理</h3>
+      <p style="color: var(--text-secondary);">如果 WebSocket 连接失败：自动降级到轮询模式（复用现有 /video/status/{job_id}）。</p>
+    </div>
+
+    <!-- 7. 待确认问题 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">七、待确认问题</h2>
+      <table class="doc-table">
+        <thead><tr><th>#</th><th>问题</th><th>答案</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>是否保留现有"等待完成后下载视频"模式？</td><td>保留，同时支持两种模式</td></tr>
+          <tr><td>2</td><td>推理速度跟不上 24fps 时？</td><td>降帧处理，前端显示实际帧率</td></tr>
+          <tr><td>3</td><td>大视频（如 5 分钟）长时间推送？</td><td>超时限制 10 分钟</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 8. 实现步骤 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">八、实现步骤</h2>
+      <table class="doc-table">
+        <thead><tr><th>阶段</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td>Phase 1</td><td>新增 WebSocket 端点 <span class="doc-badge">/ws/inference/stream/{job_id}</span></td></tr>
+          <tr><td></td><td>实现帧缓冲管理 <span class="doc-badge">frame_buffer.py</span></td></tr>
+          <tr><td></td><td>改造推理函数支持流模式</td></tr>
+          <tr><td>Phase 2</td><td>新增 <span class="doc-badge">streamClient.ts</span> WebSocket 客户端</td></tr>
+          <tr><td></td><td>Canvas 渲染组件开发</td></tr>
+          <tr><td></td><td>UI 布局改造</td></tr>
+          <tr><td>Phase 3</td><td>批量推理优化</td></tr>
+          <tr><td></td><td>播放控制（暂停、倍速）</td></tr>
+          <tr><td></td><td>统计面板</td></tr>
+          <tr><td>Phase 4</td><td>单元测试</td></tr>
+          <tr><td></td><td>集成测试</td></tr>
+          <tr><td></td><td>24fps 实时性验证</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

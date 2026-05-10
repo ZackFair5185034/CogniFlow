@@ -1,5 +1,5 @@
 <template>
-  <div class="annotate-page">
+  <div class="flex flex-col h-full bg-[var(--bg-primary)]">
     <!-- 顶部工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
@@ -339,11 +339,11 @@
           <!-- 名称 -->
           <div class="form-group">
             <label>名称</label>
-            <input
+            <el-input
               v-model="categoryForm.name"
               type="text"
               :placeholder="categoryForm.is_directory ? '输入目录名称' : '输入标签名称'"
-            >
+            />
           </div>
           <!-- 颜色（仅标签） -->
           <div
@@ -352,10 +352,10 @@
           >
             <label>颜色</label>
             <div class="color-picker">
-              <input
+              <el-input
                 v-model="categoryForm.color"
-                type="color"
-              >
+                type="text"
+              />
               <span
                 class="color-preview"
                 :style="{ background: categoryForm.color }"
@@ -497,6 +497,7 @@ import { ElMessage } from 'element-plus'
 import { categoryApi, annotationApi, atlasApi } from '@/api'
 import SvgIcon from '@/components/SvgIcon.vue'
 import type { AnnotationResponse } from '@/types/api'
+import type { CategoryNode } from '@/api'
 
 interface Category {
   id: number
@@ -547,7 +548,7 @@ const categoryForm = ref({ name: '', color: '#FF0000', is_directory: false, pare
 const showHeaderMenu = ref(false)
 const closeHeaderMenu = () => { showHeaderMenu.value = false }
 const showImportDialog = ref(false)
-const importPreviewData = ref<unknown>(null)
+const importPreviewData = ref<{ version: number; categories: CategoryNode[] } | null>(null)
 const importParseError = ref('')
 const importing = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)
@@ -670,7 +671,7 @@ const importPreviewStats = computed(() => {
   const data = importPreviewData.value
   if (!data) return { directories: 0, tags: 0, total: 0 }
   let dirs = 0, tags = 0
-  const walk = (nodes: unknown[]) => {
+  const walk = (nodes: CategoryNode[]) => {
     for (const n of nodes) {
       if (n.is_directory) dirs++
       else tags++
@@ -886,7 +887,7 @@ const initCanvas = () => {
     canvas.width = img.width * displayScale
     canvas.height = img.height * displayScale
 
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+    ctx!.drawImage(img, 0, 0, canvas.width, canvas.height)
     drawAllBboxes()
   }
   img.onerror = () => {
@@ -1222,12 +1223,6 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.annotate-page {
-  @apply flex flex-col;
-  height: 100%;
-  background: var(--bg-primary);
-}
-
 .toolbar {
   @apply flex justify-between items-center;
   padding: 8px 16px;
@@ -1812,4 +1807,5 @@ onUnmounted(() => {
   color: #ff4466;
   background: rgba(255, 68, 102, 0.1);
 }
+
 </style>

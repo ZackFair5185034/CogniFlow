@@ -1,7 +1,7 @@
 <template>
-  <div class="home">
+  <div class="flex flex-col gap-6">
     <!-- 统计卡片 -->
-    <div class="stats-grid">
+    <div class="grid grid-cols-4 gap-5">
       <div
         v-for="(stat, index) in stats"
         :key="stat.label"
@@ -172,6 +172,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { atlasApi, imageApi, modelApi, trainingApi } from '@/api'
+import type { TrainingJobResponse } from '@/types/api'
 
 const stats = ref<{ label: string; value: number; color: string; gradient: string; icon: string }[]>([
   { label: '图集总数', value: 0, color: '#00f0ff', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 240, 255, 0.2), transparent 70%)', icon: 'folder' },
@@ -180,7 +181,7 @@ const stats = ref<{ label: string; value: number; color: string; gradient: strin
   { label: '训练任务', value: 0, color: '#ffdd00', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 221, 0, 0.2), transparent 70%)', icon: 'chart' },
 ])
 
-const recentJobs = ref<Record<string, unknown>[]>([])
+const recentJobs = ref<TrainingJobResponse[]>([])
 const statusText: Record<string, string> = {
   pending: '等待中',
   running: '进行中',
@@ -286,7 +287,7 @@ const stopTrainingProgressPolling = () => {
   }
 }
 
-const getProgress = (job: Record<string, unknown>) => {
+const getProgress = (job: TrainingJobResponse) => {
   if (!job || !job.total_steps) return 0
   return Math.round((job.current_step / job.total_steps) * 100)
 }
@@ -327,16 +328,6 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.home {
-  @apply flex flex-col gap-6;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
-}
-
 .stat-card {
   @apply relative overflow-hidden rounded-2xl p-6;
   background: var(--bg-card);

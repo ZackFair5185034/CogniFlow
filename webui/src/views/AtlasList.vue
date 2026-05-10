@@ -75,21 +75,21 @@
             <template #default="{ row }">
               <div class="action-buttons">
                 <el-button
-                  type="text"
+                  link
                   size="small"
                   @click="handleRename(row)"
                 >
                   编辑
                 </el-button>
                 <el-button
-                  type="text"
+                  link
                   size="small"
                   @click="$router.push(`/atlas/${row.id}`)"
                 >
                   查看
                 </el-button>
                 <el-button
-                  type="text"
+                  link
                   size="small"
                   @click="handleDelete(row)"
                 >
@@ -121,16 +121,16 @@
         <div class="dialog-body">
           <div class="form-group">
             <label>图集名称</label>
-            <input
+            <el-input
               v-model="createForm.name"
-              type="text"
               placeholder="输入图集名称"
-            >
+            />
           </div>
           <div class="form-group">
             <label>描述</label>
-            <textarea
+            <el-input
               v-model="createForm.description"
+              type="textarea"
               rows="3"
               placeholder="输入描述（可选）"
             />
@@ -173,16 +173,16 @@
         <div class="dialog-body">
           <div class="form-group">
             <label>图集名称</label>
-            <input
+            <el-input
               v-model="renameForm.name"
-              type="text"
               placeholder="输入图集名称"
-            >
+            />
           </div>
           <div class="form-group">
             <label>描述</label>
-            <textarea
+            <el-input
               v-model="renameForm.description"
+              type="textarea"
               rows="3"
               placeholder="输入描述（可选）"
             />
@@ -483,4 +483,5 @@ onMounted(loadAtlases)
 .dialog-footer {
   @apply flex justify-end gap-3 px-6 py-5 border-t border-[var(--border-color)];
 }
+
 </style>

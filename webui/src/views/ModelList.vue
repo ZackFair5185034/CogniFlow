@@ -272,58 +272,62 @@
         <div class="dialog-body">
           <div class="form-group">
             <label>模型名称</label>
-            <input
+            <el-input
               v-model="createForm.name"
               type="text"
               placeholder="输入模型名称"
-            >
+            />
           </div>
           <div class="form-group">
             <label>版本</label>
-            <input
+            <el-input
               v-model="createForm.version"
               type="text"
               placeholder="如 v1, v2"
-            >
+            />
           </div>
           <div class="form-group">
             <label>训练图集（可选）</label>
-            <div class="select-wrapper">
-              <select v-model="createForm.atlas_id">
-                <option :value="null">
-                  不关联图集
-                </option>
-                <option
-                  v-for="atlas in atlases"
-                  :key="atlas.id"
-                  :value="atlas.id"
-                >
-                  {{ atlas.name }}
-                </option>
-              </select>
-            </div>
+            <el-select
+              v-model="createForm.atlas_id"
+              placeholder="不关联图集"
+              clearable
+              class="full-width"
+            >
+              <el-option
+                :value="null"
+                label="不关联图集"
+              />
+              <el-option
+                v-for="atlas in atlases"
+                :key="atlas.id"
+                :value="atlas.id"
+                :label="atlas.name"
+              />
+            </el-select>
           </div>
           <div class="form-group">
             <label>预训练模型</label>
-            <div class="select-wrapper">
-              <select v-model="createForm.pretrained_model">
-                <option value="yolov8n.pt">
-                  YOLOv8n (最小最快)
-                </option>
-                <option value="yolov8s.pt">
-                  YOLOv8s (小，推荐)
-                </option>
-                <option value="yolov8m.pt">
-                  YOLOv8m (中)
-                </option>
-                <option value="yolov8l.pt">
-                  YOLOv8l (大)
-                </option>
-                <option value="yolov8x.pt">
-                  YOLOv8x (最大最准)
-                </option>
-              </select>
-            </div>
+            <el-select
+              v-model="createForm.pretrained_model"
+              class="full-width"
+            >
+              <el-option value="yolov8n.pt">
+                YOLOv8n (最小最快)
+              </el-option>
+              <el-option value="yolov8s.pt">
+                YOLOv8s (小，推荐)
+              </el-option>
+              <el-option value="yolov8m.pt">
+                YOLOv8m (中)
+              </el-option>
+              <el-option value="yolov8l.pt">
+                YOLOv8l (大)
+              </el-option>
+              <el-option value="yolov8x.pt">
+                YOLOv8x (最大最准)
+              </el-option>
+            </el-select>
           </div>
         </div>
         <div class="dialog-footer">
@@ -418,19 +422,19 @@
         <div class="dialog-body">
           <div class="form-group">
             <label>模型名称</label>
-            <input
+            <el-input
               v-model="renameForm.name"
               type="text"
               placeholder="输入模型名称"
-            >
+            />
           </div>
           <div class="form-group">
             <label>版本</label>
-            <input
+            <el-input
               v-model="renameForm.version"
               type="text"
               placeholder="如 v1, v2"
-            >
+            />
           </div>
         </div>
         <div class="dialog-footer">
@@ -527,28 +531,35 @@
 
             <div class="form-group">
               <label>目标格式</label>
-              <div class="select-wrapper">
-                <select v-model="exportForm.target_format">
-                  <option value="onnx">
-                    ONNX (跨平台，CPU/GPU)
-                  </option>
-                  <option value="openvino">
-                    OpenVINO (Intel 硬件加速)
-                  </option>
-                  <option value="tensorrt">
-                    TensorRT (NVIDIA GPU 高性能)
-                  </option>
-                </select>
-              </div>
+              <el-select
+                v-model="exportForm.target_format"
+                class="full-width"
+              >
+                <el-option value="onnx">
+                  ONNX (跨平台，CPU/GPU)
+                </el-option>
+                <el-option value="openvino">
+                  OpenVINO (Intel 硬件加速)
+                </el-option>
+                <el-option value="tensorrt">
+                  TensorRT (NVIDIA GPU 高性能)
+                </el-option>
+              </el-select>
             </div>
             <div class="form-group">
-              <label>
-                <input
-                  v-model="exportForm.half"
-                  type="checkbox"
-                >
+              <label>导出名称</label>
+              <el-input
+                v-model="exportForm.name"
+                type="text"
+                placeholder="输入导出文件名称（可选）"
+              />
+            </div>
+            <div class="form-group">
+              <el-checkbox
+                v-model="exportForm.half"
+              >
                 导出为 FP16 半精度（减小模型体积，加速推理）
-              </label>
+              </el-checkbox>
             </div>
           </template>
         </div>
@@ -595,7 +606,7 @@ const uploadFile = ref<File | null>(null)
 const showExportDialog = ref(false)
 const exporting = ref(false)
 const exportTargetModel = ref<ModelResponse | null>(null)
-const exportForm = ref({target_format: 'onnx', half: false})
+const exportForm = ref({target_format: 'onnx', half: false, name: ''})
 const exportStatus = ref<'idle' | 'starting' | 'loading' | 'saving' | 'completed' | 'error'>('idle')
 const exportProgress = ref(0)
 const exportMessage = ref('')
@@ -849,7 +860,7 @@ const handleDownload = (row: ModelResponse) => {
 // 导出模型
 const handleExport = (row: ModelResponse) => {
   exportTargetModel.value = row
-  exportForm.value = {target_format: 'onnx', half: false}
+  exportForm.value = {target_format: 'onnx', half: false, name: ''}
   exportStatus.value = 'idle'
   exportProgress.value = 0
   exportMessage.value = ''
@@ -1314,5 +1325,9 @@ onMounted(() => {
   .default-tag {
     @apply text-[10px] px-1 py-0 rounded bg-[var(--accent-cyan)] text-black;
   }
+}
+
+.full-width {
+  width: 100%;
 }
 </style>

@@ -1,0 +1,280 @@
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  规则引擎画布编辑器 - UI/UX 交互规范
+
+  布局结构、快捷键、节点交互、连线规范、属性面板、执行流程、Toast 规范。
+  版本: v1.0 | 日期: 2026-05-06
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>规则引擎 UI/UX 交互规范 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+
+    <h1 class="doc-title">规则引擎画布编辑器 UI/UX 交互规范</h1>
+    <p class="doc-subtitle">布局结构、快捷键、节点交互、连线规范、属性面板、执行流程</p>
+
+    <hr class="doc-divider">
+
+    <!-- 1. 概述 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">一、概述</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">1.1 目标</h3>
+      <ul class="doc-list">
+        <li>提供清晰、完整的交互行为定义</li>
+        <li>确保团队成员实现一致的界面行为</li>
+        <li>减少用户学习成本，提高效率</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">1.2 设计原则</h3>
+      <table class="doc-table">
+        <thead><tr><th>原则</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><strong>一致性</strong></td><td>相似功能使用相似的交互方式</td></tr>
+          <tr><td><strong>即时反馈</strong></td><td>每一个操作都有明确的视觉反馈</td></tr>
+          <tr><td><strong>可逆性</strong></td><td>支持撤销/重做，让用户放心尝试</td></tr>
+          <tr><td><strong>直观性</strong></td><td>无需阅读文档也能理解基本操作</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 2. 布局结构 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">二、布局结构</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">2.1 整体布局</h3>
+      <div class="doc-code" style="font-size: 0.8rem; line-height: 1.4;">
+<pre>┌────────────────────────────────────────────────────────────────────┐
+│  顶部工具栏                                                          │
+│  [←] [规则名称] [状态] │ [撤销][重做] │ [缩放] │ [网格][吸附][小地图] │ [校验][保存][执行] │
+├──────────┬───────────────────────────────────────────┬─────────────┤
+│          │                                           │             │
+│  节点面板  │              无限画布                    │  属性配置   │
+│  (可折叠)  │                                           │   面板      │
+│          │     ┌─────┐         ┌─────┐              │             │
+│  📁 触发器 │     │节点A│────────▶│节点B│              │  [节点属性] │
+│  📁 条件   │     └─────┘         └─────┘              │  input: xxx │
+│  📁 动作   │                                           │  threshold: │
+│  📁 逻辑   │  ┌─────────────────────────────────────┐  │             │
+│          │  │ MiniMap │ 缩放 │ 节点:5 │ 连接:4    │  │             │
+│          │  └─────────────────────────────────────┘  │             │
+├──────────┴───────────────────────────────────────────┴─────────────┤
+│  底部状态栏 (执行日志/进度)                                          │
+└────────────────────────────────────────────────────────────────────┘</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">2.2 区域尺寸规范</h3>
+      <table class="doc-table">
+        <thead><tr><th>区域</th><th>最小宽度</th><th>最大宽度</th><th>默认宽度</th></tr></thead>
+        <tbody>
+          <tr><td>节点面板</td><td>200px</td><td>400px</td><td>280px</td></tr>
+          <tr><td>属性面板</td><td>280px</td><td>480px</td><td>320px</td></tr>
+          <tr><td>工具栏高度</td><td>—</td><td>—</td><td>56px</td></tr>
+          <tr><td>状态栏高度</td><td>—</td><td>—</td><td>32px</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 3. 快捷键规范 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">三、快捷键规范</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">3.1 完整快捷键清单</h3>
+      <table class="doc-table">
+        <thead><tr><th>快捷键</th><th>功能</th><th>作用域</th><th>优先级</th></tr></thead>
+        <tbody>
+          <tr><td>Ctrl + Z</td><td>撤销</td><td>全局</td><td>P0</td></tr>
+          <tr><td>Ctrl + Y 或 Ctrl + Shift + Z</td><td>重做</td><td>全局</td><td>P0</td></tr>
+          <tr><td>Delete 或 Backspace</td><td>删除选中节点/边</td><td>画布</td><td>P0</td></tr>
+          <tr><td>Ctrl + A</td><td>全选所有节点</td><td>画布</td><td>P1</td></tr>
+          <tr><td>Ctrl + C</td><td>复制选中节点</td><td>画布</td><td>P1</td></tr>
+          <tr><td>Ctrl + V</td><td>粘贴节点</td><td>画布</td><td>P1</td></tr>
+          <tr><td>Ctrl + D</td><td>复制并偏移粘贴</td><td>画布</td><td>P1</td></tr>
+          <tr><td>Escape</td><td>取消选择 / 关闭面板</td><td>全局</td><td>P1</td></tr>
+          <tr><td>Space + 拖拽</td><td>平移画布</td><td>画布</td><td>P1</td></tr>
+          <tr><td>Ctrl + 滚轮</td><td>缩放画布</td><td>画布</td><td>P1</td></tr>
+          <tr><td>Ctrl + 0</td><td>适应画布</td><td>画布</td><td>P1</td></tr>
+          <tr><td>Ctrl + S</td><td>保存</td><td>全局</td><td>P1</td></tr>
+          <tr><td>F</td><td>聚焦选中节点</td><td>画布</td><td>P2</td></tr>
+          <tr><td>Ctrl + F</td><td>搜索节点</td><td>画布</td><td>P2</td></tr>
+          <tr><td>Home</td><td>重置视口到原点</td><td>画布</td><td>P2</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.2 快捷键冲突处理</h3>
+      <table class="doc-table">
+        <thead><tr><th>场景</th><th>处理方式</th></tr></thead>
+        <tbody>
+          <tr><td>输入框聚焦时</td><td>禁用除 Escape 外的所有快捷键</td></tr>
+          <tr><td>对话框打开时</td><td>禁用所有快捷键</td></tr>
+          <tr><td>节点正在拖拽时</td><td>仅响应 Space 平移</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 4. 节点交互 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">四、节点交互</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">4.1 节点状态</h3>
+      <table class="doc-table">
+        <thead><tr><th>状态</th><th>视觉表现</th></tr></thead>
+        <tbody>
+          <tr><td>idle（空闲）</td><td>正常显示，无特殊样式</td></tr>
+          <tr><td>running（运行中）</td><td>边框闪烁动画（青色 #00f0ff）</td></tr>
+          <tr><td>success（成功）</td><td>边框变为绿色（#00ff88）</td></tr>
+          <tr><td>failed（失败）</td><td>边框变为红色（#ff4c4c）</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">4.2 节点操作</h3>
+      <ul class="doc-list">
+        <li><strong>点击选中</strong> — 单击节点选中，显示选中高亮</li>
+        <li><strong>拖拽移动</strong> — 按住并拖动移动节点位置</li>
+        <li><strong>双击打开配置</strong> — 双击节点打开属性配置面板</li>
+        <li><strong>右键菜单</strong> — 右键显示上下文菜单（复制/剪切/删除/断开连接）</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">4.3 节点面板交互</h3>
+      <ul class="doc-list">
+        <li><strong>拖拽添加</strong> — 从左侧面板拖拽节点到画布</li>
+        <li><strong>搜索过滤</strong> — 在面板顶部搜索框输入关键词过滤节点</li>
+        <li><strong>分类折叠</strong> — 点击分类标题展开/折叠节点列表</li>
+      </ul>
+    </div>
+
+    <!-- 5. 连线规范 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">五、连线规范</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">5.1 连接规则</h3>
+      <ul class="doc-list">
+        <li><strong>类型匹配:</strong> 相同类型的端口可以连接（参考端口类型颜色）</li>
+        <li><strong>拖拽连接:</strong> 从输出端口拖出到输入端口</li>
+        <li><strong>高亮反馈:</strong> 悬停兼容端口时高亮显示</li>
+        <li><strong>错误拒绝:</strong> 不兼容的端口拒绝连接并显示 Toast 提示</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">5.2 连线样式</h3>
+      <ul class="doc-list">
+        <li><strong>默认状态:</strong> 灰色实线 (#2a2a3a)，2px 宽度</li>
+        <li><strong>悬停状态:</strong> 青色高亮 (#00f0ff)</li>
+        <li><strong>选中状态:</strong> 青色加粗显示</li>
+        <li><strong>执行中:</strong> 青色流动动画（表示数据流动）</li>
+      </ul>
+    </div>
+
+    <!-- 6. 属性面板 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">六、属性面板</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">6.1 面板结构</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>┌─────────────────────────────┐
+│ [节点图标] 节点名称           │
+│ 类型: xxx | ID: node_001     │
+├─────────────────────────────┤
+│ 输入参数                      │
+│ ┌─────────────────────────┐  │
+│ │ model: [yolov8n.pt  ▼]  │  │
+│ │ conf:   [====●====] 0.5 │  │
+│ └─────────────────────────┘  │
+├─────────────────────────────┤
+│ 执行状态                      │
+│ ⚪ 空闲                      │
+├─────────────────────────────┤
+│ [删除节点]                    │
+└─────────────────────────────┘</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">6.2 表单控件类型</h3>
+      <table class="doc-table">
+        <thead><tr><th>控件类型</th><th>对应 HTML 元素</th></tr></thead>
+        <tbody>
+          <tr><td>text</td><td>el-input</td></tr>
+          <tr><td>number</td><td>el-input-number</td></tr>
+          <tr><td>slider</td><td>el-slider</td></tr>
+          <tr><td>dropdown</td><td>el-select</td></tr>
+          <tr><td>checkbox</td><td>el-checkbox</td></tr>
+          <tr><td>textarea</td><td>el-input type="textarea"</td></tr>
+          <tr><td>file</td><td>el-upload</td></tr>
+          <tr><td>code</td><td>el-input + 代码高亮</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 7. 执行流程 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">七、执行流程</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">7.1 执行控制</h3>
+      <ul class="doc-list">
+        <li><strong>点击执行:</strong> 点击顶部"执行"按钮触发规则执行</li>
+        <li><strong>进度显示:</strong> 底部状态栏显示执行进度（节点 X/Y）</li>
+        <li><strong>节点高亮:</strong> 正在执行的节点边框闪烁</li>
+        <li><strong>执行完成:</strong> 显示完成状态，可查看执行日志</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">7.2 状态栏信息</h3>
+      <table class="doc-table">
+        <thead><tr><th>状态</th><th>显示内容</th></tr></thead>
+        <tbody>
+          <tr><td>空闲</td><td>规则名称 | 节点数 | 连接数</td></tr>
+          <tr><td>执行中</td><td>进度条 | 节点 X/Y | 当前节点名称</td></tr>
+          <tr><td>完成</td><td>总耗时 | 成功/失败节点数</td></tr>
+          <tr><td>失败</td><td>错误节点 | 错误信息摘要</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 8. Toast 规范 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">八、Toast 规范</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">8.1 Toast 类型</h3>
+      <table class="doc-table">
+        <thead><tr><th>类型</th><th>颜色</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td>success</td><td style="color: #00ff88;">绿色</td><td>操作成功提示</td></tr>
+          <tr><td>error</td><td style="color: #ff4c4c;">红色</td><td>错误信息</td></tr>
+          <tr><td>warning</td><td style="color: #ffdd00;">黄色</td><td>警告信息</td></tr>
+          <tr><td>info</td><td style="color: #00f0ff;">青色</td><td>一般提示</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">8.2 Toast 场景</h3>
+      <ul class="doc-list">
+        <li><strong>保存成功:</strong> "规则图已保存"（success）</li>
+        <li><strong>校验失败:</strong> "规则图存在循环依赖"（error）</li>
+        <li><strong>执行中断:</strong> "节点执行超时"（warning）</li>
+        <li><strong>类型不匹配:</strong> "IMAGE 端口不能连接到 BBOX 端口"（info）</li>
+      </ul>
+    </div>
+
+    <!-- 9. 错误处理 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">九、错误处理</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">9.1 连接错误</h3>
+      <ul class="doc-list">
+        <li>类型不兼容时：阻止连接，显示 Toast 提示</li>
+        <li>必需端口未连接：保存时校验并提示</li>
+        <li>自连接（节点连接到自身）：阻止并提示</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">9.2 执行错误</h3>
+      <ul class="doc-list">
+        <li>节点执行失败：节点边框变红，显示错误图标</li>
+        <li>执行中断：保留已执行节点状态，可继续或重置</li>
+        <li>网络错误：显示重连提示，自动重试</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

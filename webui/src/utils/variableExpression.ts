@@ -7,22 +7,31 @@
 
 // ============ 类型定义 ============
 
+/** 变量默认值类型 */
+export type VariableDefaultValue = string | number | boolean | null
+
+/** 变量实际值类型（支持对象属性访问） */
+type VariableValue = VariableDefaultValue | Record<string, unknown> | unknown[]
+
 export interface Variable {
   name: string
   type: 'STRING' | 'NUMBER' | 'BOOLEAN' | 'IMAGE' | 'BBOX'
-  defaultValue?: any
+  defaultValue?: VariableValue
   description?: string
 }
 
 export interface EvaluationContext {
   variables: Map<string, Variable>
-  builtins?: Record<string, any>
+  builtins?: Record<string, BuiltinValue>
 }
 
 // ============ 内置变量 ============
 
-export const BUILTIN_VARIABLES: Record<string, any> = {
-  '$now': () => new Date().toISOString(),
+/** 内置变量值类型 */
+type BuiltinValue = VariableDefaultValue | (() => VariableDefaultValue)
+
+export const BUILTIN_VARIABLES: Record<string, BuiltinValue> = {
+  $now: () => new Date().toISOString(),
   '$graph.id': null,
   '$execution.id': null,
   '$node.id': null,
@@ -67,22 +76,23 @@ export function isSimpleVariableRef(str: string): boolean {
 export function getVariableRefValue(
   str: string,
   context: EvaluationContext
-): any {
+): VariableDefaultValue | undefined {
   const match = str.match(EXPRESSION_REGEX)
   if (!match) return str
 
   const path = match[1].trim()
-  return resolvePath(path, context)
+  return resolvePath(path, context) as VariableDefaultValue | undefined
 }
 
 /**
  * 解析路径（如 a.b.c 或 arr[0]）
  */
-export function resolvePath(path: string, context: EvaluationContext): any {
+export function resolvePath(path: string, context: EvaluationContext): VariableValue | undefined {
   // 检查内置变量
   if (path.startsWith('$')) {
     if (context.builtins && path in context.builtins) {
-      return context.builtins[path]
+      const builtin = context.builtins[path]
+      return typeof builtin === 'function' ? builtin() : builtin
     }
     return undefined
   }
@@ -94,7 +104,7 @@ export function resolvePath(path: string, context: EvaluationContext): any {
   const variable = context.variables.get(firstPart)
   if (!variable) return undefined
 
-  let value = variable.defaultValue
+  let value: unknown = variable.defaultValue
 
   // 遍历路径
   for (let i = 1; i < parts.length; i++) {
@@ -102,15 +112,18 @@ export function resolvePath(path: string, context: EvaluationContext): any {
     // 处理数组索引 arr[0]
     const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/)
     if (arrayMatch) {
-      const arr = value[arrayMatch[1]]
-      value = arr ? arr[parseInt(arrayMatch[2])] : undefined
+      const arr = value as Record<string, unknown>
+      value = arr ? (arr[arrayMatch[1]] as unknown[]) : undefined
+      if (Array.isArray(value)) {
+        value = value[parseInt(arrayMatch[2])]
+      }
     } else {
-      value = value ? value[part] : undefined
+      value = value && typeof value === 'object' ? (value as Record<string, unknown>)[part] : undefined
     }
     if (value === undefined) break
   }
 
-  return value
+  return value as VariableValue | undefined
 }
 
 // ============ 表达式求值 ============
@@ -137,7 +150,7 @@ export function interpolate(
 export function evaluateExpression(
   expression: string,
   context: EvaluationContext
-): any {
+): VariableDefaultValue | undefined {
   // 先替换变量引用
   const interpolated = interpolate(expression, context)
 
@@ -166,7 +179,7 @@ function sanitizeExpression(expr: string): string {
 
   // 允许的字符集：a-zA-Z0-9_.\s+\-*/%<>=!&|?():,"'[]
   const allowed = expr.replace(
-    /[^a-zA-Z0-9_.\s+\-*/%<>=!&|?():,"'\[\]]+/g,
+    /[^a-zA-Z0-9_.\s+\-*/%<>=!&|?():,"'[\]]+/g,
     ''
   )
   return allowed
@@ -238,7 +251,7 @@ export function getVariableTypeColor(type: Variable['type']): string {
  */
 export function createEvaluationContext(
   variables: Variable[],
-  builtins?: Record<string, any>
+  builtins?: Record<string, VariableDefaultValue>
 ): EvaluationContext {
   const varMap = new Map<string, Variable>()
   for (const v of variables) {
@@ -246,7 +259,7 @@ export function createEvaluationContext(
   }
   return {
     variables: varMap,
-    builtins: { ...BUILTIN_VARIABLES, ...builtins }
+    builtins: { ...BUILTIN_VARIABLES, ...builtins } as Record<string, BuiltinValue>
   }
 }
 
@@ -256,7 +269,7 @@ export function createEvaluationContext(
 export function evaluate(
   expression: string,
   context: EvaluationContext
-): any {
+): VariableDefaultValue | undefined {
   if (!expression || typeof expression !== 'string') {
     return expression
   }

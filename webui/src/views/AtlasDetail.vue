@@ -33,21 +33,23 @@
             取消
           </button>
           <div class="batch-divider" />
-          <select
+          <el-select
             v-model="batchTargetDirectory"
+            placeholder="选择目录"
+            clearable
             class="batch-dir-select"
           >
-            <option value="">
-              根目录
-            </option>
-            <option
+            <el-option
+              label="根目录"
+              value=""
+            />
+            <el-option
               v-for="dir in directories"
               :key="dir"
+              :label="dir"
               :value="dir"
-            >
-              {{ dir }}
-            </option>
-          </select>
+            />
+          </el-select>
           <button
             class="ui-btn ui-btn-sm"
             :disabled="selectedImages.length === 0"
@@ -148,22 +150,25 @@
             v-if="activeTab === 'images'"
             class="header-actions"
           >
-            <div class="select-wrapper">
-              <select
+            <div class="select-wrapper dir-wrapper">
+              <el-select
                 v-model="selectedDirectory"
+                placeholder="全部目录"
+                clearable
+                class="dir-select"
                 @change="onDirectoryChange"
               >
-                <option value="">
-                  全部目录
-                </option>
-                <option
+                <el-option
+                  label="全部目录"
+                  value=""
+                />
+                <el-option
                   v-for="dir in directories"
                   :key="dir"
+                  :label="dir"
                   :value="dir"
-                >
-                  {{ dir }}
-                </option>
-              </select>
+                />
+              </el-select>
             </div>
             <div
               class="sort-wrapper"
@@ -244,17 +249,12 @@
                   :class="{ selected: batchMode && isImageSelected(img.id) }"
                 >
                   <!-- 复选框 - 仅在批量模式下显示 -->
-                  <label
+                  <el-checkbox
                     v-if="batchMode"
-                    class="checkbox-wrapper"
+                    :model-value="isImageSelected(img.id)"
+                    @update:model-value="toggleImageSelection(img.id)"
                     @click.stop
-                  >
-                    <input
-                      type="checkbox"
-                      :checked="isImageSelected(img.id)"
-                      @change="toggleImageSelection(img.id)"
-                    >
-                  </label>
+                  />
                   <img
                     :src="getImageUrl(img.file_path)"
                     :alt="getFileName(img.file_path)"
@@ -374,12 +374,11 @@
                 name="folder-plus"
                 class="input-icon"
               />
-              <input
+              <el-input
                 v-model="newDirectoryName"
-                type="text"
                 placeholder="输入新目录名称"
                 @keyup.enter="handleCreateDirectory"
-              >
+              />
             </div>
             <button
               class="ui-btn ui-btn-primary"
@@ -397,10 +396,10 @@
             <div
               v-for="dir in directories"
               :key="dir"
-              class="dir-item"
+              :class="['dir-item', { active: dir === selectedDirectory }]"
             >
               <div class="dir-info">
-                <FolderIcon class="dir-icon" />
+                <SvgIcon name="folder" class="dir-icon" />
                 <span class="dir-name">{{ dir }}</span>
               </div>
               <div class="dir-actions">
@@ -486,13 +485,13 @@
           <h3>图片详情</h3>
           <div class="dialog-actions">
             <el-button
-              type="text"
+              link
               @click="handleAnnotateImage(selectedImage)"
             >
               标注
             </el-button>
             <el-button
-              type="text"
+              link
               @click="handleDeleteImage(selectedImage)"
             >
               删除
@@ -531,27 +530,28 @@
                 class="meta-value dir-edit"
               >
                 <div class="dir-select-wrap">
-                  <select
+                  <el-select
                     v-model="editDirectoryValue"
+                    placeholder="选择目录"
+                    clearable
                     @change="onDirectorySelect"
                   >
-                    <option value="">
-                      根目录
-                    </option>
-                    <option
+                    <el-option
+                      label="根目录"
+                      value=""
+                    />
+                    <el-option
                       v-for="dir in directories"
                       :key="dir"
+                      :label="dir"
                       :value="dir"
-                    >
-                      {{ dir }}
-                    </option>
-                  </select>
-                  <input
+                    />
+                  </el-select>
+                  <el-input
                     v-model="editDirectoryValue"
-                    type="text"
                     placeholder="或输入新目录名"
                     class="dir-text-input"
-                  >
+                  />
                 </div>
                 <div class="dir-edit-actions">
                   <button
@@ -634,13 +634,12 @@
           </div>
           <div class="extract-config">
             <label class="section-label">提取张数</label>
-            <input
-              v-model.number="extractCount"
-              type="number"
-              min="1"
-              :max="videoMeta?.total_frames"
+            <el-input-number
+              v-model="extractCount"
+              :min="1"
+              :max="videoMeta?.total_frames || 999999"
               class="extract-input"
-            >
+            />
             <span
               v-if="videoMeta && extractCount"
               class="extract-hint"
@@ -1232,7 +1231,8 @@ onMounted(() => {
 }
 
 .batch-dir-select {
-  @apply px-2 py-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-xs text-[var(--text-primary)];
+  @apply text-xs;
+  width: 140px;
 }
 
 .ui-btn.danger {
@@ -1298,21 +1298,7 @@ onMounted(() => {
 }
 
 .select-wrapper {
-  @apply relative;
-
-  select {
-    @apply px-4 py-2 pr-9 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-sm cursor-pointer appearance-none;
-  }
-
-  select:focus {
-    @apply outline-none border-[var(--accent-cyan)];
-  }
-
-  &::after {
-    content: '';
-    @apply absolute right-3 top-1/2 -translate-y-1/2 border-l-1.5 border-r-1.5 border-t-1.5 border-l-transparent border-r-transparent border-t-[var(--text-muted)];
-    pointer-events: none;
-  }
+  @apply relative flex-1 min-w-0;
 }
 
 .action-btn {
@@ -1530,15 +1516,17 @@ onMounted(() => {
   @apply w-4.5 h-4.5 text-[var(--text-muted)];
 }
 
-.input-group input {
-  @apply flex-1 py-3 bg-transparent border-none text-sm text-[var(--text-primary)];
+.input-group :deep(.el-input__wrapper) {
+  @apply flex-1 py-0 px-0 bg-transparent;
+  box-shadow: none !important;
+  border: none !important;
 }
 
-.input-group input:focus {
-  @apply outline-none;
+.input-group :deep(.el-input__inner) {
+  @apply py-3 text-sm text-[var(--text-primary)];
 }
 
-.input-group input::placeholder {
+.input-group :deep(.el-input__inner::placeholder) {
   @apply text-[var(--text-muted)];
 }
 
@@ -1552,6 +1540,10 @@ onMounted(() => {
 
 .dir-item:hover {
   @apply border-[var(--accent-cyan)];
+}
+
+.dir-item.active {
+  @apply border-[var(--accent-cyan)] bg-[var(--bg-hover)];
 }
 
 .dir-info {
@@ -1775,22 +1767,6 @@ onMounted(() => {
   @apply flex flex-col gap-2;
 }
 
-.dir-select-wrap select {
-  @apply w-full px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-sm appearance-none cursor-pointer;
-}
-
-.dir-select-wrap select:focus {
-  @apply outline-none border-[var(--accent-cyan)];
-}
-
-.dir-text-input {
-  @apply w-full px-3 py-2 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-sm;
-}
-
-.dir-text-input:focus {
-  @apply outline-none border-[var(--accent-cyan)];
-}
-
 .dir-edit-actions {
   @apply flex gap-2 justify-end;
 }
@@ -1853,11 +1829,7 @@ onMounted(() => {
 }
 
 .extract-input {
-  @apply px-4 py-3 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] font-mono;
-}
-
-.extract-input:focus {
-  @apply outline-none border-[var(--accent-cyan)];
+  @apply font-mono;
 }
 
 .extract-hint {
@@ -1913,4 +1885,5 @@ onMounted(() => {
 .progress-error {
   @apply text-xs text-[#ff4466] text-center;
 }
+
 </style>

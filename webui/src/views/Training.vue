@@ -42,79 +42,62 @@
         <div class="config-form">
           <div class="form-group">
             <label>选择模型</label>
-            <div class="select-wrapper">
-              <select v-model="startForm.model_id">
-                <option
-                  :value="null"
-                  disabled
-                >
-                  选择模型
-                </option>
-                <option
-                  v-for="m in models"
-                  :key="m.id"
-                  :value="m.id"
-                >
-                  {{ m.name }}{{ m.version ? ` (${m.version})` : '' }}
-                </option>
-              </select>
-            </div>
+            <el-select
+              v-model="startForm.model_id"
+              placeholder="选择模型"
+              class="full-width"
+            >
+              <el-option
+                v-for="m in models"
+                :key="m.id"
+                :label="m.name + (m.version ? ` (${m.version})` : '')"
+                :value="m.id"
+              />
+            </el-select>
           </div>
 
           <div class="form-group">
             <label>选择图集</label>
-            <div class="select-wrapper">
-              <select v-model="startForm.atlas_id">
-                <option
-                  :value="null"
-                  disabled
-                >
-                  选择图集
-                </option>
-                <option
-                  v-for="a in atlases"
-                  :key="a.id"
-                  :value="a.id"
-                >
-                  {{ a.name }}
-                </option>
-              </select>
-            </div>
+            <el-select
+              v-model="startForm.atlas_id"
+              placeholder="选择图集"
+              class="full-width"
+            >
+              <el-option
+                v-for="a in atlases"
+                :key="a.id"
+                :label="a.name"
+                :value="a.id"
+              />
+            </el-select>
           </div>
 
           <div class="form-group">
             <label>训练轮数</label>
-            <div class="number-input">
-              <button @click="startForm.total_steps = Math.max(10, startForm.total_steps - 10)">
-                -
-              </button>
-              <input
-                v-model="startForm.total_steps"
-                type="number"
-                min="10"
-                max="1000"
-              >
-              <button @click="startForm.total_steps = Math.min(1000, startForm.total_steps + 10)">
-                +
-              </button>
-            </div>
+            <el-input-number
+              v-model="startForm.total_steps"
+              :min="10"
+              :max="1000"
+              :step="10"
+            />
           </div>
 
           <div class="form-group">
             <label>训练设备</label>
-            <div class="select-wrapper">
-              <select v-model="startForm.device">
-                <option value="cpu">
-                  CPU
-                </option>
-                <option
-                  v-if="deviceInfo.available"
-                  value="cuda"
-                >
-                  GPU ({{ deviceInfo.device_name }})
-                </option>
-              </select>
-            </div>
+            <el-select
+              v-model="startForm.device"
+              class="full-width"
+            >
+              <el-option
+                value="cpu"
+                label="CPU"
+              />
+              <el-option
+                v-if="deviceInfo.available"
+                value="cuda"
+                :label="`GPU (${deviceInfo.device_name})`"
+              />
+            </el-select>
             <span
               v-if="deviceInfo.available"
               class="device-hint"
@@ -131,25 +114,31 @@
 
           <div class="form-group">
             <label>预训练模型</label>
-            <div class="select-wrapper">
-              <select v-model="startForm.pretrained_model">
-                <option value="yolov8n.pt">
-                  YOLOv8n (最小)
-                </option>
-                <option value="yolov8s.pt">
-                  YOLOv8s (推荐)
-                </option>
-                <option value="yolov8m.pt">
-                  YOLOv8m (中)
-                </option>
-                <option value="yolov8l.pt">
-                  YOLOv8l (大)
-                </option>
-                <option value="yolov8x.pt">
-                  YOLOv8x (最大)
-                </option>
-              </select>
-            </div>
+            <el-select
+              v-model="startForm.pretrained_model"
+              class="full-width"
+            >
+              <el-option
+                value="yolov8n.pt"
+                label="YOLOv8n (最小)"
+              />
+              <el-option
+                value="yolov8s.pt"
+                label="YOLOv8s (推荐)"
+              />
+              <el-option
+                value="yolov8m.pt"
+                label="YOLOv8m (中)"
+              />
+              <el-option
+                value="yolov8l.pt"
+                label="YOLOv8l (大)"
+              />
+              <el-option
+                value="yolov8x.pt"
+                label="YOLOv8x (最大)"
+              />
+            </el-select>
           </div>
 
           <button
@@ -219,7 +208,7 @@
                 class="job-actions"
               >
                 <el-button
-                  type="text"
+                  link
                   size="small"
                   @click="handleStop(job)"
                 >
@@ -791,47 +780,12 @@ onUnmounted(() => {
   }
 }
 
-.select-wrapper {
-  @apply relative;
-
-  select {
-    @apply w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] cursor-pointer appearance-none transition-all;
-
-    &:focus {
-      @apply outline-none border-[var(--accent-cyan)];
-    }
-
-    option {
-      @apply bg-[var(--bg-card)];
-    }
-  }
-
-  &::after {
-    content: '';
-    @apply absolute right-3 top-1/2 -translate-y-1/2 border-l-1 border-r-1 border-t-1 border-l-transparent border-r-transparent border-t-[var(--text-muted)];
-    pointer-events: none;
-  }
-}
-
-.number-input {
-  @apply flex items-center bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded overflow-hidden;
-
-  button {
-    @apply w-8 h-8 bg-transparent border-none text-[var(--text-secondary)] text-base cursor-pointer transition-all;
-    &:hover {
-      @apply bg-[var(--bg-hover)] text-[var(--accent-cyan)];
-    }
-  }
-
-  input {
-    @apply flex-1 px-2 py-2 bg-transparent border-none text-[var(--text-primary)] text-xs font-mono text-center;
-    &:focus {
-      @apply outline-none;
-    }
-  }
+.full-width {
+  width: 100%;
 }
 
 .panel-icon {
   @apply w-4 h-4 text-[var(--accent-cyan)];
 }
+
 </style>

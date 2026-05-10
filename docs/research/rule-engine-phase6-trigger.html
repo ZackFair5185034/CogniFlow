@@ -1,0 +1,228 @@
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  Phase 6 技术实现文档：规则触发机制
+
+  实现规则的手动触发、定时触发和 Webhook 触发三种机制。
+  版本: v1.0 | 日期: 2026-05-06
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phase 6: 规则触发机制 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+
+    <h1 class="doc-title">Phase 6 技术实现文档：规则触发机制</h1>
+    <p class="doc-subtitle">实现规则的手动触发、定时触发和 Webhook 触发三种机制</p>
+
+    <hr class="doc-divider">
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">一、阶段目标</h2>
+      <p class="doc-text" style="color: var(--text-secondary);"><strong>目标：</strong>实现规则的手动触发、定时触发和 Webhook 触发三种机制。</p>
+      <p class="doc-text" style="color: var(--text-secondary); margin-top: 12px;"><strong>验收标准：</strong></p>
+      <ul class="doc-list">
+        <li>手动触发：点击按钮立即执行规则</li>
+        <li>定时触发：可配置 Cron 表达式，按计划执行</li>
+        <li>Webhook 触发：提供 Webhook URL，外部请求触发执行</li>
+        <li>规则列表页面显示各规则的上次执行时间和状态</li>
+        <li>规则激活/停用切换生效</li>
+      </ul>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">二、触发类型定义</h2>
+
+      <h3 class="doc-subsection-title">2.1 触发器类型枚举</h3>
+      <table class="doc-table">
+        <thead><tr><th>类型</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><code class="doc-badge">MANUAL</code></td><td>手动触发</td></tr>
+          <tr><td><code class="doc-badge">TIMER</code></td><td>定时触发</td></tr>
+          <tr><td><code class="doc-badge">WEBHOOK</code></td><td>Webhook 触发</td></tr>
+          <tr><td><code class="doc-badge">EVENT</code></td><td>事件触发（预留）</td></tr>
+        </tbody>
+      </table>
+
+      <h3 class="doc-subsection-title">2.2 规则激活状态</h3>
+      <p class="doc-text" style="color: var(--text-secondary);">规则模型包含触发配置和执行状态：</p>
+      <ul class="doc-list">
+        <li><code class="doc-badge">trigger_type</code> — 触发类型</li>
+        <li><code class="doc-badge">trigger_config</code> — 触发配置（TimerConfig / WebhookConfig）</li>
+        <li><code class="doc-badge">is_active</code> — 是否激活</li>
+        <li><code class="doc-badge">last_executed_at</code> — 上次执行时间</li>
+        <li><code class="doc-badge">last_execution_status</code> — 上次执行状态</li>
+      </ul>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">三、手动触发</h2>
+
+      <h3 class="doc-subsection-title">3.1 API 接口</h3>
+      <div class="doc-code" style="font-size: 0.82rem; line-height: 1.4;">
+<pre>POST /api/rule-engine/rules/{rule_id}/execute
+Request Body:
+{ "rule_id": 1, "trigger_type": "manual", "trigger_data": {} }
+
+Response 202:
+{ "execution_id": 123, "status": "pending", "message": "规则执行已启动" }</pre>
+      </div>
+      <p class="doc-text" style="color: var(--text-secondary); margin-top: 8px;">执行在后台异步进行，不阻塞请求。</p>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">四、定时触发</h2>
+
+      <h3 class="doc-subsection-title">4.1 APScheduler 集成</h3>
+      <p class="doc-text" style="color: var(--text-secondary);">使用 <code class="doc-badge">AsyncIOScheduler</code> 实现定时调度：</p>
+      <ul class="doc-list">
+        <li><code class="doc-badge">add_timer_job()</code> — 按 Cron 表达式添加定时任务</li>
+        <li><code class="doc-badge">remove_timer_job()</code> — 移除定时任务</li>
+        <li><code class="doc-badge">update_timer_job()</code> — 重新调度（修改配置后）</li>
+        <li>启动时从数据库加载所有定时规则</li>
+      </ul>
+
+      <h3 class="doc-subsection-title">4.2 启动初始化</h3>
+      <div class="doc-code" style="font-size: 0.82rem; line-height: 1.4;">
+<pre>@app.on_event("startup")
+async def startup_event():
+    scheduler = get_scheduler()
+    scheduler.start()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    scheduler = get_scheduler()
+    scheduler.stop()</pre>
+      </div>
+
+      <h3 class="doc-subsection-title">4.3 Cron 表达式配置</h3>
+      <p class="doc-text" style="color: var(--text-secondary);">CronInput 组件提供常用预设和手动编辑：</p>
+      <table class="doc-table">
+        <thead><tr><th>预设</th><th>Cron 表达式</th></tr></thead>
+        <tbody>
+          <tr><td>每小时</td><td><code class="doc-badge">0 * * * *</code></td></tr>
+          <tr><td>每天午夜</td><td><code class="doc-badge">0 0 * * *</code></td></tr>
+          <tr><td>每天8点</td><td><code class="doc-badge">0 8 * * *</code></td></tr>
+          <tr><td>每周一</td><td><code class="doc-badge">0 0 * * 1</code></td></tr>
+          <tr><td>每月1号</td><td><code class="doc-badge">0 0 1 * *</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">五、Webhook 触发</h2>
+
+      <h3 class="doc-subsection-title">5.1 Webhook 注册</h3>
+      <div class="doc-code" style="font-size: 0.82rem; line-height: 1.4;">
+<pre>POST /api/webhook/register/{rule_id}
+Response:
+{
+  "webhook_id": "xxx",
+  "webhook_url": "https://host/api/webhook/trigger/xxx",
+  "secret": "xxx"  // HMAC-SHA256 签名密钥
+}</pre>
+      </div>
+
+      <h3 class="doc-subsection-title">5.2 Webhook 签名验证</h3>
+      <p class="doc-text" style="color: var(--text-secondary);">使用 HMAC-SHA256 签名验证请求来源：</p>
+      <ul class="doc-list">
+        <li><code class="doc-badge">sign_payload()</code> — 生成签名 <code class="doc-badge">sha256=...</code></li>
+        <li><code class="doc-badge">verify_signature()</code> — 验证签名（恒定时间比较防时序攻击）</li>
+        <li><code class="doc-badge">parse_github_webhook()</code> — GitHub 风格 <code class="doc-badge">sha256=</code> 前缀验证</li>
+      </ul>
+
+      <h3 class="doc-subsection-title">5.3 Webhook 触发端点</h3>
+      <div class="doc-code" style="font-size: 0.82rem; line-height: 1.4;">
+<pre>POST /api/webhook/trigger/{webhook_id}
+Headers: X-Webhook-Signature (可选)
+Body: JSON 数据（作为 trigger_data 传入）
+
+Response:
+{ "status": "ok", "execution_id": 123, "message": "规则执行已触发" }</pre>
+      </div>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">六、规则激活/停用</h2>
+
+      <h3 class="doc-subsection-title">6.1 激活</h3>
+      <div class="doc-code" style="font-size: 0.82rem; line-height: 1.4;">
+<pre>POST /api/rule-engine/rules/{rule_id}/activate
+# 定时触发：立即开始调度
+# Webhook：启用 webhook</pre>
+      </div>
+
+      <h3 class="doc-subsection-title">6.2 停用</h3>
+      <div class="doc-code" style="font-size: 0.82rem; line-height: 1.4;">
+<pre>POST /api/rule-engine/rules/{rule_id}/deactivate
+# 定时任务被移除
+# Webhook 被禁用</pre>
+      </div>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">七、规则列表页面</h2>
+
+      <h3 class="doc-subsection-title">7.1 规则列表 API</h3>
+      <div class="doc-code" style="font-size: 0.82rem; line-height: 1.4;">
+<pre>GET /api/rule-engine/rules?trigger_type=&amp;is_active=
+Response:
+[
+  {
+    "id": 1,
+    "name": "My Rule",
+    "trigger_type": "timer",
+    "is_active": true,
+    "last_executed_at": "2026-05-06T...",
+    "last_execution_status": "completed",
+    "node_count": 5,
+    "created_at": "..."
+  }
+]</pre>
+      </div>
+
+      <h3 class="doc-subsection-title">7.2 规则卡片功能</h3>
+      <p class="doc-text" style="color: var(--text-secondary);">规则卡片显示：</p>
+      <ul class="doc-list">
+        <li>规则名称和描述</li>
+        <li>触发类型徽章（手动/定时/Webhook）</li>
+        <li>激活状态</li>
+        <li>节点数量</li>
+        <li>上次执行时间和状态</li>
+      </ul>
+      <p class="doc-text" style="color: var(--text-secondary); margin-top: 12px;">快捷操作：激活/停用切换、执行、编辑</p>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">八、验收检查清单</h2>
+      <table class="doc-table">
+        <thead><tr><th>类别</th><th>验收项</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="3">手动触发</td><td>点击执行按钮创建执行记录</td></tr>
+          <tr><td>规则异步执行（不阻塞请求）</td></tr>
+          <tr><td>返回执行 ID 供查询</td></tr>
+          <tr><td rowspan="4">定时触发</td><td>Cron 表达式正确解析</td></tr>
+          <tr><td>定时任务在正确时间执行</td></tr>
+          <tr><td>规则激活时定时任务启动</td></tr>
+          <tr><td>规则停用时定时任务移除</td></tr>
+          <tr><td rowspan="3">Webhook 触发</td><td>生成唯一的 Webhook URL</td></tr>
+          <tr><td>支持签名验证</td></tr>
+          <tr><td>POST 请求能触发规则执行</td></tr>
+          <tr><td rowspan="3">激活/停用</td><td>激活按钮启用定时任务/Webhook</td></tr>
+          <tr><td>停用按钮停止定时任务/Webhook</td></tr>
+          <tr><td>状态在列表中正确显示</td></tr>
+          <tr><td rowspan="5">规则列表</td><td>显示所有规则信息</td></tr>
+          <tr><td>支持按类型和状态筛选</td></tr>
+          <tr><td>显示上次执行时间和状态</td></tr>
+          <tr><td>快捷操作按钮正确工作</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</body>
+</html>
