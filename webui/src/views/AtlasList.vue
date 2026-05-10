@@ -6,41 +6,95 @@
         <h2>图集管理</h2>
         <span class="subtitle">管理训练数据集</span>
       </div>
-      <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
+      <button
+        class="ui-btn ui-btn-primary"
+        @click="showCreateDialog = true"
+      >
         <SvgIcon name="plus" />
         创建图集
       </button>
     </div>
 
     <!-- 图集表格 -->
-    <div class="ui-card" style="width: 100%; min-width: 0;">
+    <div
+      class="ui-card"
+      style="width: 100%; min-width: 0;"
+    >
       <div class="table-wrapper">
-        <el-table :data="atlases" v-loading="loading" :row-class-name="tableRowClassName" style="width: 100%">
-          <el-table-column prop="id" label="ID" width="100">
+        <el-table
+          v-loading="loading"
+          :data="atlases"
+          :row-class-name="tableRowClassName"
+          style="width: 100%"
+        >
+          <el-table-column
+            prop="id"
+            label="ID"
+            width="100"
+          >
             <template #default="{ row }">
               <span class="id-badge">#{{ row.id }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="name" label="名称" min-width="200">
+          <el-table-column
+            prop="name"
+            label="名称"
+            min-width="200"
+          >
             <template #default="{ row }">
               <div class="name-cell">
-                <SvgIcon name="folder" class="folder-icon" />
+                <SvgIcon
+                  name="folder"
+                  class="folder-icon"
+                />
                 <span>{{ row.name }}</span>
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="description" label="描述" min-width="240" />
-          <el-table-column prop="created_at" label="创建时间" width="160">
+          <el-table-column
+            prop="description"
+            label="描述"
+            min-width="240"
+          />
+          <el-table-column
+            prop="created_at"
+            label="创建时间"
+            width="160"
+          >
             <template #default="{ row }">
               <span class="time-badge">{{ formatDate(row.created_at) }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="240" fixed="right">
+          <el-table-column
+            label="操作"
+            width="200"
+            fixed="right"
+            align="center"
+            header-align="center"
+          >
             <template #default="{ row }">
               <div class="action-buttons">
-                <el-button type="text" @click="handleRename(row)">编辑</el-button>
-                <el-button type="text" @click="$router.push(`/atlas/${row.id}`)">查看</el-button>
-                <el-button type="text" @click="handleDelete(row)">删除</el-button>
+                <el-button
+                  type="text"
+                  size="small"
+                  @click="handleRename(row)"
+                >
+                  编辑
+                </el-button>
+                <el-button
+                  type="text"
+                  size="small"
+                  @click="$router.push(`/atlas/${row.id}`)"
+                >
+                  查看
+                </el-button>
+                <el-button
+                  type="text"
+                  size="small"
+                  @click="handleDelete(row)"
+                >
+                  删除
+                </el-button>
               </div>
             </template>
           </el-table-column>
@@ -49,27 +103,51 @@
     </div>
 
     <!-- 创建对话框 -->
-    <div class="dialog-overlay" v-if="showCreateDialog" @click.self="showCreateDialog = false">
+    <div
+      v-if="showCreateDialog"
+      class="dialog-overlay"
+      @click.self="showCreateDialog = false"
+    >
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>创建新图集</h3>
-          <button class="close-btn" @click="showCreateDialog = false">
+          <button
+            class="close-btn"
+            @click="showCreateDialog = false"
+          >
             <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
           <div class="form-group">
             <label>图集名称</label>
-            <input type="text" v-model="createForm.name" placeholder="输入图集名称" />
+            <input
+              v-model="createForm.name"
+              type="text"
+              placeholder="输入图集名称"
+            >
           </div>
           <div class="form-group">
             <label>描述</label>
-            <textarea v-model="createForm.description" rows="3" placeholder="输入描述（可选）"></textarea>
+            <textarea
+              v-model="createForm.description"
+              rows="3"
+              placeholder="输入描述（可选）"
+            />
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="ui-btn" @click="showCreateDialog = false">取消</button>
-          <button class="ui-btn ui-btn-primary" @click="handleCreate" :disabled="creating">
+          <button
+            class="ui-btn"
+            @click="showCreateDialog = false"
+          >
+            取消
+          </button>
+          <button
+            class="ui-btn ui-btn-primary"
+            :disabled="creating"
+            @click="handleCreate"
+          >
             {{ creating ? '创建中...' : '创建' }}
           </button>
         </div>
@@ -77,27 +155,51 @@
     </div>
 
     <!-- 编辑对话框 -->
-    <div class="dialog-overlay" v-if="showRenameDialog" @click.self="showRenameDialog = false">
+    <div
+      v-if="showRenameDialog"
+      class="dialog-overlay"
+      @click.self="showRenameDialog = false"
+    >
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>编辑图集</h3>
-          <button class="close-btn" @click="showRenameDialog = false">
+          <button
+            class="close-btn"
+            @click="showRenameDialog = false"
+          >
             <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
           <div class="form-group">
             <label>图集名称</label>
-            <input type="text" v-model="renameForm.name" placeholder="输入图集名称" />
+            <input
+              v-model="renameForm.name"
+              type="text"
+              placeholder="输入图集名称"
+            >
           </div>
           <div class="form-group">
             <label>描述</label>
-            <textarea v-model="renameForm.description" rows="3" placeholder="输入描述（可选）"></textarea>
+            <textarea
+              v-model="renameForm.description"
+              rows="3"
+              placeholder="输入描述（可选）"
+            />
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="ui-btn" @click="showRenameDialog = false">取消</button>
-          <button class="ui-btn ui-btn-primary" @click="handleRenameSubmit" :disabled="renaming">
+          <button
+            class="ui-btn"
+            @click="showRenameDialog = false"
+          >
+            取消
+          </button>
+          <button
+            class="ui-btn ui-btn-primary"
+            :disabled="renaming"
+            @click="handleRenameSubmit"
+          >
             {{ renaming ? '保存中...' : '保存' }}
           </button>
         </div>
@@ -110,8 +212,9 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi } from '@/api'
+import type { AtlasResponse } from '@/types/api'
 
-const atlases = ref<any[]>([])
+const atlases = ref<AtlasResponse[]>([])
 const loading = ref(false)
 const showCreateDialog = ref(false)
 const creating = ref(false)
@@ -120,7 +223,7 @@ const createForm = ref({ name: '', description: '' })
 // 编辑状态
 const showRenameDialog = ref(false)
 const renaming = ref(false)
-const renameTarget = ref<any>(null)
+const renameTarget = ref<AtlasResponse | null>(null)
 const renameForm = ref({ name: '', description: '' })
 
 const formatDate = (dateStr: string) => {
@@ -141,7 +244,7 @@ const loadAtlases = async () => {
   try {
     const res = await atlasApi.list()
     atlases.value = res.data
-  } catch (error) {
+  } catch {
     ElMessage.error('加载图集失败')
   } finally {
     loading.value = false
@@ -160,15 +263,15 @@ const handleCreate = async () => {
     showCreateDialog.value = false
     createForm.value = { name: '', description: '' }
     loadAtlases()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '创建失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '创建失败'
     ElMessage.error(msg)
   } finally {
     creating.value = false
   }
 }
 
-const handleRename = (row: any) => {
+const handleRename = (row: AtlasResponse) => {
   renameTarget.value = row
   renameForm.value = { name: row.name, description: row.description || '' }
   showRenameDialog.value = true
@@ -185,15 +288,15 @@ const handleRenameSubmit = async () => {
     ElMessage.success('编辑成功')
     showRenameDialog.value = false
     loadAtlases()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '编辑失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '编辑失败'
     ElMessage.error(msg)
   } finally {
     renaming.value = false
   }
 }
 
-const handleDelete = async (row: any) => {
+const handleDelete = async (row: AtlasResponse) => {
   try {
     await ElMessageBox.confirm(`确定删除图集 "${row.name}" 吗？此操作不可撤销。`, '删除确认', {
       type: 'warning',
@@ -303,7 +406,8 @@ onMounted(loadAtlases)
 }
 
 .action-buttons {
-  @apply flex gap-4 items-center;
+  @apply flex items-center justify-around;
+  width: 100%;
 }
 
 /* 对话框 */

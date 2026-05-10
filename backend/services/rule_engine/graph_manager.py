@@ -97,6 +97,7 @@ class GraphManager:
         edges_json: Optional[str] = None,
         variables_json: Optional[str] = None,
         is_active: Optional[bool] = None,
+        cron_expression: Optional[str] = None,
         thumbnail: Optional[str] = None,
     ) -> Optional[RuleGraph]:
         """更新规则图。
@@ -109,6 +110,7 @@ class GraphManager:
             edges_json: 边JSON字符串
             variables_json: 变量JSON字符串
             is_active: 是否激活
+            cron_expression: 定时触发 Cron 表达式
             thumbnail: 缩略图 Base64
 
         Returns:
@@ -130,6 +132,8 @@ class GraphManager:
             graph.variables_json = variables_json
         if is_active is not None:
             graph.is_active = is_active
+        if cron_expression is not None:
+            graph.cron_expression = cron_expression
         if thumbnail is not None:
             graph.thumbnail = thumbnail
 

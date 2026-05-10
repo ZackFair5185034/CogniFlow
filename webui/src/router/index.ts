@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import NProgress from 'nprogress'
 import Home from '@/views/Home.vue'
 import AtlasList from '@/views/AtlasList.vue'
 import AtlasDetail from '@/views/AtlasDetail.vue'
@@ -22,6 +23,14 @@ const router = createRouter({
     // 规则设计器 - 顶层路由，隐藏 App 布局
     { path: '/rule-engine/design/:id', name: 'rule-canvas', component: RuleCanvas, meta: { layout: 'none' } },
   ],
+})
+
+router.beforeEach((_to, _from) => {
+  NProgress.start()
+})
+
+router.afterEach(() => {
+  NProgress.done()
 })
 
 export default router

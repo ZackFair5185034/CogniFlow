@@ -3,20 +3,37 @@
     <!-- 顶部工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <button class="ui-btn" @click="goBack">
+        <button
+          class="ui-btn"
+          @click="goBack"
+        >
           <SvgIcon name="back" />
           返回
         </button>
-        <div class="image-nav" v-if="currentImage">
-          <button class="ui-btn" @click="prevImage" :disabled="!hasPrev">
+        <div
+          v-if="currentImage"
+          class="image-nav"
+        >
+          <button
+            class="ui-btn"
+            :disabled="!hasPrev"
+            @click="prevImage"
+          >
             <SvgIcon name="chevron-left" />
           </button>
           <span class="nav-info">#{{ currentImage.id }}</span>
-          <button class="ui-btn" @click="nextImage" :disabled="!hasNext">
+          <button
+            class="ui-btn"
+            :disabled="!hasNext"
+            @click="nextImage"
+          >
             <SvgIcon name="chevron-right" />
           </button>
         </div>
-        <div class="progress-stats" v-if="totalImages > 0">
+        <div
+          v-if="totalImages > 0"
+          class="progress-stats"
+        >
           <div class="stat-item">
             <span class="stat-label">标注</span>
             <span class="stat-value done">{{ annotatedImages }}</span>
@@ -27,9 +44,15 @@
             <span class="stat-value">{{ totalImages }}</span>
           </div>
           <div class="stat-bar">
-            <div class="stat-fill" :style="{ width: progressPercent + '%' }"></div>
+            <div
+              class="stat-fill"
+              :style="{ width: progressPercent + '%' }"
+            />
           </div>
-          <span class="stat-pct" :class="{ done: progressPercent === 100 }">{{ progressPercent }}%</span>
+          <span
+            class="stat-pct"
+            :class="{ done: progressPercent === 100 }"
+          >{{ progressPercent }}%</span>
         </div>
       </div>
       <div class="toolbar-center">
@@ -40,7 +63,11 @@
         </div>
       </div>
       <div class="toolbar-right">
-        <button class="ui-btn ui-btn-primary" @click="saveAnnotations" :disabled="!hasChanges || saving">
+        <button
+          class="ui-btn ui-btn-primary"
+          :disabled="!hasChanges || saving"
+          @click="saveAnnotations"
+        >
           <SvgIcon name="save" />
           {{ saving ? '保存中...' : '保存 (S)' }}
         </button>
@@ -54,21 +81,40 @@
         <div class="panel-header">
           <h3>类别库</h3>
           <div class="header-actions">
-            <div class="header-dropdown" @click.stop>
-              <button class="ui-btn ui-btn-small" @click="showHeaderMenu = !showHeaderMenu">
+            <div
+              class="header-dropdown"
+              @click.stop
+            >
+              <button
+                class="ui-btn ui-btn-small"
+                @click="showHeaderMenu = !showHeaderMenu"
+              >
                 <SvgIcon name="menu" />
               </button>
-              <div class="dropdown-menu" v-if="showHeaderMenu" @click="showHeaderMenu = false">
-                <div class="dropdown-item" @click="handleExport">
+              <div
+                v-if="showHeaderMenu"
+                class="dropdown-menu"
+                @click="showHeaderMenu = false"
+              >
+                <div
+                  class="dropdown-item"
+                  @click="handleExport"
+                >
                   <SvgIcon name="download" />
                   <span>导出类别</span>
                 </div>
-                <div class="dropdown-item" @click="triggerImport">
+                <div
+                  class="dropdown-item"
+                  @click="triggerImport"
+                >
                   <SvgIcon name="upload" />
                   <span>导入类别</span>
                 </div>
-                <div class="dropdown-divider"></div>
-                <div class="dropdown-item" @click="openCreateDialog">
+                <div class="dropdown-divider" />
+                <div
+                  class="dropdown-item"
+                  @click="openCreateDialog"
+                >
                   <SvgIcon name="plus" />
                   <span>新建类别</span>
                 </div>
@@ -78,15 +124,36 @@
         </div>
 
         <!-- 路径导航 + 当前选中标签 -->
-        <div class="breadcrumb" v-if="currentPath.length > 0 || selectedCategoryId">
-          <span class="breadcrumb-item" @click="navigateToRoot">根目录</span>
-          <template v-for="(item, idx) in currentPath" :key="item.id">
-            <SvgIcon name="chevron-right" class="breadcrumb-sep" />
-            <span class="breadcrumb-item" @click="navigateTo(idx)">{{ item.name }}</span>
+        <div
+          v-if="currentPath.length > 0 || selectedCategoryId"
+          class="breadcrumb"
+        >
+          <span
+            class="breadcrumb-item"
+            @click="navigateToRoot"
+          >根目录</span>
+          <template
+            v-for="(item, idx) in currentPath"
+            :key="item.id"
+          >
+            <SvgIcon
+              name="chevron-right"
+              class="breadcrumb-sep"
+            />
+            <span
+              class="breadcrumb-item"
+              @click="navigateTo(idx)"
+            >{{ item.name }}</span>
           </template>
           <template v-if="selectedCategoryId">
-            <SvgIcon name="chevron-right" class="breadcrumb-sep" />
-            <span class="current-tag" :style="{ background: getSelectedCategoryColor }">
+            <SvgIcon
+              name="chevron-right"
+              class="breadcrumb-sep"
+            />
+            <span
+              class="current-tag"
+              :style="{ background: getSelectedCategoryColor }"
+            >
               {{ getSelectedCategoryName }}
             </span>
           </template>
@@ -100,20 +167,35 @@
             class="dir-item"
             @click="enterDirectory(dir)"
           >
-            <SvgIcon name="folder" class="dir-icon" />
+            <SvgIcon
+              name="folder"
+              class="dir-icon"
+            />
             <span class="dir-name">{{ dir.name }}</span>
             <div class="item-actions">
-              <button class="icon-btn" @click.stop="deleteCategory(dir.id)" title="删除">
+              <button
+                class="icon-btn"
+                title="删除"
+                @click.stop="deleteCategory(dir.id)"
+              >
                 <SvgIcon name="trash" />
               </button>
-              <SvgIcon name="chevron-right" class="enter-icon" />
+              <SvgIcon
+                name="chevron-right"
+                class="enter-icon"
+              />
             </div>
           </div>
         </div>
 
         <!-- 当前目录下的标签列表 -->
-        <div class="tag-list" v-if="currentCategories.length > 0">
-          <div class="tag-header">标签</div>
+        <div
+          v-if="currentCategories.length > 0"
+          class="tag-list"
+        >
+          <div class="tag-header">
+            标签
+          </div>
           <div
             v-for="(cat, idx) in currentCategories"
             :key="cat.id"
@@ -121,10 +203,17 @@
             :class="{ active: selectedCategoryId === cat.id }"
             @click="selectCategory(cat.id)"
           >
-            <span class="tag-color" :style="{ background: cat.color }"></span>
+            <span
+              class="tag-color"
+              :style="{ background: cat.color }"
+            />
             <span class="tag-name">{{ cat.name }}</span>
             <div class="item-actions">
-              <button class="icon-btn" @click.stop="deleteCategory(cat.id)" title="删除">
+              <button
+                class="icon-btn"
+                title="删除"
+                @click.stop="deleteCategory(cat.id)"
+              >
                 <SvgIcon name="trash" />
               </button>
               <span class="tag-hotkey">{{ idx + 1 }}</span>
@@ -132,26 +221,40 @@
           </div>
         </div>
 
-        <div v-if="currentItems.length === 0" class="empty-tip">
+        <div
+          v-if="currentItems.length === 0"
+          class="empty-tip"
+        >
           空目录
         </div>
       </div>
 
       <!-- 画布区域 -->
-      <div class="canvas-container" ref="canvasContainer">
+      <div
+        ref="canvasContainer"
+        class="canvas-container"
+      >
         <canvas
           ref="canvasRef"
           @mousedown="handleMouseDown"
           @mousemove="handleMouseMove"
           @mouseup="handleMouseUp"
           @mouseleave="handleMouseUp"
-        ></canvas>
-        <div class="canvas-loading" v-if="imageLoading">
-          <div class="loading-spinner"></div>
+        />
+        <div
+          v-if="imageLoading"
+          class="canvas-loading"
+        >
+          <div class="loading-spinner" />
           <span>加载图片中...</span>
         </div>
-        <div class="canvas-overlay" v-if="!currentImage && !imageLoading">
-          <div class="no-image">请先选择图片</div>
+        <div
+          v-if="!currentImage && !imageLoading"
+          class="canvas-overlay"
+        >
+          <div class="no-image">
+            请先选择图片
+          </div>
         </div>
       </div>
 
@@ -168,28 +271,45 @@
             :class="{ selected: selectedAnnotationIndex === index, pending: !ann.id }"
             @click="selectAnnotation(index)"
           >
-            <span class="ann-color" :style="{ background: getCategoryColor(ann.category_id) }"></span>
+            <span
+              class="ann-color"
+              :style="{ background: getCategoryColor(ann.category_id) }"
+            />
             <span class="ann-name">{{ getCategoryName(ann.category_id) }}</span>
             <span class="ann-bbox">[{{ formatBbox(ann.bbox) }}]</span>
             <div class="ann-actions">
-              <button class="icon-btn" @click.stop="removeAnnotation(index)" title="删除">
+              <button
+                class="icon-btn"
+                title="删除"
+                @click.stop="removeAnnotation(index)"
+              >
                 <SvgIcon name="trash" />
               </button>
             </div>
           </div>
         </div>
-        <div v-if="localAnnotations.length === 0" class="empty-tip">
-          暂无标注<br/>在画布上拖拽绘制框
+        <div
+          v-if="localAnnotations.length === 0"
+          class="empty-tip"
+        >
+          暂无标注<br>在画布上拖拽绘制框
         </div>
       </div>
     </div>
 
     <!-- 创建类别对话框 -->
-    <div class="dialog-overlay" v-if="showCategoryDialog" @click.self="closeCreateDialog">
+    <div
+      v-if="showCategoryDialog"
+      class="dialog-overlay"
+      @click.self="closeCreateDialog"
+    >
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>{{ categoryForm.is_directory ? '创建目录' : '创建标签' }}</h3>
-          <button class="close-btn" @click="closeCreateDialog">
+          <button
+            class="close-btn"
+            @click="closeCreateDialog"
+          >
             <SvgIcon name="close" />
           </button>
         </div>
@@ -219,14 +339,27 @@
           <!-- 名称 -->
           <div class="form-group">
             <label>名称</label>
-            <input type="text" v-model="categoryForm.name" :placeholder="categoryForm.is_directory ? '输入目录名称' : '输入标签名称'" />
+            <input
+              v-model="categoryForm.name"
+              type="text"
+              :placeholder="categoryForm.is_directory ? '输入目录名称' : '输入标签名称'"
+            >
           </div>
           <!-- 颜色（仅标签） -->
-          <div class="form-group" v-if="!categoryForm.is_directory">
+          <div
+            v-if="!categoryForm.is_directory"
+            class="form-group"
+          >
             <label>颜色</label>
             <div class="color-picker">
-              <input type="color" v-model="categoryForm.color" />
-              <span class="color-preview" :style="{ background: categoryForm.color }"></span>
+              <input
+                v-model="categoryForm.color"
+                type="color"
+              >
+              <span
+                class="color-preview"
+                :style="{ background: categoryForm.color }"
+              />
             </div>
           </div>
           <!-- 父目录 -->
@@ -238,8 +371,17 @@
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="ui-btn" @click="closeCreateDialog">取消</button>
-          <button class="ui-btn ui-btn-primary" @click="handleCreateCategory" :disabled="creatingCategory">
+          <button
+            class="ui-btn"
+            @click="closeCreateDialog"
+          >
+            取消
+          </button>
+          <button
+            class="ui-btn ui-btn-primary"
+            :disabled="creatingCategory"
+            @click="handleCreateCategory"
+          >
             {{ creatingCategory ? '创建中...' : '创建' }}
           </button>
         </div>
@@ -247,19 +389,32 @@
     </div>
 
     <!-- 导入类别对话框 -->
-    <div class="dialog-overlay" v-if="showImportDialog" @click.self="closeImportDialog">
+    <div
+      v-if="showImportDialog"
+      class="dialog-overlay"
+      @click.self="closeImportDialog"
+    >
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>导入类别</h3>
-          <button class="close-btn" @click="closeImportDialog">
+          <button
+            class="close-btn"
+            @click="closeImportDialog"
+          >
             <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-body">
           <!-- 步骤 1：文件选择 -->
-          <div v-if="!importPreviewData" class="form-group">
+          <div
+            v-if="!importPreviewData"
+            class="form-group"
+          >
             <label>选择 JSON 文件</label>
-            <div class="import-dropzone" @click="importFileInput?.click()">
+            <div
+              class="import-dropzone"
+              @click="importFileInput?.click()"
+            >
               <SvgIcon name="upload" />
               <span>点击选择文件</span>
               <span class="import-hint">支持 .json 格式的类别导出文件</span>
@@ -270,11 +425,14 @@
               accept=".json,application/json"
               style="display: none"
               @change="onImportFileSelected"
-            />
+            >
           </div>
 
           <!-- 步骤 2：预览 -->
-          <div v-if="importPreviewData" class="import-preview">
+          <div
+            v-if="importPreviewData"
+            class="import-preview"
+          >
             <div class="preview-stats">
               <div class="preview-stat">
                 <span class="stat-count">{{ importPreviewStats.directories }}</span>
@@ -290,17 +448,34 @@
               </div>
             </div>
             <div class="preview-tree">
-              <div v-for="node in importPreviewData.categories" :key="node.name" class="preview-node">
+              <div
+                v-for="node in importPreviewData.categories"
+                :key="node.name"
+                class="preview-node"
+              >
                 <SvgIcon :name="node.is_directory ? 'folder' : 'tag'" />
                 <span>{{ node.name }}</span>
-                <span v-if="node.children?.length" class="node-count">({{ countChildren(node) }} 子项)</span>
+                <span
+                  v-if="node.children?.length"
+                  class="node-count"
+                >({{ countChildren(node) }} 子项)</span>
               </div>
             </div>
-            <div v-if="importParseError" class="import-error">{{ importParseError }}</div>
+            <div
+              v-if="importParseError"
+              class="import-error"
+            >
+              {{ importParseError }}
+            </div>
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="ui-btn" @click="closeImportDialog">取消</button>
+          <button
+            class="ui-btn"
+            @click="closeImportDialog"
+          >
+            取消
+          </button>
           <button
             v-if="importPreviewData"
             class="ui-btn ui-btn-primary"
@@ -321,6 +496,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { categoryApi, annotationApi, atlasApi } from '@/api'
 import SvgIcon from '@/components/SvgIcon.vue'
+import type { AnnotationResponse } from '@/types/api'
 
 interface Category {
   id: number
@@ -371,7 +547,7 @@ const categoryForm = ref({ name: '', color: '#FF0000', is_directory: false, pare
 const showHeaderMenu = ref(false)
 const closeHeaderMenu = () => { showHeaderMenu.value = false }
 const showImportDialog = ref(false)
-const importPreviewData = ref<any>(null)
+const importPreviewData = ref<unknown>(null)
 const importParseError = ref('')
 const importing = ref(false)
 const importFileInput = ref<HTMLInputElement | null>(null)
@@ -471,17 +647,17 @@ const deleteCategory = async (id: number) => {
     }
     // 重新加载树
     await loadTree()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '删除失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '删除失败'
     ElMessage.error(msg)
   }
 }
 
 // ============ 导入导出 ============
-const countChildren = (node: any): number => {
+const countChildren = (node: { children?: unknown[] }): number => {
   let count = 0
-  const walk = (nodes: any[]) => {
-    for (const n of nodes) {
+  const walk = (nodes: unknown[]) => {
+    for (const n of nodes as { children?: unknown[] }[]) {
       count++
       if (n.children?.length) walk(n.children)
     }
@@ -494,7 +670,7 @@ const importPreviewStats = computed(() => {
   const data = importPreviewData.value
   if (!data) return { directories: 0, tags: 0, total: 0 }
   let dirs = 0, tags = 0
-  const walk = (nodes: any[]) => {
+  const walk = (nodes: unknown[]) => {
     for (const n of nodes) {
       if (n.is_directory) dirs++
       else tags++
@@ -519,7 +695,7 @@ const handleExport = async () => {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
     ElMessage.success('导出成功')
-  } catch (error) {
+  } catch {
     ElMessage.error('导出失败')
   }
 }
@@ -576,8 +752,8 @@ const handleImport = async () => {
       const stillExists = flatCategories.value.find(c => c.id === selectedCategoryId.value)
       if (!stillExists) selectedCategoryId.value = null
     }
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '导入失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '导入失败'
     ElMessage.error(msg)
   } finally {
     importing.value = false
@@ -605,8 +781,6 @@ let isDrawing = false
 let startX = 0
 let startY = 0
 let imgElement: HTMLImageElement | null = null
-let originalWidth = 0
-let originalHeight = 0
 let displayScale = 1
 
 const image_id = computed(() => Number(route.params.image_id))
@@ -635,7 +809,7 @@ const loadCategories = async () => {
         selectedCategoryId.value = firstTag.id
       }
     }
-  } catch (error) {
+  } catch {
     ElMessage.error('加载类别失败')
   }
   // 同时加载树形结构
@@ -664,7 +838,7 @@ const loadImage = async (id: number) => {
 const loadAnnotations = async (imageId: number) => {
   try {
     const res = await annotationApi.getByImage(imageId)
-    localAnnotations.value = res.data.map((ann: any) => ({
+    localAnnotations.value = res.data.map((ann: AnnotationResponse) => ({
       id: ann.id,
       image_id: ann.image_id,
       category_id: ann.category_id,
@@ -700,9 +874,6 @@ const initCanvas = () => {
   const img = new Image()
   imgElement = img
   img.onload = () => {
-    originalWidth = img.width
-    originalHeight = img.height
-
     const containerWidth = container.clientWidth - 40
     const containerHeight = container.clientHeight - 40
 
@@ -832,7 +1003,7 @@ const handleMouseMove = (e: MouseEvent) => {
   const h = Math.abs(currentY - startY)
 
   // 半透明填充
-  ctx.fillStyle = color + '40'  // 40 = 25% opacity
+  ctx.fillStyle = `${color  }40`  // 40 = 25% opacity
   ctx.fillRect(x, y, w, h)
 
   // 实线边框
@@ -928,8 +1099,8 @@ const saveAnnotations = async () => {
     await loadAnnotations(currentImage.value.id)
     await loadImageList()  // 刷新标注进度
     drawAllBboxes()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '保存失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '保存失败'
     ElMessage.error(msg)
   } finally {
     saving.value = false
@@ -954,8 +1125,8 @@ const handleCreateCategory = async () => {
     closeCreateDialog()
     // 同时更新 categories 和 treeData
     await loadCategories()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '创建失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '创建失败'
     ElMessage.error(msg)
   } finally {
     creatingCategory.value = false

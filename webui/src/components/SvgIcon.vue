@@ -13,7 +13,16 @@ defineProps({
 </script>
 
 <template>
-  <svg :width="size" :height="size" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle">
+  <svg
+    :width="size"
+    :height="size"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    style="display:inline-block;vertical-align:middle"
+  >
     <use :xlink:href="'#icon-' + name" />
   </svg>
 </template>

@@ -12,16 +12,53 @@ from sqlalchemy.orm import Session
 
 
 def check_gpu_available() -> Dict:
-    """检查 GPU 是否可用。
+    """检查 GPU 是否可用（使用启动时缓存的设备信息）。
 
     Returns:
         设备信息字典，包含：
         - available: bool，是否可用
-        - device: str，'cuda' 或 'cpu'
+        - device: str，推荐设备
         - device_name: str，设备名称
         - memory_total: int，总显存(MB)，仅 CUDA 时有效
         - memory_free: int，可用显存(MB)，仅 CUDA 时有效
+        - devices: dict，所有可用设备的详细信息
     """
+    from backend.core.backends.auto_detector import get_cached_device_info
+
+    try:
+        summary = get_cached_device_info()
+        devices = summary.get("devices", {})
+
+        # 确定推荐设备和可用性
+        recommended = summary.get("recommended", "cpu")
+        gpu_device = recommended if recommended != "cpu" else None
+
+        # 查找最佳 GPU 设备
+        for dev_type in ("cuda", "directml", "openvino"):
+            if dev_type in devices:
+                info = devices[dev_type]
+                return {
+                    "available": True,
+                    "device": dev_type,
+                    "device_name": info.get("device_name", "Unknown"),
+                    "memory_total": info.get("memory_total_mb", 0),
+                    "memory_free": info.get("memory_free_mb", 0),
+                    "devices": devices,
+                }
+
+        # 只有 CPU
+        return {
+            "available": False,
+            "device": "cpu",
+            "device_name": "CPU",
+            "memory_total": 0,
+            "memory_free": 0,
+            "devices": devices,
+        }
+    except Exception:
+        pass
+
+    # 降级：原有检测逻辑
     try:
         import torch
         if torch.cuda.is_available():
@@ -34,6 +71,7 @@ def check_gpu_available() -> Dict:
                 "device_name": device_name,
                 "memory_total": memory_total,
                 "memory_free": memory_free,
+                "devices": {"cuda": {"device_type": "cuda", "device_name": device_name}},
             }
     except Exception as e:
         print(f"[GPU检测] 失败: {e}")
@@ -44,6 +82,7 @@ def check_gpu_available() -> Dict:
         "device_name": "CPU",
         "memory_total": 0,
         "memory_free": 0,
+        "devices": {"cpu": {"device_type": "cpu", "device_name": "CPU"}},
     }
 
 
@@ -415,10 +454,110 @@ def train_yolo(
     return result
 
 
-def load_yolo_model(model_path: str):
-    """加载 YOLO 模型用于推理。"""
-    from ultralytics import YOLO
-    return YOLO(model_path)
+def load_yolo_model(model_path: str, device: str = "cpu", class_names: dict = None, precision: str = "fp32"):
+    """加载 YOLO 模型用于推理。
+
+    Args:
+        model_path: 模型文件路径
+        device: 设备标识 (cpu/cuda/directml/openvino)
+        class_names: 类别名称映射 {id: name}，用于 ONNX/OpenVINO 格式的 fallback
+        precision: 推理精度 (fp32/fp16)，仅对 ONNX DirectML/CUDA 有效
+
+    Returns:
+        YOLO 模型实例（向后兼容），或 handler 本身（如果是 ONNX 等格式）
+    """
+    from backend.core.model_registry import ModelHandlerRegistry, init_model_handlers
+
+    # 初始化内置处理器
+    init_model_handlers()
+
+    # 如果是 ONNX 或 OpenVINO 格式，尝试从对应 PT 文件提取类别名称
+    extra_kwargs = {}
+    extra_kwargs["precision"] = precision
+    _is_onnx_ov = model_path.endswith((".onnx", ".xml")) or (
+        os.path.isdir(model_path) and any(f.endswith(".xml") for f in (os.listdir(model_path) if os.path.isdir(model_path) else []))
+    )
+    if _is_onnx_ov:
+        pt_path = _find_pt_model(model_path)
+        if pt_path:
+            names = _extract_class_names(pt_path)
+            if names:
+                extra_kwargs["class_names"] = names
+
+        # fallback：从 DB 传入的类别名称（PT 文件找不到时使用）
+        if not extra_kwargs.get("class_names") and class_names:
+            extra_kwargs["class_names"] = class_names
+
+    # 通过注册表创建处理器
+    handler = ModelHandlerRegistry().from_path(model_path, device=device, **extra_kwargs)
+
+    # 返回原始 YOLO 实例供现有代码使用（向后兼容）
+    if hasattr(handler, "_model") and handler._model is not None:
+        return handler._model
+    # ONNX 等格式没有 _model，返回 handler 本身
+    return handler
+
+
+def _find_pt_model(model_path: str) -> Optional[str]:
+    """查找与指定模型对应的 PT 模型文件。
+
+    搜索策略：
+    1. 同目录下同名 .pt 文件
+    2. 目录本身是 OpenVINO 导出目录时，在上级查找
+    3. 父目录下任意 .pt 文件
+
+    Args:
+        model_path: 模型文件路径（.onnx/.xml 或 OpenVINO 目录）
+
+    Returns:
+        .pt 文件路径，未找到返回 None
+    """
+    import os
+
+    # 如果是目录（OpenVINO 导出目录），在上级目录查找
+    if os.path.isdir(model_path):
+        parent_dir = os.path.dirname(model_path)
+        if os.path.exists(parent_dir):
+            for f in os.listdir(parent_dir):
+                if f.endswith(".pt"):
+                    return os.path.join(parent_dir, f)
+        return None
+
+    # 同名替换扩展名
+    pt_path = model_path.rsplit(".", 1)[0] + ".pt"
+    if os.path.exists(pt_path):
+        return pt_path
+
+    # 处理可能的命名差异（如 model_best.onnx -> best.pt）
+    base_dir = os.path.dirname(model_path)
+    if os.path.exists(base_dir):
+        for f in os.listdir(base_dir):
+            if f.endswith(".pt"):
+                return os.path.join(base_dir, f)
+
+    return None
+
+
+def _extract_class_names(pt_model_path: str) -> Optional[Dict[int, str]]:
+    """从 PT 模型文件中提取类别名称映射。
+
+    Args:
+        pt_model_path: .pt 文件路径
+
+    Returns:
+        class_id -> class_name 映射字典，失败返回 None
+    """
+    try:
+        import torch
+
+        ckpt = torch.load(pt_model_path, map_location="cpu", weights_only=False)
+        model = ckpt.get("model")
+        if model and hasattr(model, "names"):
+            return model.names
+    except Exception:
+        pass
+
+    return None
 
 
 def inference_yolo(model, image_path: str, conf_threshold: float = 0.25) -> Dict:

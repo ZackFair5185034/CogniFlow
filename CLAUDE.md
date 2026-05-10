@@ -65,50 +65,84 @@ class ClassName:
 CogniFlow/
 ├── backend/                      # FastAPI 后端
 │   ├── app.py                   # 应用入口
-│   ├── database.py              # 数据库配置
+│   ├── database.py              # SQLAlchemy ORM + SQLite
 │   ├── schemas.py               # Pydantic 模型
 │   ├── websocket_manager.py     # WebSocket 管理
-│   └── routers/                 # API 路由（按业务功能）
-│       ├── atlas.py             # 图集管理
-│       ├── image.py             # 图片管理
-│       ├── annotation.py         # 标注管理
-│       ├── category.py          # 类别管理
-│       ├── model.py             # 模型管理
-│       ├── training.py          # 训练管理（YOLO）
-│       ├── launch.py            # 启动管理
-│       ├── inference.py         # 模型测试（图片/视频检测）
-│       ├── websocket.py         # WebSocket
-│       └── yolo_training.py     # YOLO 训练工具
+│   ├── core/                    # 模型基础设施
+│   │   ├── backends/           # 推理设备自动检测
+│   │   ├── formats/            # 多格式处理器 (YOLO/ONNX/OpenVINO)
+│   │   └── export/            # 模型导出器
+│   ├── routers/                 # API 路由
+│   │   ├── atlas.py            # 图集管理
+│   │   ├── image.py            # 图片管理
+│   │   ├── annotation.py       # 标注管理
+│   │   ├── category.py         # 类别管理（树形目录）
+│   │   ├── model.py            # 模型管理 + 多格式文件
+│   │   ├── training.py         # 训练管理 + 进度推送
+│   │   ├── yolo_training.py   # YOLO 训练核心
+│   │   ├── inference.py        # 图片/视频推理（双线程流水线）
+│   │   ├── ws_stream.py       # 视频流 WebSocket 推送
+│   │   ├── launch.py          # 模型启动（⚠️仅模拟）
+│   │   ├── rule_engine.py     # 规则图 CRUD + 执行
+│   │   ├── websocket.py        # 通用 WebSocket
+│   │   ├── simple_detector.py  # 简单检测器
+│   │   └── detection_dataset.py # 检测数据集
+│   └── services/
+│       └── rule_engine/         # 规则引擎核心
+│           ├── executor.py      # Kahn 拓扑排序 + 层内并行
+│           ├── graph_manager.py # 图 CRUD + 验证
+│           ├── registry.py      # 节点注册表
+│           ├── scheduler.py     # Cron 定时调度
+│           ├── websocket_manager.py # 规则 WS 推送
+│           └── nodes/          # 节点实现
+│               ├── triggers.py    # 触发器
+│               ├── conditions.py  # 条件
+│               ├── actions.py     # 动作
+│               ├── logic.py      # 逻辑
+│               └── ...
 ├── engine/                     # 核心视觉感知包
-│   ├── __init__.py             # 包初始化
-│   ├── config/                  # 配置模块
-│   │   ├── schema.py           # 配置数据类
-│   │   ├── default.yaml        # 默认配置
-│   │   └── __init__.py
-│   ├── core/                    # 核心模块
-│   │   ├── data_input/         # 数据输入
-│   │   │   ├── capture/        # 屏幕/视频捕获
-│   │   │   └── storage/        # 数据存储
-│   │   ├── vision/             # 视觉处理
-│   │   │   ├── features/       # 特征提取
-│   │   │   ├── detector/       # 目标检测
-│   │   │   └── preprocessor/   # 图像预处理
-│   │   ├── rl/                 # 强化学习
-│   │   │   ├── algorithms/     # RL算法
-│   │   │   ├── environment/    # 环境封装
-│   │   │   └── trainer/        # 训练器
-│   │   └── control/            # 控制接口
-│   │       ├── input_emulator/ # 输入模拟
-│   │       └── controller/     # 控制器
-│   └── annotation/              # 标注工具
-├── webui/                       # Vue3 前端
-├── tests/                       # 单元测试
-├── examples/                    # 示例代码
-├── docs/                        # 文档
-├── uploads/                     # 上传文件目录
-├── checkpoints/                 # 模型检查点
-├── logs/                        # 日志目录
-├── requirements.txt           # 项目依赖
+│   ├── __init__.py            # 包初始化，27 个公开接口
+│   ├── config/                 # 配置模块
+│   │   ├── schema.py          # 配置数据类
+│   │   └── default.yaml       # 默认配置
+│   ├── core/                   # 核心模块
+│   │   ├── data_input/        # 数据输入
+│   │   │   ├── capture/       # 屏幕采集
+│   │   │   └── storage/       # 数据集管理
+│   │   ├── vision/            # 视觉处理
+│   │   │   ├── features/      # 特征提取
+│   │   │   ├── detector/      # 目标检测
+│   │   │   └── preprocessor/ # 图像预处理
+│   │   ├── rl/               # 强化学习（⚠️未集成）
+│   │   │   ├── algorithms/    # PPO/SAC
+│   │   │   ├── environment/   # 环境封装
+│   │   │   └── trainer/       # 训练器
+│   │   └── control/           # 控制接口
+│   │       └── input_emulator/ # 输入模拟
+│   └── annotation/             # 标注工具
+├── webui/                      # Vue3 前端
+│   ├── src/
+│   │   ├── api/              # API 调用封装
+│   │   ├── components/       # 公共组件
+│   │   ├── router/           # 路由配置（9 条路由）
+│   │   ├── stores/           # Pinia 状态管理
+│   │   ├── utils/            # 工具函数
+│   │   ├── views/            # 页面组件（9 个页面）
+│   │   ├── style/            # 深色主题设计系统
+│   │   ├── App.vue           # 根组件
+│   │   └── main.ts           # 入口文件
+│   ├── public/               # 静态资源
+│   └── COGNIFLOW_DESIGN.md  # 设计规范
+├── data/                       # 统一数据目录
+│   ├── datasets/             # 训练数据集
+│   ├── checkpoints/          # 模型权重
+│   ├── model_cache/         # 模型缓存
+│   ├── inference_output/     # 推理结果
+│   ├── runs/               # YOLO 训练输出
+│   └── database/           # SQLite 数据库
+├── docs/                      # 文档
+├── tests/                     # 单元测试
+└── requirements.txt         # 项目依赖
 ```
 
 ## 4. Git 规范
@@ -162,10 +196,11 @@ Closes #123
 - Python 缓存：`__pycache__/`、`.pyc`
 - 虚拟环境：`venv/`、`env/`
 - IDE 配置：`.idea/`、`.vscode/`
-- 日志文件：`*.log`
-- 训练输出：`logs/`、`checkpoints/`、`data/`
-- 模型文件：`*.pt`、`.pth`
+- 日志文件：`logs/*.log`
+- 数据目录：`data/`（统一数据目录）
+- 模型文件：`*.pt`、`.pth`、`.onnx`、`.engine`
 - 敏感信息：`.env`、`*.key`
+- 前端构建产物：`webui/dist/`
 
 ## 5. 测试规范
 

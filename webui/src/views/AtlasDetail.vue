@@ -2,56 +2,122 @@
   <div class="atlas-detail">
     <!-- 页面头部 -->
     <div class="page-header">
-      <button class="back-btn" @click="$router.push('/atlas')">
+      <button
+        class="back-btn"
+        @click="$router.push('/atlas')"
+      >
         <SvgIcon name="back" />
         返回列表
       </button>
       <div class="atlas-info">
         <h2>{{ atlas?.name }}</h2>
-        <span class="atlas-desc" v-if="atlas?.description">{{ atlas?.description }}</span>
+        <span
+          v-if="atlas?.description"
+          class="atlas-desc"
+        >{{ atlas?.description }}</span>
       </div>
       <div class="header-operations">
         <!-- 批量模式下显示操作按钮 -->
         <template v-if="batchMode || selectedImages.length > 0">
           <span class="selected-count">已选 {{ selectedImages.length }}</span>
-          <button class="ui-btn ui-btn-sm" @click="selectAllImages">全选</button>
-          <button class="ui-btn ui-btn-sm" @click="clearSelection">取消</button>
-          <div class="batch-divider"></div>
-          <select v-model="batchTargetDirectory" class="batch-dir-select">
-            <option value="">根目录</option>
-            <option v-for="dir in directories" :key="dir" :value="dir">{{ dir }}</option>
+          <button
+            class="ui-btn ui-btn-sm"
+            @click="selectAllImages"
+          >
+            全选
+          </button>
+          <button
+            class="ui-btn ui-btn-sm"
+            @click="clearSelection"
+          >
+            取消
+          </button>
+          <div class="batch-divider" />
+          <select
+            v-model="batchTargetDirectory"
+            class="batch-dir-select"
+          >
+            <option value="">
+              根目录
+            </option>
+            <option
+              v-for="dir in directories"
+              :key="dir"
+              :value="dir"
+            >
+              {{ dir }}
+            </option>
           </select>
-          <button class="ui-btn ui-btn-sm" @click="handleBatchMoveDirectory" :disabled="selectedImages.length === 0">
+          <button
+            class="ui-btn ui-btn-sm"
+            :disabled="selectedImages.length === 0"
+            @click="handleBatchMoveDirectory"
+          >
             <SvgIcon name="folder" />
             移动
           </button>
-          <button class="ui-btn ui-btn-sm" @click="handleBatchDownload" :disabled="selectedImages.length === 0">
+          <button
+            class="ui-btn ui-btn-sm"
+            :disabled="selectedImages.length === 0"
+            @click="handleBatchDownload"
+          >
             <SvgIcon name="download" />
             下载
           </button>
-          <button class="ui-btn ui-btn-sm danger" @click="handleBatchDelete" :disabled="selectedImages.length === 0">
+          <button
+            class="ui-btn ui-btn-sm danger"
+            :disabled="selectedImages.length === 0"
+            @click="handleBatchDelete"
+          >
             <SvgIcon name="trash" />
             删除
           </button>
         </template>
-        <button class="ui-btn ui-btn-sm" v-if="batchMode" @click="exitBatchMode">
+        <button
+          v-if="batchMode"
+          class="ui-btn ui-btn-sm"
+          @click="exitBatchMode"
+        >
           退出批量
         </button>
-        <button class="ui-btn ui-btn-sm" v-if="!batchMode" @click="enterBatchMode">
+        <button
+          v-if="!batchMode"
+          class="ui-btn ui-btn-sm"
+          @click="enterBatchMode"
+        >
           <SvgIcon name="check-square" />
           批量
         </button>
-        <button class="ui-btn ui-btn-secondary ui-btn-sm" @click="triggerVideoUpload">
+        <button
+          class="ui-btn ui-btn-secondary ui-btn-sm"
+          @click="triggerVideoUpload"
+        >
           <SvgIcon name="video" />
           解析视频
         </button>
-        <button class="ui-btn ui-btn-primary ui-btn-sm" @click="triggerUpload">
+        <button
+          class="ui-btn ui-btn-primary ui-btn-sm"
+          @click="triggerUpload"
+        >
           <SvgIcon name="upload" />
           上传图片
         </button>
       </div>
-      <input ref="fileInputRef" type="file" accept="image/*" multiple style="display: none" @change="handleFileSelect" />
-      <input ref="videoInputRef" type="file" accept="video/*" style="display: none" @change="handleVideoSelect" />
+      <input
+        ref="fileInputRef"
+        type="file"
+        accept="image/*"
+        multiple
+        style="display: none"
+        @change="handleFileSelect"
+      >
+      <input
+        ref="videoInputRef"
+        type="file"
+        accept="video/*"
+        style="display: none"
+        @change="handleVideoSelect"
+      >
     </div>
 
     <div class="content-grid">
@@ -59,79 +125,184 @@
       <div class="main-panel ui-card">
         <div class="panel-header">
           <div class="tabs">
-            <button class="tab-btn" :class="{ active: activeTab === 'images' }" @click="activeTab = 'images'">
+            <button
+              class="tab-btn"
+              :class="{ active: activeTab === 'images' }"
+              @click="activeTab = 'images'"
+            >
               <SvgIcon name="image" />
               图片列表
               <span class="count">{{ pagination.total }}</span>
             </button>
-            <button class="tab-btn" :class="{ active: activeTab === 'directories' }" @click="activeTab = 'directories'">
+            <button
+              class="tab-btn"
+              :class="{ active: activeTab === 'directories' }"
+              @click="activeTab = 'directories'"
+            >
               <SvgIcon name="folder" />
               目录管理
               <span class="count">{{ directories.length }}</span>
             </button>
           </div>
-          <div class="header-actions" v-if="activeTab === 'images'">
+          <div
+            v-if="activeTab === 'images'"
+            class="header-actions"
+          >
             <div class="select-wrapper">
-              <select v-model="selectedDirectory" @change="onDirectoryChange">
-                <option value="">全部目录</option>
-                <option v-for="dir in directories" :key="dir" :value="dir">{{ dir }}</option>
+              <select
+                v-model="selectedDirectory"
+                @change="onDirectoryChange"
+              >
+                <option value="">
+                  全部目录
+                </option>
+                <option
+                  v-for="dir in directories"
+                  :key="dir"
+                  :value="dir"
+                >
+                  {{ dir }}
+                </option>
               </select>
             </div>
-            <div class="sort-wrapper" @click="showSortMenu = !showSortMenu">
+            <div
+              class="sort-wrapper"
+              @click="showSortMenu = !showSortMenu"
+            >
               <span class="sort-label">
                 {{ sortConfig.by === 'created_at' ? '创建时间' : '名称' }}
                 <span class="sort-arrow">{{ sortConfig.order === 'asc' ? '↑' : '↓' }}</span>
               </span>
-              <div class="sort-dropdown" v-if="showSortMenu" @click.stop>
-                <div class="sort-group-title">排序字段</div>
-                <div class="sort-option" :class="{ active: sortConfig.by === 'created_at' }" @click="sortConfig.by = 'created_at'; loadImages()">创建时间</div>
-                <div class="sort-option" :class="{ active: sortConfig.by === 'name' }" @click="sortConfig.by = 'name'; loadImages()">名称</div>
-                <div class="sort-divider"></div>
-                <div class="sort-group-title">排序方向</div>
-                <div class="sort-option" :class="{ active: sortConfig.order === 'desc' }" @click="sortConfig.order = 'desc'; loadImages()">降序</div>
-                <div class="sort-option" :class="{ active: sortConfig.order === 'asc' }" @click="sortConfig.order = 'asc'; loadImages()">升序</div>
+              <div
+                v-if="showSortMenu"
+                class="sort-dropdown"
+                @click.stop
+              >
+                <div class="sort-group-title">
+                  排序字段
+                </div>
+                <div
+                  class="sort-option"
+                  :class="{ active: sortConfig.by === 'created_at' }"
+                  @click="sortConfig.by = 'created_at'; loadImages()"
+                >
+                  创建时间
+                </div>
+                <div
+                  class="sort-option"
+                  :class="{ active: sortConfig.by === 'name' }"
+                  @click="sortConfig.by = 'name'; loadImages()"
+                >
+                  名称
+                </div>
+                <div class="sort-divider" />
+                <div class="sort-group-title">
+                  排序方向
+                </div>
+                <div
+                  class="sort-option"
+                  :class="{ active: sortConfig.order === 'desc' }"
+                  @click="sortConfig.order = 'desc'; loadImages()"
+                >
+                  降序
+                </div>
+                <div
+                  class="sort-option"
+                  :class="{ active: sortConfig.order === 'asc' }"
+                  @click="sortConfig.order = 'asc'; loadImages()"
+                >
+                  升序
+                </div>
               </div>
             </div>
-            <button class="action-btn" @click="loadImages">
+            <button
+              class="action-btn"
+              @click="loadImages"
+            >
               <SvgIcon name="refresh" />
             </button>
           </div>
         </div>
 
         <!-- 图片列表 - 内部滚动 -->
-        <div class="images-content" v-if="activeTab === 'images'">
-          <div class="images-grid-wrapper" v-loading="loadingImages">
+        <div
+          v-if="activeTab === 'images'"
+          class="images-content"
+        >
+          <div
+            v-loading="loadingImages"
+            class="images-grid-wrapper"
+          >
             <div class="images-grid">
-              <div class="image-card" v-for="img in images" :key="img.id">
-                <div class="image-wrapper" :class="{ selected: batchMode && isImageSelected(img.id) }">
+              <div
+                v-for="img in images"
+                :key="img.id"
+                class="image-card"
+              >
+                <div
+                  class="image-wrapper"
+                  :class="{ selected: batchMode && isImageSelected(img.id) }"
+                >
                   <!-- 复选框 - 仅在批量模式下显示 -->
-                  <label class="checkbox-wrapper" v-if="batchMode" @click.stop>
+                  <label
+                    v-if="batchMode"
+                    class="checkbox-wrapper"
+                    @click.stop
+                  >
                     <input
                       type="checkbox"
                       :checked="isImageSelected(img.id)"
                       @change="toggleImageSelection(img.id)"
-                    />
+                    >
                   </label>
-                  <img :src="getImageUrl(img.file_path)" :alt="getFileName(img.file_path)" @click="openImageDialog(img)" />
+                  <img
+                    :src="getImageUrl(img.file_path)"
+                    :alt="getFileName(img.file_path)"
+                    @click="openImageDialog(img)"
+                  >
                   <div class="image-overlay">
                     <span class="overlay-icon">
                       <SvgIcon name="eye" />
                     </span>
                   </div>
-                  <span class="annotated-badge" v-if="img.annotated"></span>
+                  <span
+                    v-if="img.annotated"
+                    class="annotated-badge"
+                  />
                 </div>
                 <div class="image-info">
-                  <span class="image-name" :title="getFileName(img.file_path)">{{ getFileName(img.file_path) }}</span>
-                  <div class="image-dir-row" v-if="img.directory">
+                  <span
+                    class="image-name"
+                    :title="getFileName(img.file_path)"
+                  >{{ getFileName(img.file_path) }}</span>
+                  <div
+                    v-if="img.directory"
+                    class="image-dir-row"
+                  >
                     <span class="image-dir">{{ img.directory }}</span>
-                    <div class="image-actions" @click.stop>
-                      <button class="img-action-btn" @click="handleDownloadImage(img)" title="下载">
+                    <div
+                      class="image-actions"
+                      @click.stop
+                    >
+                      <button
+                        class="img-action-btn"
+                        title="下载"
+                        @click="handleDownloadImage(img)"
+                      >
                         <SvgIcon name="download" />
                       </button>
-                      <button class="img-action-btn" @click="handleAnnotateImage(img)" title="标注图片">
+                      <button
+                        class="img-action-btn"
+                        title="标注图片"
+                        @click="handleAnnotateImage(img)"
+                      >
                         <SvgIcon name="tag" />
                       </button>
-                      <button class="img-action-btn danger" @click="handleDeleteImage(img)" title="删除图片">
+                      <button
+                        class="img-action-btn danger"
+                        title="删除图片"
+                        @click="handleDeleteImage(img)"
+                      >
                         <SvgIcon name="trash" />
                       </button>
                     </div>
@@ -139,7 +310,10 @@
                 </div>
               </div>
             </div>
-            <div class="empty-state" v-if="!loadingImages && images.length === 0">
+            <div
+              v-if="!loadingImages && images.length === 0"
+              class="empty-state"
+            >
               <div class="empty-icon">
                 <SvgIcon name="image" />
               </div>
@@ -148,49 +322,109 @@
             </div>
           </div>
           <!-- 分页器 -->
-          <div class="pagination-wrapper" v-if="pagination.total_pages > 1">
-            <div class="pagination-info">共 {{ pagination.total }} 张图片</div>
+          <div
+            v-if="pagination.total_pages > 1"
+            class="pagination-wrapper"
+          >
+            <div class="pagination-info">
+              共 {{ pagination.total }} 张图片
+            </div>
             <div class="pagination-controls">
-              <button class="page-btn" :disabled="pagination.page <= 1" @click="goToPage(1)">«</button>
-              <button class="page-btn" :disabled="pagination.page <= 1" @click="goToPage(pagination.page - 1)">‹</button>
+              <button
+                class="page-btn"
+                :disabled="pagination.page <= 1"
+                @click="goToPage(1)"
+              >
+                «
+              </button>
+              <button
+                class="page-btn"
+                :disabled="pagination.page <= 1"
+                @click="goToPage(pagination.page - 1)"
+              >
+                ‹
+              </button>
               <span class="page-current">{{ pagination.page }} / {{ pagination.total_pages }}</span>
-              <button class="page-btn" :disabled="pagination.page >= pagination.total_pages" @click="goToPage(pagination.page + 1)">›</button>
-              <button class="page-btn" :disabled="pagination.page >= pagination.total_pages" @click="goToPage(pagination.total_pages)">»</button>
+              <button
+                class="page-btn"
+                :disabled="pagination.page >= pagination.total_pages"
+                @click="goToPage(pagination.page + 1)"
+              >
+                ›
+              </button>
+              <button
+                class="page-btn"
+                :disabled="pagination.page >= pagination.total_pages"
+                @click="goToPage(pagination.total_pages)"
+              >
+                »
+              </button>
             </div>
           </div>
         </div>
 
         <!-- 目录管理 -->
-        <div class="directories-content" v-if="activeTab === 'directories'">
+        <div
+          v-if="activeTab === 'directories'"
+          class="directories-content"
+        >
           <div class="create-dir-section">
             <div class="input-group">
-              <SvgIcon name="folder-plus" class="input-icon" />
-              <input type="text" v-model="newDirectoryName" placeholder="输入新目录名称"
-                     @keyup.enter="handleCreateDirectory" />
+              <SvgIcon
+                name="folder-plus"
+                class="input-icon"
+              />
+              <input
+                v-model="newDirectoryName"
+                type="text"
+                placeholder="输入新目录名称"
+                @keyup.enter="handleCreateDirectory"
+              >
             </div>
-            <button class="ui-btn ui-btn-primary" @click="handleCreateDirectory">
+            <button
+              class="ui-btn ui-btn-primary"
+              @click="handleCreateDirectory"
+            >
               <SvgIcon name="plus" />
               创建目录
             </button>
           </div>
 
-          <div class="directories-list" v-if="directories.length > 0">
-            <div class="dir-item" v-for="dir in directories" :key="dir">
+          <div
+            v-if="directories.length > 0"
+            class="directories-list"
+          >
+            <div
+              v-for="dir in directories"
+              :key="dir"
+              class="dir-item"
+            >
               <div class="dir-info">
                 <FolderIcon class="dir-icon" />
                 <span class="dir-name">{{ dir }}</span>
               </div>
               <div class="dir-actions">
-                <button class="action-btn" @click="selectDirectory(dir)" title="选择此目录">
+                <button
+                  class="action-btn"
+                  title="选择此目录"
+                  @click="selectDirectory(dir)"
+                >
                   <SvgIcon name="check" />
                 </button>
-                <button class="action-btn danger" @click="handleDeleteDirectory(dir)" title="删除目录">
+                <button
+                  class="action-btn danger"
+                  title="删除目录"
+                  @click="handleDeleteDirectory(dir)"
+                >
                   <SvgIcon name="trash" />
                 </button>
               </div>
             </div>
           </div>
-          <div class="empty-state" v-else>
+          <div
+            v-else
+            class="empty-state"
+          >
             <div class="empty-icon">
               <SvgIcon name="folder" />
             </div>
@@ -242,21 +476,44 @@
     </div>
 
     <!-- 图片详情对话框 -->
-    <div class="dialog-overlay" v-if="showImageDialog" @click.self="showImageDialog = false">
+    <div
+      v-if="showImageDialog"
+      class="dialog-overlay"
+      @click.self="showImageDialog = false"
+    >
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>图片详情</h3>
           <div class="dialog-actions">
-            <el-button type="text" @click="handleAnnotateImage(selectedImage)">标注</el-button>
-            <el-button type="text" @click="handleDeleteImage(selectedImage)">删除</el-button>
-            <el-button class="close-btn" @click="showImageDialog = false">
+            <el-button
+              type="text"
+              @click="handleAnnotateImage(selectedImage)"
+            >
+              标注
+            </el-button>
+            <el-button
+              type="text"
+              @click="handleDeleteImage(selectedImage)"
+            >
+              删除
+            </el-button>
+            <el-button
+              class="close-btn"
+              @click="showImageDialog = false"
+            >
               <SvgIcon name="close" />
             </el-button>
           </div>
         </div>
-        <div class="dialog-content" v-if="selectedImage">
+        <div
+          v-if="selectedImage"
+          class="dialog-content"
+        >
           <div class="image-preview">
-            <img :src="getImageUrl(selectedImage.file_path)" :alt="getFileName(selectedImage.file_path)" />
+            <img
+              :src="getImageUrl(selectedImage.file_path)"
+              :alt="getFileName(selectedImage.file_path)"
+            >
           </div>
           <div class="image-meta">
             <div class="meta-row">
@@ -269,23 +526,59 @@
             </div>
             <div class="meta-row">
               <span class="meta-label">目录</span>
-              <div class="meta-value dir-edit" v-if="editingDirectory">
+              <div
+                v-if="editingDirectory"
+                class="meta-value dir-edit"
+              >
                 <div class="dir-select-wrap">
-                  <select v-model="editDirectoryValue" @change="onDirectorySelect">
-                    <option value="">根目录</option>
-                    <option v-for="dir in directories" :key="dir" :value="dir">{{ dir }}</option>
+                  <select
+                    v-model="editDirectoryValue"
+                    @change="onDirectorySelect"
+                  >
+                    <option value="">
+                      根目录
+                    </option>
+                    <option
+                      v-for="dir in directories"
+                      :key="dir"
+                      :value="dir"
+                    >
+                      {{ dir }}
+                    </option>
                   </select>
-                  <input type="text" v-model="editDirectoryValue" placeholder="或输入新目录名"
-                         class="dir-text-input" />
+                  <input
+                    v-model="editDirectoryValue"
+                    type="text"
+                    placeholder="或输入新目录名"
+                    class="dir-text-input"
+                  >
                 </div>
                 <div class="dir-edit-actions">
-                  <button class="save-btn" @click="handleSaveDirectory" :disabled="savingDirectory">保存</button>
-                  <button class="cancel-btn" @click="cancelEditDirectory">取消</button>
+                  <button
+                    class="save-btn"
+                    :disabled="savingDirectory"
+                    @click="handleSaveDirectory"
+                  >
+                    保存
+                  </button>
+                  <button
+                    class="cancel-btn"
+                    @click="cancelEditDirectory"
+                  >
+                    取消
+                  </button>
                 </div>
               </div>
-              <span class="meta-value" v-else>
+              <span
+                v-else
+                class="meta-value"
+              >
                 {{ selectedImage.directory || '根目录' }}
-                <button class="edit-dir-btn" @click="startEditDirectory" title="修改目录">
+                <button
+                  class="edit-dir-btn"
+                  title="修改目录"
+                  @click="startEditDirectory"
+                >
                   <SvgIcon name="edit" />
                 </button>
               </span>
@@ -293,7 +586,10 @@
             <div class="meta-row">
               <span class="meta-label">标注状态</span>
               <span class="meta-value">
-                <span class="status-tag" :class="selectedImage.annotated ? 'annotated' : 'pending'">
+                <span
+                  class="status-tag"
+                  :class="selectedImage.annotated ? 'annotated' : 'pending'"
+                >
                   {{ selectedImage.annotated ? '已标注' : '未标注' }}
                 </span>
               </span>
@@ -303,16 +599,26 @@
       </div>
     </div>
     <!-- 视频提取对话框 -->
-    <div class="dialog-overlay" v-if="showVideoDialog" @click.self="showVideoDialog = false">
+    <div
+      v-if="showVideoDialog"
+      class="dialog-overlay"
+      @click.self="showVideoDialog = false"
+    >
       <div class="dialog-panel ui-card">
         <div class="dialog-header">
           <h3>从视频提取帧</h3>
-          <button class="close-btn" @click="showVideoDialog = false">
+          <button
+            class="close-btn"
+            @click="showVideoDialog = false"
+          >
             <SvgIcon name="close" />
           </button>
         </div>
         <div class="dialog-content">
-          <div class="video-meta" v-if="videoMeta">
+          <div
+            v-if="videoMeta"
+            class="video-meta"
+          >
             <div class="meta-row">
               <span class="meta-label">时长</span>
               <span class="meta-value">{{ videoMeta.duration }}s</span>
@@ -328,14 +634,32 @@
           </div>
           <div class="extract-config">
             <label class="section-label">提取张数</label>
-            <input type="number" v-model.number="extractCount" min="1" :max="videoMeta?.total_frames" class="extract-input" />
-            <span class="extract-hint" v-if="videoMeta && extractCount">
+            <input
+              v-model.number="extractCount"
+              type="number"
+              min="1"
+              :max="videoMeta?.total_frames"
+              class="extract-input"
+            >
+            <span
+              v-if="videoMeta && extractCount"
+              class="extract-hint"
+            >
               均匀采样，间隔约 {{ Math.max(1, Math.round(videoMeta.total_frames / extractCount)) }} 帧
             </span>
           </div>
           <div class="dialog-footer">
-            <button class="ui-btn" @click="showVideoDialog = false">取消</button>
-            <button class="ui-btn ui-btn-primary" @click="confirmExtract" :disabled="!extractCount">
+            <button
+              class="ui-btn"
+              @click="showVideoDialog = false"
+            >
+              取消
+            </button>
+            <button
+              class="ui-btn ui-btn-primary"
+              :disabled="!extractCount"
+              @click="confirmExtract"
+            >
               开始提取
             </button>
           </div>
@@ -343,25 +667,45 @@
       </div>
     </div>
     <!-- 提取进度对话框 -->
-    <div class="dialog-overlay" v-if="showExtractProgress" @click.self="() => {}">
+    <div
+      v-if="showExtractProgress"
+      class="dialog-overlay"
+      @click.self="() => {}"
+    >
       <div class="dialog-panel ui-card extract-progress-dialog">
         <div class="dialog-header">
           <h3>正在提取帧...</h3>
         </div>
         <div class="dialog-content">
           <div class="progress-info">
-            <span class="progress-status" :class="extractProgress.status">
+            <span
+              class="progress-status"
+              :class="extractProgress.status"
+            >
               {{ extractProgress.status === 'pending' ? '等待开始...' : extractProgress.status === 'processing' ? '提取中...' : extractProgress.status === 'completed' ? '完成' : '失败' }}
             </span>
             <span class="progress-count">{{ extractProgress.extracted_count }} / {{ extractProgress.total_frames }}</span>
           </div>
           <div class="progress-bar-wrapper">
             <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: extractProgress.progress + '%' }"></div>
+              <div
+                class="progress-fill"
+                :style="{ width: extractProgress.progress + '%' }"
+              />
             </div>
           </div>
-          <p class="progress-hint" v-if="extractProgress.status === 'processing'">正在从视频提取帧，请稍候...</p>
-          <p class="progress-error" v-if="extractProgress.error">{{ extractProgress.error }}</p>
+          <p
+            v-if="extractProgress.status === 'processing'"
+            class="progress-hint"
+          >
+            正在从视频提取帧，请稍候...
+          </p>
+          <p
+            v-if="extractProgress.error"
+            class="progress-error"
+          >
+            {{ extractProgress.error }}
+          </p>
         </div>
       </div>
     </div>
@@ -373,6 +717,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi, imageApi } from '@/api'
+import type { AtlasResponse, ImageResponse } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -380,16 +725,16 @@ const id = Number(route.params.id)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const videoInputRef = ref<HTMLInputElement | null>(null)
 
-const atlas = ref<any>(null)
-const images = ref<any[]>([])
+const atlas = ref<AtlasResponse | null>(null)
+const images = ref<ImageResponse[]>([])
 const directories = ref<string[]>([])
 const loadingImages = ref(false)
 const activeTab = ref('images')
 const selectedDirectory = ref('')
-const sortConfig = ref({ by: 'created_at', order: 'desc' as 'asc' | 'desc' })
+const sortConfig = ref<{ by: string; order: 'asc' | 'desc' }>({ by: 'created_at', order: 'desc' })
 const showSortMenu = ref(false)
 const showImageDialog = ref(false)
-const selectedImage = ref<any>(null)
+const selectedImage = ref<ImageResponse | null>(null)
 const newDirectoryName = ref('')
 
 // 视频提取相关
@@ -461,8 +806,8 @@ const handleSaveDirectory = async () => {
     editingDirectory.value = false
     loadImages()
     loadDirectories()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '修改目录失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '修改目录失败'
     ElMessage.error(msg)
   } finally {
     savingDirectory.value = false
@@ -473,7 +818,7 @@ const loadAtlas = async () => {
   try {
     const res = await atlasApi.get(id)
     atlas.value = res.data
-  } catch (error) {
+  } catch {
     ElMessage.error('加载图集详情失败')
   }
 }
@@ -482,9 +827,7 @@ const loadImages = async () => {
   loadingImages.value = true
   try {
     const directory = selectedDirectory.value || undefined
-    console.log('[DEBUG] loadImages called, directory:', directory, 'page:', pagination.value.page)
     const res = await atlasApi.getImages(id, directory, pagination.value.page, pagination.value.page_size, sortConfig.value.by, sortConfig.value.order)
-    console.log('[DEBUG] getImages response, total:', res.data.total)
     images.value = res.data.items
     pagination.value.total = res.data.total
     pagination.value.total_pages = res.data.total_pages
@@ -497,14 +840,6 @@ const loadImages = async () => {
 }
 
 const onDirectoryChange = () => {
-  pagination.value.page = 1
-  loadImages()
-}
-
-const setSort = (by: 'created_at' | 'name', order: 'asc' | 'desc') => {
-  sortConfig.value.by = by
-  sortConfig.value.order = order
-  showSortMenu.value = false
   pagination.value.page = 1
   loadImages()
 }
@@ -527,7 +862,7 @@ const triggerUpload = () => {
   fileInputRef.value?.click()
 }
 
-const openImageDialog = (img: any) => {
+const openImageDialog = (img: ImageResponse) => {
   selectedImage.value = img
   showImageDialog.value = true
 }
@@ -552,7 +887,7 @@ const handleFileSelect = async (event: Event) => {
     ElMessage.success('上传成功')
     loadImages()
     loadDirectories()
-  } catch (error) {
+  } catch {
     ElMessage.error('上传失败')
   }
 
@@ -574,7 +909,7 @@ const handleVideoSelect = async (event: Event) => {
     extractCount.value = res.data.metadata.total_frames
     pendingVideoPath.value = res.data.video_path
     showVideoDialog.value = true
-  } catch (error) {
+  } catch {
     ElMessage.error('视频上传失败')
   }
 
@@ -596,8 +931,8 @@ const confirmExtract = async () => {
     extractJobId.value = res.data.job_id
     extractProgress.value.status = 'processing'
     startExtractPolling()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '提交提取任务失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '提交提取任务失败'
     extractProgress.value.status = 'failed'
     extractProgress.value.error = msg
   }
@@ -628,7 +963,7 @@ const startExtractPolling = () => {
           loadDirectories()
         }
       }
-    } catch (error) {
+    } catch {
       stopExtractPolling()
     }
   }, 1000)
@@ -655,8 +990,8 @@ const handleCreateDirectory = async () => {
     selectedDirectory.value = dirName
     ElMessage.success(`已创建目录 "${dirName}"，上传图片将自动归类到此目录`)
     newDirectoryName.value = ''
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '创建目录失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '创建目录失败'
     ElMessage.error(msg)
   }
 }
@@ -679,14 +1014,14 @@ const handleDeleteDirectory = async (dir: string) => {
   }
 }
 
-const handleAnnotateImage = (img: any) => {
+const handleAnnotateImage = (img: { id: number }) => {
   const query: Record<string, string> = selectedDirectory.value ? { directory: selectedDirectory.value } : {}
   query.sort_by = sortConfig.value.by
   query.sort_order = sortConfig.value.order
   router.push({ path: `/annotate/${img.id}`, query })
 }
 
-const handleDeleteImage = async (img: any) => {
+const handleDeleteImage = async (img: { file_path: string; id: number }) => {
   try {
     await ElMessageBox.confirm(
       `确定删除图片 "${getFileName(img.file_path)}" 吗？此操作不可撤销。`,
@@ -705,7 +1040,7 @@ const handleDeleteImage = async (img: any) => {
   }
 }
 
-const handleDownloadImage = (img: any) => {
+const handleDownloadImage = (img: ImageResponse) => {
   const url = getImageUrl(img.file_path)
   const filename = getFileName(img.file_path)
   const link = document.createElement('a')
@@ -732,7 +1067,7 @@ const handleBatchDownload = async () => {
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
     ElMessage.success('打包下载完成')
-  } catch (error) {
+  } catch {
     ElMessage.error('打包下载失败')
   }
 }
@@ -786,9 +1121,9 @@ const handleBatchMoveDirectory = async () => {
     batchTargetDirectory.value = ''
     loadImages()
     loadDirectories()
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error !== 'cancel') {
-      const msg = error.response?.data?.detail || '批量移动失败'
+      const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '批量移动失败'
       ElMessage.error(msg)
     }
   }
@@ -811,9 +1146,9 @@ const handleBatchDelete = async () => {
     clearSelection()
     loadImages()
     loadDirectories()
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error !== 'cancel') {
-      const msg = error.response?.data?.detail || '批量删除失败'
+      const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '批量删除失败'
       ElMessage.error(msg)
     }
   }

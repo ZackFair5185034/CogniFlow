@@ -9,15 +9,19 @@
       <div class="header-actions">
         <div class="header-stats">
           <div class="stat-pill running">
-            <span class="dot"></span>
+            <span class="dot" />
             {{ runningCount }} 运行
           </div>
           <div class="stat-pill completed">
-            <span class="dot"></span>
+            <span class="dot" />
             {{ completedCount }} 完成
           </div>
         </div>
-        <button class="ui-btn ui-btn-sm" @click="handleClearCompleted" :disabled="completedCount === 0">
+        <button
+          class="ui-btn ui-btn-sm"
+          :disabled="completedCount === 0"
+          @click="handleClearCompleted"
+        >
           清理
         </button>
       </div>
@@ -27,15 +31,30 @@
       <!-- 左侧：参数配置 -->
       <div class="config-panel ui-card">
         <div class="section-header">
-          <h3>参数配置</h3>
+          <div class="header-left">
+            <SvgIcon
+              name="box"
+              class="panel-icon"
+            />
+            <h3>参数配置</h3>
+          </div>
         </div>
         <div class="config-form">
           <div class="form-group">
             <label>选择模型</label>
             <div class="select-wrapper">
               <select v-model="startForm.model_id">
-                <option :value="null" disabled>选择模型</option>
-                <option v-for="m in models" :key="m.id" :value="m.id">
+                <option
+                  :value="null"
+                  disabled
+                >
+                  选择模型
+                </option>
+                <option
+                  v-for="m in models"
+                  :key="m.id"
+                  :value="m.id"
+                >
                   {{ m.name }}{{ m.version ? ` (${m.version})` : '' }}
                 </option>
               </select>
@@ -46,8 +65,17 @@
             <label>选择图集</label>
             <div class="select-wrapper">
               <select v-model="startForm.atlas_id">
-                <option :value="null" disabled>选择图集</option>
-                <option v-for="a in atlases" :key="a.id" :value="a.id">
+                <option
+                  :value="null"
+                  disabled
+                >
+                  选择图集
+                </option>
+                <option
+                  v-for="a in atlases"
+                  :key="a.id"
+                  :value="a.id"
+                >
                   {{ a.name }}
                 </option>
               </select>
@@ -57,9 +85,18 @@
           <div class="form-group">
             <label>训练轮数</label>
             <div class="number-input">
-              <button @click="startForm.total_steps = Math.max(10, startForm.total_steps - 10)">-</button>
-              <input type="number" v-model="startForm.total_steps" min="10" max="1000" />
-              <button @click="startForm.total_steps = Math.min(1000, startForm.total_steps + 10)">+</button>
+              <button @click="startForm.total_steps = Math.max(10, startForm.total_steps - 10)">
+                -
+              </button>
+              <input
+                v-model="startForm.total_steps"
+                type="number"
+                min="10"
+                max="1000"
+              >
+              <button @click="startForm.total_steps = Math.min(1000, startForm.total_steps + 10)">
+                +
+              </button>
             </div>
           </div>
 
@@ -67,14 +104,27 @@
             <label>训练设备</label>
             <div class="select-wrapper">
               <select v-model="startForm.device">
-                <option value="cpu">CPU</option>
-                <option value="cuda" v-if="deviceInfo.available">GPU ({{ deviceInfo.device_name }})</option>
+                <option value="cpu">
+                  CPU
+                </option>
+                <option
+                  v-if="deviceInfo.available"
+                  value="cuda"
+                >
+                  GPU ({{ deviceInfo.device_name }})
+                </option>
               </select>
             </div>
-            <span class="device-hint" v-if="deviceInfo.available">
+            <span
+              v-if="deviceInfo.available"
+              class="device-hint"
+            >
               推荐使用 GPU
             </span>
-            <span class="device-hint" v-else>
+            <span
+              v-else
+              class="device-hint"
+            >
               将使用 CPU 训练
             </span>
           </div>
@@ -83,16 +133,30 @@
             <label>预训练模型</label>
             <div class="select-wrapper">
               <select v-model="startForm.pretrained_model">
-                <option value="yolov8n.pt">YOLOv8n (最小)</option>
-                <option value="yolov8s.pt">YOLOv8s (推荐)</option>
-                <option value="yolov8m.pt">YOLOv8m (中)</option>
-                <option value="yolov8l.pt">YOLOv8l (大)</option>
-                <option value="yolov8x.pt">YOLOv8x (最大)</option>
+                <option value="yolov8n.pt">
+                  YOLOv8n (最小)
+                </option>
+                <option value="yolov8s.pt">
+                  YOLOv8s (推荐)
+                </option>
+                <option value="yolov8m.pt">
+                  YOLOv8m (中)
+                </option>
+                <option value="yolov8l.pt">
+                  YOLOv8l (大)
+                </option>
+                <option value="yolov8x.pt">
+                  YOLOv8x (最大)
+                </option>
               </select>
             </div>
           </div>
 
-          <button class="ui-btn ui-btn-primary start-btn" @click="handleStart" :disabled="starting">
+          <button
+            class="ui-btn ui-btn-primary start-btn"
+            :disabled="starting"
+            @click="handleStart"
+          >
             <SvgIcon name="play" />
             {{ starting ? '启动中...' : '启动训练' }}
           </button>
@@ -104,23 +168,45 @@
         <!-- 训练任务列表 -->
         <div class="training-list-section ui-card">
           <div class="section-header">
-            <h3>训练任务</h3>
-            <button class="refresh-btn" @click="loadJobs">
+            <div class="header-left">
+              <SvgIcon
+                name="chart"
+                class="panel-icon"
+              />
+              <h3>训练任务</h3>
+            </div>
+            <button
+              class="refresh-btn"
+              @click="loadJobs"
+            >
               <SvgIcon name="refresh" />
             </button>
           </div>
 
-          <div class="jobs-list" v-loading="loading">
-            <div class="job-item" v-for="job in jobs" :key="job.id"
-                 :class="{ active: job.status === 'running' }">
+          <div
+            v-loading="loading"
+            class="jobs-list"
+          >
+            <div
+              v-for="job in jobs"
+              :key="job.id"
+              class="job-item"
+              :class="{ active: job.status === 'running' }"
+            >
               <div class="job-header">
                 <span class="job-id">#{{ job.id.toString().padStart(4, '0') }}</span>
-                <span class="job-status" :class="job.status">{{ statusText[job.status] }}</span>
+                <span
+                  class="job-status"
+                  :class="job.status"
+                >{{ statusText[job.status] }}</span>
               </div>
               <div class="job-progress">
                 <div class="progress-bar">
-                  <div class="progress-fill" :class="job.status"
-                       :style="{ width: getProgress(job) + '%' }"></div>
+                  <div
+                    class="progress-fill"
+                    :class="job.status"
+                    :style="{ width: getProgress(job) + '%' }"
+                  />
                 </div>
                 <span class="progress-text">{{ job.current_step }} / {{ job.total_steps || '?' }}</span>
               </div>
@@ -128,12 +214,24 @@
                 <span class="meta-tag">M#{{ job.model_id }}</span>
                 <span class="meta-tag">A#{{ job.atlas_id }}</span>
               </div>
-              <div class="job-actions" v-if="job.status === 'running'">
-                <el-button type="text" size="small" @click="handleStop(job)">停止</el-button>
+              <div
+                v-if="job.status === 'running'"
+                class="job-actions"
+              >
+                <el-button
+                  type="text"
+                  size="small"
+                  @click="handleStop(job)"
+                >
+                  停止
+                </el-button>
               </div>
             </div>
 
-            <div class="empty-jobs" v-if="!loading && jobs.length === 0">
+            <div
+              v-if="!loading && jobs.length === 0"
+              class="empty-jobs"
+            >
               <div class="empty-icon">
                 <SvgIcon name="chart" />
               </div>
@@ -143,11 +241,14 @@
         </div>
 
         <!-- 实时状态 -->
-        <div class="realtime-card ui-card" v-if="currentJob">
+        <div
+          v-if="currentJob"
+          class="realtime-card ui-card"
+        >
           <div class="section-header">
             <h3>实时状态</h3>
             <span class="live-badge">
-              <span class="live-dot"></span>
+              <span class="live-dot" />
               LIVE
             </span>
           </div>
@@ -158,21 +259,30 @@
             </div>
             <div class="realtime-stat">
               <span class="stat-label whitespace-nowrap">状态</span>
-              <span class="stat-value" :class="'status-' + currentJob._displayStatus">
+              <span
+                class="stat-value"
+                :class="'status-' + currentJob._displayStatus"
+              >
                 {{ currentJob._displayStatus === 'downloading' ? '下载中' : currentJob._displayStatus === 'running' ? '进行中' : statusText[currentJob.status] }}
               </span>
             </div>
             <div class="realtime-progress">
               <div class="progress-bar large">
-                <div class="progress-fill" :class="currentJob.status"
-                     :style="{ width: getProgress(currentJob) + '%' }"></div>
+                <div
+                  class="progress-fill"
+                  :class="currentJob.status"
+                  :style="{ width: getProgress(currentJob) + '%' }"
+                />
               </div>
               <span class="progress-percent">
                 <span v-if="currentJob._displayStatus === 'downloading'">{{ getProgress(currentJob) }}%</span>
                 <span v-else>{{ getProgress(currentJob) }}%</span>
               </span>
             </div>
-            <div class="realtime-message" v-if="currentJob.message">
+            <div
+              v-if="currentJob.message"
+              class="realtime-message"
+            >
               <span class="message-text">{{ currentJob.message }}</span>
             </div>
           </div>
@@ -187,10 +297,11 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { trainingApi, modelApi, atlasApi } from '@/api'
 import SvgIcon from '@/components/SvgIcon.vue'
+import type { TrainingJobResponse, ModelResponse, AtlasResponse } from '@/types/api'
 
-const jobs = ref<any[]>([])
-const models = ref<any[]>([])
-const atlases = ref<any[]>([])
+const jobs = ref<TrainingJobResponse[]>([])
+const models = ref<ModelResponse[]>([])
+const atlases = ref<AtlasResponse[]>([])
 const loading = ref(false)
 const starting = ref(false)
 const deviceInfo = ref<{ available: boolean; device: string; device_name: string }>({
@@ -225,14 +336,14 @@ const handleClearCompleted = async () => {
     await trainingApi.clearCompleted()
     ElMessage.success('已清理完成和失败的记录')
     loadJobs()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '清理失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '清理失败'
     ElMessage.error(msg)
   }
 }
 
 // 图标
-const getProgress = (job: any) => {
+const getProgress = (job: TrainingJobResponse) => {
   if (!job || !job.total_steps) return 0
   return Math.round((job.current_step / job.total_steps) * 100)
 }
@@ -293,21 +404,21 @@ const handleStart = async () => {
     ElMessage.success('训练已启动')
     loadJobs()
     startProgressPolling()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '启动失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '启动失败'
     ElMessage.error(msg)
   } finally {
     starting.value = false
   }
 }
 
-const handleStop = async (job: any) => {
+const handleStop = async (job: TrainingJobResponse) => {
   try {
     await trainingApi.stop(job.id)
     ElMessage.success('训练已停止')
     loadJobs()
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '停止失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '停止失败'
     ElMessage.error(msg)
   }
 }
@@ -446,7 +557,8 @@ onUnmounted(() => {
 
 /* 左侧配置面板 */
 .config-panel {
-  @apply flex flex-col w-64 flex-shrink-0 overflow-hidden;
+  @apply flex flex-col flex-shrink-0 overflow-hidden;
+  width: 360px;
 }
 
 .config-form {
@@ -472,6 +584,10 @@ onUnmounted(() => {
 
 .section-header {
   @apply flex justify-between items-center px-4 py-3 border-b border-[var(--border-color)] flex-shrink-0;
+
+  .header-left {
+    @apply flex items-center gap-2;
+  }
 
   h3 {
     @apply text-sm font-semibold;
@@ -679,7 +795,7 @@ onUnmounted(() => {
   @apply relative;
 
   select {
-    @apply w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-xs text-[var(--text-primary)] cursor-pointer appearance-none transition-all;
+    @apply w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] cursor-pointer appearance-none transition-all;
 
     &:focus {
       @apply outline-none border-[var(--accent-cyan)];
@@ -715,7 +831,7 @@ onUnmounted(() => {
   }
 }
 
-.device-hint {
-  @apply text-[10px] text-[var(--text-muted)] mt-1;
+.panel-icon {
+  @apply w-4 h-4 text-[var(--accent-cyan)];
 }
 </style>

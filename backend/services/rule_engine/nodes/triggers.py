@@ -1,163 +1,387 @@
 # -*- coding: utf-8 -*-
-"""触发器节点 - 规则执行的入口节点。"""
-from typing import Optional
-from .base import (
-    BaseNode, NodeCategory, NodeResult, NodeStatus, ExecutionContext
+"""触发器节点 - 规则执行的入口节点。
+
+按 Phase 1 设计文档实现 BaseExecutor 模式。
+"""
+import time
+from typing import Any, Dict, Optional, Tuple
+
+from backend.services.rule_engine.models import (
+    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
 )
+from typing import Dict
+from .base import BaseExecutor
 
 
-class YOLOTriggerNode(BaseNode):
-    """YOLO 触发器 - 当检测到指定目标时触发规则。
+class ManualTriggerNode(BaseExecutor):
+    """手动触发器 - 手动触发规则执行。
 
-    配置项:
-        class_names: list[str] - 要检测的类别名称列表
-        min_confidence: float - 最小置信度 (0-1)
-        max_objects: int - 最大检测数量
-        check_interval: float - 检测间隔(秒)
+    用于测试或手动控制场景。
     """
-    node_type = "yolo_trigger"
-    category = NodeCategory.TRIGGER
-    label = "YOLO 触发器"
-    description = "当检测到指定目标时触发规则执行"
-    icon = "mdi:radar"
 
-    inputs = []
-    outputs = [
-        {"name": "triggered", "type": "boolean", "label": "触发"},
-        {"name": "detections", "type": "array", "label": "检测结果"},
-    ]
+    node_type = "manual_trigger"
+    category = NodeCategory.INPUT
+    display_name = "手动触发"
+    description = "手动触发规则执行"
+    icon = "play"
+    color = "#4CFF4C"
 
-    config_schema = {
-        "type": "object",
-        "properties": {
-            "class_names": {
-                "type": "array",
-                "items": {"type": "string"},
-                "default": []
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={},
+            outputs={
+                "triggered": PortDefinition(
+                    name="触发",
+                    type="BOOLEAN",
+                    description="是否触发"
+                ),
             },
-            "min_confidence": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1,
-                "default": 0.5
-            },
-            "max_objects": {
-                "type": "integer",
-                "minimum": 1,
-                "default": 10
-            },
-        }
-    }
-
-    async def _execute(self, context: ExecutionContext, input_data: dict) -> NodeResult:
-        """执行 YOLO 触发检测。"""
-        class_names = self.config.get("class_names", [])
-        min_confidence = self.config.get("min_confidence", 0.5)
-        max_objects = self.config.get("max_objects", 10)
-
-        # 从触发数据中获取检测结果
-        detections = context.trigger_data.get("detections", [])
-        triggered = False
-        matched = []
-
-        for det in detections:
-            if det.get("confidence", 0) >= min_confidence:
-                if not class_names or det.get("class") in class_names:
-                    matched.append(det)
-                    if len(matched) >= max_objects:
-                        break
-
-        if matched:
-            triggered = True
-            context.set_var("_last_detections", matched)
-
-        return NodeResult(
-            status=NodeStatus.COMPLETED,
-            output_data={
-                "triggered": triggered,
-                "detections": matched,
-            }
+            config_schema=self.get_config_schema(),
         )
 
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {}  # 手动触发器无需配置
 
-class TimerTriggerNode(BaseNode):
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
+
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
+        return {
+            "triggered": True,
+            "timestamp": time.time(),
+        }
+
+
+class TimerTriggerNode(BaseExecutor):
     """定时器触发器 - 按固定间隔触发规则。
 
     配置项:
         interval: float - 触发间隔(秒)
         enabled: bool - 是否启用
     """
+
     node_type = "timer_trigger"
-    category = NodeCategory.TRIGGER
-    label = "定时器触发器"
+    category = NodeCategory.INPUT
+    display_name = "定时器触发"
     description = "按固定时间间隔触发规则执行"
-    icon = "mdi:timer"
+    icon = "timer"
+    color = "#4CFF4C"
 
-    inputs = []
-    outputs = [
-        {"name": "triggered", "type": "boolean", "label": "触发"},
-        {"name": "timestamp", "type": "number", "label": "时间戳"},
-    ]
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={},
+            outputs={
+                "triggered": PortDefinition(
+                    name="触发",
+                    type="BOOLEAN",
+                    description="是否触发"
+                ),
+                "timestamp": PortDefinition(
+                    name="时间戳",
+                    type="FLOAT",
+                    description="触发时间戳"
+                ),
+            },
+            config_schema=self.get_config_schema(),
+        )
 
-    config_schema = {
-        "type": "object",
-        "properties": {
-            "interval": {
-                "type": "number",
-                "minimum": 0.1,
-                "default": 5.0
-            },
-            "enabled": {
-                "type": "boolean",
-                "default": True
-            },
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "interval": ConfigSchemaProperty(
+                type="number",
+                title="触发间隔",
+                description="触发间隔时间（秒）",
+                default=5.0,
+                minimum=0.1,
+                maximum=3600,
+                step=0.5,
+                widget="slider",
+            ),
+            "enabled": ConfigSchemaProperty(
+                type="boolean",
+                title="启用状态",
+                description="是否启用定时器",
+                default=True,
+                widget="dropdown",
+                enum=["true", "false"],
+            ),
         }
-    }
 
-    async def _execute(self, context: ExecutionContext, input_data: dict) -> NodeResult:
-        """执行定时器检查。"""
-        import time
-        interval = self.config.get("interval", 5.0)
-        enabled = self.config.get("enabled", True)
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
 
-        # 简单实现：每次都触发，实际使用时需要记录上次触发时间
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
+        params = self.config.get("params", {})
+        interval = params.get("interval", 5.0)
+        enabled = params.get("enabled", True)
+
+        # TODO: 实现时间间隔控制（需要记录上次触发时间）
+        # 当前为占位实现
         triggered = enabled
 
-        return NodeResult(
-            status=NodeStatus.COMPLETED,
-            output_data={
-                "triggered": triggered,
-                "timestamp": time.time(),
-            }
-        )
+        return {
+            "triggered": triggered,
+            "timestamp": time.time(),
+            "interval": interval,
+        }
 
 
-class ManualTriggerNode(BaseNode):
-    """手动触发器 - 手动触发规则执行。
+class CronTriggerNode(BaseExecutor):
+    """Cron 触发器 - 按 Cron 表达式触发规则。
 
-    用于测试或手动控制场景。
+    配置项:
+        cron: str - Cron 表达式
+        timezone: str - 时区
     """
-    node_type = "manual_trigger"
-    category = NodeCategory.TRIGGER
-    label = "手动触发器"
-    description = "手动触发规则执行"
-    icon = "mdi:hand-pointing-right"
 
-    inputs = []
-    outputs = [
-        {"name": "triggered", "type": "boolean", "label": "触发"},
-    ]
+    node_type = "cron_trigger"
+    category = NodeCategory.INPUT
+    display_name = "Cron 触发"
+    description = "按 Cron 表达式触发规则执行"
+    icon = "clock"
+    color = "#4CFF4C"
 
-    config_schema = {
-        "type": "object",
-        "properties": {}
-    }
-
-    async def _execute(self, context: ExecutionContext, input_data: dict) -> NodeResult:
-        """执行手动触发。"""
-        return NodeResult(
-            status=NodeStatus.COMPLETED,
-            output_data={
-                "triggered": True,
-            }
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={},
+            outputs={
+                "triggered": PortDefinition(
+                    name="触发",
+                    type="BOOLEAN",
+                    description="是否触发"
+                ),
+                "timestamp": PortDefinition(
+                    name="时间戳",
+                    type="FLOAT",
+                    description="触发时间戳"
+                ),
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "cron": ConfigSchemaProperty(
+                type="string",
+                title="Cron 表达式",
+                description="标准 Cron 格式，如 0 * * * *",
+                default="0 * * * *",
+                widget="text",
+            ),
+            "timezone": ConfigSchemaProperty(
+                type="string",
+                title="时区",
+                description="时区名称，如 Asia/Shanghai",
+                default="Asia/Shanghai",
+                widget="dropdown",
+                enum=["Asia/Shanghai", "UTC", "America/New_York", "Europe/London", "Japan"],
+            ),
+        }
+
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
+
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
+        params = self.config.get("params", {})
+        cron_expr = params.get("cron", "0 * * * *")
+        timezone = params.get("timezone", "Asia/Shanghai")
+
+        # Cron 触发器的实际调度由 RuleScheduler 管理
+        # 此节点仅在触发时返回结果
+        return {
+            "triggered": True,
+            "timestamp": time.time(),
+            "cron": cron_expr,
+        }
+
+
+class WebhookTriggerNode(BaseExecutor):
+    """Webhook 触发器 - 接收 HTTP 请求触发规则。
+
+    配置项:
+        path: str - Webhook 路径
+        method: str - HTTP 方法 (GET/POST)
+        auth_token: str - 认证令牌（可选）
+
+    注意: Webhook 触发器的实际 HTTP 端点由调度器/路由器创建。
+    此节点在接收请求时返回结果。
+    """
+
+    node_type = "webhook_trigger"
+    category = NodeCategory.INPUT
+    display_name = "Webhook 触发"
+    description = "接收 HTTP 请求触发规则执行"
+    icon = "webhook"
+    color = "#4CFF4C"
+
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={},
+            outputs={
+                "triggered": PortDefinition(
+                    name="触发",
+                    type="BOOLEAN",
+                    description="是否触发"
+                ),
+                "request_data": PortDefinition(
+                    name="请求数据",
+                    type="ANY",
+                    description="HTTP 请求数据"
+                ),
+            },
+            config_schema=self.get_config_schema(),
+        )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "path": ConfigSchemaProperty(
+                type="string",
+                title="Webhook 路径",
+                description="Webhook 端点路径，如 /webhook/myrule",
+                default="/webhook/trigger",
+                widget="text",
+            ),
+            "method": ConfigSchemaProperty(
+                type="string",
+                title="HTTP 方法",
+                description="支持的 HTTP 方法",
+                default="POST",
+                widget="dropdown",
+                enum=["GET", "POST", "PUT", "DELETE"],
+            ),
+        }
+
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
+
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
+        params = self.config.get("params", {})
+        path = params.get("path", "")
+        method = params.get("method", "POST")
+
+        # 从上下文获取触发数据
+        request_data = context.trigger_data or {}
+
+        return {
+            "triggered": True,
+            "path": path,
+            "method": method,
+            "request_data": request_data,
+            "timestamp": time.time(),
+        }
+
+
+class ApiTriggerNode(BaseExecutor):
+    """API 触发器 - 通过内部 API 调用触发规则。
+
+    配置项:
+        api_name: str - API 名称
+        api_params: dict - API 参数
+
+    用于规则之间的内部调用或消息队列触发。
+    """
+
+    node_type = "api_trigger"
+    category = NodeCategory.INPUT
+    display_name = "API 触发"
+    description = "通过 API 调用触发规则执行"
+    icon = "api"
+    color = "#4CFF4C"
+
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={},
+            outputs={
+                "triggered": PortDefinition(
+                    name="触发",
+                    type="BOOLEAN",
+                    description="是否触发"
+                ),
+                "api_response": PortDefinition(
+                    name="API响应",
+                    type="ANY",
+                    description="API 响应数据"
+                ),
+            },
+            config_schema=self.get_config_schema(),
+        )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "api_name": ConfigSchemaProperty(
+                type="string",
+                title="API 名称",
+                description="调用的 API 名称",
+                default="",
+                widget="text",
+            ),
+        }
+
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
+
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context
+    ) -> Dict[str, Any]:
+        params = self.config.get("params", {})
+        api_name = params.get("api_name", "")
+        api_params = params.get("api_params", {})
+
+        # 从上下文获取触发数据
+        trigger_data = context.trigger_data or {}
+
+        return {
+            "triggered": True,
+            "api_name": api_name,
+            "api_params": api_params,
+            "trigger_data": trigger_data,
+            "timestamp": time.time(),
+        }

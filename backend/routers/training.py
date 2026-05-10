@@ -223,7 +223,7 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
             # 训练完成后的回调，在线程中执行数据库更新
             def on_complete(result):
                 global _current_training_progress
-                from backend.database import SessionLocal, Model
+                from backend.database import SessionLocal, Model, ModelFile
                 from datetime import datetime as dt
                 import json as json_module
 
@@ -241,6 +241,16 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
                             "best_model": result['best_model'],
                             "categories": export_result['classes']
                         })
+                        db_thread.commit()
+
+                        # 创建 yolo_pt 格式的 ModelFile 记录
+                        model_file = ModelFile(
+                            model_id=model_id,
+                            format="yolo_pt",
+                            file_path=result['best_model'],
+                            is_default=True
+                        )
+                        db_thread.add(model_file)
                         db_thread.commit()
 
                     # 更新任务状态

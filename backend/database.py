@@ -104,8 +104,32 @@ class Model(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     is_best = Column(Boolean, default=False)
 
+    # 多格式支持字段
+    format = Column(String(20), default="yolo_pt")  # 当前注册格式
+    available_formats = Column(Text, default="[]")  # JSON 数组，可用格式列表
+    device_preference = Column(String(20), default="auto")  # 设备偏好: auto/cpu/cuda
+    precision = Column(String(10), default="fp32")  # 推理精度: fp32/fp16/int8
+    input_shape = Column(String(50), nullable=True)  # 输入尺寸，如 "640x640"
+
     atlas = relationship("Atlas", back_populates=None)
     inference_jobs = relationship("InferenceJob", back_populates="model", cascade="all, delete-orphan")
+    files = relationship("ModelFile", back_populates="model", cascade="all, delete-orphan")
+
+
+class ModelFile(Base):
+    """模型文件模型 - 关联模型与其多种格式的文件。"""
+    __tablename__ = "model_file"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    model_id = Column(Integer, ForeignKey("model.id", ondelete="CASCADE"), nullable=False)
+    format = Column(String(20), nullable=False)  # yolo_pt/onnx/openvino/tensorrt/pytorch
+    file_path = Column(String(500), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    precision = Column(String(10), default="fp32")  # fp32/fp16/int8
+    is_default = Column(Boolean, default=False)  # 推理默认格式
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    model = relationship("Model", back_populates="files")
 
 
 class TrainingJob(Base):
@@ -139,6 +163,7 @@ class RuleGraph(Base):
     variables_json = Column(Text, nullable=True)  # JSON 存储变量定义
     version = Column(String(50), default="1.0.0")
     is_active = Column(Boolean, default=False)
+    cron_expression = Column(String(100), nullable=True)  # 定时触发 Cron 表达式
     thumbnail = Column(Text, nullable=True)  # Base64 缩略图快照
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -193,6 +218,9 @@ class InferenceJob(Base):
     file_path = Column(String(500), nullable=False)
     file_type = Column(String(10), nullable=False)                   # "image" / "video"
     conf_threshold = Column(Float, default=0.25)
+    device = Column(String(20), default="cpu")                        # 推理设备: auto/cpu/cuda
+    precision = Column(String(10), default="fp32")                    # 推理精度: fp32/fp16
+    used_format = Column(String(20), default="yolo_pt")               # 实际使用的模型格式
     status = Column(String(20), default="completed")                 # completed / processing / failed
     total_frames = Column(Integer, nullable=True)
     total_detections = Column(Integer, default=0)
@@ -235,5 +263,24 @@ def get_db():
 
 
 def init_db():
-    """初始化数据库，创建所有表。"""
+    """初始化数据库，创建所有表并执行迁移。"""
     Base.metadata.create_all(bind=engine)
+
+    # 迁移：为已有数据库添加新列（2026-05 添加 device/precision/used_format）
+    _migrate_add_column("inference_job", "device", "VARCHAR(20) DEFAULT 'cpu'")
+    _migrate_add_column("inference_job", "precision", "VARCHAR(10) DEFAULT 'fp32'")
+    _migrate_add_column("inference_job", "used_format", "VARCHAR(20) DEFAULT 'yolo_pt'")
+
+
+def _migrate_add_column(table: str, column: str, column_def: str):
+    """安全地向已有表添加列（SQLite 不支持 IF NOT EXISTS，忽略重复列错误）。"""
+    import sqlite3
+    try:
+        db_path = engine.url.database
+        if db_path and os.path.exists(db_path):
+            conn = sqlite3.connect(db_path)
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
+            conn.commit()
+            conn.close()
+    except Exception:
+        pass  # 列已存在则忽略

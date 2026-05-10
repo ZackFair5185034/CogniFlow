@@ -81,24 +81,38 @@
     <div class="canvas-body">
       <!-- 左侧节点面板 -->
       <aside class="node-palette" :class="{ collapsed: !showPalette }">
-        <div class="palette-header">
-          <h3 v-if="showPalette">节点库</h3>
-          <button class="collapse-btn" @click="showPalette = !showPalette">
-            <SvgIcon name="chevron-left" :class="{ rotated: !showPalette }" />
-          </button>
+        <button class="collapse-btn" :class="{ collapsed: !showPalette }" @click="showPalette = !showPalette" :title="showPalette ? '收起面板' : '展开面板'">
+          <SvgIcon :name="showPalette ? 'chevron-left' : 'chevron-right'" />
+        </button>
+        <div class="palette-header" v-show="showPalette">
+          <h3>节点库</h3>
+        </div>
+
+        <div class="palette-search" v-show="showPalette">
+          <input
+            v-model="nodeSearchQuery"
+            type="text"
+            placeholder="搜索节点..."
+            class="search-input"
+            @input="handleSearchInput"
+          />
+          <button
+            v-if="nodeSearchQuery"
+            class="search-clear"
+            @click="nodeSearchQuery = ''"
+            title="清除搜索"
+          >×</button>
         </div>
 
         <div class="palette-content" v-show="showPalette">
           <div
-            v-for="category in nodeCategories"
+            v-for="category in filteredCategories"
             :key="category.name"
             class="node-category"
           >
-            <div class="category-header" @click="category.expanded = !category.expanded">
+            <div class="category-header" @click="toggleCategory(category.name)">
               <div class="category-icon-wrapper" :class="category.name">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <component :is="category.icon" />
-                </svg>
+                <SvgIcon :name="category.name" />
               </div>
               <span class="category-name">{{ category.label }}</span>
               <span class="category-count">{{ category.nodes.length }}</span>
@@ -113,11 +127,10 @@
                 draggable="true"
                 @dragstart="handleDragStart($event, node)"
                 @dblclick="quickAddNode(node)"
+                @contextmenu.prevent="handlePaletteContextMenu($event, node)"
               >
                 <div class="node-icon-wrapper" :class="category.name">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <component :is="category.icon" />
-                  </svg>
+                  <SvgIcon :name="node.category || category.name" />
                 </div>
                 <div class="node-info">
                   <span class="node-label">{{ node.label }}</span>
@@ -126,29 +139,51 @@
               </div>
             </div>
           </div>
+
+          <!-- 变量管理面板 -->
+          <div class="variables-section">
+            <div class="section-header" @click="showVariables = !showVariables">
+              <span class="section-title">📌 变量</span>
+              <span class="section-count">{{ variables.length }}</span>
+              <SvgIcon class="chevron" :class="{ expanded: showVariables }" name="chevron" />
+            </div>
+            <div v-show="showVariables" class="variables-list">
+              <div
+                v-for="(variable, index) in variables"
+                :key="index"
+                class="variable-item"
+              >
+                <input
+                  type="text"
+                  :value="variable.name"
+                  @input="updateVariable(index, 'name', ($event.target as HTMLInputElement).value)"
+                  class="var-name-input"
+                  placeholder="变量名"
+                />
+                <select
+                  :value="variable.type"
+                  @change="updateVariable(index, 'type', ($event.target as HTMLSelectElement).value)"
+                  class="var-type-select"
+                >
+                  <option value="STRING">STRING</option>
+                  <option value="NUMBER">NUMBER</option>
+                  <option value="BOOLEAN">BOOLEAN</option>
+                  <option value="IMAGE">IMAGE</option>
+                  <option value="BBOX">BBOX</option>
+                </select>
+                <button class="var-remove-btn" @click="removeVariable(index)" title="删除变量">×</button>
+              </div>
+              <button class="add-var-btn" @click="addVariable">
+                <SvgIcon name="plus" /> 添加变量
+              </button>
+            </div>
+          </div>
         </div>
       </aside>
 
       <!-- 画布区域 -->
       <div class="canvas-wrapper" ref="canvasWrapper">
-        <!-- 顶部标尺 -->
-        <div class="ruler ruler-horizontal" v-if="showRulers">
-          <div class="ruler-content" :style="{ width: canvasWidth + 'px', transform: `translateX(${-panX}px)` }">
-            <span v-for="i in Math.ceil(canvasWidth / rulerStep)" :key="i" class="ruler-mark" :style="{ left: (i - 1) * rulerStep + 'px' }">
-              {{ (i - 1) * rulerStep }}
-            </span>
-          </div>
-        </div>
-
-        <!-- 左侧标尺 -->
-        <div class="ruler ruler-vertical" v-if="showRulers">
-          <div class="ruler-content" :style="{ height: canvasHeight + 'px', transform: `translateY(${-panY}px)` }">
-            <span v-for="i in Math.ceil(canvasHeight / rulerStep)" :key="i" class="ruler-mark" :style="{ top: (i - 1) * rulerStep + 'px' }">
-              {{ (i - 1) * rulerStep }}
-            </span>
-          </div>
-        </div>
-
+        
         <!-- VueFlow 画布 -->
         <div
           class="flow-container"
@@ -161,14 +196,14 @@
           @mousemove="handleCanvasMouseMove"
           @mouseup="handleCanvasMouseUp"
         >
-          <VueFlow
+            <VueFlow
             ref="vueFlowRef"
             v-model:nodes="nodes"
             v-model:edges="edges"
             :node-types="nodeTypes"
             :default-edge-options="defaultEdgeOptions"
             :connection-line-style="connectionLineStyle"
-            :snap-to-grid="snapGrid"
+            :snap-to-grid="false"
             :snap-grid="[gridSize, gridSize]"
             fit-view-on-init
             @node-click="handleNodeClick"
@@ -179,6 +214,11 @@
             @zoom="handleZoom"
             @nodes-change="handleNodesChange"
             @edges-change="handleEdgesChange"
+            @node-context-menu="(event: any, node: any) => handleContextMenu(event, node, 'node')"
+            @pane-context-menu="(event: any) => handleContextMenu(event, null, 'pane')"
+            @edge-context-menu="(event: any, edge: any) => handleContextMenu(event, edge, 'edge')"
+            @node-delete="handleNodeDelete"
+            :pan-on-drag="[]"
             :pan-on-scroll="true"
             :zoom-on-scroll="true"
             :min-zoom="0.1"
@@ -187,15 +227,12 @@
             :nodes-connectable="true"
             :elements-selectable="true"
             :select-nodes-on-drag="true"
+            :selection-mode="SelectionMode.Partial"
+            :connection-radius="20"
+            @selection-change="handleSelectionChange"
+            :is-valid-connection="isValidConnection"
           >
-            <!-- 点阵背景 -->
-            <Background
-              v-if="showGrid"
-              :pattern-color="gridColor"
-              :gap="gridSize"
-              :size="gridSize"
-            />
-
+            
             <!-- 小地图 -->
             <MiniMap
               v-if="showMiniMap"
@@ -210,6 +247,7 @@
             <Controls position="bottom-left" />
           </VueFlow>
 
+          
           <!-- 空画布提示 -->
           <div class="empty-state" v-if="nodes.length === 0 && !isLoading">
             <div class="empty-icon">
@@ -225,9 +263,7 @@
                 @click="quickAddNode(node)"
               >
                 <span class="btn-icon" :class="node.category">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <component :is="getCategoryIcon(node.category)" />
-                  </svg>
+                  <SvgIcon :name="node.category" />
                 </span>
                 {{ node.label }}
               </button>
@@ -242,151 +278,16 @@
         </div>
       </div>
 
-      <!-- 右侧属性面板 -->
-      <aside class="properties-panel" :class="{ visible: selectedNode }">
-        <template v-if="selectedNode">
-          <div class="panel-header">
-            <div class="panel-title">
-              <span class="panel-icon" :class="selectedNode.category">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <component :is="getCategoryIcon(selectedNode.category)" />
-                </svg>
-              </span>
-              <div class="panel-title-text">
-                <span class="node-name">{{ selectedNode.label }}</span>
-                <span class="node-type-label">{{ selectedNode.type }}</span>
-              </div>
-            </div>
-            <button class="close-btn" @click="selectedNode = null">
-              <SvgIcon name="close" />
-            </button>
           </div>
-
-          <div class="panel-body">
-            <!-- 节点描述 -->
-            <div class="config-section" v-if="selectedNode.description">
-              <div class="section-label">描述</div>
-              <p class="node-description">{{ selectedNode.description }}</p>
-            </div>
-
-            <!-- 参数配置 -->
-            <div class="config-section">
-              <div class="section-label">参数配置</div>
-              <div class="config-form">
-                <div
-                  v-for="(schema, key) in selectedNode.configSchema?.properties || {}"
-                  :key="key"
-                  class="form-field"
-                >
-                  <label class="field-label">{{ schema.title || key }}</label>
-
-                  <!-- 字符串输入 -->
-                  <input
-                    v-if="schema.type === 'string' && !schema.enum"
-                    type="text"
-                    :value="nodeConfig[key]"
-                    @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
-                    class="field-input"
-                    placeholder="请输入..."
-                  />
-
-                  <!-- 数字输入 -->
-                  <input
-                    v-else-if="schema.type === 'number' || schema.type === 'integer'"
-                    type="number"
-                    :min="schema.minimum"
-                    :max="schema.maximum"
-                    :step="schema.type === 'integer' ? 1 : 0.1"
-                    :value="nodeConfig[key]"
-                    @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
-                    class="field-input"
-                  />
-
-                  <!-- 布尔选择 -->
-                  <select
-                    v-else-if="schema.type === 'boolean'"
-                    :value="String(nodeConfig[key])"
-                    @change="updateConfig(key, ($event.target as HTMLSelectElement).value === 'true')"
-                    class="field-select"
-                  >
-                    <option value="true">是</option>
-                    <option value="false">否</option>
-                  </select>
-
-                  <!-- 枚举选择 -->
-                  <select
-                    v-else-if="schema.enum"
-                    :value="nodeConfig[key]"
-                    @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
-                    class="field-select"
-                  >
-                    <option v-for="opt in schema.enum" :key="opt" :value="opt">{{ opt }}</option>
-                  </select>
-
-                  <!-- 数组输入 -->
-                  <div v-else-if="schema.type === 'array'" class="array-field">
-                    <div
-                      v-for="(item, idx) in (nodeConfig[key] || [])"
-                      :key="idx"
-                      class="array-item"
-                    >
-                      <input
-                        type="text"
-                        :value="item"
-                        @input="updateArrayItem(key, idx, ($event.target as HTMLInputElement).value)"
-                        class="field-input"
-                      />
-                      <button class="remove-btn" @click="removeArrayItem(key, idx)">
-                        <SvgIcon name="close" />
-                      </button>
-                    </div>
-                    <button class="add-item-btn" @click="addArrayItem(key)">
-                      <SvgIcon name="plus" />
-                      添加
-                    </button>
-                  </div>
-
-                  <span class="field-default" v-if="schema.default !== undefined">
-                    默认: {{ JSON.stringify(schema.default) }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <!-- 连接信息 -->
-            <div class="config-section">
-              <div class="section-label">连接</div>
-              <div class="ports-display">
-                <div class="ports-row" v-if="selectedNode.inputs?.length">
-                  <span class="ports-title">输入:</span>
-                  <div class="ports-list">
-                    <span v-for="input in selectedNode.inputs" :key="input.name" class="port-chip input">
-                      {{ input.label || input.name }}
-                    </span>
-                  </div>
-                </div>
-                <div class="ports-row" v-if="selectedNode.outputs?.length">
-                  <span class="ports-title">输出:</span>
-                  <div class="ports-list">
-                    <span v-for="output in selectedNode.outputs" :key="output.name" class="port-chip output">
-                      {{ output.label || output.name }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
-
-        <div class="no-selection" v-else>
-          <SvgIcon name="alert" />
-          <p>选择画布上的节点<br>查看和编辑属性</p>
-        </div>
-      </aside>
-    </div>
 
     <!-- 执行日志面板 -->
-    <div class="execution-panel" :class="{ expanded: showExecutionPanel }">
+    <div class="execution-panel" :class="{ expanded: showExecutionPanel }"
+      :style="{
+        height: showExecutionPanel ? panelHeight + 'px' : '44px',
+        left: showPalette ? EXPANDED_WIDTH + 'px' : COLLAPSED_WIDTH + 'px'
+      }">
+      <!-- 拖拽调整高度 -->
+      <div class="panel-resize-handle" @mousedown="startPanelResize"></div>
       <div class="execution-header" @click="showExecutionPanel = !showExecutionPanel">
         <div class="execution-title">
           <SvgIcon name="file-text" />
@@ -402,6 +303,14 @@
       </div>
 
       <div class="execution-content" v-show="showExecutionPanel">
+        <!-- 进度条 -->
+        <div class="progress-bar-wrapper" v-if="executionStatus === 'running'">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: executionProgress + '%' }"></div>
+          </div>
+          <span class="progress-text">{{ executionProgress }}%</span>
+        </div>
+
         <div class="logs-list">
           <div
             v-for="(log, idx) in executionLogs"
@@ -427,13 +336,59 @@
         {{ toast.message }}
       </div>
     </transition>
+
+    <!-- 右键菜单 -->
+    <div
+      v-if="contextMenu.show"
+      class="context-menu"
+      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+      @contextmenu.prevent
+    >
+      <template v-if="contextMenu.targetType === 'node'">
+        <div class="context-menu-item" @click="handleContextAction('copy')">
+          <SvgIcon name="copy" /> 复制
+        </div>
+        <div class="context-menu-item" @click="handleContextAction('cut')">
+          <SvgIcon name="cut" /> 剪切
+        </div>
+        <div class="context-menu-item danger" @click="handleContextAction('delete')">
+          <SvgIcon name="delete" /> 删除
+        </div>
+        <div class="context-menu-divider" />
+      </template>
+      <template v-if="contextMenu.targetType === 'edge'">
+        <div class="context-menu-item danger" @click="handleContextAction('delete')">
+          <SvgIcon name="delete" /> 删除连线
+        </div>
+        <div class="context-menu-divider" />
+      </template>
+      <div class="context-menu-item" @click="handleContextAction('paste')">
+        <SvgIcon name="paste" /> 粘贴
+      </div>
+      <div class="context-menu-item" @click="handleContextAction('selectAll')">
+        <SvgIcon name="select" /> 全选
+      </div>
+    </div>
+
+    <!-- 点击其他区域隐藏右键菜单 -->
+    <div v-if="contextMenu.show" class="context-menu-overlay" @click="hideContextMenu" @contextmenu.prevent="hideContextMenu" />
+
+    <!-- 变量绑定菜单 -->
+    <div v-if="varMenu.show" class="var-menu" :style="{ left: varMenu.x + 'px', top: varMenu.y + 'px' }" @click.stop>
+      <div class="var-menu-title">插入变量</div>
+      <div v-if="variables.length === 0" class="var-menu-empty">暂无变量，请先在左侧添加</div>
+      <div v-for="v in variables" :key="v.name" class="var-menu-item" @click="insertVariable(v.name)">
+        📌 {{ v.name }} <span class="var-type-tag">{{ v.type }}</span>
+      </div>
+    </div>
+    <div v-if="varMenu.show" class="var-menu-overlay" @click="hideVariableMenu" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, markRaw, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { VueFlow, useVueFlow, Position, MarkerType } from '@vue-flow/core'
+import { VueFlow, useVueFlow, Position, MarkerType, SelectionMode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -443,21 +398,15 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 
-// 图标
-const TriggerIcon = () => h('polygon', { points: '13 2 3 14 12 14 11 22 21 10 12 10 13 2' })
-const ConditionIcon = () => h('polyline', { points: '22 12 18 12 15 21 9 3 6 12 2 12' })
-const ActionIcon = () => h('polygon', { points: '5 3 19 12 5 21 5 3' })
-const LogicIcon = () => h('rect', { x: '3', y: '3', width: '7', height: '7' })
-
-import { h } from 'vue'
+import RuleNode from '@/components/rule-engine/RuleNode.vue'
 
 const router = useRouter()
 const route = useRoute()
 const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate, getZoom, getPan } = useVueFlow()
 
 // 常量
-const gridSize = 20
-const gridColor = '#1a1a2e'
+const gridSize = 30
+const gridColor = '#2a2a32'
 const rulerStep = 100
 const showRulers = ref(true)
 
@@ -470,6 +419,9 @@ const edges = ref<any[]>([])
 const nodeDefinitions = ref<any[]>([])
 const selectedNode = ref<any>(null)
 const nodeConfig = ref<any>({})
+// 变量列表 - 支持的类型：STRING/NUMBER/BOOLEAN/IMAGE/BBOX
+const variables = ref<Array<{ name: string; type: string; defaultValue: any; description: string }>>([])
+const showVariables = ref(true)
 const isLoading = ref(false)
 const saving = ref(false)
 const executing = ref(false)
@@ -480,6 +432,8 @@ const showGrid = ref(true)
 const showExecutionPanel = ref(false)
 const executionLogs = ref<any[]>([])
 const executionStatus = ref<'idle' | 'running' | 'success' | 'failed'>('idle')
+const executionProgress = ref(0)
+const executionId = ref<number | null>(null)
 const flowContainer = ref<HTMLElement | null>(null)
 const vueFlowRef = ref<any>(null)
 const canvasWrapper = ref<HTMLElement | null>(null)
@@ -491,22 +445,96 @@ const zoomLevel = ref(1)
 const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
 
+// 节点执行状态: nodeId -> 'pending' | 'running' | 'success' | 'failed'
+const nodeStates = ref<Record<string, string>>({})
+
+// 复制粘贴
+const clipboard = ref<any[]>([])
+const clipboardMode = ref<'copy' | 'cut'>('copy')
+
+// 右键菜单
+const contextMenu = reactive({
+  show: false,
+  x: 0,
+  y: 0,
+  target: null as any,
+  targetType: null as 'node' | 'edge' | 'pane'
+})
+
+// 执行日志面板高度
+const panelHeight = ref(200)
+const isResizingPanel = ref(false)
+
+// palette 折叠后的宽度（配合 execution-panel left 动态响应）
+const COLLAPSED_WIDTH = 48
+const EXPANDED_WIDTH = 280
+
+// 变量绑定菜单
+const varMenu = reactive({
+  show: false,
+  x: 0,
+  y: 0,
+  fieldKey: '' as string
+})
+
 // 撤销/重做
 const historyStack = ref<{ nodes: any[], edges: any[] }[]>([])
 const historyIndex = ref(-1)
 const canUndo = computed(() => historyIndex.value > 0)
 const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
 
-// 节点分类
+// 节点分类展开状态（reactive，分离避免循环引用）
+const categoryExpanded = reactive({
+  input: true, detection: true, processing: true,
+  action: true, logic: true, output: true
+})
+
+// 节点分类 - 6色体系 (按设计文档)
 const nodeCategories = computed(() => [
-  { name: 'trigger', label: '触发器', icon: markRaw(TriggerIcon), expanded: true, nodes: [] as any[] },
-  { name: 'condition', label: '条件', icon: markRaw(ConditionIcon), expanded: true, nodes: [] as any[] },
-  { name: 'action', label: '动作', icon: markRaw(ActionIcon), expanded: true, nodes: [] as any[] },
-  { name: 'logic', label: '逻辑', icon: markRaw(LogicIcon), expanded: true, nodes: [] as any[] },
+  { name: 'input', label: '输入' },
+  { name: 'detection', label: '检测' },
+  { name: 'processing', label: '处理' },
+  { name: 'action', label: '动作' },
+  { name: 'logic', label: '逻辑' },
+  { name: 'output', label: '输出' },
 ].map(cat => ({
   ...cat,
+  expanded: categoryExpanded[cat.name],
   nodes: nodeDefinitions.value.filter((d: any) => d.category === cat.name)
 })))
+
+// 节点搜索
+const nodeSearchQuery = ref('')
+const filteredCategories = computed(() => {
+  const query = nodeSearchQuery.value.trim().toLowerCase()
+  if (!query) {
+    // 无搜索词：显示所有分类和节点，展开状态由用户控制
+    return nodeCategories.value
+  }
+  // 搜索模式：展开所有有匹配节点的分类
+  return nodeCategories.value
+    .map(cat => ({
+      ...cat,
+      nodes: cat.nodes.filter((n: any) =>
+        n.label?.toLowerCase().includes(query) ||
+        n.type?.toLowerCase().includes(query) ||
+        n.description?.toLowerCase().includes(query)
+      ),
+      expanded: true // 搜索时强制展开
+    }))
+    .filter(cat => cat.nodes.length > 0) // 隐藏空分类
+})
+
+function handleSearchInput() {
+  // 搜索时自动展开所有分类
+  if (nodeSearchQuery.value.trim()) {
+    Object.keys(categoryExpanded).forEach(key => categoryExpanded[key as keyof typeof categoryExpanded] = true)
+  }
+}
+
+function toggleCategory(name: string) {
+  categoryExpanded[name as keyof typeof categoryExpanded] = !categoryExpanded[name as keyof typeof categoryExpanded]
+}
 
 // 快速添加
 const quickAddNodes = computed(() => nodeDefinitions.value.slice(0, 4))
@@ -522,10 +550,10 @@ const executionStatusText = computed(() => ({
   failed: '执行失败'
 }[executionStatus.value]))
 
-// 默认边样式
+// 默认边样式 - 使用贝塞尔曲线
 const defaultEdgeOptions = {
-  type: 'smoothstep',
-  animated: true,
+  type: 'default',
+  animated: false,
   markerEnd: MarkerType.ArrowClosed,
   style: { stroke: '#00f0ff', strokeWidth: 2 }
 }
@@ -536,29 +564,22 @@ const connectionLineStyle = {
   strokeWidth: 2
 }
 
-// 节点类型
-const nodeTypes = {}
-
-// 小地图颜色
-function miniMapNodeColor(node: any) {
-  const colors: Record<string, string> = {
-    trigger: '#00f0ff',
-    condition: '#ffdd00',
-    action: '#00ff88',
-    logic: '#ff00aa'
-  }
-  return colors[node.category] || '#888'
+// 节点类型 - 注册自定义节点组件
+const nodeTypes = {
+  ruleNode: RuleNode
 }
 
-// 获取分类图标
-function getCategoryIcon(category: string) {
-  const icons: Record<string, any> = {
-    trigger: markRaw(TriggerIcon),
-    condition: markRaw(ConditionIcon),
-    action: markRaw(ActionIcon),
-    logic: markRaw(LogicIcon)
+// 小地图颜色 - 6色分类体系
+function miniMapNodeColor(node: any) {
+  const colors: Record<string, string> = {
+    input: '#4CFF4C',      // input (#4CFF4C)
+    detection: '#00f0FF',  // detection (#00f0FF)
+    processing: '#FFFF4C', // processing (#FFFF4C)
+    action: '#FF7F4C',     // action (#FF7F4C)
+    logic: '#DC4FDC',      // logic (#DC4FDC)
+    output: '#FF4C4C'       // output (#FF4C4C)
   }
-  return icons[category] || icons.action
+  return colors[node.category] || '#888'
 }
 
 // Toast
@@ -567,11 +588,101 @@ const toast = reactive({ show: false, message: '', type: 'info' as 'success' | '
 function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
   toast.message = message
   toast.type = type
-  toast.show = true
-  setTimeout(() => { toast.show = false }, 3000)
+  toast.visible = true
+  setTimeout(() => { toast.visible = false }, 3000)
 }
 
-// 保存历史
+// WebSocket 连接（Phase 5 实时推送）
+let ws: WebSocket | null = null
+let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+function getWsUrl() {
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${proto}//${window.location.host}/ws/rule-execution`
+}
+
+function connectWebSocket(execId: number) {
+  if (ws) {
+    ws.close()
+    ws = null
+  }
+
+  try {
+    ws = new WebSocket(getWsUrl())
+
+    ws.onopen = () => {
+      // 订阅该 execution_id
+      ws?.send(JSON.stringify({ action: 'subscribe', execution_id: execId }))
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data)
+        handleWsMessage(msg)
+      } catch (e) {
+        console.error('[WS] 解析消息失败', e)
+      }
+    }
+
+    ws.onerror = () => {
+      // 自动重连
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
+      wsReconnectTimer = setTimeout(() => {
+        if (executionStatus.value === 'running' && executionId.value) {
+          connectWebSocket(executionId.value)
+        }
+      }, 3000)
+    }
+
+    ws.onclose = () => {
+      ws = null
+    }
+  } catch (e) {
+    console.error('[WS] 连接失败', e)
+  }
+}
+
+function disconnectWebSocket() {
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer)
+    wsReconnectTimer = null
+  }
+  if (ws) {
+    ws.close()
+    ws = null
+  }
+}
+
+function handleWsMessage(msg: any) {
+  switch (msg.type) {
+    case 'node_started':
+      nodeStates.value[msg.node_id] = 'running'
+      break
+    case 'node_executed':
+      nodeStates.value[msg.node_id] = 'success'
+      break
+    case 'node_failed':
+      nodeStates.value[msg.node_id] = 'failed'
+      showToast(`节点执行失败: ${msg.error}`, 'error')
+      break
+    case 'execution_progress':
+      executionProgress.value = msg.progress
+      break
+    case 'execution_complete':
+      executionStatus.value = msg.status === 'completed' ? 'success' : 'failed'
+      executionProgress.value = 100
+      showToast(
+        msg.status === 'completed' ? '执行成功' : `执行失败: ${msg.error || ''}`,
+        msg.status === 'completed' ? 'success' : 'error'
+      )
+      // 重置节点状态
+      setTimeout(() => { nodeStates.value = {} }, 2000)
+      disconnectWebSocket()
+      break
+  }
+}
+
+// 右键菜单操作
 function saveHistory() {
   historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
   historyStack.value.push({
@@ -582,6 +693,294 @@ function saveHistory() {
   if (historyStack.value.length > 50) {
     historyStack.value.shift()
     historyIndex.value--
+  }
+}
+
+// 键盘事件处理
+function handleKeyDown(event: KeyboardEvent) {
+  // 忽略输入框内的按键
+  const target = event.target as HTMLElement
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+    return
+  }
+
+  const isCtrl = event.ctrlKey || event.metaKey
+
+  // Ctrl+C: 复制
+  if (isCtrl && event.key === 'c') {
+    event.preventDefault()
+    handleCopy()
+    return
+  }
+
+  // Ctrl+X: 剪切
+  if (isCtrl && event.key === 'x') {
+    event.preventDefault()
+    handleCut()
+    return
+  }
+
+  // Ctrl+V: 粘贴
+  if (isCtrl && event.key === 'v') {
+    event.preventDefault()
+    handlePaste()
+    return
+  }
+
+  // Ctrl+Z: 撤销
+  if (isCtrl && event.key === 'z' && !event.shiftKey) {
+    event.preventDefault()
+    handleUndo()
+    return
+  }
+
+  // Ctrl+Y / Ctrl+Shift+Z: 重做
+  if (isCtrl && (event.key === 'y' || (event.key === 'z' && event.shiftKey))) {
+    event.preventDefault()
+    handleRedo()
+    return
+  }
+
+  // Delete / Backspace: 删除选中
+  if (event.key === 'Delete' || event.key === 'Backspace') {
+    event.preventDefault()
+    handleDelete()
+    return
+  }
+}
+
+// 复制
+function handleCopy() {
+  const selected = nodes.value.filter((n: any) => n.selected)
+  if (selected.length === 0) {
+    showToast('请先选择要复制的节点', 'info')
+    return
+  }
+  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
+  clipboardMode.value = 'copy'
+  showToast(`已复制 ${selected.length} 个节点`, 'info')
+}
+
+// 剪切
+function handleCut() {
+  const selected = nodes.value.filter((n: any) => n.selected)
+  if (selected.length === 0) {
+    showToast('请先选择要剪切的节点', 'info')
+    return
+  }
+  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
+  clipboardMode.value = 'cut'
+  // 立即删除
+  removeNodes(selected.map((n: any) => n.id))
+  edges.value = edges.value.filter((e: any) =>
+    !selected.some((n: any) => n.id === e.source || n.id === e.target)
+  )
+  selected.forEach((n: any) => {
+    const idx = nodes.value.findIndex((node: any) => node.id === n.id)
+    if (idx !== -1) nodes.value.splice(idx, 1)
+  })
+  showToast(`已剪切 ${selected.length} 个节点`, 'info')
+}
+
+// 粘贴
+function handlePaste() {
+  if (clipboard.value.length === 0) {
+    showToast('剪贴板为空', 'info')
+    return
+  }
+
+  const container = flowContainer.value
+  if (!container) return
+
+  const rect = container.getBoundingClientRect()
+  const offsetX = 50
+  const offsetY = 50
+
+  const newNodes = clipboard.value.map((n: any) => {
+    const cloned = JSON.parse(JSON.stringify(n))
+    return {
+      ...cloned,
+      id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      type: 'ruleNode',  // 确保使用自定义节点组件
+      position: {
+        x: n.position.x + offsetX,
+        y: n.position.y + offsetY
+      },
+      selected: false,
+      data: {
+        ...(cloned.data || {}),
+        onDelete: handleNodeDelete
+      }
+    }
+  })
+
+  // 如果是剪切模式，清除原选中节点
+  if (clipboardMode.value === 'cut') {
+    clipboard.value = []
+  }
+
+  addNodes(newNodes)
+  saveHistory()
+  showToast(`已粘贴 ${newNodes.length} 个节点`, 'info')
+}
+
+// 框选变化 - 同步 VueFlow 选中状态到 nodes
+function handleSelectionChange({ nodes: selectedNodes }: any) {
+  // 先清除所有节点的选中状态
+  nodes.value.forEach((n: any) => { n.selected = false })
+  // 再设置当前选中的节点
+  selectedNodes.forEach((n: any) => {
+    const node = nodes.value.find((node: any) => node.id === n.id)
+    if (node) node.selected = true
+  })
+}
+
+// 节点删除按钮点击
+function handleNodeDelete(nodeId: string) {
+  // 使用 VueFlow 的 removeNodes 方法删除节点
+  removeNodes(nodeId)
+  // 同时删除关联的边
+  edges.value = edges.value.filter((e: any) => e.source !== nodeId && e.target !== nodeId)
+  saveHistory()
+  showToast('节点已删除', 'info')
+}
+
+// 删除选中
+function handleDelete() {
+  const selectedNodes = nodes.value.filter((n: any) => n.selected)
+  const selectedEdges = edges.value.filter((e: any) => e.selected)
+
+  if (selectedNodes.length === 0 && selectedEdges.length === 0) {
+    return
+  }
+
+  // 删除节点时同步删除关联的边
+  const nodeIds = selectedNodes.map((n: any) => n.id)
+  edges.value = edges.value.filter((e: any) =>
+    !nodeIds.includes(e.source) && !nodeIds.includes(e.target) && !e.selected
+  )
+
+  // 删除节点
+  selectedNodes.forEach((n: any) => {
+    const idx = nodes.value.findIndex((node: any) => node.id === n.id)
+    if (idx !== -1) nodes.value.splice(idx, 1)
+  })
+
+  selectedEdges.forEach((e: any) => {
+    const idx = edges.value.findIndex((edge: any) => edge.id === e.id)
+    if (idx !== -1) edges.value.splice(idx, 1)
+  })
+
+  selectedNode.value = null
+  saveHistory()
+  showToast(`已删除 ${selectedNodes.length} 个节点`, 'info')
+}
+
+// 右键菜单
+function handleContextMenu(event: MouseEvent, target: any, type: 'node' | 'edge' | 'pane') {
+  event.preventDefault()
+  event.stopPropagation()
+  contextMenu.show = true
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.target = target
+  contextMenu.targetType = type
+}
+
+// 节点面板右键菜单
+function handlePaletteContextMenu(event: MouseEvent, node: any) {
+  event.preventDefault()
+  contextMenu.show = true
+  contextMenu.x = event.clientX
+  contextMenu.y = event.clientY
+  contextMenu.target = node
+  contextMenu.targetType = 'pane'
+}
+
+// 隐藏右键菜单
+function hideContextMenu() {
+  contextMenu.show = false
+}
+
+// 获取输入端口的连接信息
+function getInputConnection(inputName: string) {
+  const edge = edges.value.find(
+    (e: any) => e.target === selectedNode.value?.id && e.targetHandle === inputName
+  )
+  if (!edge) return null
+  const sourceNode = nodes.value.find((n: any) => n.id === edge.source)
+  return {
+    edge,
+    sourceNode
+  }
+}
+
+// 断开连接
+function disconnectInput(inputName: string) {
+  const edge = edges.value.find(
+    (e: any) => e.target === selectedNode.value?.id && e.targetHandle === inputName
+  )
+  if (!edge) return
+  const idx = edges.value.findIndex((e: any) => e.id === edge.id)
+  if (idx !== -1) edges.value.splice(idx, 1)
+  saveHistory()
+  showToast('已断开连接', 'info')
+}
+
+// 显示变量绑定菜单
+function showVariableMenu(key: string, event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  varMenu.show = true
+  varMenu.x = event.clientX
+  varMenu.y = event.clientY
+  varMenu.fieldKey = key
+}
+
+// 隐藏变量菜单
+function hideVariableMenu() {
+  varMenu.show = false
+}
+
+// 插入变量到字段
+function insertVariable(varName: string) {
+  if (!varMenu.fieldKey) return
+  const currentValue = nodeConfig.value[varMenu.fieldKey] || ''
+  // 如果当前值已包含 {{}}，则追加；否则添加 {{varName}}
+  if (currentValue.includes('{{') && currentValue.includes('}}')) {
+    nodeConfig.value[varMenu.fieldKey] = currentValue + `{{${varName}}}`
+  } else {
+    nodeConfig.value[varMenu.fieldKey] = `{{${varName}}}`
+  }
+  updateConfig(varMenu.fieldKey, nodeConfig.value[varMenu.fieldKey])
+  hideVariableMenu()
+}
+
+// 右键菜单操作
+function handleContextAction(action: string) {
+  hideContextMenu()
+  switch (action) {
+    case 'copy':
+      if (contextMenu.targetType === 'node') {
+        nodes.value.forEach((n: any) => { n.selected = n.id === contextMenu.target?.id })
+        handleCopy()
+      }
+      break
+    case 'paste':
+      handlePaste()
+      break
+    case 'delete':
+      if (contextMenu.targetType === 'node') {
+        nodes.value.forEach((n: any) => { n.selected = n.id === contextMenu.target?.id })
+      } else if (contextMenu.targetType === 'edge') {
+        edges.value.forEach((e: any) => { e.selected = e.id === contextMenu.target?.id })
+      }
+      handleDelete()
+      break
+    case 'selectAll':
+      nodes.value.forEach((n: any) => { n.selected = true })
+      edges.value.forEach((e: any) => { e.selected = true })
+      break
   }
 }
 
@@ -625,6 +1024,12 @@ onMounted(async () => {
   await loadGraph()
   await loadNodeDefinitions()
   saveHistory()
+  // 键盘事件
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeyDown)
 })
 
 // 加载规则图
@@ -649,10 +1054,23 @@ async function loadGraph() {
       target: e.target,
       sourceHandle: e.source_handle,
       targetHandle: e.target_handle,
-      type: 'smoothstep',
-      animated: true,
+      type: 'default',
+      animated: false,
       markerEnd: MarkerType.ArrowClosed
     }))
+
+    // 加载变量列表
+    try {
+      const vars = JSON.parse(graph.value.variables_json || '{}')
+      variables.value = Object.entries(vars).map(([name, config]: [string, any]) => ({
+        name,
+        type: config.type || 'STRING',
+        defaultValue: config.defaultValue || '',
+        description: config.description || ''
+      }))
+    } catch {
+      variables.value = []
+    }
   } catch (err) {
     console.error('加载规则图失败:', err)
     showToast('加载规则图失败', 'error')
@@ -722,15 +1140,20 @@ function handleDrop(event: DragEvent) {
 
   const newNode = {
     id: `node_${Date.now()}`,
-    type: nodeDef.type,
+    type: 'ruleNode',
     position,
-    data: {},
-    category: nodeDef.category,
-    label: nodeDef.label,
-    description: nodeDef.description,
-    configSchema: nodeDef.config_schema,
-    inputs: nodeDef.inputs,
-    outputs: nodeDef.outputs
+    data: {
+      id: `node_${Date.now()}`,
+      type: nodeDef.type,
+      category: nodeDef.category,
+      label: nodeDef.label,
+      description: nodeDef.description,
+      configSchema: nodeDef.config_schema,
+      inputs: nodeDef.inputs,
+      outputs: nodeDef.outputs,
+      config: {},
+      onDelete: handleNodeDelete
+    }
   }
 
   addNodes([newNode])
@@ -744,18 +1167,23 @@ function quickAddNode(nodeDef: any) {
 
   const newNode = {
     id: `node_${Date.now()}`,
-    type: nodeDef.type,
+    type: 'ruleNode',
     position: {
       x: centerX + Math.random() * 100 - 50,
       y: centerY + Math.random() * 100 - 50
     },
-    data: {},
-    category: nodeDef.category,
-    label: nodeDef.label,
-    description: nodeDef.description,
-    configSchema: nodeDef.config_schema,
-    inputs: nodeDef.inputs,
-    outputs: nodeDef.outputs
+    data: {
+      id: `node_${Date.now()}`,
+      type: nodeDef.type,
+      category: nodeDef.category,
+      label: nodeDef.label,
+      description: nodeDef.description,
+      configSchema: nodeDef.config_schema,
+      inputs: nodeDef.inputs,
+      outputs: nodeDef.outputs,
+      config: {},
+      onDelete: handleNodeDelete
+    }
   }
 
   addNodes([newNode])
@@ -783,12 +1211,97 @@ function handlePaneClick() {
   selectedNode.value = null
 }
 
+// 端口类型兼容性检查（14种类型 + ANY通配）
+const PORT_TYPES = ['IMAGE', 'BBOX', 'MASK', 'SCORES', 'TRIGGER', 'CONTROL', 'MODEL', 'ANY', 'INT', 'FLOAT', 'BOOLEAN', 'STRING', 'ARRAY', 'OBJECT']
+
+function isPortCompatible(sourceType: string, targetType: string): boolean {
+  // ANY 可以连接任何类型
+  if (sourceType === 'ANY' || targetType === 'ANY') return true
+  // 相同类型可以连接
+  if (sourceType === targetType) return true
+  // TRIGGER 可以连接到 TRIGGER 或 CONTROL
+  if (sourceType === 'TRIGGER' && (targetType === 'TRIGGER' || targetType === 'CONTROL')) return true
+  // CONTROL 只能连接到 CONTROL
+  if (sourceType === 'CONTROL' && targetType === 'CONTROL') return true
+  return false
+}
+
+function getNodePortType(nodeId: string, handleId: string | null, isSource: boolean): string | null {
+  const node = nodes.value.find(n => n.id === nodeId)
+  if (!node) return null
+  const ports = isSource ? (node.data?.outputs || []) : (node.data?.inputs || [])
+  if (!ports?.length) return null
+  // handleId 是端口名，需要用 find 匹配（ports 是数组，不是对象）
+  if (handleId) {
+    const port = ports.find((p: any) => p.name === handleId)
+    return port?.type || 'ANY'
+  }
+  // 如果没有指定handle，返回第一个端口的类型
+  return ports[0]?.type || 'ANY'
+}
+
+function validateConnection(params: any): { valid: boolean; error?: string } {
+  const { source, target, sourceHandle, targetHandle } = params
+  
+  // 获取源节点和目标节点
+  const sourceNode = nodes.value.find(n => n.id === source)
+  const targetNode = nodes.value.find(n => n.id === target)
+  
+  if (!sourceNode || !targetNode) {
+    return { valid: false, error: '节点不存在' }
+  }
+  
+  // 禁止自己连接自己
+  if (source === target) {
+    return { valid: false, error: '不能连接到自己' }
+  }
+  
+  // 获取端口类型
+  const sourceType = getNodePortType(source, sourceHandle, true)
+  const targetType = getNodePortType(target, targetHandle, false)
+  
+  if (sourceType === null || targetType === null) {
+    return { valid: false, error: '端口定义缺失' }
+  }
+  
+  // 类型兼容性检查
+  if (!isPortCompatible(sourceType, targetType)) {
+    return { valid: false, error: `类型不兼容: ${sourceType} → ${targetType}` }
+  }
+  
+  return { valid: true }
+}
+
+// VueFlow 专用连接验证（用于高亮和阻止连接）
+function isValidConnection(connection: any): boolean {
+  const { source, target, sourceHandle, targetHandle } = connection
+
+  // 不能连接自己
+  if (source === target) return false
+
+  // 获取端口类型
+  const sourceType = getNodePortType(source, sourceHandle, true)
+  const targetType = getNodePortType(target, targetHandle, false)
+
+  if (sourceType === null || targetType === null) return true // 未知类型允许连接
+
+  // 类型兼容性检查
+  return isPortCompatible(sourceType, targetType)
+}
+
 // 连接
 function handleConnect(params: any) {
+  // 验证连接类型兼容性
+  const validation = validateConnection(params)
+  if (!validation.valid) {
+    showToast(validation.error || '连接失败', 'error')
+    return
+  }
+  
   addEdges([{
     ...params,
-    type: 'smoothstep',
-    animated: true,
+    type: 'default',
+    animated: false,
     markerEnd: MarkerType.ArrowClosed,
     id: `e-${params.source}-${params.target}-${Date.now()}`
   }])
@@ -797,7 +1310,17 @@ function handleConnect(params: any) {
 
 // 节点/边变化
 function handleNodesChange(changes: any[]) {
+  // VueFlow 会自动更新 nodes.value，我们需要同步本地状态
   // 只在外部变化时保存历史
+  const hasRemoval = changes.some(c => c.type === 'remove')
+  if (hasRemoval) {
+    // 节点被删除，同步更新本地 edges
+    const remainingNodeIds = nodes.value.map((n: any) => n.id)
+    edges.value = edges.value.filter((e: any) =>
+      remainingNodeIds.includes(e.source) && remainingNodeIds.includes(e.target)
+    )
+    saveHistory()
+  }
 }
 
 function handleEdgesChange(changes: any[]) {
@@ -842,6 +1365,24 @@ function handleCanvasMouseMove(event: MouseEvent) {
 
 function handleCanvasMouseUp() {
   isPanning.value = false
+  isResizingPanel.value = false
+}
+
+function startPanelResize(e: MouseEvent) {
+  isResizingPanel.value = true
+  const startY = e.clientY
+  const startHeight = panelHeight.value
+  const onMove = (ev: MouseEvent) => {
+    const newHeight = startHeight + (startY - ev.clientY)
+    panelHeight.value = Math.max(100, Math.min(500, newHeight))
+  }
+  const onUp = () => {
+    isResizingPanel.value = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
 }
 
 // 更新配置
@@ -849,7 +1390,8 @@ function updateConfig(key: string, value: any) {
   nodeConfig.value[key] = value
   const node = nodes.value.find(n => n.id === selectedNode.value?.id)
   if (node) {
-    node.data = { ...nodeConfig.value }
+    node.data = node.data || {}
+    node.data.config = { ...nodeConfig.value }
   }
 }
 
@@ -875,10 +1417,43 @@ function updateNodeData() {
   if (node) node.data = { ...nodeConfig.value }
 }
 
+// ============ 变量管理 ============
+function addVariable() {
+  const newVar = {
+    name: `var_${variables.value.length + 1}`,
+    type: 'STRING',
+    defaultValue: '',
+    description: ''
+  }
+  variables.value.push(newVar)
+  saveHistory()
+}
+
+function removeVariable(index: number) {
+  variables.value.splice(index, 1)
+  saveHistory()
+}
+
+function updateVariable(index: number, field: string, value: any) {
+  if (variables.value[index]) {
+    variables.value[index][field] = value
+  }
+}
+
 // 保存
 async function handleSave() {
   saving.value = true
   try {
+    // 构建变量 JSON
+    const varsObj: Record<string, any> = {}
+    for (const v of variables.value) {
+      varsObj[v.name] = {
+        type: v.type,
+        defaultValue: v.defaultValue,
+        description: v.description
+      }
+    }
+
     await ruleEngineApi.updateGraph(graphId.value, {
       nodes_json: JSON.stringify(nodes.value.map(n => ({
         id: n.id,
@@ -892,7 +1467,8 @@ async function handleSave() {
         target: e.target,
         source_handle: e.sourceHandle,
         target_handle: e.targetHandle
-      })))
+      }))),
+      variables_json: JSON.stringify(varsObj)
     })
     // 生成并保存缩略图
     await captureAndSaveThumbnail()
@@ -1042,8 +1618,10 @@ async function handleExecute() {
 
   executing.value = true
   executionStatus.value = 'running'
+  executionProgress.value = 0
   showExecutionPanel.value = true
   executionLogs.value = []
+  nodeStates.value = {}
 
   try {
     const res = await ruleEngineApi.execute({
@@ -1051,12 +1629,14 @@ async function handleExecute() {
       trigger_type: 'manual'
     })
 
-    if (res.data.result?.logs) {
-      executionLogs.value = res.data.result.logs
-    }
+    // Phase 5: WebSocket 实时推送
+    const execId = res.data.execution_id
+    executionId.value = execId
+    connectWebSocket(execId)
 
-    executionStatus.value = res.data.status === 'completed' ? 'success' : 'failed'
-    showToast(`执行${executionStatus.value === 'success' ? '成功' : '完成'}`, 'success')
+    // 前端轮询作为降级（备用）
+    pollExecutionStatus(execId)
+
   } catch (err: any) {
     executionStatus.value = 'failed'
     executionLogs.value.push({
@@ -1065,9 +1645,14 @@ async function handleExecute() {
       message: err?.response?.data?.detail || '执行失败'
     })
     showToast('执行失败', 'error')
-  } finally {
     executing.value = false
   }
+}
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+async function pollExecutionStatus(execId: number) {
+  // WebSocket 足够可靠，仅在连接失败时启用轮询备用
 }
 
 // 清空日志
@@ -1113,12 +1698,12 @@ $panel-header-height: 52px;
   .header-right {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
   }
 
-  .header-left { flex: 1; }
+  .header-left { flex: 0 0 auto; }
   .header-center { flex: 0 0 auto; }
-  .header-right { flex: 1; justify-content: flex-end; }
+  .header-right { flex: 0 0 auto; }
 }
 
 .rule-name-section {
@@ -1239,20 +1824,22 @@ $panel-header-height: 52px;
 }
 
 .action-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 6px;
+  padding: 6px 12px;
   border: none;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
   }
 
   &:disabled {
@@ -1298,11 +1885,15 @@ $panel-header-height: 52px;
   transition: width 0.3s ease;
   flex-shrink: 0;
   z-index: 50;
+  position: relative;
+  overflow: visible;
 
   &.collapsed {
     width: 48px;
 
-    .palette-content { display: none; }
+    .palette-content,
+    .palette-search,
+    .palette-header { display: none; }
   }
 }
 
@@ -1310,8 +1901,8 @@ $panel-header-height: 52px;
   height: $panel-header-height;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
+  gap: 8px;
+  padding: 0 8px;
   border-bottom: 1px solid #1e1e2e;
 
   h3 {
@@ -1320,33 +1911,91 @@ $panel-header-height: 52px;
     color: #888;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    flex: 1;
   }
 }
 
 .collapse-btn {
-  width: 28px;
-  height: 28px;
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
+  background: #0e0e14;
+  border: 1px solid #1e1e2e;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
   color: #666;
   cursor: pointer;
-  transition: all 0.2s;
-
-  svg {
-    width: 16px;
-    height: 16px;
-    transition: transform 0.2s;
-
-    &.rotated { transform: rotate(180deg); }
-  }
+  z-index: 20;
+  padding: 0;
 
   &:hover {
-    background: #1e1e2e;
-    color: #fff;
+    color: #00f0ff;
+    border-color: #00f0ff;
+    border-left: none;
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  &.collapsed svg {
+    transform: translateX(1px);
+  }
+}
+
+.palette-search {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e1e2e;
+  gap: 6px;
+
+  .search-input {
+    flex: 1;
+    height: 30px;
+    padding: 0 10px;
+    background: #12121a;
+    border: 1px solid #2a2a3e;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+
+    &::placeholder {
+      color: #555;
+    }
+
+    &:focus {
+      border-color: #4a4a6e;
+    }
+  }
+
+  .search-clear {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #2a2a3e;
+    border: none;
+    border-radius: 50%;
+    color: #888;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+
+    &:hover {
+      background: #3a3a5e;
+      color: #fff;
+    }
   }
 }
 
@@ -1354,6 +2003,142 @@ $panel-header-height: 52px;
   flex: 1;
   overflow-y: auto;
   padding: 8px;
+}
+
+// 变量管理面板
+.variables-section {
+  margin-top: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--border-color, #3a3a5c);
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.2s;
+
+    &:hover {
+      background: #1a1a24;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #00f0ff;
+    }
+
+    .section-count {
+      font-size: 11px;
+      color: #888;
+      background: #2a2a3a;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+
+    .chevron {
+      width: 14px;
+      height: 14px;
+      margin-left: auto;
+      transition: transform 0.2s;
+
+      &.expanded {
+        transform: rotate(180deg);
+      }
+    }
+  }
+
+  .variables-list {
+    padding: 4px 0;
+  }
+
+  .variable-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+
+    .var-name-input {
+      flex: 1;
+      min-width: 0;
+      padding: 6px 8px;
+      background: #1a1a24;
+      border: 1px solid #3a3a5c;
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-size: 12px;
+
+      &:focus {
+        outline: none;
+        border-color: #00f0ff;
+      }
+    }
+
+    .var-type-select {
+      width: 80px;
+      padding: 6px 4px;
+      background: #1a1a24;
+      border: 1px solid #3a3a5c;
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-size: 11px;
+
+      &:focus {
+        outline: none;
+        border-color: #00f0ff;
+      }
+    }
+
+    .var-remove-btn {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: #888;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+
+      &:hover {
+        background: rgba(255, 76, 76, 0.2);
+        color: #ff4c4c;
+      }
+    }
+  }
+
+  .add-var-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    background: transparent;
+    border: 1px dashed #3a3a5c;
+    border-radius: 6px;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+
+    &:hover {
+      border-color: #00f0ff;
+      color: #00f0ff;
+      background: rgba(0, 240, 255, 0.05);
+    }
+
+    svg {
+      width: 12px;
+      height: 12px;
+    }
+  }
 }
 
 .node-category {
@@ -1384,10 +2169,12 @@ $panel-header-height: 52px;
 
     svg { width: 16px; height: 16px; }
 
-    &.trigger { background: rgba(0, 240, 255, 0.15); color: #00f0ff; }
-    &.condition { background: rgba(255, 221, 0, 0.15); color: #ffdd00; }
-    &.action { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
-    &.logic { background: rgba(255, 0, 170, 0.15); color: #ff00aa; }
+    &.input { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
+    &.detection { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
+    &.processing { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
+    &.action { background: rgba(255, 127, 76, 0.15); color: #FF7F4C; }
+    &.logic { background: rgba(220, 79, 220, 0.15); color: #DC4FDC; }
+    &.output { background: rgba(255, 76, 76, 0.15); color: #FF4C4C; }
   }
 
   .category-name {
@@ -1446,10 +2233,12 @@ $panel-header-height: 52px;
 
     svg { width: 14px; height: 14px; }
 
-    &.trigger { background: rgba(0, 240, 255, 0.1); color: #00f0ff; }
-    &.condition { background: rgba(255, 221, 0, 0.1); color: #ffdd00; }
-    &.action { background: rgba(0, 255, 136, 0.1); color: #00ff88; }
-    &.logic { background: rgba(255, 0, 170, 0.1); color: #ff00aa; }
+    &.input { background: rgba(76, 255, 76, 0.1); color: #4CFF4C; }
+    &.detection { background: rgba(0, 240, 255, 0.1); color: #00f0FF; }
+    &.processing { background: rgba(255, 255, 76, 0.1); color: #FFFF4C; }
+    &.action { background: rgba(255, 127, 76, 0.1); color: #FF7F4C; }
+    &.logic { background: rgba(220, 79, 220, 0.1); color: #DC4FDC; }
+    &.output { background: rgba(255, 76, 76, 0.1); color: #FF4C4C; }
   }
 
   .node-info {
@@ -1480,7 +2269,10 @@ $panel-header-height: 52px;
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #08080c;
+  background:
+    radial-gradient(circle, #3a3a4a 1px, transparent 1px);
+  background-size: 30px 30px;
+  background-position: 0 0;
 }
 
 .flow-container {
@@ -1494,8 +2286,28 @@ $panel-header-height: 52px;
     background: transparent;
   }
 
-  :deep(.vue-flow__background) {
-    background: #08080c;
+  :deep(.vue-flow) {
+    width: 100%;
+    height: 100%;
+    background: transparent !important;
+  }
+
+  /* 默认画布鼠标样式为默认，只有按住空格/中键/alt才可平移 */
+  :deep(.vue-flow__pane) {
+    cursor: default;
+  }
+
+  :deep(.vue-flow__pane.draggable) {
+    cursor: grab;
+  }
+
+  :deep(.vue-flow__pane.dragging) {
+    cursor: grabbing;
+  }
+
+  /* 只有 selection 模式（框选）才显示十字光标 */
+  :deep(.vue-flow__pane.selection) {
+    cursor: crosshair;
   }
 
   :deep(.vue-flow__edge-path) {
@@ -1658,15 +2470,82 @@ $panel-header-height: 52px;
 
       svg { width: 14px; height: 14px; }
 
-      &.trigger { background: rgba(0, 240, 255, 0.1); color: #00f0ff; }
-      &.condition { background: rgba(255, 221, 0, 0.1); color: #ffdd00; }
-      &.action { background: rgba(0, 255, 136, 0.1); color: #00ff88; }
-      &.logic { background: rgba(255, 0, 170, 0.1); color: #ff00aa; }
+      &.input { background: rgba(76, 255, 76, 0.1); color: #4CFF4C; }
+      &.detection { background: rgba(0, 240, 255, 0.1); color: #00f0FF; }
+      &.processing { background: rgba(255, 255, 76, 0.1); color: #FFFF4C; }
+      &.action { background: rgba(255, 127, 76, 0.1); color: #FF7F4C; }
+      &.logic { background: rgba(220, 79, 220, 0.1); color: #DC4FDC; }
+      &.output { background: rgba(255, 76, 76, 0.1); color: #FF4C4C; }
     }
 
     &:hover {
       border-color: #00f0ff;
       color: #fff;
+    }
+  }
+}
+
+// 快捷添加工具栏（画布上有节点时显示）
+.quick-add-toolbar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(18, 18, 26, 0.95);
+  border: 1px solid #2a2a3a;
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  z-index: 10;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+
+  .quick-add-toolbar-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 8px;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+
+    .btn-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      svg { width: 12px; height: 12px; }
+
+      &.input { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
+      &.detection { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
+      &.processing { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
+      &.action { background: rgba(255, 127, 76, 0.15); color: #FF7F4C; }
+      &.logic { background: rgba(220, 79, 220, 0.15); color: #DC4FDC; }
+      &.output { background: rgba(255, 76, 76, 0.15); color: #FF4C4C; }
+    }
+
+    .btn-label {
+      color: #e0e0e8;
+    }
+
+    &:hover {
+      border-color: #00f0ff;
+      background: #22222e;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 240, 255, 0.15);
+    }
+
+    &:active {
+      transform: translateY(0);
     }
   }
 }
@@ -1743,10 +2622,12 @@ $panel-header-height: 52px;
 
     svg { width: 18px; height: 18px; }
 
-    &.trigger { background: rgba(0, 240, 255, 0.15); color: #00f0ff; }
-    &.condition { background: rgba(255, 221, 0, 0.15); color: #ffdd00; }
-    &.action { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
-    &.logic { background: rgba(255, 0, 170, 0.15); color: #ff00aa; }
+    &.input { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
+    &.detection { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
+    &.processing { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
+    &.action { background: rgba(255, 127, 76, 0.15); color: #FF7F4C; }
+    &.logic { background: rgba(220, 79, 220, 0.15); color: #DC4FDC; }
+    &.output { background: rgba(255, 76, 76, 0.15); color: #FF4C4C; }
   }
 
   .panel-title-text {
@@ -1925,8 +2806,15 @@ $panel-header-height: 52px;
 
   .ports-row {
     display: flex;
-    align-items: flex-start;
-    gap: 8px;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .port-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
   }
 
   .ports-title {
@@ -1948,6 +2836,7 @@ $panel-header-height: 52px;
     border-radius: 4px;
     font-size: 11px;
     font-weight: 500;
+    flex-shrink: 0;
 
     &.input {
       background: rgba(0, 240, 255, 0.1);
@@ -1959,6 +2848,45 @@ $panel-header-height: 52px;
       background: rgba(0, 255, 136, 0.1);
       color: #00ff88;
       border: 1px solid rgba(0, 255, 136, 0.2);
+    }
+  }
+
+  .port-connected {
+    font-size: 11px;
+    color: #888;
+    flex: 1;
+  }
+
+  .port-disconnected {
+    font-size: 11px;
+    color: #444;
+    font-style: italic;
+  }
+
+  .port-outgoing {
+    font-size: 11px;
+    color: #00ff88;
+  }
+
+  .port-disconnect {
+    background: rgba(255, 60, 60, 0.15);
+    border: 1px solid rgba(255, 60, 60, 0.3);
+    color: #ff6666;
+    border-radius: 3px;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0;
+    transition: all 0.15s;
+
+    &:hover {
+      background: rgba(255, 60, 60, 0.3);
+      color: #ff8888;
     }
   }
 }
@@ -1990,7 +2918,6 @@ $panel-header-height: 52px;
 .execution-panel {
   position: fixed;
   bottom: 0;
-  left: $palette-width;
   right: 0;
   background: #0e0e14;
   border-top: 1px solid #1e1e2e;
@@ -1999,6 +2926,20 @@ $panel-header-height: 52px;
 
   &:not(.expanded) {
     .execution-content { display: none; }
+  }
+}
+
+.panel-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  cursor: ns-resize;
+  z-index: 10;
+
+  &:hover {
+    background: rgba(0, 240, 255, 0.3);
   }
 }
 
@@ -2059,6 +3000,38 @@ $panel-header-height: 52px;
 .execution-content {
   max-height: 200px;
   overflow-y: auto;
+}
+
+/* 执行进度条 */
+.progress-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: rgba(0, 240, 255, 0.03);
+  border-bottom: 1px solid #1a1a24;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 4px;
+  background: #2a2a3a;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00f0ff, #00ff88);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 11px;
+  color: #00f0ff;
+  min-width: 32px;
+  text-align: right;
 }
 
 .logs-list {
@@ -2171,5 +3144,145 @@ $panel-header-height: 52px;
 .toast-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(20px);
+}
+
+/* 右键菜单 */
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-secondary, #12121a);
+  border: 1px solid var(--border-color, #2a2a3e);
+  border-radius: 8px;
+  padding: 6px 0;
+  min-width: 180px;
+  max-width: 220px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary, #e0e0e0);
+  transition: background 0.15s;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+
+  &:hover {
+    background: var(--bg-hover, #1e1e2e);
+
+    svg { opacity: 1; }
+  }
+}
+
+.context-menu-item.danger {
+  color: #ff4c4c;
+}
+
+.context-menu-item.danger:hover {
+  background: rgba(255, 76, 76, 0.1);
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: var(--border-color, #2a2a3e);
+  margin: 6px 0;
+}
+
+.context-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+}
+
+// 变量绑定菜单
+.var-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border-color, #3a3a5c);
+  border-radius: 8px;
+  padding: 8px 0;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+  .var-menu-title {
+    padding: 6px 12px;
+    font-size: 12px;
+    color: var(--text-secondary, #888);
+    border-bottom: 1px solid var(--border-color, #3a3a5c);
+    margin-bottom: 4px;
+  }
+
+  .var-menu-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary, #e0e0e0);
+    transition: background 0.15s;
+
+    &:hover {
+      background: var(--hover-bg, #2a2a4a);
+      color: var(--accent, #00f0ff);
+    }
+
+    .var-type-tag {
+      font-size: 10px;
+      padding: 1px 5px;
+      background: rgba(0, 240, 255, 0.15);
+      color: #00f0ff;
+      border-radius: 3px;
+      margin-left: 6px;
+    }
+  }
+
+  .var-menu-empty {
+    padding: 12px;
+    text-align: center;
+    font-size: 12px;
+    color: #888;
+  }
+}
+
+.var-menu-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+}
+
+// 字段输入包装（带变量按钮）
+.field-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  .field-input {
+    flex: 1;
+  }
+
+  .var-btn {
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid var(--border-color, #3a3a5c);
+    border-radius: 4px;
+    color: var(--text-secondary, #888);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s;
+
+    &:hover {
+      background: var(--hover-bg, #2a2a4a);
+      color: var(--accent, #00f0ff);
+      border-color: var(--accent, #00f0ff);
+    }
+  }
 }
 </style>

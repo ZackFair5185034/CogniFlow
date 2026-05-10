@@ -1,21 +1,39 @@
 <template>
+  <!-- Toast 全局通知 -->
+  <Toast ref="toastRef" />
+
   <!-- 规则设计器 - 顶层全屏页面，不走 App 布局 -->
   <router-view v-if="$route.meta.layout === 'none'" />
 
   <!-- 普通页面 - 带 App 布局 -->
-  <div v-else class="app-container">
+  <div
+    v-else
+    class="app-container"
+  >
     <!-- 背景效果 -->
-    <div class="bg-grid"></div>
-    <div class="bg-glow"></div>
-    <div class="scanline"></div>
+    <div class="bg-grid" />
+    <div class="bg-glow" />
+    <div class="scanline" />
 
     <!-- 侧边导航 -->
-    <aside class="sidebar" :class="{ collapsed }">
-      <button class="collapse-btn" :class="{ collapsed }" @click="toggleSidebar" :title="collapsed ? '展开菜单' : '收起菜单'">
+    <aside
+      class="sidebar"
+      :class="{ collapsed }"
+    >
+      <button
+        class="collapse-btn"
+        :class="{ collapsed }"
+        :title="collapsed ? '展开菜单' : '收起菜单'"
+        @click="toggleSidebar"
+      >
         <SvgIcon :name="collapsed ? 'chevron-right' : 'chevron-left'" />
       </button>
       <div class="logo">
-        <img class="logo-icon" src="/logo.svg" alt="CogniFlow">
+        <img
+          class="logo-icon"
+          src="/logo.svg"
+          alt="CogniFlow"
+        >
         <div class="logo-text">
           <span class="logo-title">CogniFlow</span>
           <span class="logo-sub">Visual Perception</span>
@@ -30,17 +48,22 @@
           class="nav-item"
           :class="{ active: isNavActive(item.path) }"
         >
-          <SvgIcon :name="item.icon" class="nav-icon" />
+          <SvgIcon
+            :name="item.icon"
+            class="nav-icon"
+          />
           <span class="nav-text">{{ item.label }}</span>
-          <span class="nav-indicator"></span>
+          <span class="nav-indicator" />
         </router-link>
       </nav>
 
       <div class="sidebar-footer">
-        <div class="status-dot" :class="{ online: isOnline }"></div>
+        <div
+          class="status-dot"
+          :class="{ online: isOnline }"
+        />
         <span class="status-text">{{ isOnline ? '系统在线' : '离线' }}</span>
       </div>
-
     </aside>
 
     <!-- 主内容区 -->
@@ -48,7 +71,10 @@
       <header class="top-bar">
         <div class="top-actions">
           <span class="time-display">{{ currentTime }}</span>
-          <button class="action-btn" @click="refreshData">
+          <button
+            class="action-btn"
+            @click="refreshData"
+          >
             <SvgIcon name="refresh" />
           </button>
         </div>
@@ -56,7 +82,10 @@
 
       <div class="content-area">
         <router-view v-slot="{ Component }">
-          <transition name="page-fade" mode="out-in">
+          <transition
+            name="page-fade"
+            mode="out-in"
+          >
             <component :is="Component" />
           </transition>
         </router-view>
@@ -66,13 +95,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
+import Toast from '@/components/common/Toast.vue'
+import { registerToast } from '@/utils/toast'
 
 const route = useRoute()
 const isOnline = ref(true)
 const currentTime = ref('')
 const collapsed = ref(false)
+const toastRef = ref<InstanceType<typeof Toast> | null>(null)
+
+// 注册 Toast
+onMounted(() => {
+  if (toastRef.value) {
+    registerToast(toastRef.value)
+  }
+})
 
 const toggleSidebar = () => {
   collapsed.value = !collapsed.value
@@ -86,24 +125,6 @@ const navItems = [
   { path: '/launch', label: '模型测试', icon: 'rocket' },
   { path: '/rule-engine', label: '规则引擎', icon: 'flow' },
 ]
-
-const pageTitles: Record<string, string> = {
-  '/': '控制台',
-  '/atlas': '图集管理',
-  '/atlas/': '图集详情',
-  '/models': '模型管理',
-  '/training': '模型训练',
-  '/launch': '模型测试',
-  '/rule-engine': '规则引擎',
-}
-
-const currentPageTitle = computed(() => {
-  const path = route.path
-  if (path.endsWith('/') && path !== '/') {
-    return pageTitles[path.slice(0, -1)] || '详情'
-  }
-  return pageTitles[path] || 'CogniFlow'
-})
 
 const isNavActive = (path: string) => {
   if (path === '/') {
@@ -328,10 +349,13 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   padding: 14px 20px;
+  margin: 0 8px;
+  border-radius: 8px;
   color: var(--text-secondary);
   text-decoration: none;
   position: relative;
   transition: all 0.3s ease;
+  overflow: hidden;
 
   &::before {
     content: '';
@@ -343,6 +367,7 @@ onUnmounted(() => {
     height: 0;
     background: var(--accent-cyan);
     transition: height 0.3s ease;
+    border-radius: 0 2px 2px 0;
   }
 
   &:hover {
@@ -540,5 +565,16 @@ onUnmounted(() => {
 @keyframes statusPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+// 页面切换淡入淡出
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.page-fade-enter-from,
+.page-fade-leave-to {
+  opacity: 0;
 }
 </style>

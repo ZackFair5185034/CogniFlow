@@ -32,7 +32,10 @@
       <div class="config-panel ui-card">
         <div class="panel-header">
           <div class="header-left">
-            <SvgIcon name="brain" class="panel-icon" />
+            <SvgIcon
+              name="brain"
+              class="panel-icon"
+            />
             <h3>检测配置</h3>
           </div>
         </div>
@@ -42,30 +45,139 @@
           <div class="config-section">
             <label class="section-label">选择模型</label>
             <div class="select-wrapper">
-              <select v-model="selectedModelId" :disabled="detecting || streamConnected">
-                <option :value="null" disabled>选择已训练的模型</option>
-                <option v-for="m in trainedModels" :key="m.id" :value="m.id">
+              <select
+                v-model="selectedModelId"
+                :disabled="detecting || streamConnected"
+              >
+                <option
+                  :value="null"
+                  disabled
+                >
+                  选择已训练的模型
+                </option>
+                <option
+                  v-for="m in trainedModels"
+                  :key="m.id"
+                  :value="m.id"
+                >
                   {{ m.name }}{{ m.version ? ` (${m.version})` : '' }}
                 </option>
               </select>
             </div>
-            <div class="model-info" v-if="selectedModel">
+            <div
+              v-if="selectedModel"
+              class="model-info"
+            >
               <span class="info-tag">类别: {{ getModelClasses(selectedModel) }}</span>
-              <span class="info-tag" v-if="selectedModel.metrics?.mAP50">mAP50: {{ (selectedModel.metrics.mAP50 * 100).toFixed(1) }}%</span>
+              <span
+                v-if="selectedModel.metrics?.mAP50"
+                class="info-tag"
+              >mAP50: {{ (selectedModel.metrics.mAP50 * 100).toFixed(1) }}%</span>
             </div>
+          </div>
+
+          <!-- 推理后端 -->
+          <div class="config-section">
+            <label class="section-label">推理后端</label>
+            <div class="select-wrapper">
+              <select
+                v-model="device"
+                :disabled="detecting || streamConnected"
+              >
+                <option value="auto">
+                  自动选择
+                </option>
+                <option
+                  v-for="d in availableDevices"
+                  :key="d.value"
+                  :value="d.value"
+                  :disabled="d.disabled"
+                >
+                  {{ d.label }} {{ (d.value === 'cuda' || d.value === 'directml') ? '(推荐)' : '' }}
+                </option>
+              </select>
+            </div>
+            <span
+              v-if="deviceInfo.devices?.cuda && device === 'auto'"
+              class="device-hint"
+            >
+              将使用 GPU 推理
+            </span>
+          </div>
+
+          <!-- 推理精度 -->
+          <div class="config-section">
+            <label class="section-label">推理精度</label>
+            <div class="select-wrapper">
+              <select
+                v-model="precision"
+                :disabled="detecting || streamConnected"
+              >
+                <option value="fp32">
+                  FP32 (兼容最好)
+                </option>
+                <option
+                  value="fp16"
+                  :disabled="device === 'cpu'"
+                >
+                  FP16 (加速50%, 精度略降)
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 模型格式 -->
+          <div class="config-section">
+            <label class="section-label">模型格式</label>
+            <div class="select-wrapper">
+              <select
+                v-model="modelFormat"
+                :disabled="detecting || streamConnected"
+              >
+                <option value="auto">
+                  自动选择
+                </option>
+                <option
+                  v-for="f in availableFormats"
+                  :key="f.value"
+                  :value="f.value"
+                  :disabled="f.disabled"
+                >
+                  {{ f.label }} {{ f.is_default ? '(默认)' : '' }}
+                </option>
+              </select>
+            </div>
+            <span
+              v-if="modelFormat === 'auto' && selectedModel?.files?.length"
+              class="device-hint"
+            >
+              将自动选择最优格式
+            </span>
+            <span
+              v-else-if="usedFormat"
+              class="device-hint"
+            >
+              当前使用: {{ usedFormat.toUpperCase() }}
+            </span>
+            <span
+              v-if="formatCompatibilityHint"
+              class="compatibility-warning"
+            >
+              {{ formatCompatibilityHint }}
+            </span>
           </div>
 
           <!-- 置信度阈值 -->
           <div class="config-section">
             <label class="section-label">置信度阈值: {{ (confThreshold * 100).toFixed(0) }}%</label>
             <input
-              type="range"
               v-model.number="confThreshold"
+              type="range"
               min="0.05"
               max="0.95"
               step="0.05"
               class="range-slider"
-            />
+            >
           </div>
 
           <!-- 图片模式 -->
@@ -84,13 +196,16 @@
                   ref="fileInputRef"
                   type="file"
                   accept="image/*"
-                  @change="handleFileSelect"
                   style="display: none"
-                />
+                  @change="handleFileSelect"
+                >
                 <div class="upload-hint">
                   <SvgIcon name="upload" />
                   <span v-if="!selectedFile">拖拽或点击上传</span>
-                  <span v-else class="file-name">{{ selectedFile.name }}</span>
+                  <span
+                    v-else
+                    class="file-name"
+                  >{{ selectedFile.name }}</span>
                 </div>
               </div>
             </div>
@@ -112,91 +227,21 @@
                   ref="streamInputRef"
                   type="file"
                   accept="video/*"
-                  @change="handleStreamSelect"
                   style="display: none"
-                />
+                  @change="handleStreamSelect"
+                >
                 <div class="upload-hint">
                   <SvgIcon name="upload" />
                   <span v-if="!selectedStreamFile">拖拽或点击上传视频</span>
-                  <span v-else class="file-name">{{ selectedStreamFile.name }}</span>
+                  <span
+                    v-else
+                    class="file-name"
+                  >{{ selectedStreamFile.name }}</span>
                 </div>
               </div>
             </div>
 
-            <!-- 视频状态 -->
-            <div class="stream-stats" v-if="streamConnected">
-              <div class="stat-item">
-                <span class="stat-label">帧率</span>
-                <span class="stat-value">{{ streamStats.fps }} fps</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">已处理</span>
-                <span class="stat-value">{{ streamStats.current_frame }} / {{ streamStats.total_frames }}</span>
-              </div>
-              <div class="stat-item" v-if="streamStats.buffered_frames">
-                <span class="stat-label">缓冲</span>
-                <span class="stat-value buffer-stat">{{ streamStats.buffered_frames }} 帧</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">检测数</span>
-                <span class="stat-value">{{ streamStats.total_detections }}</span>
-              </div>
-            </div>
-          </template>
-
-          <!-- 最近记录 -->
-          <div class="config-section">
-            <div class="section-label-row" @click="recentRecordsExpanded = !recentRecordsExpanded">
-              <span class="section-label">最近记录</span>
-              <div class="flex items-center gap-2">
-                <button
-                  v-if="recentRecords.length > 0"
-                  class="clear-btn"
-                  @click.stop="handleClearRecords"
-                  title="清除历史"
-                >清空</button>
-                <SvgIcon :name="recentRecordsExpanded ? 'chevron-up' : 'chevron-down'" class="chevron-icon" />
-              </div>
-            </div>
-            <div class="recent-records" v-if="recentRecordsExpanded">
-              <div v-if="filteredRecords.length === 0" class="records-empty">暂无{{ mode === 'stream' ? '视频' : '图片' }}检测记录</div>
-              <div
-                v-for="rec in filteredRecords"
-                :key="rec.job_id"
-                class="record-item"
-              >
-                <img v-if="rec.thumbnail" :src="rec.thumbnail" class="record-thumb" alt="缩略图" />
-                <div class="record-info">
-                  <span class="record-name">{{ rec.file_name }}</span>
-                  <span class="record-meta">{{ rec.model_name }} · {{ rec.total_detections }} 个目标</span>
-                  <span class="record-time">{{ formatRelativeTime(rec.created_at) }}</span>
-                </div>
-                <el-button
-                  size="small"
-                  class="rerun-btn"
-                  :disabled="!rec.file_path"
-                  @click="handleRerun(rec)"
-                >
-                  {{ rec.file_type === 'image' ? '图片重检' : '重新检测' }}
-                </el-button>
-              </div>
-            </div>
-          </div>
-
-          <!-- 检测按钮 -->
-          <el-button
-            v-if="mode === 'image'"
-            class="detect-btn"
-            type="primary"
-            :disabled="!canDetect || detecting"
-            :loading="detecting"
-            @click="startDetection"
-          >
-            {{ detecting ? '检测中...' : '开始检测' }}
-          </el-button>
-
-          <!-- 视频检测按钮 -->
-          <template v-if="mode === 'stream'">
+            <!-- 视频检测按钮 -->
             <el-button
               v-if="!streamConnected"
               class="detect-btn"
@@ -215,7 +260,111 @@
             >
               停止检测
             </el-button>
+
+            <!-- 视频状态 -->
+            <div
+              v-if="streamConnected"
+              class="stream-stats"
+            >
+              <div class="stat-item">
+                <span class="stat-label">帧率</span>
+                <span class="stat-value">{{ videoFps }} fps</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">已处理</span>
+                <span class="stat-value">{{ streamStats.current_frame }} / {{ streamStats.total_frames }}</span>
+              </div>
+              <div
+                v-if="totalReceivedFrames"
+                class="stat-item"
+              >
+                <span class="stat-label">已接收</span>
+                <span class="stat-value buffer-stat">{{ totalReceivedFrames }} 帧</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">检测数</span>
+                <span class="stat-value">{{ streamStats.total_detections }}</span>
+              </div>
+            </div>
           </template>
+
+          <!-- 检测按钮（图片模式） -->
+          <el-button
+            v-if="mode === 'image'"
+            class="detect-btn"
+            type="primary"
+            :disabled="!canDetect || detecting"
+            :loading="detecting"
+            @click="startDetection"
+          >
+            {{ detecting ? '检测中...' : '开始检测' }}
+          </el-button>
+
+          <!-- 最近记录 -->
+          <div class="config-section recent-section">
+            <div
+              class="section-label-row"
+              @click="recentRecordsExpanded = !recentRecordsExpanded"
+            >
+              <span class="section-label">最近记录</span>
+              <div class="flex items-center gap-2">
+                <button
+                  v-if="recentRecords.length > 0"
+                  class="clear-btn"
+                  title="清除历史"
+                  @click.stop="handleClearRecords"
+                >
+                  清空
+                </button>
+                <SvgIcon
+                  :name="recentRecordsExpanded ? 'chevron-up' : 'chevron-down'"
+                  class="chevron-icon"
+                />
+              </div>
+            </div>
+            <div
+              v-if="recentRecordsExpanded"
+              class="recent-records"
+            >
+              <div
+                v-if="filteredRecords.length === 0"
+                class="records-empty"
+              >
+                暂无{{ mode === 'stream' ? '视频' : '图片' }}检测记录
+              </div>
+              <div
+                v-for="rec in filteredRecords"
+                :key="rec.job_id"
+                class="record-item"
+              >
+                <img
+                  v-if="rec.thumbnail"
+                  :src="rec.thumbnail"
+                  class="record-thumb"
+                  alt="缩略图"
+                >
+                <div class="record-info">
+                  <span class="record-name">{{ rec.file_name }}</span>
+                  <span class="record-meta">
+                    {{ rec.model_name }} · {{ rec.total_detections }} 个目标
+                  </span>
+                  <div class="record-badges">
+                    <span class="record-param">{{ formatLabel(rec.used_format) }}</span>
+                    <span class="record-param">{{ rec.device?.toUpperCase() || 'CPU' }}</span>
+                    <span class="record-param">{{ (rec.precision || 'fp32').toUpperCase() }}</span>
+                  </div>
+                  <span class="record-time">{{ formatRelativeTime(rec.created_at) }}</span>
+                </div>
+                <span
+                  class="rerun-link"
+                  :class="{ disabled: !rec.file_path }"
+                  @click="rec.file_path && handleRerun(rec)"
+                >
+                  {{ rec.file_type === 'image' ? '图片重检' : '重新检测' }}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -223,18 +372,34 @@
       <div class="result-panel ui-card">
         <div class="panel-header">
           <div class="header-left">
-            <SvgIcon name="eye" class="panel-icon" />
+            <SvgIcon
+              name="eye"
+              class="panel-icon"
+            />
             <h3>检测结果</h3>
           </div>
         </div>
 
         <div class="result-body">
           <!-- 图片检测结果 -->
-          <div v-if="resultImage" class="result-image-wrapper">
+          <div
+            v-if="resultImage"
+            class="result-image-wrapper"
+          >
             <div class="image-area">
-              <img :src="resultImage" alt="检测结果" class="result-image" />
-              <svg class="bbox-overlay" :viewBox="`0 0 ${imageSize.width} ${imageSize.height}`">
-                <g v-for="(det, idx) in detections" :key="idx">
+              <img
+                :src="resultImage"
+                alt="检测结果"
+                class="result-image"
+              >
+              <svg
+                class="bbox-overlay"
+                :viewBox="`0 0 ${imageSize.width} ${imageSize.height}`"
+              >
+                <g
+                  v-for="(det, idx) in detections"
+                  :key="idx"
+                >
                   <rect
                     :x="det.bbox[0]"
                     :y="det.bbox[1]"
@@ -262,102 +427,199 @@
               </svg>
             </div>
             <div class="zoom-controls">
-              <button class="zoom-btn" @click="zoomLevel = Math.min(2, zoomLevel + 0.25)">+</button>
+              <button
+                class="zoom-btn"
+                @click="zoomLevel = Math.min(2, zoomLevel + 0.25)"
+              >
+                +
+              </button>
               <span class="zoom-level">{{ (zoomLevel * 100).toFixed(0) }}%</span>
-              <button class="zoom-btn" @click="zoomLevel = Math.max(0.5, zoomLevel - 0.25)">-</button>
+              <button
+                class="zoom-btn"
+                @click="zoomLevel = Math.max(0.5, zoomLevel - 0.25)"
+              >
+                -
+              </button>
             </div>
           </div>
 
-        <!-- 视频检测结果 - Canvas 渲染 -->
-        <div v-else-if="mode === 'stream' && (streamConnected || streamComplete)" class="result-stream-wrapper">
-          <div class="stream-container">
-            <canvas ref="streamCanvasRef" class="stream-canvas"></canvas>
-          </div>
-          <div class="stream-progress" v-if="!streamComplete">
-            <div class="progress-bar-dual">
-              <div class="progress-buffer" :style="{ width: `${bufferProgress}%` }"></div>
-              <div class="progress-playback" :style="{ width: `${streamStats.progress}%` }"></div>
+          <!-- 视频检测结果 - Canvas 渲染 -->
+          <div
+            v-else-if="mode === 'stream' && (streamConnected || streamComplete)"
+            class="result-stream-wrapper"
+          >
+            <div class="stream-container">
+              <canvas
+                ref="streamCanvasRef"
+                class="stream-canvas"
+              />
             </div>
-            <div class="progress-controls">
-              <button
-                class="ctrl-btn"
-                :title="streamPaused ? '继续' : '暂停'"
-                @click="togglePause"
-              >
-                <SvgIcon :name="streamPaused ? 'play' : 'pause'" />
-              </button>
-              <span class="progress-text">帧 {{ streamStats.current_frame }} / {{ streamStats.total_frames }}</span>
-              <span class="buffer-info" v-if="streamStats.buffer_frame">缓冲 {{ streamStats.buffer_frame }}</span>
-              <div class="fps-control">
-                <button class="ctrl-btn-sm" @click="adjustFps(-5)" :disabled="videoFps <= 1">-</button>
-                <span class="fps-value">{{ videoFps }} fps</span>
-                <button class="ctrl-btn-sm" @click="adjustFps(5)" :disabled="videoFps >= 60">+</button>
+            <div
+              v-if="!streamComplete"
+              class="stream-progress"
+            >
+              <div class="progress-bar-dual">
+                <div
+                  class="progress-buffer"
+                  :style="{ width: `${bufferProgress}%` }"
+                />
+                <div
+                  class="progress-playback"
+                  :style="{ width: `${streamStats.progress}%` }"
+                />
+              </div>
+              <div class="progress-controls">
+                <button
+                  class="ctrl-btn"
+                  :title="streamPaused ? '继续' : '暂停'"
+                  @click="togglePause"
+                >
+                  <SvgIcon :name="streamPaused ? 'play' : 'pause'" />
+                </button>
+                <span class="progress-text">帧 {{ streamStats.current_frame }} / {{ streamStats.total_frames }}</span>
+                <span
+                  v-if="totalReceivedFrames"
+                  class="buffer-info"
+                >缓冲 {{ totalReceivedFrames }}</span>
+                <div class="fps-control">
+                  <button
+                    class="ctrl-btn-sm"
+                    :disabled="videoFps <= 1"
+                    @click="adjustFps(-5)"
+                  >
+                    -
+                  </button>
+                  <span class="fps-value">{{ videoFps }} fps</span>
+                  <button
+                    class="ctrl-btn-sm"
+                    :disabled="videoFps >= 60"
+                    @click="adjustFps(5)"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </div>
+            <div
+              v-else
+              class="stream-complete"
+            >
+              <span>检测完成，共 {{ streamStats.total_detections }} 个目标</span>
+            </div>
           </div>
-          <div class="stream-complete" v-else>
-            <span>检测完成，共 {{ streamStats.total_detections }} 个目标</span>
-          </div>
-        </div>
 
-        <!-- 加载状态（图片检测用） -->
-        <div v-else-if="detecting" class="result-loading">
-          <div class="loading-spinner"></div>
-          <span>图片检测中...</span>
-        </div>
-
-        <!-- 空状态 -->
-        <div v-else class="empty-result">
-          <div class="empty-icon">
-            <SvgIcon name="image" v-if="mode === 'image'" />
-            <SvgIcon name="stream" v-else />
+          <!-- 加载状态（图片检测用） -->
+          <div
+            v-else-if="detecting"
+            class="result-loading"
+          >
+            <div class="loading-spinner" />
+            <span>图片检测中...</span>
           </div>
-          <p>暂无检测结果</p>
-          <span>{{ mode === 'image' ? '上传图片开始检测' : '上传视频开始检测' }}</span>
-        </div>
+
+          <!-- 空状态 -->
+          <div
+            v-else
+            class="empty-result"
+          >
+            <div class="empty-icon">
+              <SvgIcon
+                v-if="mode === 'image'"
+                name="image"
+              />
+              <SvgIcon
+                v-else
+                name="stream"
+              />
+            </div>
+            <p>暂无检测结果</p>
+            <span>{{ mode === 'image' ? '上传图片开始检测' : '上传视频开始检测' }}</span>
+          </div>
         </div>
 
         <!-- 分割拖拽条 -->
         <div
-          class="console-divider"
           v-show="consoleExpanded"
+          class="console-divider"
           @mousedown.prevent="startDrag"
-        ></div>
+        />
 
         <!-- 监控台 -->
-        <div class="console-panel" :class="{ expanded: consoleExpanded }" :style="consoleStyle">
-          <div class="console-header" @click="consoleExpanded = !consoleExpanded">
+        <div
+          class="console-panel"
+          :class="{ expanded: consoleExpanded }"
+          :style="consoleStyle"
+        >
+          <div
+            class="console-header"
+            @click="consoleExpanded = !consoleExpanded"
+          >
             <div class="console-header-left">
-              <SvgIcon name="terminal" class="console-icon" />
+              <SvgIcon
+                name="terminal"
+                class="console-icon"
+              />
               <span>监控台</span>
-              <span class="console-count" v-if="consoleEntries.length">{{ consoleEntries.length }} 条</span>
+              <span
+                v-if="consoleEntries.length"
+                class="console-count"
+              >{{ consoleEntries.length }} 条</span>
             </div>
             <div class="console-header-right">
-              <button class="console-clear-btn" @click.stop="clearConsole" title="清空">清空</button>
-              <SvgIcon :name="consoleExpanded ? 'chevron-down' : 'chevron-up'" class="console-toggle" />
+              <button
+                class="console-clear-btn"
+                title="清空"
+                @click.stop="clearConsole"
+              >
+                清空
+              </button>
+              <SvgIcon
+                :name="consoleExpanded ? 'chevron-down' : 'chevron-up'"
+                class="console-toggle"
+              />
             </div>
           </div>
-          <div class="console-body" v-show="consoleExpanded" ref="consoleBodyRef">
+          <div
+            v-show="consoleExpanded"
+            ref="consoleBodyRef"
+            class="console-body"
+          >
             <div
-              v-for="(entry, idx) in consoleEntries"
+              v-for="entry in consoleEntries"
               :key="entry.id"
               class="console-entry"
               :class="{ expanded: entry.expanded }"
             >
-              <div class="console-entry-header" @click="entry.expanded = !entry.expanded">
+              <div
+                class="console-entry-header"
+                @click="entry.expanded = !entry.expanded"
+              >
                 <span class="entry-time">{{ entry.time }}</span>
-                <span class="entry-source" :class="entry.source === '图片检测' ? 'src-image' : 'src-video'">{{ entry.source }}</span>
+                <span
+                  class="entry-source"
+                  :class="entry.source === '图片检测' ? 'src-image' : 'src-video'"
+                >{{ entry.source }}</span>
                 <span class="entry-summary">{{ entry.summary }}</span>
-                <button class="entry-copy-btn" @click.stop="copyEntry(entry)" title="复制 JSON">
+                <button
+                  class="entry-copy-btn"
+                  title="复制 JSON"
+                  @click.stop="copyEntry(entry)"
+                >
                   <SvgIcon name="copy" />
                 </button>
                 <span class="entry-toggle">{{ entry.expanded ? '−' : '+' }}</span>
               </div>
-              <div class="console-entry-body" v-show="entry.expanded">
+              <div
+                v-show="entry.expanded"
+                class="console-entry-body"
+              >
                 <pre class="console-json">{{ formatJSON(entry.data) }}</pre>
               </div>
             </div>
-            <div class="console-empty" v-if="consoleEntries.length === 0">
+            <div
+              v-if="consoleEntries.length === 0"
+              class="console-empty"
+            >
               <span>暂无数据，执行检测后将自动显示</span>
             </div>
           </div>
@@ -370,23 +632,92 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { inferenceApi } from '@/api'
+import { inferenceApi, trainingApi } from '@/api'
 import { StreamClient, type StreamFrame, type StreamStats } from '@/utils/streamClient'
 import SvgIcon from '@/components/SvgIcon.vue'
+import type { ModelResponse } from '@/types/api'
 
 // 状态
 const mode = ref<'image' | 'stream'>('image')
-const trainedModels = ref<any[]>([])
+const trainedModels = ref<ModelResponse[]>([])
 const selectedModelId = ref<number | null>(null)
 const confThreshold = ref(0.25)
 const selectedFile = ref<File | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
-const isLoading = ref(false)
 const detecting = ref(false)
 
+// 推理设备和精度
+const device = ref('auto')
+const precision = ref('fp32')
+const modelFormat = ref('auto')  // 模型格式: auto/yolo_pt/onnx/openvino/tensorrt
+const usedFormat = ref<string | null>(null)  // 实际使用的格式
+
+// 设备-格式兼容性映射：哪些格式能利用该设备的硬件加速
+const DEVICE_FORMAT_MAP: Record<string, string[]> = {
+  directml: ['onnx'],
+  openvino: ['openvino'],
+  cuda: ['onnx', 'yolo_pt', 'tensorrt'],
+  tensorrt: ['tensorrt'],
+}
+
+// 当前设备+格式组合的兼容性提示
+const formatCompatibilityHint = computed(() => {
+  const currentDevice = device.value
+  const currentFormat = modelFormat.value
+
+  // 自动选择或 CPU 无需提示
+  if (currentFormat === 'auto' || currentDevice === 'auto' || currentDevice === 'cpu') {
+    return null
+  }
+
+  const compatibleFormats = DEVICE_FORMAT_MAP[currentDevice]
+  if (!compatibleFormats) return null
+
+  if (!compatibleFormats.includes(currentFormat)) {
+    const deviceLabel = availableDevices.value.find(d => d.value === currentDevice)?.label || currentDevice
+    const recommended = compatibleFormats.join(' / ').toUpperCase()
+    return `${deviceLabel} 仅对 ${recommended} 格式提供硬件加速，当前组合将回退到 CPU 推理`
+  }
+
+  return null
+})
+const deviceInfo = ref<{
+  available: boolean
+  device: string
+  device_name: string
+  devices: Record<string, unknown>
+}>({
+  available: false,
+  device: 'cpu',
+  device_name: 'CPU',
+  devices: {}
+})
+
+// 可用设备列表
+const availableDevices = computed(() => {
+  const devices = deviceInfo.value.devices || {}
+  return Object.entries(devices).map(([type, info]: [string, unknown]) => ({
+    value: type,
+    label: (info as any).display_name || info.device_name || type.toUpperCase(),
+    disabled: type === 'cpu' ? false : !(info.device_type === type)
+  }))
+})
+
+// 可用格式列表（从选中的模型获取）
+const availableFormats = computed(() => {
+  const model = selectedModel.value
+  if (!model?.files?.length) return []
+  return model.files.map((f: unknown) => ({
+    value: f.format,
+    label: f.format.toUpperCase(),
+    is_default: f.is_default,
+    disabled: false
+  }))
+})
+
 const resultImage = ref<string | null>(null)
-const detections = ref<any[]>([])
+const detections = ref<unknown[]>([])
 const imageSize = ref({ width: 0, height: 0 })
 const zoomLevel = ref(1)
 
@@ -402,10 +733,47 @@ const streamComplete = ref(false)
 const streamPaused = ref(false)
 const videoFps = ref(24)
 
-// 前端帧缓存：暂停时累积，恢复时快速重放
+// 前端帧缓存：服务端来帧即存，渲染循环按 videoFps 消费
 const frameCache = ref<StreamFrame[]>([])
-const isReplaying = ref(false)
-let replayTimer: number | null = null
+let renderTimer: ReturnType<typeof setInterval> | null = null
+// 后端推理是否已结束（用于缓存清空后安全停止渲染循环）
+const inferenceDone = ref(false)
+// 已接收的总帧数（服务端推送计数，只增不减）
+const totalReceivedFrames = ref(0)
+
+/** 启动渲染循环，按当前 videoFps 从缓存取帧渲染 */
+const startRenderLoop = () => {
+  stopRenderLoop()
+  inferenceDone.value = false
+  renderTimer = setInterval(() => {
+    if (!streamPaused.value && frameCache.value.length > 0) {
+      const frame = frameCache.value.shift()!
+      renderFrame(frame)
+      // 播放进度基于实际渲染的帧
+      streamStats.value = {
+        ...streamStats.value,
+        current_frame: frame.frame_id,
+        progress: Math.min(100, Math.ceil((frame.frame_id / (streamStats.value.total_frames || 1)) * 100)),
+        buffered_frames: frameCache.value.length,
+      }
+    }
+    // 缓存为空且推理已完成 → 安全停止
+    if (frameCache.value.length === 0 && inferenceDone.value) {
+      stopRenderLoop()
+      streamComplete.value = true
+      streamConnected.value = false
+      streamPaused.value = false
+    }
+  }, 1000 / videoFps.value)
+}
+
+/** 停止渲染循环 */
+const stopRenderLoop = () => {
+  if (renderTimer !== null) {
+    clearInterval(renderTimer)
+    renderTimer = null
+  }
+}
 /** 类别颜色映射，来自后端数据库配置 */
 const categoryColors = ref<Record<number, string>>({})
 
@@ -416,21 +784,15 @@ interface ConsoleEntry {
   source: '图片检测' | '视频帧'
   frameId?: number
   summary: string
-  data: any
+  data: unknown
   expanded: boolean
 }
 const consoleExpanded = ref(false)
 const consoleEntries = ref<ConsoleEntry[]>([])
 const consoleBodyRef = ref<HTMLDivElement | null>(null)
 let nextEntryId = 0
-let lastVideoLogTime = 0
 
-const addConsoleEntry = (source: ConsoleEntry['source'], summary: string, data: any, frameId?: number) => {
-  const now = Date.now()
-  // 视频检测节流：每秒最多 5 条
-  if (source === '视频帧' && now - lastVideoLogTime < 200) return
-  lastVideoLogTime = now
-
+const addConsoleEntry = (source: ConsoleEntry['source'], summary: string, data: unknown, frameId?: number) => {
   const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   consoleEntries.value.unshift({
     id: nextEntryId++,
@@ -452,7 +814,7 @@ const clearConsole = () => {
   nextEntryId = 0
 }
 
-const formatJSON = (data: any) => {
+const formatJSON = (data: unknown) => {
   try {
     return JSON.stringify(data, null, 2)
   } catch {
@@ -462,7 +824,6 @@ const formatJSON = (data: any) => {
 
 // 复制和拖拽
 const consoleHeight = ref(260)
-const isDraggingDivider = ref(false)
 
 const consoleStyle = computed(() => {
   if (!consoleExpanded.value) return {}
@@ -510,13 +871,11 @@ const streamStats = ref<StreamStats>({
   progress: 0,
   total_detections: 0,
   status: 'pending',
-  buffer_frame: 0,
 })
 
 const bufferProgress = computed(() => {
   const total = streamStats.value.total_frames || 1
-  const buf = streamStats.value.buffer_frame || 0
-  return Math.min(100, Math.ceil((buf / total) * 100))
+  return Math.min(100, Math.ceil((totalReceivedFrames.value / total) * 100))
 })
 
 const canStreamDetect = computed(() => {
@@ -531,7 +890,7 @@ const canDetect = computed(() => {
   return selectedModelId.value && selectedFile.value && !detecting.value
 })
 
-const getModelClasses = (model: any) => {
+const getModelClasses = (model: ModelResponse) => {
   if (model.metrics?.categories) {
     return model.metrics.categories.length
   }
@@ -578,6 +937,9 @@ interface RecentRecord {
   file_path: string
   file_type: 'image' | 'video'
   conf_threshold: number
+  device: string
+  precision: string
+  used_format: string
   status: string
   total_frames: number | null
   total_detections: number
@@ -603,9 +965,21 @@ const loadRecentRecords = async () => {
 }
 
 // 相对时间格式化
+/** 格式标签映射 */
+const FORMAT_LABELS: Record<string, string> = {
+  yolo_pt: 'PT',
+  onnx: 'ONNX',
+  openvino: 'OpenVINO',
+  tensorrt: 'TensorRT',
+}
+
+const formatLabel = (fmt: string): string => {
+  return FORMAT_LABELS[fmt] || fmt?.toUpperCase() || 'PT'
+}
+
 const formatRelativeTime = (isoString: string): string => {
   if (!isoString) return '未知'
-  const serverTime = new Date(isoString.endsWith('Z') ? isoString : isoString + 'Z').getTime()
+  const serverTime = new Date(isoString.endsWith('Z') ? isoString : `${isoString  }Z`).getTime()
   if (isNaN(serverTime)) return '未知'
   const diff = Date.now() - serverTime
   const seconds = Math.floor(diff / 1000)
@@ -624,18 +998,22 @@ const handleClearRecords = async () => {
     await inferenceApi.clearInferenceJobs()
     recentRecords.value = []
     ElMessage.success('已清除历史记录')
-  } catch (error: any) {
+  } catch {
     ElMessage.error('清除失败')
   }
 }
 
-// 重新检测
+// 重新检测 - 使用当前UI配置
 const handleRerun = async (rec: RecentRecord) => {
-  selectedModelId.value = rec.model_id
-  confThreshold.value = rec.conf_threshold
+  // 使用当前UI配置（允许用户修改参数后重新检测）
+  const currentModelId = selectedModelId.value ?? rec.model_id
+  const currentConf = confThreshold.value
+  const currentDevice = device.value
+  const currentFormat = modelFormat.value
+  const currentPrecision = precision.value
 
   try {
-    const res = await inferenceApi.rerunInferenceJob(rec.job_id, rec.model_id, rec.conf_threshold)
+    const res = await inferenceApi.rerunInferenceJob(rec.job_id, currentModelId, currentConf, currentDevice, currentFormat, currentPrecision)
     if (res.data.success) {
       // 图片重检：内联结果
       if (res.data.file_type === 'image') {
@@ -644,12 +1022,12 @@ const handleRerun = async (rec: RecentRecord) => {
         detections.value = res.data.detections || []
         loadImageSize(res.data.result_image_base64)
 
-        // 构建类别颜色映射
+        // 构建类别颜色映射（按 cat.id 对应 class_id）
         if (res.data.categories) {
           const colors: Record<number, string> = {}
-          res.data.categories.forEach((cat: any, idx: number) => {
-            colors[idx] = cat.color || '#FF0000'
-          })
+          for (const cat of (res.data.categories || [])) {
+            colors[cat.id] = cat.color || '#FF0000'
+          }
           categoryColors.value = colors
         }
 
@@ -667,8 +1045,14 @@ const handleRerun = async (rec: RecentRecord) => {
       // 视频重检：WebSocket 流式
       mode.value = 'stream'
       streamJobId.value = res.data.job_id
+
+      // 构建类别颜色映射
+      const colors: Record<number, string> = {}
+      for (const cat of (res.data.categories || [])) {
+        colors[cat.id] = cat.color || '#FF0000'
+      }
+      categoryColors.value = colors
       const videoInfo = res.data.video_info
-      videoFps.value = videoInfo.fps || 24
       streamStats.value = {
         fps: videoInfo.fps || 24,
         total_frames: videoInfo.total_frames || 0,
@@ -676,51 +1060,27 @@ const handleRerun = async (rec: RecentRecord) => {
         progress: 0,
         total_detections: 0,
         status: 'processing',
-        buffer_frame: 0,
       }
       frameCache.value = []
-      isReplaying.value = false
+      totalReceivedFrames.value = 0
 
       const client = new StreamClient()
       client.onFrame((frame) => {
-        if (streamPaused.value || isReplaying.value) {
-          frameCache.value.push(frame)
-          streamStats.value = {
-            ...streamStats.value,
-            buffer_frame: frame.progress?.buffer_frame || streamStats.value.buffer_frame || frame.frame_id,
-            buffered_frames: frameCache.value.length,
-          }
-          return
-        }
+        frameCache.value.push(frame)
+        totalReceivedFrames.value++
 
         streamStats.value = {
           ...streamStats.value,
-          current_frame: frame.frame_id,
+          // 从首帧同步 total_frames（兜底：服务端数据比前端 videoInfo 更可靠）
+          total_frames: streamStats.value.total_frames || frame.progress?.total_frames || 0,
           total_detections: frame.stats.total_detections,
-          progress: Math.min(99, Math.ceil((frame.frame_id / (videoInfo.total_frames || 1)) * 100)),
-          buffer_frame: frame.progress?.buffer_frame || streamStats.value.buffer_frame,
           buffered_frames: frameCache.value.length,
         }
-        renderFrame(frame)
-        addConsoleEntry('视频帧',
-          `帧 #${frame.frame_id} | ${frame.detections.length} 个目标 | ${frame.stats.inference_ms}ms`,
-          {
-            frame_id: frame.frame_id,
-            timestamp: frame.timestamp,
-            detections: frame.detections,
-            stats: frame.stats,
-          },
-          frame.frame_id,
-        )
       })
       client.onComplete((totalFrames, totalDetections) => {
-        streamComplete.value = true
-        streamConnected.value = false
-        streamPaused.value = false
+        inferenceDone.value = true
         streamStats.value = {
           ...streamStats.value,
-          progress: 100,
-          current_frame: totalFrames,
           total_detections: totalDetections,
           status: 'completed',
         }
@@ -732,27 +1092,21 @@ const handleRerun = async (rec: RecentRecord) => {
         })
       })
       client.onError((error) => {
-        ElMessage.error(`视频检测错误: ${error}`)
+        // 不立即停止渲染，先排空已缓存的帧
+        ElMessage.warning(`连接异常: ${error}，正在播放缓存帧...`)
+        inferenceDone.value = true
         streamConnected.value = false
-      })
-      client.onPaused(() => { streamPaused.value = true })
-      client.onResumed(() => { streamPaused.value = false })
-      client.onFpsUpdated((fps) => { videoFps.value = fps })
-      client.onProgress((progress) => {
-        streamStats.value = {
-          ...streamStats.value,
-          buffer_frame: progress.buffer_frame,
-        }
       })
 
       client.connect(res.data.job_id, res.data.stream_url)
       videoClient.value = client
+      startRenderLoop()
       streamConnected.value = true
       streamPaused.value = false
       streamComplete.value = false
     }
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '重新检测失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '重新检测失败'
     ElMessage.error(msg)
   }
 }
@@ -797,16 +1151,17 @@ const startDetection = async () => {
 
   try {
     if (mode.value === 'image' && selectedFile.value) {
-      const res = await inferenceApi.detectImage(selectedFile.value, selectedModelId.value!, confThreshold.value)
+      const res = await inferenceApi.detectImage(selectedFile.value, selectedModelId.value!, confThreshold.value, device.value, precision.value, modelFormat.value)
       if (res.data.success) {
         resultImage.value = res.data.result_image_base64
         detections.value = res.data.detections || []
+        usedFormat.value = res.data.used_format || null  // 记录实际使用的格式
         loadImageSize(res.data.result_image_base64)
 
         // 构建类别颜色映射（来自模型配置，使用数组索引作为 key）
         if (res.data.categories) {
           const colors: Record<number, string> = {}
-          res.data.categories.forEach((cat: any, idx: number) => {
+          res.data.categories.forEach((cat: unknown, idx: number) => {
             colors[idx] = cat.color || '#FF0000'
           })
           categoryColors.value = colors
@@ -822,8 +1177,8 @@ const startDetection = async () => {
         loadRecentRecords()
       }
     }
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '检测失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '检测失败'
     addConsoleEntry('图片检测', '检测失败', { error: msg })
     ElMessage.error(msg)
   } finally {
@@ -914,6 +1269,18 @@ const renderFrame = async (frame: StreamFrame) => {
       ctx.fillStyle = 'white'
       ctx.fillText(label, x1 + 4, y1 - 7)
     }
+
+    // 日志与实际渲染帧同步（后端推送速率无关）
+    addConsoleEntry('视频帧',
+      `帧 #${frame.frame_id} | ${frame.detections.length} 个目标 | ${frame.stats.inference_ms}ms`,
+      {
+        frame_id: frame.frame_id,
+        timestamp: frame.timestamp,
+        detections: frame.detections,
+        stats: frame.stats,
+      },
+      frame.frame_id,
+    )
   } catch (e) {
     console.error('[Launch] 渲染帧失败', e)
   }
@@ -929,13 +1296,19 @@ const startVideoDetection = async () => {
     const res = await inferenceApi.detectVideoStream(
       selectedStreamFile.value,
       selectedModelId.value!,
-      confThreshold.value
+      confThreshold.value,
+      device.value,
+      precision.value,
+      modelFormat.value
     )
 
     if (res.data.success) {
       const jobId = res.data.job_id
       const streamUrl = res.data.stream_url
       const videoInfo = res.data.video_info
+
+      // 记录实际使用的模型格式
+      usedFormat.value = res.data.used_format || null
 
       // 构建类别颜色映射（来自数据库配置）
       const colors: Record<number, string> = {}
@@ -945,7 +1318,6 @@ const startVideoDetection = async () => {
       categoryColors.value = colors
 
       streamJobId.value = jobId
-      videoFps.value = videoInfo.fps || 24
       streamStats.value = {
         fps: videoInfo.fps || 24,
         total_frames: videoInfo.total_frames || 0,
@@ -953,54 +1325,28 @@ const startVideoDetection = async () => {
         progress: 0,
         total_detections: 0,
         status: 'processing',
-        buffer_frame: 0,
       }
       frameCache.value = []
-      isReplaying.value = false
+      totalReceivedFrames.value = 0
 
       // 创建 StreamClient 并连接
       const client = new StreamClient()
       client.onFrame((frame) => {
-        // 暂停或重放中 → 前端缓存，不渲染
-        if (streamPaused.value || isReplaying.value) {
-          frameCache.value.push(frame)
-          streamStats.value = {
-            ...streamStats.value,
-            buffer_frame: frame.progress?.buffer_frame || streamStats.value.buffer_frame || frame.frame_id,
-            buffered_frames: frameCache.value.length,
-          }
-          return
-        }
+        frameCache.value.push(frame)
+        totalReceivedFrames.value++
 
         streamStats.value = {
           ...streamStats.value,
-          current_frame: frame.frame_id,
+          // 从首帧同步 total_frames（兜底：服务端数据比前端 videoInfo 更可靠）
+          total_frames: streamStats.value.total_frames || frame.progress?.total_frames || 0,
           total_detections: frame.stats.total_detections,
-          progress: Math.min(99, Math.ceil((frame.frame_id / (videoInfo.total_frames || 1)) * 100)),
-          buffer_frame: frame.progress?.buffer_frame || streamStats.value.buffer_frame,
           buffered_frames: frameCache.value.length,
         }
-        renderFrame(frame)
-        // 写入监控台（节流到每秒 5 条）
-        addConsoleEntry('视频帧',
-          `帧 #${frame.frame_id} | ${frame.detections.length} 个目标 | ${frame.stats.inference_ms}ms`,
-          {
-            frame_id: frame.frame_id,
-            timestamp: frame.timestamp,
-            detections: frame.detections,
-            stats: frame.stats,
-          },
-          frame.frame_id,
-        )
       })
       client.onComplete((totalFrames, totalDetections) => {
-        streamComplete.value = true
-        streamConnected.value = false
-        streamPaused.value = false
+        inferenceDone.value = true
         streamStats.value = {
           ...streamStats.value,
-          progress: 100,
-          current_frame: totalFrames,
           total_detections: totalDetections,
           status: 'completed',
         }
@@ -1011,33 +1357,20 @@ const startVideoDetection = async () => {
         })
       })
       client.onError((error) => {
-        ElMessage.error(`视频检测错误: ${error}`)
+        ElMessage.warning(`连接异常: ${error}，正在播放缓存帧...`)
+        inferenceDone.value = true
         streamConnected.value = false
-      })
-      client.onPaused(() => {
-        streamPaused.value = true
-      })
-      client.onResumed(() => {
-        streamPaused.value = false
-      })
-      client.onFpsUpdated((fps) => {
-        videoFps.value = fps
-      })
-      client.onProgress((progress) => {
-        streamStats.value = {
-          ...streamStats.value,
-          buffer_frame: progress.buffer_frame,
-        }
       })
 
       client.connect(jobId, streamUrl)
       videoClient.value = client
+      startRenderLoop()
       streamConnected.value = true
       streamPaused.value = false
       streamComplete.value = false
     }
-  } catch (error: any) {
-    const msg = error.response?.data?.detail || '启动视频检测失败'
+  } catch (error: unknown) {
+    const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '启动视频检测失败'
     ElMessage.error(msg)
   } finally {
     streamUploading.value = false
@@ -1046,6 +1379,7 @@ const startVideoDetection = async () => {
 
 // 停止视频检测
 const stopVideoDetection = () => {
+  stopRenderLoop()
   if (videoClient.value) {
     videoClient.value.disconnect()
     videoClient.value = null
@@ -1058,6 +1392,7 @@ const stopVideoDetection = () => {
   streamComplete.value = false
   streamPaused.value = false
   categoryColors.value = {}
+  totalReceivedFrames.value = 0
   streamStats.value = {
     fps: 24,
     total_frames: 0,
@@ -1065,74 +1400,44 @@ const stopVideoDetection = () => {
     progress: 0,
     total_detections: 0,
     status: 'pending',
-    buffer_frame: 0,
   }
   frameCache.value = []
-  isReplaying.value = false
 }
 
-// 暂停/继续切换
+// 暂停/继续切换（纯前端控制，不涉及服务端）
 const togglePause = () => {
-  const client = videoClient.value
-  if (!client) return
-  if (streamPaused.value) {
-    // 恢复：先快速重放缓存帧，再切回实时
-    if (frameCache.value.length > 0) {
-      isReplaying.value = true
-      burstReplay()
-    }
-    client.sendResume()
-  } else {
-    // 暂停：清旧缓存，开始累积
-    frameCache.value = []
-    isReplaying.value = false
-    if (replayTimer !== null) {
-      clearInterval(replayTimer)
-      replayTimer = null
-    }
-    client.sendPause()
-  }
+  streamPaused.value = !streamPaused.value
 }
 
-/** 快速重放暂停期间缓存的帧 */
-const burstReplay = () => {
-  const tick = () => {
-    const batch = Math.min(5, frameCache.value.length)
-    for (let i = 0; i < batch; i++) {
-      const frame = frameCache.value.shift()
-      if (!frame) break
-      renderFrame(frame)
-      streamStats.value = {
-        ...streamStats.value,
-        current_frame: frame.frame_id,
-        progress: Math.min(99, Math.ceil((frame.frame_id / (streamStats.value.total_frames || 1)) * 100)),
-        buffered_frames: frameCache.value.length,
-      }
-    }
-
-    if (frameCache.value.length > 0) {
-      requestAnimationFrame(tick)
-    } else {
-      // 缓存耗尽，切回实时模式
-      isReplaying.value = false
-      streamStats.value.buffered_frames = 0
-    }
-  }
-  requestAnimationFrame(tick)
-}
-
-// 调整帧率
+// 调整帧率（本地渲染循环帧率，不涉及服务端）
 const adjustFps = (delta: number) => {
   const newFps = Math.max(1, Math.min(60, videoFps.value + delta))
   videoFps.value = newFps
-  videoClient.value?.setFps(newFps)
+  startRenderLoop()
 }
 
 watch(mode, handleModeChange)
 
+// 加载设备信息
+const loadDeviceInfo = async () => {
+  try {
+    const res = await trainingApi.getDeviceInfo()
+    deviceInfo.value = res.data
+    // 自动设置推荐设备
+    if (res.data.devices?.cuda) {
+      device.value = 'cuda'
+    } else if (res.data.devices?.directml) {
+      device.value = 'directml'
+    }
+  } catch (error) {
+    console.error('获取设备信息失败', error)
+  }
+}
+
 onMounted(() => {
   loadTrainedModels()
   loadRecentRecords()
+  loadDeviceInfo()
 })
 
 onUnmounted(() => {
@@ -1224,7 +1529,7 @@ onUnmounted(() => {
 }
 
 .config-content {
-  @apply p-5 flex flex-col gap-4;
+  @apply p-4 flex flex-col gap-4;
   overflow-y: auto;
   flex: 1;
 }
@@ -1239,7 +1544,7 @@ onUnmounted(() => {
 
 .select-wrapper {
   select {
-    @apply w-full px-3 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg text-sm text-[var(--text-primary)] cursor-pointer appearance-none;
+    @apply w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] cursor-pointer appearance-none;
 
     &:focus {
       @apply outline-none border-[var(--accent-cyan)];
@@ -1740,15 +2045,19 @@ onUnmounted(() => {
 }
 
 .recent-records {
-  @apply mt-2 flex flex-col gap-2 max-h-64 overflow-y-auto;
+  @apply mt-2 flex flex-col gap-2 max-h-72 overflow-y-auto;
 }
 
 .records-empty {
   @apply text-sm text-[var(--text-muted)] text-center py-4;
 }
 
+.recent-section {
+  margin-top: 20px;
+}
+
 .record-item {
-  @apply flex items-center gap-2 p-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-color)];
+  @apply flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-color)];
 
   &.expired {
     @apply opacity-50;
@@ -1756,7 +2065,7 @@ onUnmounted(() => {
 }
 
 .record-thumb {
-  @apply w-10 h-10 rounded object-cover flex-shrink-0 border border-[var(--border-color)];
+  @apply w-12 h-12 rounded object-cover flex-shrink-0 border border-[var(--border-color)];
 }
 
 .record-info {
@@ -1775,8 +2084,42 @@ onUnmounted(() => {
   @apply text-xs text-[var(--text-muted)];
 }
 
-.rerun-btn {
-  @apply flex-shrink-0 text-xs py-1 px-2;
+.record-badges {
+  @apply flex flex-wrap items-center gap-1;
+}
+
+.record-param {
+  @apply inline-block text-[11px] px-1 py-px rounded;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+
+.rerun-link {
+  @apply flex-shrink-0 text-xs cursor-pointer whitespace-nowrap;
+  color: var(--accent-cyan);
+
+  &.disabled {
+    @apply cursor-not-allowed;
+    color: var(--text-muted);
+    opacity: 0.5;
+  }
+
+  &:hover:not(.disabled) {
+    filter: brightness(1.2);
+  }
+}
+
+.device-hint {
+  @apply text-xs block mt-1;
+  color: var(--text-muted);
+}
+
+.compatibility-warning {
+  @apply text-xs block mt-1 px-2 py-1 rounded;
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.2);
 }
 
 </style>
