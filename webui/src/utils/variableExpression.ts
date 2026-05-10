@@ -43,6 +43,9 @@ export const BUILTIN_VARIABLES: Record<string, BuiltinValue> = {
 // 匹配 {{variable_name}} 或 {{object.property}}
 const VARIABLE_REF_REGEX = /\{\{([^}]+)\}\}/g
 
+// 非全局版本用于 hasVariableRef（避免 lastIndex 问题）
+const VARIABLE_REF_REGEX_NO_G = /\{\{([^}]+)\}\}/
+
 // 匹配完整的表达式（包含 {{...}}）
 const EXPRESSION_REGEX = /^\{\{([^}]+)\}\}$/
 
@@ -52,7 +55,7 @@ const EXPRESSION_REGEX = /^\{\{([^}]+)\}\}$/
  * 检查字符串是否包含变量引用
  */
 export function hasVariableRef(str: string): boolean {
-  return VARIABLE_REF_REGEX.test(str)
+  return VARIABLE_REF_REGEX_NO_G.test(str)
 }
 
 /**

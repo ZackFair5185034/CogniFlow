@@ -264,7 +264,7 @@ class RuleGraphExecutor:
         graph: Dict[str, List[str]],
         remaining: Set[str]
     ) -> List[List[str]]:
-        """从剩余节点中用 DFS 检测所有环。
+        """从剩余节点中用迭代 DFS 检测所有环。
 
         Args:
             graph: 邻接表
@@ -279,27 +279,49 @@ class RuleGraphExecutor:
         all_cycles: List[List[str]] = []
         visited: Set[str] = set()
 
-        def dfs(node: str, path: List[str], rec_stack: Set[str]):
-            """DFS 检测环，收集所有发现的环"""
-            visited.add(node)
-            rec_stack.add(node)
-            path.append(node)
+        for start_node in remaining:
+            if start_node in visited:
+                continue
 
-            for neighbor in graph.get(node, []):
-                if neighbor not in visited:
-                    dfs(neighbor, path, rec_stack)
-                elif neighbor in rec_stack:
-                    # 找到环，记录下来
-                    cycle_start = path.index(neighbor)
-                    cycle = path[cycle_start:] + [neighbor]
-                    all_cycles.append(cycle)
+            # 使用显式栈模拟递归 DFS
+            # 栈元素: (node, next_neighbor_index)
+            stack: List[Tuple[str, int]] = []
+            rec_stack: Set[str] = set()
+            path: List[str] = []
 
-            path.pop()
-            rec_stack.remove(node)
+            # 初始化：从起始节点开始
+            visited.add(start_node)
+            stack.append((start_node, 0))
+            rec_stack.add(start_node)
+            path.append(start_node)
 
-        for node in remaining:
-            if node not in visited:
-                dfs(node, [], set())
+            while stack:
+                node, neighbor_idx = stack[-1]
+                neighbors = graph.get(node, [])
+
+                if neighbor_idx < len(neighbors):
+                    # 还有邻居需要处理
+                    neighbor = neighbors[neighbor_idx]
+                    # 更新当前节点的邻居索引（下次从这里继续）
+                    stack[-1] = (node, neighbor_idx + 1)
+
+                    if neighbor not in visited:
+                        # 未访问过，深度优先探索
+                        visited.add(neighbor)
+                        stack.append((neighbor, 0))
+                        rec_stack.add(neighbor)
+                        path.append(neighbor)
+                    elif neighbor in rec_stack:
+                        # 在当前递归栈中找到邻居 -> 发现环
+                        cycle_start = path.index(neighbor)
+                        cycle = path[cycle_start:] + [neighbor]
+                        all_cycles.append(cycle)
+                    # else: neighbor 已访问但不在递归栈中，说明是其他分支的节点，跳过
+                else:
+                    # 当前节点所有邻居都已处理完毕，回溯
+                    stack.pop()
+                    path.pop()
+                    rec_stack.remove(node)
 
         return all_cycles
 

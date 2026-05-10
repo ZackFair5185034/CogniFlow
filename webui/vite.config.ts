@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite'
+/// <reference types="vitest" />
 import vue from '@vitejs/plugin-vue'
 import UnoCSS from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
@@ -115,6 +116,11 @@ export default defineConfig(({ mode }) => {
 
     optimizeDeps: {
       include: ['vue', 'vue-router', 'pinia', 'element-plus', 'axios'],
+    },
+
+    test: {
+      globals: true,
+      environment: 'happy-dom',
     },
   }
 })

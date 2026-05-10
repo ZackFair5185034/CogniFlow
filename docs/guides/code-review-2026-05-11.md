@@ -11,9 +11,11 @@
 
 ## 一、潜在 Bug（高优先级）
 
-### 1.1 [高] `RuleCanvas.vue` - 变量绑定替换逻辑错误
+### 1.1 [高] `RuleCanvas.vue` - 变量绑定替换逻辑错误 ✅ 已修复
 
 **位置**: `RuleNode.vue` 第 341-347 行
+
+**修复状态**: 2026-05-11 已修复 - 使用 `insertVariable` 逻辑替代直接追加，添加了重复变量检查
 
 ```typescript
 function bindVariable(key: string, varName: string) {
@@ -33,9 +35,11 @@ function bindVariable(key: string, varName: string) {
 
 ---
 
-### 1.2 [高] `RuleCanvas.vue` - `handleContextAction` 状态更新滞后
+### 1.2 [高] `RuleCanvas.vue` - `handleContextAction` 状态更新滞后 ✅ 已修复
 
 **位置**: 第 1157-1177 行
+
+**修复状态**: 2026-05-11 已修复 - 重构删除逻辑，先清空选中状态再执行删除操作
 
 ```typescript
 case 'delete':
@@ -426,14 +430,14 @@ ctx.fillText(label.substring(0, 12), x + w / 2, y + h / 2)
 
 | 严重程度 | 数量 | 说明 |
 |---------|------|------|
-| **高** | 2 | 变量绑定逻辑错误、状态更新时序问题 |
+| **高** | 2 | ~~变量绑定逻辑错误、状态更新时序问题~~ ✅ 已全部修复 |
 | **中** | 12 | 性能问题、代码重复、边界检查缺失 |
 | **低** | 11 | XSS 风险较小、UX 改进空间 |
 
 ### 优先修复建议
 
-1. **[高] 变量绑定追加逻辑** - 修复追加到末尾而非插入光标位置的问题
-2. **[高] `fetchGraph` 重置选中状态** - 避免加载新图时残留旧状态
+1. **[高] 变量绑定追加逻辑** ✅ 已修复
+2. **[高] `fetchGraph` 重置选中状态** ✅ 已修复
 3. **[中] 节点 ID 生成函数抽取** - 减少重复代码
 4. **[中] 变量面板重复** - 统一使用 `VariablePanel.vue`，修复 index 作为 key 的问题
 5. **[中] `handleCut` 冗余删除** - 移除重复的 splice 操作
@@ -461,9 +465,11 @@ ctx.fillText(label.substring(0, 12), x + w / 2, y + h / 2)
 
 ## 一、潜在 Bug（高优先级）
 
-### 1.1 [高] `executor.py` - Kahn 拓扑排序环检测不完整
+### 1.1 [高] `executor.py` - Kahn 拓扑排序环检测不完整 ✅ 已修复
 
 **位置**: `topological_sort_levels` 第 233-250 行
+
+**修复状态**: 2026-05-11 已修复 - 完善了环检测逻辑，返回完整的环节点信息
 
 ```python
 if not current_level:
@@ -480,9 +486,11 @@ if not current_level:
 
 ---
 
-### 1.2 [高] `executor.py` - 变量插值 `_interpolate` 可能产生无限循环
+### 1.2 [高] `executor.py` - 变量插值 `_interpolate` 可能产生无限循环 ✅ 已修复
 
 **位置**: `_interpolate` 第 579-606 行
+
+**修复状态**: 2026-05-11 已修复 - 添加了循环引用检测和递归深度限制
 
 ```python
 result = value
@@ -498,9 +506,11 @@ return self._try_convert(result)
 
 ---
 
-### 1.3 [高] `graph_manager.py` - `validate_graph` 孤立节点检查逻辑为空
+### 1.3 [高] `graph_manager.py` - `validate_graph` 孤立节点检查逻辑为空 ✅ 已修复
 
 **位置**: `validate_graph` 第 190-196 行
+
+**修复状态**: 2026-05-11 已修复 - 实现了完整的孤立节点检测逻辑和悬挂边检查
 
 ```python
 # 检查孤立节点（排除没有输入边的节点，因为触发器节点通常没有输入）
@@ -882,15 +892,15 @@ return list(remaining)  # 兜底返回
 
 | 严重程度 | 数量 | 说明 |
 |---------|------|------|
-| **高** | 3 | 环检测不完整、变量插值循环引用、孤立节点检查为空 |
+| **高** | 3 | ~~环检测不完整、变量插值循环引用、孤立节点检查为空~~ ✅ 已全部修复 |
 | **中** | 10 | 并行执行错误传播、实例缓存缺失、API 安全和设计问题 |
 | **低** | 7 | 性能优化、代码重复、错误信息泄露 |
 
 ### 优先修复建议
 
-1. **[高] 孤立节点检查逻辑** - 实现完整的 `validate_graph` 孤立节点检测
-2. **[高] 变量插值循环引用** - 添加循环检测或递归深度限制
-3. **[高] Kahn 环检测完整性** - 返回所有环而非只返回第一个
+1. **[高] 孤立节点检查逻辑** ✅ 已修复
+2. **[高] 变量插值循环引用** ✅ 已修复
+3. **[高] Kahn 环检测完整性** ✅ 已修复
 4. **[中] Webhook 认证** - 添加 API Key 或限流机制
 5. **[中] 执行取消 API** - 添加 `POST /executions/{id}/cancel` 端点
 6. **[中] 节点定义缓存** - 使用 `lru_cache` 缓存 `get_definitions` 结果
