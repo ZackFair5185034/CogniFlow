@@ -37,11 +37,11 @@
               :min="schema.minimum"
               :max="schema.maximum"
               :step="schema.step"
-              :value="nodeConfig[key]"
+              :value="getNodeValue(key)"
               class="slider-input"
               @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
             >
-            <span class="slider-value">{{ nodeConfig[key] }}</span>
+            <span class="slider-value">{{ getNodeValue(key) }}</span>
           </template>
 
           <!-- Number -->
@@ -51,7 +51,7 @@
               :min="schema.minimum"
               :max="schema.maximum"
               :step="schema.step"
-              :value="nodeConfig[key]"
+              :value="getNodeValue(key)"
               class="number-input"
               @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
             >
@@ -60,7 +60,7 @@
           <!-- Dropdown -->
           <template v-else-if="schema.widget === 'dropdown'">
             <select
-              :value="nodeConfig[key]"
+              :value="getNodeValue(key)"
               class="select-input"
               @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
             >
@@ -77,7 +77,7 @@
           <!-- Model Select -->
           <template v-else-if="schema.widget === 'model-select'">
             <select
-              :value="nodeConfig[key]"
+              :value="getNodeValue(key)"
               class="select-input model-select"
               @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
             >
@@ -97,7 +97,7 @@
           <!-- Textarea -->
           <template v-else-if="schema.widget === 'textarea'">
             <textarea
-              :value="nodeConfig[key]"
+              :value="(getNodeValue(key) as string | number | null) ?? ''"
               class="textarea-input"
               :placeholder="schema.description || ''"
               rows="2"
@@ -108,7 +108,7 @@
           <!-- Code -->
           <template v-else-if="schema.widget === 'code'">
             <textarea
-              :value="nodeConfig[key]"
+              :value="(getNodeValue(key) as string | number | null) ?? ''"
               class="code-input"
               :placeholder="schema.description || ''"
               rows="2"
@@ -121,7 +121,7 @@
             <label class="checkbox-wrapper">
               <input
                 type="checkbox"
-                :checked="nodeConfig[key]"
+                :checked="!!getNodeValue(key)"
                 class="checkbox-input"
                 @change="updateConfig(key, ($event.target as HTMLInputElement).checked)"
               >
@@ -133,7 +133,7 @@
           <template v-else>
             <input
               type="text"
-              :value="nodeConfig[key]"
+              :value="getNodeValue(key)"
               class="text-input"
               :placeholder="schema.description || ''"
               @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
@@ -246,11 +246,14 @@ import { computed, inject, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import SvgIcon from '@/components/SvgIcon.vue'
 
+/** 节点配置值类型（排除 boolean/null，文本输入无法处理） */
+type NodeConfigValue = string | number | boolean | null
+
 interface ConfigSchemaProperty {
   type: string
   title?: string
   description?: string
-  default?: any
+  default?: NodeConfigValue
   minimum?: number
   maximum?: number
   step?: number
@@ -275,7 +278,7 @@ interface NodeData {
   configSchema?: {
     properties?: Record<string, ConfigSchemaProperty>
   }
-  config?: Record<string, any>
+  config?: Record<string, NodeConfigValue>
   status?: string
 }
 
@@ -287,7 +290,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:config', key: string, value: any): void
+  (e: 'update:config', key: string, value: string | number | boolean | null): void
   (e: 'delete', nodeId: string): void
   (e: 'contextmenu', event: MouseEvent): void
 }>()
@@ -298,8 +301,8 @@ function handleContextMenu(event: MouseEvent) {
 }
 
 // 可用模型（model-select用）
-const configProperties = computed(() => {
-  return props.data.configSchema || {}
+const configProperties = computed((): Record<string, ConfigSchemaProperty> => {
+  return props.data.configSchema?.properties ?? Object.create(null) as Record<string, ConfigSchemaProperty>
 })
 
 // 是否有配置
@@ -308,16 +311,21 @@ const hasConfig = computed(() => {
 })
 
 // 节点配置（合并默认值）
-const nodeConfig = computed(() => {
-  const defaults: Record<string, any> = {}
-  const schema = props.data.configSchema || {}
+const nodeConfig = computed((): Record<string, NodeConfigValue> => {
+  const defaults: Record<string, NodeConfigValue> = {}
+  const schema = props.data.configSchema?.properties ?? {}
   for (const [key, prop] of Object.entries(schema)) {
-    if ((prop as any).default !== undefined) {
-      defaults[key] = (prop as any).default
+    if ((prop as ConfigSchemaProperty).default !== undefined) {
+      defaults[key] = (prop as ConfigSchemaProperty).default as NodeConfigValue
     }
   }
-  return { ...defaults, ...props.data.config }
+  return { ...defaults, ...(props.data.config as Record<string, NodeConfigValue>) }
 })
+
+/** 获取节点配置值（辅助方法，解决动态索引类型推断问题） */
+function getNodeValue(key: string): string | number | boolean | null {
+  return (nodeConfig.value as Record<string, string | number | boolean | null>)[key] ?? null
+}
 
 // 可用模型（model-select用）
 const availableModels = inject<Array<{ id: number; name: string }>>('availableModels', [])
@@ -364,9 +372,9 @@ const configSummary = computed(() => {
                         'interval_ms', 'delay_ms', 'expression', 'method', 'url']
 
   for (const key of summaryKeys) {
-    if (schema[key] && config[key] !== undefined) {
+    if (schema.properties?.[key] && config[key] !== undefined) {
       const val = config[key]
-      const label = schema[key].title || key
+      const label = schema.properties[key]?.title || key
       if (val !== '' && val !== null && val !== undefined) {
         // 截断过长值
         const displayVal = String(val).length > 12
@@ -381,12 +389,12 @@ const configSummary = computed(() => {
 })
 
 // 更新配置
-function updateConfig(key: string, value: any) {
+function updateConfig(key: string, value: string | number | boolean | null) {
   emit('update:config', key, value)
 }
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .rule-node,
 :deep(.vue-flow__node) {
   overflow: visible !important;

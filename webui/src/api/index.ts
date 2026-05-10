@@ -79,13 +79,16 @@ export const categoryApi = {
   export: () => api.get('/categories/export'),
   import: (data: {
     version: number
-    categories: Array<{
-      name: string
-      color: string
-      is_directory: boolean
-      children: any[]
-    }>
+    categories: CategoryNode[]
   }) => api.post('/categories/import', data),
+}
+
+/** 类别树节点（支持递归 children） */
+interface CategoryNode {
+  name: string
+  color: string
+  is_directory: boolean
+  children: CategoryNode[]
 }
 
 // Annotation API

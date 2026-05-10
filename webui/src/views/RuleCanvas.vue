@@ -327,30 +327,30 @@
             :snap-to-grid="false"
             :snap-grid="[gridSize, gridSize]"
             fit-view-on-init
-            @node-click="handleNodeClick"
-            @node-drag-stop="handleNodeDragStop"
             :pan-on-drag="[]"
-            @pane-click="handlePaneClick"
             :pan-on-scroll="true"
-            @connect="handleConnect"
             :zoom-on-scroll="true"
-            @move="handlePan"
             :min-zoom="0.1"
-            @zoom="handleZoom"
             :max-zoom="4"
-            @nodes-change="handleNodesChange"
             :nodes-draggable="true"
-            @edges-change="handleEdgesChange"
             :nodes-connectable="true"
-            @node-context-menu="(event: any, node: any) => handleContextMenu(event, node, 'node')"
             :elements-selectable="true"
-            @pane-context-menu="(event: any) => handleContextMenu(event, null, 'pane')"
             :select-nodes-on-drag="true"
-            @edge-context-menu="(event: any, edge: any) => handleContextMenu(event, edge, 'edge')"
             :selection-mode="SelectionMode.Partial"
-            @node-delete="handleNodeDelete"
             :connection-radius="20"
             :is-valid-connection="isValidConnection"
+            @node-click="handleNodeClick"
+            @node-drag-stop="handleNodeDragStop"
+            @pane-click="handlePaneClick"
+            @connect="handleConnect"
+            @move="handlePan"
+            @zoom="handleZoom"
+            @nodes-change="handleNodesChange"
+            @edges-change="handleEdgesChange"
+            @node-context-menu="(e: NodeMouseEvent) => handleContextMenu(e.event as MouseEvent, e.node, 'node')"
+            @pane-context-menu="(e: MouseEvent) => handleContextMenu(e, null, 'pane')"
+            @edge-context-menu="(e: EdgeMouseEvent) => handleContextMenu(e.event as MouseEvent, e.edge, 'edge')"
+            @node-delete="handleNodeDelete"
             @selection-change="handleSelectionChange"
           >
             <!-- 小地图 -->
@@ -599,10 +599,11 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { VueFlow, useVueFlow, MarkerType, SelectionMode } from '@vue-flow/core'
+import { VueFlow, useVueFlow, MarkerType, SelectionMode, type Node, type Edge, type NodeMouseEvent, type EdgeMouseEvent } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { ruleEngineApi } from '@/api'
+import { type NodeDefinition } from '@/stores/ruleEngine'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -623,7 +624,7 @@ const graph = ref<any>(null)
 const graphName = ref('')
 const nodes = ref<any[]>([])
 const edges = ref<any[]>([])
-const nodeDefinitions = ref<any[]>([])
+const nodeDefinitions = ref<NodeDefinition[]>([])
 const selectedNode = ref<any>(null)
 const nodeConfig = ref<any>({})
 // 变量列表 - 支持的类型：STRING/NUMBER/BOOLEAN/IMAGE/BBOX
@@ -662,8 +663,8 @@ const contextMenu = reactive({
   show: false,
   x: 0,
   y: 0,
-  target: null as any,
-  targetType: null as 'node' | 'edge' | 'pane'
+  target: null as unknown,
+  targetType: null as 'node' | 'edge' | 'pane' | null
 })
 
 // 执行日志面板高度
@@ -705,7 +706,7 @@ const nodeCategories = computed(() => [
 ].map(cat => ({
   ...cat,
   expanded: categoryExpanded[cat.name],
-  nodes: nodeDefinitions.value.filter((d: any) => d.category === cat.name)
+  nodes: nodeDefinitions.value.filter((d) => d.category === cat.name)
 })))
 
 // 节点搜索
@@ -1081,7 +1082,7 @@ function handleDelete() {
 }
 
 // 右键菜单
-function handleContextMenu(event: MouseEvent, target: any, type: 'node' | 'edge' | 'pane') {
+function handleContextMenu(event: MouseEvent, target: Node | Edge | NodeDefinition | null, type: 'node' | 'edge' | 'pane') {
   event.preventDefault()
   event.stopPropagation()
   contextMenu.show = true
@@ -1092,7 +1093,7 @@ function handleContextMenu(event: MouseEvent, target: any, type: 'node' | 'edge'
 }
 
 // 节点面板右键菜单
-function handlePaletteContextMenu(event: MouseEvent, node: any) {
+function handlePaletteContextMenu(event: MouseEvent, node: NodeDefinition) {
   event.preventDefault()
   contextMenu.show = true
   contextMenu.x = event.clientX
@@ -1260,7 +1261,7 @@ async function loadNodeDefinitions() {
 
 // 获取节点分类
 function getNodeCategory(type: string): string {
-  const def = nodeDefinitions.value.find((d: any) => d.type === type)
+  const def = nodeDefinitions.value.find((d) => d.type === type)
   return def?.category || 'action'
 }
 

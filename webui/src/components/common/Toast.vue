@@ -89,7 +89,7 @@ defineExpose({ show, hide })
   </transition>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .toast-notification {
   position: fixed;
   bottom: 80px;

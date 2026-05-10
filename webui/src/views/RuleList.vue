@@ -135,7 +135,7 @@
                 </span>
                 <span class="meta-item">
                   <SvgIcon name="clock" />
-                  {{ formatDate(graph.updated_at) }}
+                  {{ formatDate(graph.updated_at || '') }}
                 </span>
               </div>
               <span
@@ -229,9 +229,32 @@ import { useRouter } from 'vue-router'
 import { ruleEngineApi } from '@/api'
 import { ElMessageBox } from 'element-plus'
 
+/** 规则图列表项 */
+interface GraphItem {
+  id: number
+  name: string
+  description?: string
+  version?: string
+  is_active: boolean
+  thumbnail?: string
+  cron_expression?: string
+  last_executed_at?: string
+  created_at?: string
+  updated_at?: string
+}
+
+/** Axios 错误响应 */
+interface ApiError {
+  response?: {
+    data?: {
+      detail?: string
+    }
+  }
+}
+
 const router = useRouter()
 
-const graphs = ref<any[]>([])
+const graphs = ref<GraphItem[]>([])
 const loading = ref(false)
 const showCreateDialog = ref(false)
 const creating = ref(false)
@@ -280,7 +303,7 @@ function goToDesign(id: number) {
   router.push(`/rule-engine/design/${id}`)
 }
 
-async function toggleActive(graph: any) {
+async function toggleActive(graph: GraphItem) {
   try {
     if (graph.is_active) {
       await ruleEngineApi.deactivateGraph(graph.id)
@@ -291,12 +314,13 @@ async function toggleActive(graph: any) {
       graph.is_active = true
       showToast('规则已激活', 'success')
     }
-  } catch (err: any) {
-    showToast(err?.response?.data?.detail || '操作失败', 'error')
+  } catch (err: unknown) {
+    const error = err as ApiError
+    showToast(error?.response?.data?.detail || '操作失败', 'error')
   }
 }
 
-async function handleDelete(graph: any) {
+async function handleDelete(graph: GraphItem) {
   try {
     await ElMessageBox.confirm(
       `确定要删除规则"${graph.name}"吗？此操作不可恢复。`,
@@ -306,7 +330,7 @@ async function handleDelete(graph: any) {
     await ruleEngineApi.deleteGraph(graph.id)
     showToast('规则已删除', 'success')
     loadGraphs()
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (err !== 'cancel') {
       showToast('删除失败', 'error')
     }

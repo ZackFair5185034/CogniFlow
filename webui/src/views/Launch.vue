@@ -697,10 +697,12 @@ const deviceInfo = ref<{
 // 可用设备列表
 const availableDevices = computed(() => {
   const devices = deviceInfo.value.devices || {}
-  return Object.entries(devices).map(([type, info]: [string, unknown]) => ({
+  return Object.entries(devices).map(([type, info]) => ({
     value: type,
-    label: (info as any).display_name || info.device_name || type.toUpperCase(),
-    disabled: type === 'cpu' ? false : !(info.device_type === type)
+    label: (info as { display_name?: string; device_name?: string }).display_name
+      || (info as { device_name?: string }).device_name
+      || type.toUpperCase(),
+    disabled: type === 'cpu' ? false : !((info as { device_type?: string }).device_type === type)
   }))
 })
 

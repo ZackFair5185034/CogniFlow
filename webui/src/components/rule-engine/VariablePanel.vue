@@ -11,10 +11,13 @@ import SvgIcon from '@/components/SvgIcon.vue'
 
 export type VariableType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'IMAGE' | 'BBOX'
 
+/** 变量默认值类型 */
+export type VariableDefaultValue = string | number | boolean | null
+
 export interface Variable {
   name: string
   type: VariableType
-  defaultValue?: any
+  defaultValue?: VariableDefaultValue
   description?: string
 }
 
@@ -28,7 +31,7 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'add'): void
   (e: 'remove', index: number): void
-  (e: 'update', index: number, field: keyof Variable, value: any): void
+  (e: 'update', index: number, field: keyof Variable, value: VariableDefaultValue): void
 }>()
 
 // ============ 状态 ============
@@ -55,7 +58,7 @@ function handleRemove(index: number) {
   emit('remove', index)
 }
 
-function handleUpdate(index: number, field: keyof Variable, value: any) {
+function handleUpdate(index: number, field: keyof Variable, value: VariableDefaultValue) {
   emit('update', index, field, value)
 }
 </script>
@@ -149,7 +152,7 @@ function handleUpdate(index: number, field: keyof Variable, value: any) {
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .variable-panel {
   background: var(--bg-secondary, #1a1a24);
   border: 1px solid var(--border-color, #2a2a3a);
