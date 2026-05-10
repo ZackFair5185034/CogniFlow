@@ -297,6 +297,7 @@ class RuleGraphBase(BaseModel):
     is_active: bool = False
     cron_expression: Optional[str] = None  # 定时触发 Cron 表达式
     thumbnail: Optional[str] = None
+    webhook_api_key: Optional[str] = None  # Webhook API Key（仅在响应中显示，创建后不可读取）
 
 
 class RuleGraphCreate(RuleGraphBase):

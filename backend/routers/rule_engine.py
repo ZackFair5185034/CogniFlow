@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """规则引擎 API 路由 - 提供规则图的 CRUD 和执行接口。"""
+import secrets
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -183,17 +184,64 @@ async def deactivate_graph(graph_id: int, db: Session = Depends(get_db)):
 # ============ 执行相关 ============
 
 @router.get("/graphs/{graph_id}/webhook-url")
-async def get_webhook_url(graph_id: int):
-    """获取规则的 Webhook 触发 URL。
+async def get_webhook_url(graph_id: int, db: Session = Depends(get_db)):
+    """获取规则的 Webhook 触发 URL 和认证信息。
 
     外部系统可通过 POST 此 URL 触发规则执行。
     """
-    # 实际 URL 由反向代理配置，这里只返回路径格式
+    manager = GraphManager(db)
+    graph = manager.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="规则图不存在")
+
+    # 检查是否配置了 API Key
+    has_api_key = bool(graph.webhook_api_key)
+
     return {
         "webhook_url": f"/api/rule-engine/webhook/{graph_id}/trigger",
         "method": "POST",
-        "description": "向此 URL 发送 POST 请求即可触发规则执行"
+        "auth_type": "api_key" if has_api_key else "none",
+        "has_api_key": has_api_key,
+        "description": "向此 URL 发送 POST 请求即可触发规则执行，认证通过 X-API-Key header 提供"
     }
+
+
+@router.post("/graphs/{graph_id}/webhook-api-key")
+async def generate_webhook_api_key(graph_id: int, db: Session = Depends(get_db)):
+    """为规则图生成或更新 Webhook API Key。
+
+    返回完整的 API Key（仅此一次可见，请妥善保管）。
+    """
+    manager = GraphManager(db)
+    graph = manager.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="规则图不存在")
+
+    # 生成新的 API Key（32字节十六进制字符串，64字符）
+    new_api_key = secrets.token_hex(32)
+    graph.webhook_api_key = new_api_key
+    db.commit()
+
+    return {
+        "graph_id": graph_id,
+        "webhook_api_key": new_api_key,
+        "warning": "请妥善保管此 API Key，刷新页面后将不再显示",
+        "usage": "在请求时通过 X-API-Key header 提供此 Key"
+    }
+
+
+@router.delete("/graphs/{graph_id}/webhook-api-key")
+async def delete_webhook_api_key(graph_id: int, db: Session = Depends(get_db)):
+    """删除规则图的 Webhook API Key（禁用 Webhook 认证）。"""
+    manager = GraphManager(db)
+    graph = manager.get_graph(graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="规则图不存在")
+
+    graph.webhook_api_key = None
+    db.commit()
+
+    return {"message": "Webhook API Key 已删除，此规则的 Webhook 认证已被禁用"}
 
 
 @router.post("/webhook/{graph_id}/trigger", response_model=ExecutionResponse)
@@ -201,12 +249,14 @@ async def webhook_trigger(
     graph_id: int,
     background_tasks: BackgroundTasks,
     request_data: dict = None,
+    x_api_key: Optional[str] = Header(None, description="Webhook API Key 认证"),
     db: Session = Depends(get_db),
 ):
     """Webhook 触发规则图执行。
 
     外部系统（如 GitHub CI、其他服务）可通过此端点触发规则。
     支持传递 JSON 数据作为 trigger_data。
+    需要通过 X-API-Key header 提供 API Key 进行认证。
     """
     manager = GraphManager(db)
     graph = manager.get_graph(graph_id)
@@ -215,6 +265,23 @@ async def webhook_trigger(
 
     if not graph.is_active:
         raise HTTPException(status_code=403, detail="规则图未激活，无法通过 Webhook 触发")
+
+    # API Key 认证校验
+    if graph.webhook_api_key:
+        # 如果规则图配置了 API Key，必须提供且匹配
+        if not x_api_key:
+            raise HTTPException(
+                status_code=401,
+                detail="缺少 API Key，请通过 X-API-Key header 提供有效的认证信息"
+            )
+        if not secrets.compare_digest(x_api_key, graph.webhook_api_key):
+            raise HTTPException(status_code=401, detail="无效的 API Key")
+    else:
+        # 如果规则图未配置 API Key，拒绝所有请求（安全默认）
+        raise HTTPException(
+            status_code=401,
+            detail="此规则图未配置 Webhook 认证，请先设置 API Key"
+        )
 
     graph_data = manager.parse_graph_data(graph)
 

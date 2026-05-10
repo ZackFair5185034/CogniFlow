@@ -3,6 +3,7 @@
     class="rule-node"
     :class="[`category-${data.category}`, { selected }]"
     @contextmenu.prevent="handleContextMenu"
+    v-memo="[data.category, data.status, data.label, configSummary]"
   >
     <!-- 标题栏 -->
     <div class="node-header">

@@ -614,7 +614,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, shallowRef, onMounted, onBeforeUnmount } from 'vue'
+import { throttle } from 'lodash-es'
 import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow, MarkerType, SelectionMode, type Node, type Edge, type NodeMouseEvent, type EdgeMouseEvent } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
@@ -639,8 +640,11 @@ const gridSize = 30
 const graphId = computed(() => Number(route.params.id))
 const graph = ref<any>(null)
 const graphName = ref('')
-const nodes = ref<any[]>([])
-const edges = ref<any[]>([])
+// 使用 shallowRef 减少大量节点的响应式开销
+// shallowRef 只追踪 .value 的替换，不深度追踪数组内部变化
+// VueFlow 内部已维护节点状态，我们只需要在必要时同步本地副本
+const nodes = shallowRef<any[]>([])
+const edges = shallowRef<any[]>([])
 const nodeDefinitions = ref<NodeDefinition[]>([])
 const selectedNode = ref<any>(null)
 const nodeConfig = ref<any>({})
@@ -793,17 +797,18 @@ const nodeTypes = {
   ruleNode: RuleNode
 } as unknown as Record<string, any>
 
-// 小地图颜色 - 6色分类体系
+// 小地图颜色 - 提取为模块常量避免每次调用创建对象
+const NODE_CATEGORY_COLORS: Record<string, string> = {
+  input: '#4CFF4C',      // input (#4CFF4C)
+  detection: '#00f0FF',  // detection (#00f0FF)
+  processing: '#FFFF4C', // processing (#FFFF4C)
+  action: '#FF7F4C',     // action (#FF7F4C)
+  logic: '#DC4FDC',      // logic (#DC4FDC)
+  output: '#FF4C4C'       // output (#FF4C4C)
+}
+
 function miniMapNodeColor(node: any) {
-  const colors: Record<string, string> = {
-    input: '#4CFF4C',      // input (#4CFF4C)
-    detection: '#00f0FF',  // detection (#00f0FF)
-    processing: '#FFFF4C', // processing (#FFFF4C)
-    action: '#FF7F4C',     // action (#FF7F4C)
-    logic: '#DC4FDC',      // logic (#DC4FDC)
-    output: '#FF4C4C'       // output (#FF4C4C)
-  }
-  return colors[node.category] || '#888'
+  return NODE_CATEGORY_COLORS[node.category] || '#888'
 }
 
 // Toast
@@ -894,7 +899,8 @@ function handleWsMessage(msg: any) {
       showToast(`节点执行失败: ${msg.error}`, 'error')
       break
     case 'execution_progress':
-      executionProgress.value = msg.progress
+      // 节流进度更新，限制为每秒最多2次更新（500ms间隔）
+      throttledUpdateProgress(msg.progress)
       break
     case 'execution_complete':
       executionStatus.value = msg.status === 'completed' ? 'success' : 'failed'
@@ -909,6 +915,11 @@ function handleWsMessage(msg: any) {
       break
   }
 }
+
+// 节流进度更新函数，限制为每秒2次更新（500ms间隔）
+const throttledUpdateProgress = throttle((progress: number) => {
+  executionProgress.value = progress
+}, 500)
 
 // 右键菜单操作
 function saveHistory() {

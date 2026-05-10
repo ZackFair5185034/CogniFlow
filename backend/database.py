@@ -166,6 +166,7 @@ class RuleGraph(Base):
     is_active = Column(Boolean, default=False)
     cron_expression = Column(String(100), nullable=True)  # 定时触发 Cron 表达式
     thumbnail = Column(Text, nullable=True)  # Base64 缩略图快照
+    webhook_api_key = Column(String(64), nullable=True)  # Webhook API Key 认证
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
