@@ -1151,16 +1151,17 @@ function insertVariable(varName: string) {
 
 // 右键菜单操作
 function handleContextAction(action: string) {
-  hideContextMenu()
   switch (action) {
     case 'copy':
       if (contextMenu.targetType === 'node') {
         (nodes.value as unknown as any[]).forEach((n: any) => { n.selected = n.id === (contextMenu.target as any)?.id })
         handleCopy()
       }
+      hideContextMenu()
       break
     case 'paste':
       handlePaste()
+      hideContextMenu()
       break
     case 'delete':
       if (contextMenu.targetType === 'node') {
@@ -1169,10 +1170,12 @@ function handleContextAction(action: string) {
         (edges.value as unknown as any[]).forEach((e: any) => { e.selected = e.id === (contextMenu.target as any)?.id })
       }
       handleDelete()
+      hideContextMenu()
       break
     case 'selectAll':
       nodes.value.forEach((n: any) => { n.selected = true })
       edges.value.forEach((e: any) => { e.selected = true })
+      hideContextMenu()
       break
   }
 }

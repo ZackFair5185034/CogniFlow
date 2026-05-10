@@ -96,6 +96,7 @@
               :placeholder="schema.description || ''"
               :rows="2"
               class="textarea-input"
+              :ref="el => setInputRef(key, el)"
               @update:model-value="updateConfig(key, $event)"
             />
           </template>
@@ -108,6 +109,7 @@
               :placeholder="schema.description || ''"
               :rows="2"
               class="code-input"
+              :ref="el => setInputRef(key, el)"
               @update:model-value="updateConfig(key, $event)"
             />
           </template>
@@ -128,6 +130,7 @@
               :model-value="String(getNodeValue(key) ?? '')"
               :placeholder="schema.description || ''"
               class="text-input"
+              :ref="el => setInputRef(key, el)"
               @update:model-value="updateConfig(key, $event)"
             />
           </template>
@@ -332,19 +335,66 @@ const variables = inject<Variable[]>('variables', [])
 // 变量绑定菜单状态
 const activeVarMenu = ref<string | null>(null)
 
+// 输入框引用字典（用于获取光标位置）
+const inputRefs = ref<Record<string, HTMLInputElement | HTMLTextAreaElement>>({})
+
+// 设置输入框引用（el-input 内部有 .input 或 .textarea 属性指向原生元素）
+function setInputRef(key: string, el: any) {
+  if (!el) {
+    delete inputRefs.value[key]
+    return
+  }
+  // el-input 组件实例的 .input 或 .textarea 属性指向原生元素
+  if (el.input) {
+    inputRefs.value[key] = el.input
+  } else if (el.textarea) {
+    inputRefs.value[key] = el.textarea
+  } else if (el.$el && (el.$el.tagName === 'INPUT' || el.$el.tagName === 'TEXTAREA')) {
+    inputRefs.value[key] = el.$el
+  }
+}
+
 function toggleVarMenu(key: string) {
   activeVarMenu.value = activeVarMenu.value === key ? null : key
 }
 
 function bindVariable(key: string, varName: string) {
-  // 将变量插入到当前字段值中
-  const currentValue = nodeConfig.value[key] || ''
+  // 将变量插入到光标位置
+  const currentValue = String(nodeConfig.value[key] || '')
   const varRef = `{{${varName}}}`
-  // 如果已有变量引用则替换，否则追加
-  const newValue = currentValue
-    ? currentValue + varRef
-    : varRef
-  updateConfig(key, newValue)
+
+  // 检查重复引用
+  if (currentValue.includes(varRef)) {
+    console.warn(`变量 ${varName} 已存在于此字段中`)
+    activeVarMenu.value = null
+    return
+  }
+
+  // 获取输入框引用，尝试在光标位置插入
+  const inputEl = inputRefs.value[key]
+  let newValue: string
+
+  if (inputEl && (inputEl.tagName === 'TEXTAREA' || inputEl.tagName === 'INPUT')) {
+    const start = inputEl.selectionStart ?? currentValue.length
+    const end = inputEl.selectionEnd ?? currentValue.length
+    // 在光标位置插入变量
+    newValue = currentValue.slice(0, start) + varRef + currentValue.slice(end)
+    // 更新输入框值和光标位置
+    updateConfig(key, newValue)
+    // 设置光标在变量引用之后
+    setTimeout(() => {
+      if (inputEl.tagName === 'TEXTAREA' || inputEl.tagName === 'INPUT') {
+        const newPos = start + varRef.length
+        inputEl.setSelectionRange(newPos, newPos)
+        inputEl.focus()
+      }
+    }, 0)
+  } else {
+    // 如果无法获取光标位置，则追加到末尾
+    newValue = currentValue ? currentValue + varRef : varRef
+    updateConfig(key, newValue)
+  }
+
   activeVarMenu.value = null
 }
 
