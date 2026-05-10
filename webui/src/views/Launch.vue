@@ -1503,7 +1503,7 @@ onUnmounted(() => {
 }
 
 .config-content {
-  @apply p-5 flex flex-col gap-4;
+  @apply p-4 flex flex-col gap-4;
   overflow-y: auto;
   flex: 1;
 }
