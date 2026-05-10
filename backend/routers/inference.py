@@ -530,10 +530,10 @@ def process_video_stream_background(
     )
     encode_thread.start()
 
-    # 等待推理线程完成
-    inference_thread.join()
-    # 等待编码线程消费完剩余帧
-    encode_thread.join()
+    # 等待推理线程完成（最多等 5 秒，超时则强制继续）
+    inference_thread.join(timeout=5)
+    # 等待编码线程消费完剩余帧（最多等 5 秒）
+    encode_thread.join(timeout=5)
 
     # 更新任务状态为完成
     try:
@@ -735,6 +735,8 @@ async def rerun_inference_job(
         device: 推理设备 (auto/cpu/cuda)
         format: 模型格式 (auto/yolo_pt/onnx/openvino/tensorrt)
     """
+    import asyncio
+
     job = db.query(InferenceJob).filter(InferenceJob.job_id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="记录不存在")
@@ -767,11 +769,14 @@ async def rerun_inference_job(
 
         # 从 Category 表补充颜色（覆盖模型训练时保存的默认色）
         from backend.routers.category import Category as CategoryModel
-        name_to_color = {}
-        for cat in db.query(CategoryModel).filter(CategoryModel.is_directory == False).all():
-            name_to_color[cat.name] = cat.color
-        for cat in categories:
-            cat['color'] = name_to_color.get(cat['name'], cat.get('color', '#FF0000'))
+        try:
+            name_to_color = {}
+            for cat in db.query(CategoryModel).filter(CategoryModel.is_directory == False).all():
+                name_to_color[cat.name] = cat.color
+            for cat in categories:
+                cat['color'] = name_to_color.get(cat['name'], cat.get('color', '#FF0000'))
+        except Exception:
+            pass  # 颜色获取失败不影响检测流程
 
         cap = cv2.VideoCapture(job.file_path)
         fps = round(cap.get(cv2.CAP_PROP_FPS)) or 24
