@@ -11,14 +11,14 @@
           <SvgIcon name="back" />
         </button>
         <div class="rule-name-section">
-          <input
+          <el-input
             v-model="graphName"
             type="text"
             class="rule-name-input"
             placeholder="规则名称..."
             @blur="handleNameChange"
             @keyup.enter="handleNameChange"
-          >
+          />
           <span
             class="rule-status-badge"
             :class="{ active: graph?.is_active }"
@@ -158,13 +158,13 @@
           v-show="showPalette"
           class="palette-search"
         >
-          <input
+          <el-input
             v-model="nodeSearchQuery"
             type="text"
             placeholder="搜索节点..."
             class="search-input"
             @input="handleSearchInput"
-          >
+          />
           <button
             v-if="nodeSearchQuery"
             class="search-clear"
@@ -253,34 +253,39 @@
                 :key="index"
                 class="variable-item"
               >
-                <input
+                <el-input
                   type="text"
-                  :value="variable.name"
+                  :model-value="variable.name"
                   class="var-name-input"
                   placeholder="变量名"
-                  @input="updateVariable(index, 'name', ($event.target as HTMLInputElement).value)"
-                >
-                <select
-                  :value="variable.type"
+                  @update:model-value="updateVariable(index, 'name', $event)"
+                />
+                <el-select
+                  :model-value="variable.type"
                   class="var-type-select"
-                  @change="updateVariable(index, 'type', ($event.target as HTMLSelectElement).value)"
+                  @update:model-value="updateVariable(index, 'type', $event)"
                 >
-                  <option value="STRING">
-                    STRING
-                  </option>
-                  <option value="NUMBER">
-                    NUMBER
-                  </option>
-                  <option value="BOOLEAN">
-                    BOOLEAN
-                  </option>
-                  <option value="IMAGE">
-                    IMAGE
-                  </option>
-                  <option value="BBOX">
-                    BBOX
-                  </option>
-                </select>
+                  <el-option
+                    value="STRING"
+                    label="STRING"
+                  />
+                  <el-option
+                    value="NUMBER"
+                    label="NUMBER"
+                  />
+                  <el-option
+                    value="BOOLEAN"
+                    label="BOOLEAN"
+                  />
+                  <el-option
+                    value="IMAGE"
+                    label="IMAGE"
+                  />
+                  <el-option
+                    value="BBOX"
+                    label="BBOX"
+                  />
+                </el-select>
                 <button
                   class="var-remove-btn"
                   title="删除变量"
@@ -3428,5 +3433,41 @@ $panel-header-height: 52px;
       border-color: var(--accent, #00f0ff);
     }
   }
+}
+
+// Element Plus 深色主题覆盖
+:deep(.el-input__wrapper) {
+  background: var(--bg-primary) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border-color);
+}
+:deep(.el-input__wrapper:hover) {
+  border-color: var(--accent-cyan);
+}
+:deep(.el-input__wrapper.is-focus) {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
+}
+:deep(.el-input__inner) {
+  color: var(--text-primary);
+}
+:deep(.el-select__wrapper) {
+  background: var(--bg-primary) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border-color);
+}
+:deep(.el-select-dropdown) {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+}
+:deep(.el-select-dropdown__item) {
+  color: var(--text-primary);
+}
+:deep(.el-select-dropdown__item.hover),
+:deep(.el-select-dropdown__item:hover) {
+  background: var(--bg-hover);
+}
+:deep(.el-select-dropdown__item.is-selected) {
+  color: var(--accent-cyan);
 }
 </style>

@@ -339,11 +339,11 @@
           <!-- 名称 -->
           <div class="form-group">
             <label>名称</label>
-            <input
+            <el-input
               v-model="categoryForm.name"
               type="text"
               :placeholder="categoryForm.is_directory ? '输入目录名称' : '输入标签名称'"
-            >
+            />
           </div>
           <!-- 颜色（仅标签） -->
           <div
@@ -352,10 +352,10 @@
           >
             <label>颜色</label>
             <div class="color-picker">
-              <input
+              <el-input
                 v-model="categoryForm.color"
-                type="color"
-              >
+                type="text"
+              />
               <span
                 class="color-preview"
                 :style="{ background: categoryForm.color }"
@@ -1806,5 +1806,22 @@ onUnmounted(() => {
   @apply text-sm p-2 rounded;
   color: #ff4466;
   background: rgba(255, 68, 102, 0.1);
+}
+
+// Element Plus 深色主题覆盖
+:deep(.el-input__wrapper) {
+  background: var(--bg-primary) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border-color);
+}
+:deep(.el-input__wrapper:hover) {
+  border-color: var(--accent-cyan);
+}
+:deep(.el-input__wrapper.is-focus) {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
+}
+:deep(.el-input__inner) {
+  color: var(--text-primary);
 }
 </style>

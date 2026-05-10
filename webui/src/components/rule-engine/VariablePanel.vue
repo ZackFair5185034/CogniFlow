@@ -97,30 +97,28 @@ function handleUpdate(index: number, field: keyof Variable, value: VariableDefau
         class="variable-item"
       >
         <!-- 变量名 -->
-        <input
+        <el-input
           type="text"
-          :value="variable.name"
-          class="var-name-input"
+          :model-value="variable.name"
           placeholder="变量名"
           :disabled="disabled"
-          @input="handleUpdate(index, 'name', ($event.target as HTMLInputElement).value)"
-        >
+          @update:model-value="handleUpdate(index, 'name', $event as string)"
+        />
 
         <!-- 变量类型 -->
-        <select
-          :value="variable.type"
+        <el-select
+          :model-value="variable.type"
           class="var-type-select"
           :disabled="disabled"
-          @change="handleUpdate(index, 'type', ($event.target as HTMLSelectElement).value)"
+          @update:model-value="handleUpdate(index, 'type', $event as VariableType)"
         >
-          <option
+          <el-option
             v-for="t in VARIABLE_TYPES"
             :key="t.value"
             :value="t.value"
-          >
-            {{ t.label }}
-          </option>
-        </select>
+            :label="t.label"
+          />
+        </el-select>
 
         <!-- 删除按钮 -->
         <button
@@ -220,47 +218,75 @@ function handleUpdate(index: number, field: keyof Variable, value: VariableDefau
   gap: 6px;
 }
 
-.var-name-input {
+:deep(.el-input) {
   flex: 1;
   min-width: 0;
-  background: var(--bg-input, #0e0e16);
-  border: 1px solid var(--border-color, #2a2a3a);
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-size: 12px;
-  color: var(--text-primary, #e0e0e8);
-  font-family: monospace;
-}
 
-.var-name-input:focus {
-  outline: none;
-  border-color: var(--accent-cyan, #00f0ff);
-}
+  .el-input__wrapper {
+    background: var(--bg-input, #0e0e16);
+    border: 1px solid var(--border-color, #2a2a3a);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 12px;
+    color: var(--text-primary, #e0e0e8);
+    font-family: monospace;
+    box-shadow: none;
+  }
 
-.var-name-input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  .el-input__wrapper:hover {
+    border-color: var(--accent-cyan, #00f0ff);
+  }
+
+  .el-input__wrapper.is-focus {
+    border-color: var(--accent-cyan, #00f0ff);
+    box-shadow: 0 0 0 1px var(--accent-cyan, #00f0ff) inset;
+  }
+
+  .el-input.is-disabled .el-input__wrapper {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 }
 
 .var-type-select {
   width: 80px;
-  background: var(--bg-input, #0e0e16);
-  border: 1px solid var(--border-color, #2a2a3a);
-  border-radius: 4px;
-  padding: 6px 4px;
-  font-size: 11px;
-  color: var(--text-primary, #e0e0e8);
-  cursor: pointer;
 }
 
-.var-type-select:focus {
-  outline: none;
-  border-color: var(--accent-cyan, #00f0ff);
-}
+:deep(.el-select) {
+  width: 80px;
 
-.var-type-select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  .el-select__wrapper {
+    background: var(--bg-input, #0e0e16);
+    border: 1px solid var(--border-color, #2a2a3a);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 11px;
+    color: var(--text-primary, #e0e0e8);
+    box-shadow: none;
+    min-height: unset;
+    height: auto;
+  }
+
+  .el-select__wrapper:hover {
+    border-color: var(--accent-cyan, #00f0ff);
+  }
+
+  .el-select__wrapper.is-focus {
+    border-color: var(--accent-cyan, #00f0ff);
+    box-shadow: 0 0 0 1px var(--accent-cyan, #00f0ff) inset;
+  }
+
+  .el-select__caret {
+    color: var(--text-muted, #8888aa);
+  }
+
+  .el-select__selected-item {
+    color: var(--text-primary, #e0e0e8);
+  }
+
+  .el-select__placeholder {
+    color: var(--text-muted, #8888aa);
+  }
 }
 
 .var-remove-btn {

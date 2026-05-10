@@ -170,28 +170,27 @@
         <div class="dialog-body">
           <div class="form-group">
             <label>规则名称</label>
-            <input
+            <el-input
               v-model="createForm.name"
-              type="text"
               placeholder="例如：目标检测自动响应"
               @keyup.enter="handleCreate"
-            >
+            />
           </div>
           <div class="form-group">
             <label>描述（可选）</label>
-            <textarea
+            <el-input
               v-model="createForm.description"
+              type="textarea"
               rows="3"
               placeholder="描述规则的用途..."
             />
           </div>
           <div class="form-group">
             <label>版本（可选）</label>
-            <input
+            <el-input
               v-model="createForm.version"
-              type="text"
               placeholder="例如：1.0.0"
-            >
+            />
           </div>
         </div>
         <div class="dialog-footer">
@@ -800,5 +799,37 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
     border: 1px solid var(--border-color);
     color: var(--text-primary);
   }
+}
+
+/* el-input 深色主题覆盖 */
+:deep(.el-input__wrapper) {
+  background: var(--bg-primary);
+  box-shadow: none;
+  border: 1px solid var(--border-color);
+}
+
+:deep(.el-input__wrapper:hover) {
+  border-color: var(--accent-cyan);
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px var(--accent-cyan) inset;
+}
+
+:deep(.el-textarea__inner) {
+  background: var(--bg-primary);
+  box-shadow: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+:deep(.el-textarea__inner:hover) {
+  border-color: var(--accent-cyan);
+}
+
+:deep(.el-textarea__inner:focus) {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px var(--accent-cyan) inset;
 }
 </style>

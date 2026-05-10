@@ -121,16 +121,16 @@
         <div class="dialog-body">
           <div class="form-group">
             <label>图集名称</label>
-            <input
+            <el-input
               v-model="createForm.name"
-              type="text"
               placeholder="输入图集名称"
-            >
+            />
           </div>
           <div class="form-group">
             <label>描述</label>
-            <textarea
+            <el-input
               v-model="createForm.description"
+              type="textarea"
               rows="3"
               placeholder="输入描述（可选）"
             />
@@ -173,16 +173,16 @@
         <div class="dialog-body">
           <div class="form-group">
             <label>图集名称</label>
-            <input
+            <el-input
               v-model="renameForm.name"
-              type="text"
               placeholder="输入图集名称"
-            >
+            />
           </div>
           <div class="form-group">
             <label>描述</label>
-            <textarea
+            <el-input
               v-model="renameForm.description"
+              type="textarea"
               rows="3"
               placeholder="输入描述（可选）"
             />
@@ -482,5 +482,37 @@ onMounted(loadAtlases)
 
 .dialog-footer {
   @apply flex justify-end gap-3 px-6 py-5 border-t border-[var(--border-color)];
+}
+
+/* el-input 深色主题覆盖 */
+:deep(.el-input__wrapper) {
+  background: var(--bg-primary);
+  box-shadow: none;
+  border: 1px solid var(--border-color);
+}
+
+:deep(.el-input__wrapper:hover) {
+  border-color: var(--accent-cyan);
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px var(--accent-cyan) inset;
+}
+
+:deep(.el-textarea__inner) {
+  background: var(--bg-primary);
+  box-shadow: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+:deep(.el-textarea__inner:hover) {
+  border-color: var(--accent-cyan);
+}
+
+:deep(.el-textarea__inner:focus) {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px var(--accent-cyan) inset;
 }
 </style>

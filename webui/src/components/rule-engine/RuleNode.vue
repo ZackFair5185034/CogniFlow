@@ -32,112 +32,104 @@
         <div class="field-control">
           <!-- Slider -->
           <template v-if="schema.widget === 'slider'">
-            <input
-              type="range"
+            <el-slider
+              :model-value="getNodeValue(key) as number"
               :min="schema.minimum"
               :max="schema.maximum"
               :step="schema.step"
-              :value="getNodeValue(key)"
-              class="slider-input"
-              @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
-            >
+              @update:model-value="updateConfig(key, $event)"
+            />
             <span class="slider-value">{{ getNodeValue(key) }}</span>
           </template>
 
           <!-- Number -->
           <template v-else-if="schema.widget === 'number'">
-            <input
-              type="number"
+            <el-input-number
+              :model-value="getNodeValue(key) as number"
               :min="schema.minimum"
               :max="schema.maximum"
               :step="schema.step"
-              :value="getNodeValue(key)"
+              :controls="false"
               class="number-input"
-              @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
-            >
+              @update:model-value="updateConfig(key, $event)"
+            />
           </template>
 
           <!-- Dropdown -->
           <template v-else-if="schema.widget === 'dropdown'">
-            <select
-              :value="getNodeValue(key)"
+            <el-select
+              :model-value="getNodeValue(key)"
               class="select-input"
-              @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
+              @update:model-value="updateConfig(key, $event)"
             >
-              <option
+              <el-option
                 v-for="opt in schema.enum"
                 :key="opt"
                 :value="opt"
-              >
-                {{ opt }}
-              </option>
-            </select>
+                :label="opt"
+              />
+            </el-select>
           </template>
 
           <!-- Model Select -->
           <template v-else-if="schema.widget === 'model-select'">
-            <select
-              :value="getNodeValue(key)"
+            <el-select
+              :model-value="getNodeValue(key)"
               class="select-input model-select"
-              @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
+              placeholder="选择模型..."
+              @update:model-value="updateConfig(key, $event)"
             >
-              <option value="">
-                选择模型...
-              </option>
-              <option
+              <el-option
                 v-for="model in availableModels"
                 :key="model.id"
                 :value="model.id"
-              >
-                {{ model.name }}
-              </option>
-            </select>
+                :label="model.name"
+              />
+            </el-select>
           </template>
 
           <!-- Textarea -->
           <template v-else-if="schema.widget === 'textarea'">
-            <textarea
-              :value="(getNodeValue(key) as string | number | null) ?? ''"
-              class="textarea-input"
+            <el-input
+              :model-value="(getNodeValue(key) as string | number | null) ?? ''"
+              type="textarea"
               :placeholder="schema.description || ''"
-              rows="2"
-              @input="updateConfig(key, ($event.target as HTMLTextAreaElement).value)"
+              :rows="2"
+              class="textarea-input"
+              @update:model-value="updateConfig(key, $event)"
             />
           </template>
 
           <!-- Code -->
           <template v-else-if="schema.widget === 'code'">
-            <textarea
-              :value="(getNodeValue(key) as string | number | null) ?? ''"
-              class="code-input"
+            <el-input
+              :model-value="(getNodeValue(key) as string | number | null) ?? ''"
+              type="textarea"
               :placeholder="schema.description || ''"
-              rows="2"
-              @input="updateConfig(key, ($event.target as HTMLTextAreaElement).value)"
+              :rows="2"
+              class="code-input"
+              @update:model-value="updateConfig(key, $event)"
             />
           </template>
 
           <!-- Checkbox -->
           <template v-else-if="schema.widget === 'checkbox'">
-            <label class="checkbox-wrapper">
-              <input
-                type="checkbox"
-                :checked="!!getNodeValue(key)"
-                class="checkbox-input"
-                @change="updateConfig(key, ($event.target as HTMLInputElement).checked)"
-              >
-              <span class="checkbox-label">{{ schema.description || '' }}</span>
-            </label>
+            <el-checkbox
+              :model-value="!!getNodeValue(key)"
+              @update:model-value="updateConfig(key, $event)"
+            >
+              {{ schema.description || '' }}
+            </el-checkbox>
           </template>
 
           <!-- Text / Default -->
           <template v-else>
-            <input
-              type="text"
-              :value="getNodeValue(key)"
-              class="text-input"
+            <el-input
+              :model-value="String(getNodeValue(key) ?? '')"
               :placeholder="schema.description || ''"
-              @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
-            >
+              class="text-input"
+              @update:model-value="updateConfig(key, $event)"
+            />
           </template>
 
           <!-- 变量绑定按钮 -->
@@ -610,6 +602,151 @@ function updateConfig(key: string, value: string | number | boolean | null) {
   border-color: #00f0ff;
 }
 
+/* el-input 深色主题适配 */
+.text-input :deep(.el-input__wrapper),
+.textarea-input :deep(.el-input__wrapper),
+.code-input :deep(.el-input__wrapper) {
+  background: #1a1a1c;
+  border: 1px solid #3a3a3c;
+  border-radius: 4px;
+  box-shadow: none;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: #e0e0e0;
+}
+
+.textarea-input :deep(.el-input__wrapper) {
+  background: #1a1a24;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-family: monospace;
+}
+
+.code-input :deep(.el-input__wrapper) {
+  background: #0a0a12;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-family: monospace;
+  min-height: 36px;
+}
+
+.text-input :deep(.el-input__wrapper:hover),
+.textarea-input :deep(.el-input__wrapper:hover),
+.code-input :deep(.el-input__wrapper:hover) {
+  border-color: #505055;
+}
+
+.text-input :deep(.el-input__wrapper:focus-within),
+.textarea-input :deep(.el-input__wrapper:focus-within),
+.code-input :deep(.el-input__wrapper:focus-within) {
+  border-color: #00f0ff;
+  box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.2);
+}
+
+.text-input :deep(.el-input__inner),
+.textarea-input :deep(.el-textarea__inner),
+.code-input :deep(.el-textarea__inner) {
+  color: #e0e0e0;
+  font-size: 12px;
+}
+
+.textarea-input :deep(.el-textarea__inner),
+.code-input :deep(.el-textarea__inner) {
+  font-size: 11px;
+  font-family: monospace;
+}
+
+.text-input :deep(.el-input__inner::placeholder),
+.textarea-input :deep(.el-textarea__inner),
+.code-input :deep(.el-textarea__inner) {
+  color: #777;
+}
+
+.textarea-input :deep(.el-textarea__inner) {
+  resize: vertical;
+  min-height: 40px;
+}
+
+/* el-select 深色主题适配 */
+.select-input :deep(.el-select__wrapper) {
+  background: #1a1a1c;
+  border: 1px solid #3a3a3c;
+  border-radius: 4px;
+  box-shadow: none;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: #e0e0e0;
+  min-height: auto;
+}
+
+.select-input :deep(.el-select__wrapper:hover) {
+  border-color: #505055;
+}
+
+.select-input :deep(.el-select__wrapper.is-focused) {
+  border-color: #00f0ff;
+  box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.2);
+}
+
+.select-input :deep(.el-select__placeholder) {
+  color: #777;
+}
+
+.select-input :deep(.el-select__selected-item) {
+  color: #e0e0e0;
+}
+
+.select-input :deep(.el-select__tags) {
+  flex-wrap: nowrap;
+}
+
+.select-input :deep(.el-select-dropdown__item) {
+  font-size: 12px;
+  color: #e0e0e0;
+  background: #1a1a1c;
+}
+
+.select-input :deep(.el-select-dropdown__item.hover),
+.select-input :deep(.el-select-dropdown__item:hover) {
+  background: #2a2a3a;
+}
+
+.select-input :deep(.el-select-dropdown__item.is-selected) {
+  color: #00f0ff;
+  background: rgba(0, 240, 255, 0.1);
+}
+
+.select-input :deep(.el-select-dropdown) {
+  background: #1a1a1c;
+  border: 1px solid #3a3a3c;
+}
+
+/* el-input-number 深色主题适配 */
+.number-input :deep(.el-input__wrapper) {
+  background: #1a1a1c;
+  border: 1px solid #3a3a3c;
+  border-radius: 4px;
+  box-shadow: none;
+  padding: 5px 8px;
+  font-size: 12px;
+  color: #e0e0e0;
+}
+
+.number-input :deep(.el-input__wrapper:hover) {
+  border-color: #505055;
+}
+
+.number-input :deep(.el-input__wrapper:focus-within) {
+  border-color: #00f0ff;
+  box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.2);
+}
+
+.number-input :deep(.el-input__inner) {
+  color: #e0e0e0;
+  font-size: 12px;
+  text-align: left;
+}
+
 /* Checkbox */
 .checkbox-wrapper {
   display: flex;
@@ -857,5 +994,26 @@ function updateConfig(key: string, value: string | number | boolean | null) {
     opacity: 0.9;
   }
 }
-  
+
+/* Element Plus 深色主题适配 */
+:deep(.el-slider__runway) {
+  background: var(--border-color);
+}
+:deep(.el-slider__bar) {
+  background: var(--accent-cyan);
+}
+:deep(.el-slider__button) {
+  border-color: var(--accent-cyan);
+}
+:deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+:deep(.el-checkbox__input.is-checked + .el-checkbox__label) {
+  color: var(--text-primary);
+}
+:deep(.el-checkbox__inner) {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+}
 </style>

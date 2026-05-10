@@ -508,6 +508,74 @@ const jobs = res.data as TrainingJobResponse[]
 - 组件样式使用 `scoped`
 - 避免行内样式（除了动态值）
 
+### 7.6.1 Element Plus 表单组件规范
+
+**禁止使用原生 HTML 表单标签，所有表单输入必须使用 Element Plus 组件：**
+
+| 原生标签 | Element Plus 组件 | 说明 |
+|---------|------------------|------|
+| `<input type="text">` | `<el-input>` | 文本输入 |
+| `<input type="number">` | `<el-input-number>` | 数字输入 |
+| `<input type="range">` | `<el-slider>` | 范围滑块 |
+| `<input type="checkbox">` | `<el-checkbox>` | 复选框 |
+| `<input type="file">` | `<el-upload>` | 文件上传 |
+| `<select>` + `<option>` | `<el-select>` + `<el-option>` | 下拉选择 |
+| `<textarea>` | `<el-input type="textarea">` | 多行文本 |
+
+**深色主题适配：**
+
+Element Plus 默认样式在深色主题下可能与项目主题不一致。在文件 scoped `<style>` 末尾添加 `:deep()` 覆盖：
+
+```scss
+// el-input / el-select 背景边框适配
+:deep(.el-input__wrapper),
+:deep(.el-select__wrapper) {
+  background: var(--bg-primary) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border-color);
+}
+:deep(.el-input__wrapper:hover),
+:deep(.el-select__wrapper:hover) {
+  border-color: var(--accent-cyan);
+}
+:deep(.el-input__wrapper.is-focus),
+:deep(.el-select__wrapper.is-focus) {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
+}
+:deep(.el-input__inner),
+:deep(.el-select__placeholder) {
+  color: var(--text-primary);
+}
+
+// el-select 下拉菜单
+:deep(.el-select-dropdown) {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+}
+:deep(.el-select-dropdown__item) {
+  color: var(--text-primary);
+}
+:deep(.el-select-dropdown__item.hover),
+:deep(.el-select-dropdown__item:hover) {
+  background: var(--bg-hover);
+}
+:deep(.el-select-dropdown__item.is-selected) {
+  color: var(--accent-cyan);
+}
+
+// el-checkbox / el-slider 主题色
+:deep(.el-checkbox__input.is-checked .el-checkbox__inner),
+:deep(.el-slider__bar) {
+  background: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+}
+```
+
+**例外：`type="file"` 隐藏输入**
+
+`display: none` 的 `<input type="file">` 用于程序化触发文件对话框（如按钮触发），保持原生实现，无需替换为 `el-upload`。
+
 ### 7.7 ESLint 规则
 
 ```javascript
