@@ -313,16 +313,16 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。
 **常用快捷方式（shortcuts）：**
 ```typescript
 // uno.config.ts 中定义
-'vg-btn': 'px-4 py-2 rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] cursor-pointer transition-all duration-200 hover:border-[var(--accent-cyan)] hover:bg-[var(--bg-hover)]'
-'vg-btn-primary': 'px-4 py-2 rounded-md bg-[var(--accent-cyan)] border border-[var(--accent-cyan)] text-black cursor-pointer'
-'vg-card': 'bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl'
+'cf-btn': 'px-4 py-2.5 rounded-[50px] bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] cursor-pointer transition-all duration-200 hover:border-[var(--accent-cyan)] hover:bg-[var(--bg-hover)]'
+'cf-btn-primary': 'px-4 py-2.5 rounded-[50px] bg-[var(--accent-cyan)] text-black border-none cursor-pointer transition-all duration-200 font-semibold'
+'cf-card': 'bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl'
 ```
 
 **使用示例：**
 ```html
-<button class="vg-btn">默认按钮</button>
-<button class="vg-btn-primary">主要按钮</button>
-<div class="vg-card">卡片内容</div>
+<button class="cf-btn">默认按钮</button>
+<button class="cf-btn-primary">主要按钮</button>
+<div class="cf-card">卡片内容</div>
 ```
 
 ### 7.6 代码规范
