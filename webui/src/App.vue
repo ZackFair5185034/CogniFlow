@@ -342,6 +342,7 @@ onUnmounted(() => {
   text-decoration: none;
   position: relative;
   transition: all 0.3s ease;
+  overflow: hidden;
 
   &::before {
     content: '';
