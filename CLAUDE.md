@@ -603,6 +603,19 @@ pnpm lint           # ESLint 检查
 pnpm lint:fix       # ESLint 自动修复
 ```
 
-## 8. 许可证
+## 8. 文档规范
+
+项目所有文档（`.md` 除外）一律使用 **HTML** 编写，禁止使用 Markdown。
+
+**原因：** Markdown 在复杂布局、样式控制和嵌入交互内容时能力有限，HTML 可提供更精细的控制和一致性。
+
+**规范：**
+- 文档文件使用 `.html` 扩展名
+- HTML 文档放在 `docs/` 目录下
+- 使用项目统一的 CSS 类名和设计令牌
+- 文件头部包含中文注释说明文档用途
+- 禁止在 HTML 文档中使用内联 `style` 属性，统一引用 `webui/src/style/` 中的样式文件
+
+## 9. 许可证
 
 MIT License
