@@ -398,7 +398,7 @@
               class="dir-item"
             >
               <div class="dir-info">
-                <FolderIcon class="dir-icon" />
+                <SvgIcon name="folder" class="dir-icon" />
                 <span class="dir-name">{{ dir }}</span>
               </div>
               <div class="dir-actions">
