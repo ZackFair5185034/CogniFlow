@@ -35,8 +35,8 @@ class OnnxModelHandler(BaseModelHandler):
 
         Args:
             model_path: .onnx 文件路径
-            device: 设备 (cpu/cuda/mps)
-            **kwargs: 可包含 class_names (Dict[int, str]) 类别名称映射
+            device: 设备 (cpu/cuda/directml)
+            **kwargs: 可包含 class_names (Dict[int, str]), precision (fp32/fp16)
         """
         super().load(model_path, device, **kwargs)
 
@@ -44,18 +44,39 @@ class OnnxModelHandler(BaseModelHandler):
         if "class_names" in kwargs:
             self._class_names = kwargs["class_names"]
 
+        precision = kwargs.get("precision", "fp32")
+
         import onnxruntime as ort
 
-        # 配置 providers
+        # 配置 Session 选项以优化推理性能
+        sess_options = ort.SessionOptions()
+        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        sess_options.enable_mem_pattern = True
+
+        # 配置 providers（按优先级排列，可附加 provider 特定选项）
         providers = []
         if device == "cuda":
             providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        elif device == "directml":
+            # DirectML: Windows 通用 GPU 加速，支持 AMD Radeon / NVIDIA / Intel
+            # FP16 模式下启用 fp16_enabled 选项，让 GPU 以半精度执行部分算子
+            dml_opts = {}
+            if precision == "fp16":
+                dml_opts["fp16_enabled"] = "1"
+            providers = [
+                ("DmlExecutionProvider", dml_opts) if dml_opts else "DmlExecutionProvider",
+                "CPUExecutionProvider",
+            ]
         elif device == "mps":
             providers = ["CoreMLExecutionProvider", "CPUExecutionProvider"]
+        elif device in ("openvino",):
+            providers = ["CPUExecutionProvider"]
         else:
             providers = ["CPUExecutionProvider"]
 
-        self._session = ort.InferenceSession(model_path, providers=providers)
+        self._session = ort.InferenceSession(
+            model_path, sess_options=sess_options, providers=providers
+        )
 
         # 获取输入输出信息
         self._input_name = self._session.get_inputs()[0].name
@@ -70,6 +91,10 @@ class OnnxModelHandler(BaseModelHandler):
         if self._session is None:
             return
 
+        # 记录实际使用的执行提供器
+        actual_providers = self._session.get_providers()
+        requested = getattr(self, '_device', 'cpu')
+
         try:
             model_meta = self._session.get_modelmeta()
             self._metadata = {
@@ -77,12 +102,27 @@ class OnnxModelHandler(BaseModelHandler):
                 "graph_name": getattr(model_meta, "graph_name", ""),
                 "input_shape": self._input_shape,
                 "format": ModelFormat.ONNX.value,
+                "execution_provider": actual_providers[0] if actual_providers else "unknown",
             }
         except Exception:
             self._metadata = {
                 "input_shape": self._input_shape,
                 "format": ModelFormat.ONNX.value,
+                "execution_provider": actual_providers[0] if actual_providers else "unknown",
             }
+
+        # 如果请求了 GPU 但实际用了 CPU，给出警告
+        import logging
+        _logger = logging.getLogger(__name__)
+        gpu_devices = ("cuda", "directml")
+        if requested in gpu_devices and actual_providers and actual_providers[0] == "CPUExecutionProvider":
+            hint = {
+                "cuda": "请确认已安装 onnxruntime-gpu 且 CUDA 可用。",
+                "directml": "请确认已安装 onnxruntime-directml。",
+            }.get(requested, "")
+            _logger.warning(
+                f"ONNX: 请求 {requested} 加速但实际使用 CPU。{hint}"
+            )
 
     def infer(self, image: np.ndarray, conf: float = 0.25, **kwargs) -> InferenceResult:
         """ONNX 单图推理。

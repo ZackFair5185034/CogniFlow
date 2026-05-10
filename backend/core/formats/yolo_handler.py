@@ -26,13 +26,19 @@ class YoloModelHandler(BaseModelHandler):
 
         Args:
             model_path: .pt 文件路径
-            device: 设备 (cpu/cuda)
+            device: 设备 (cpu/cuda/mps)
         """
         super().load(model_path, device, **kwargs)
 
         from ultralytics import YOLO
 
         self._model = YOLO(model_path)
+        # 将模型移至用户指定的设备
+        if device and device != "cpu":
+            try:
+                self._model.to(device)
+            except Exception:
+                pass
         self._device = device
 
         # 提取模型元数据

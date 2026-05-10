@@ -29,15 +29,19 @@ class HardwareInfo:
 
     @property
     def display_name(self) -> str:
-        """获取设备的显示名称。"""
+        """获取设备的显示名称（用于前端下拉框）。"""
         if self.device_type == "cpu":
             return f"CPU ({self.device_name})"
         elif self.device_type == "cuda":
-            return f"GPU ({self.device_name})"
+            return f"GPU: {self.device_name} (CUDA)"
         elif self.device_type == "openvino":
-            return f"OpenVINO ({self.device_name})"
+            return f"{self.device_name}"
+        elif self.device_type == "directml":
+            return f"GPU: {self.device_name} (DirectML)"
+        elif self.device_type == "directml":
+            return f"GPU: {self.device_name} (DirectML)"
         elif self.device_type == "tensorrt":
-            return f"TensorRT ({self.device_name})"
+            return f"GPU: {self.device_name} (TensorRT)"
         return self.device_name
 
     def to_dict(self) -> Dict[str, Any]:
@@ -45,6 +49,7 @@ class HardwareInfo:
         return {
             "device_type": self.device_type,
             "device_name": self.device_name,
+            "display_name": self.display_name,
             "memory_total_mb": self.memory_total_mb,
             "memory_free_mb": self.memory_free_mb,
             "supports_fp16": self.supports_fp16,

@@ -116,9 +116,17 @@ class OpenVinoModelHandler(BaseModelHandler):
         if self._compiled_model is None:
             return
 
+        # 获取实际执行设备
+        try:
+            exec_network = self._compiled_model
+            actual_device = getattr(exec_network, '_device', 'unknown')
+        except Exception:
+            actual_device = 'unknown'
+
         self._metadata = {
             "input_shape": self._input_shape,
             "format": ModelFormat.OPENVINO.value,
+            "execution_device": str(actual_device),
         }
 
     def infer(self, image: np.ndarray, conf: float = 0.25, **kwargs) -> InferenceResult:

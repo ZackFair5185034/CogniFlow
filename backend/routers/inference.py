@@ -24,36 +24,17 @@ INFERENCE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _resolve_device(device_preference: str, model) -> str:
-    """根据用户偏好和硬件情况解析实际设备。
+    """根据用户偏好和硬件情况解析实际设备（使用启动时缓存）。
 
     Args:
-        device_preference: 用户指定偏好 (auto/cpu/cuda/openvino)
+        device_preference: 用户指定偏好 (auto/cpu/cuda/openvino/directml)
         model: 模型对象
 
     Returns:
         实际使用的设备字符串
     """
-    # 如果用户明确指定，优先使用
-    if device_preference in ("cpu", "cuda", "openvino"):
-        return device_preference
-
-    # 自动检测：CUDA > OpenVINO GPU > CPU
-    try:
-        import torch
-        if torch.cuda.is_available():
-            return "cuda"
-    except ImportError:
-        pass
-
-    try:
-        import openvino as ov
-        core = ov.Core()
-        if "GPU" in core.available_devices:
-            return "openvino"
-    except ImportError:
-        pass
-
-    return "cpu"
+    from backend.core.backends.auto_detector import resolve_device_cached
+    return resolve_device_cached(device_preference)
 
 
 def _select_model_file(db: Session, model: Model, format_preference: str = "auto") -> tuple:
@@ -162,7 +143,17 @@ async def detect_image(
         # 根据模型格式和设备偏好确定实际设备
         actual_device = _resolve_device(device, model)
 
-        detector = load_yolo_model(model_file.file_path, device=actual_device)
+        # 从 model.metrics 提取 class_names 映射（ONNX/OpenVINO fallback）
+        _class_names = None
+        if model.metrics:
+            try:
+                _cats = json.loads(model.metrics).get('categories', [])
+                if _cats:
+                    _class_names = {i: c['name'] for i, c in enumerate(_cats)}
+            except json.JSONDecodeError:
+                pass
+
+        detector = load_yolo_model(model_file.file_path, device=actual_device, class_names=_class_names, precision=precision)
 
         # 读取图片为 numpy 数组
         img = cv2.imread(str(file_path))
@@ -434,11 +425,12 @@ def _encode_worker(job_id: str):
             break
         if job["status"] in ("failed", "stopped"):
             break
-        if job.get("inference_done") and raw_buffer.qsize == 0:
-            break
 
         raw = raw_buffer.get(timeout=0.5)
         if raw is None:
+            # 取不到帧时，确认推理是否已结束且缓冲已空
+            if job.get("inference_done") and raw_buffer.qsize == 0:
+                break
             continue
 
         try:
@@ -484,6 +476,7 @@ def process_video_stream_background(
     categories: list,
     input_path: str,
     device: str = "cpu",
+    precision: str = "fp32",
 ):
     """后台线程：流式处理视频，推理与编码分离为流水线。
 
@@ -500,8 +493,11 @@ def process_video_stream_background(
 
     stream_job_manager.update_job(job_id, status="processing")
 
+    # 从 categories 构建 class_names 映射（作为 ONNX/OpenVINO 的 fallback）
+    class_names = {i: cat['name'] for i, cat in enumerate(categories)} if categories else None
+
     # 加载 YOLO 模型
-    detector = load_yolo_model(model_file_path, device=device)
+    detector = load_yolo_model(model_file_path, device=device, class_names=class_names, precision=precision)
 
     # 获取视频信息
     cap = cv2.VideoCapture(input_path)
@@ -530,18 +526,20 @@ def process_video_stream_background(
     )
     encode_thread.start()
 
-    # 等待推理线程完成（最多等 5 秒，超时则强制继续）
-    inference_thread.join(timeout=5)
-    # 等待编码线程消费完剩余帧（最多等 5 秒）
-    encode_thread.join(timeout=5)
+    # 等待推理线程完成（不设超时，让视频完整跑完）
+    inference_thread.join()
+    # 等待编码线程消费完剩余帧
+    encode_thread.join()
 
-    # 更新任务状态为完成
+    # 推理和编码都完成后才更新 DB 状态
+    job = stream_job_manager.get_job(job_id)
+    final_status = job["status"] if job else "completed"
     try:
         db_session = SessionLocal()
         try:
             db_session.query(InferenceJob).filter(
                 InferenceJob.job_id == job_id
-            ).update({"status": "completed"})
+            ).update({"status": final_status})
             db_session.commit()
         finally:
             db_session.close()
@@ -641,7 +639,7 @@ async def detect_video_stream(
     # 后台线程执行推理
     thread = threading.Thread(
         target=process_video_stream_background,
-        args=(job_id, model_file.file_path, conf_threshold, categories, str(input_path), actual_device),
+        args=(job_id, model_file.file_path, conf_threshold, categories, str(input_path), actual_device, precision),
         daemon=True,
     )
     thread.start()
@@ -721,9 +719,10 @@ async def clear_inference_jobs(db: Session = Depends(get_db)):
 async def rerun_inference_job(
     job_id: str,
     model_id: int = None,
-    conf_threshold: float = Form(default=0.25),
-    device: str = Form(default="auto"),
-    format: str = Form(default="auto"),
+    conf_threshold: float = Query(default=0.25),
+    device: str = Query(default="auto"),
+    format: str = Query(default="auto"),
+    precision: str = Query(default="fp32"),
     db: Session = Depends(get_db)
 ):
     """使用当前配置（而非历史配置）重新发起检测（图片或视频）。
@@ -803,7 +802,7 @@ async def rerun_inference_job(
             file_type="video",
             conf_threshold=conf_threshold,
             device=actual_device,
-            precision="fp32",
+            precision=precision,
             used_format=used_format,
             status="processing",
             total_frames=total_frames,
@@ -814,7 +813,7 @@ async def rerun_inference_job(
 
         thread = threading.Thread(
             target=process_video_stream_background,
-            args=(new_job_id, model_file.file_path, conf_threshold, categories, job.file_path, actual_device),
+            args=(new_job_id, model_file.file_path, conf_threshold, categories, job.file_path, actual_device, precision),
             daemon=True,
         )
         thread.start()
@@ -836,7 +835,17 @@ async def rerun_inference_job(
         # 图片：重新执行 detect_image 逻辑（只返回原图，画框由前端负责）
         from backend.routers.yolo_training import load_yolo_model, inference_yolo
 
-        detector = load_yolo_model(model_file.file_path, device=actual_device)
+        # 从 model.metrics 提取 class_names（ONNX/OpenVINO fallback）
+        _img_class_names = None
+        if model.metrics:
+            try:
+                _img_cats = json.loads(model.metrics).get('categories', [])
+                if _img_cats:
+                    _img_class_names = {i: c['name'] for i, c in enumerate(_img_cats)}
+            except json.JSONDecodeError:
+                pass
+
+        detector = load_yolo_model(model_file.file_path, device=actual_device, class_names=_img_class_names, precision=precision)
 
         # 根据 detector 类型选择推理方式
         if hasattr(detector, '_model') and detector._model is None:
@@ -876,7 +885,7 @@ async def rerun_inference_job(
             file_type="image",
             conf_threshold=conf_threshold,
             device=actual_device,
-            precision="fp32",
+            precision=precision,
             used_format=used_format,
             status="completed",
             total_detections=result['num_detections'],

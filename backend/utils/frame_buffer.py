@@ -81,16 +81,17 @@ class FrameBuffer:
             帧数据，超时返回 None
         """
         with self._not_empty:
-            if not self._queue:
-                # 等待新帧到达（最多等待 timeout）
+            # while 循环：处理 clear() notify_all 唤醒后队列仍为空的情况
+            while not self._queue:
                 if not self._not_empty.wait(timeout):
                     return None
             return self._queue.popleft()
 
     def clear(self):
-        """清空队列。"""
+        """清空队列并唤醒所有等待中的 get() 调用。"""
         with self._lock:
             self._queue.clear()
+            self._not_empty.notify_all()
 
     @property
     def qsize(self) -> int:
@@ -196,8 +197,17 @@ class StreamJobManager:
             return job.get("raw_buffer") if job else None
 
     def stop_job(self, job_id: str):
-        """停止任务。"""
-        self.update_job(job_id, status=self.STATUS_STOPPED)
+        """停止任务并清空缓冲区，唤醒所有阻塞等待的线程。"""
+        with self._lock:
+            if job_id in self._jobs:
+                self._jobs[job_id]["status"] = self.STATUS_STOPPED
+                # 清空缓冲区，触发 notify_all 唤醒等待中的 get() 调用
+                fb = self._jobs[job_id].get("frame_buffer")
+                if fb:
+                    fb.clear()
+                rb = self._jobs[job_id].get("raw_buffer")
+                if rb:
+                    rb.clear()
 
     def is_job_stopped(self, job_id: str) -> bool:
         """检查任务是否已停止。"""

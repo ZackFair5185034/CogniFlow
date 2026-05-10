@@ -93,7 +93,7 @@
                   :value="d.value"
                   :disabled="d.disabled"
                 >
-                  {{ d.label }} {{ d.value === 'cuda' ? '(推荐)' : '' }}
+                  {{ d.label }} {{ (d.value === 'cuda' || d.value === 'directml') ? '(推荐)' : '' }}
                 </option>
               </select>
             </div>
@@ -158,6 +158,12 @@
               class="device-hint"
             >
               当前使用: {{ usedFormat.toUpperCase() }}
+            </span>
+            <span
+              v-if="formatCompatibilityHint"
+              class="compatibility-warning"
+            >
+              {{ formatCompatibilityHint }}
             </span>
           </div>
 
@@ -235,47 +241,7 @@
               </div>
             </div>
 
-            <!-- 视频状态 -->
-            <div
-              v-if="streamConnected"
-              class="stream-stats"
-            >
-              <div class="stat-item">
-                <span class="stat-label">帧率</span>
-                <span class="stat-value">{{ streamStats.fps }} fps</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">已处理</span>
-                <span class="stat-value">{{ streamStats.current_frame }} / {{ streamStats.total_frames }}</span>
-              </div>
-              <div
-                v-if="streamStats.buffered_frames"
-                class="stat-item"
-              >
-                <span class="stat-label">缓冲</span>
-                <span class="stat-value buffer-stat">{{ streamStats.buffered_frames }} 帧</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">检测数</span>
-                <span class="stat-value">{{ streamStats.total_detections }}</span>
-              </div>
-            </div>
-          </template>
-
-          <!-- 检测按钮 -->
-          <el-button
-            v-if="mode === 'image'"
-            class="detect-btn"
-            type="primary"
-            :disabled="!canDetect || detecting"
-            :loading="detecting"
-            @click="startDetection"
-          >
-            {{ detecting ? '检测中...' : '开始检测' }}
-          </el-button>
-
-          <!-- 视频检测按钮 -->
-          <template v-if="mode === 'stream'">
+            <!-- 视频检测按钮 -->
             <el-button
               v-if="!streamConnected"
               class="detect-btn"
@@ -294,7 +260,45 @@
             >
               停止检测
             </el-button>
+
+            <!-- 视频状态 -->
+            <div
+              v-if="streamConnected"
+              class="stream-stats"
+            >
+              <div class="stat-item">
+                <span class="stat-label">帧率</span>
+                <span class="stat-value">{{ videoFps }} fps</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">已处理</span>
+                <span class="stat-value">{{ streamStats.current_frame }} / {{ streamStats.total_frames }}</span>
+              </div>
+              <div
+                v-if="totalReceivedFrames"
+                class="stat-item"
+              >
+                <span class="stat-label">已接收</span>
+                <span class="stat-value buffer-stat">{{ totalReceivedFrames }} 帧</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">检测数</span>
+                <span class="stat-value">{{ streamStats.total_detections }}</span>
+              </div>
+            </div>
           </template>
+
+          <!-- 检测按钮（图片模式） -->
+          <el-button
+            v-if="mode === 'image'"
+            class="detect-btn"
+            type="primary"
+            :disabled="!canDetect || detecting"
+            :loading="detecting"
+            @click="startDetection"
+          >
+            {{ detecting ? '检测中...' : '开始检测' }}
+          </el-button>
 
           <!-- 最近记录 -->
           <div class="config-section recent-section">
@@ -474,9 +478,9 @@
                 </button>
                 <span class="progress-text">帧 {{ streamStats.current_frame }} / {{ streamStats.total_frames }}</span>
                 <span
-                  v-if="streamStats.buffer_frame"
+                  v-if="totalReceivedFrames"
                   class="buffer-info"
-                >缓冲 {{ streamStats.buffer_frame }}</span>
+                >缓冲 {{ totalReceivedFrames }}</span>
                 <div class="fps-control">
                   <button
                     class="ctrl-btn-sm"
@@ -648,6 +652,36 @@ const device = ref('auto')
 const precision = ref('fp32')
 const modelFormat = ref('auto')  // 模型格式: auto/yolo_pt/onnx/openvino/tensorrt
 const usedFormat = ref<string | null>(null)  // 实际使用的格式
+
+// 设备-格式兼容性映射：哪些格式能利用该设备的硬件加速
+const DEVICE_FORMAT_MAP: Record<string, string[]> = {
+  directml: ['onnx'],
+  openvino: ['openvino'],
+  cuda: ['onnx', 'yolo_pt', 'tensorrt'],
+  tensorrt: ['tensorrt'],
+}
+
+// 当前设备+格式组合的兼容性提示
+const formatCompatibilityHint = computed(() => {
+  const currentDevice = device.value
+  const currentFormat = modelFormat.value
+
+  // 自动选择或 CPU 无需提示
+  if (currentFormat === 'auto' || currentDevice === 'auto' || currentDevice === 'cpu') {
+    return null
+  }
+
+  const compatibleFormats = DEVICE_FORMAT_MAP[currentDevice]
+  if (!compatibleFormats) return null
+
+  if (!compatibleFormats.includes(currentFormat)) {
+    const deviceLabel = availableDevices.value.find(d => d.value === currentDevice)?.label || currentDevice
+    const recommended = compatibleFormats.join(' / ').toUpperCase()
+    return `${deviceLabel} 仅对 ${recommended} 格式提供硬件加速，当前组合将回退到 CPU 推理`
+  }
+
+  return null
+})
 const deviceInfo = ref<{
   available: boolean
   device: string
@@ -665,7 +699,7 @@ const availableDevices = computed(() => {
   const devices = deviceInfo.value.devices || {}
   return Object.entries(devices).map(([type, info]: [string, unknown]) => ({
     value: type,
-    label: info.device_name || type.toUpperCase(),
+    label: (info as any).display_name || info.device_name || type.toUpperCase(),
     disabled: type === 'cpu' ? false : !(info.device_type === type)
   }))
 })
@@ -702,10 +736,15 @@ const videoFps = ref(24)
 // 前端帧缓存：服务端来帧即存，渲染循环按 videoFps 消费
 const frameCache = ref<StreamFrame[]>([])
 let renderTimer: ReturnType<typeof setInterval> | null = null
+// 后端推理是否已结束（用于缓存清空后安全停止渲染循环）
+const inferenceDone = ref(false)
+// 已接收的总帧数（服务端推送计数，只增不减）
+const totalReceivedFrames = ref(0)
 
 /** 启动渲染循环，按当前 videoFps 从缓存取帧渲染 */
 const startRenderLoop = () => {
   stopRenderLoop()
+  inferenceDone.value = false
   renderTimer = setInterval(() => {
     if (!streamPaused.value && frameCache.value.length > 0) {
       const frame = frameCache.value.shift()!
@@ -715,7 +754,15 @@ const startRenderLoop = () => {
         ...streamStats.value,
         current_frame: frame.frame_id,
         progress: Math.min(100, Math.ceil((frame.frame_id / (streamStats.value.total_frames || 1)) * 100)),
+        buffered_frames: frameCache.value.length,
       }
+    }
+    // 缓存为空且推理已完成 → 安全停止
+    if (frameCache.value.length === 0 && inferenceDone.value) {
+      stopRenderLoop()
+      streamComplete.value = true
+      streamConnected.value = false
+      streamPaused.value = false
     }
   }, 1000 / videoFps.value)
 }
@@ -744,14 +791,8 @@ const consoleExpanded = ref(false)
 const consoleEntries = ref<ConsoleEntry[]>([])
 const consoleBodyRef = ref<HTMLDivElement | null>(null)
 let nextEntryId = 0
-let lastVideoLogTime = 0
 
 const addConsoleEntry = (source: ConsoleEntry['source'], summary: string, data: unknown, frameId?: number) => {
-  const now = Date.now()
-  // 视频检测节流：每秒最多 5 条
-  if (source === '视频帧' && now - lastVideoLogTime < 200) return
-  lastVideoLogTime = now
-
   const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
   consoleEntries.value.unshift({
     id: nextEntryId++,
@@ -830,13 +871,11 @@ const streamStats = ref<StreamStats>({
   progress: 0,
   total_detections: 0,
   status: 'pending',
-  buffer_frame: 0,
 })
 
 const bufferProgress = computed(() => {
   const total = streamStats.value.total_frames || 1
-  const buf = streamStats.value.buffer_frame || 0
-  return Math.min(100, Math.ceil((buf / total) * 100))
+  return Math.min(100, Math.ceil((totalReceivedFrames.value / total) * 100))
 })
 
 const canStreamDetect = computed(() => {
@@ -971,9 +1010,10 @@ const handleRerun = async (rec: RecentRecord) => {
   const currentConf = confThreshold.value
   const currentDevice = device.value
   const currentFormat = modelFormat.value
+  const currentPrecision = precision.value
 
   try {
-    const res = await inferenceApi.rerunInferenceJob(rec.job_id, currentModelId, currentConf, currentDevice, currentFormat)
+    const res = await inferenceApi.rerunInferenceJob(rec.job_id, currentModelId, currentConf, currentDevice, currentFormat, currentPrecision)
     if (res.data.success) {
       // 图片重检：内联结果
       if (res.data.file_type === 'image') {
@@ -982,12 +1022,12 @@ const handleRerun = async (rec: RecentRecord) => {
         detections.value = res.data.detections || []
         loadImageSize(res.data.result_image_base64)
 
-        // 构建类别颜色映射
+        // 构建类别颜色映射（按 cat.id 对应 class_id）
         if (res.data.categories) {
           const colors: Record<number, string> = {}
-          res.data.categories.forEach((cat: unknown, idx: number) => {
-            colors[idx] = cat.color || '#FF0000'
-          })
+          for (const cat of (res.data.categories || [])) {
+            colors[cat.id] = cat.color || '#FF0000'
+          }
           categoryColors.value = colors
         }
 
@@ -1020,41 +1060,27 @@ const handleRerun = async (rec: RecentRecord) => {
         progress: 0,
         total_detections: 0,
         status: 'processing',
-        buffer_frame: 0,
       }
       frameCache.value = []
+      totalReceivedFrames.value = 0
 
       const client = new StreamClient()
       client.onFrame((frame) => {
-        // 始终缓存，由渲染循环按帧率消费
         frameCache.value.push(frame)
+        totalReceivedFrames.value++
 
         streamStats.value = {
           ...streamStats.value,
+          // 从首帧同步 total_frames（兜底：服务端数据比前端 videoInfo 更可靠）
+          total_frames: streamStats.value.total_frames || frame.progress?.total_frames || 0,
           total_detections: frame.stats.total_detections,
-          buffer_frame: frameCache.value.length,
           buffered_frames: frameCache.value.length,
         }
-        addConsoleEntry('视频帧',
-          `帧 #${frame.frame_id} | ${frame.detections.length} 个目标 | ${frame.stats.inference_ms}ms`,
-          {
-            frame_id: frame.frame_id,
-            timestamp: frame.timestamp,
-            detections: frame.detections,
-            stats: frame.stats,
-          },
-          frame.frame_id,
-        )
       })
       client.onComplete((totalFrames, totalDetections) => {
-        stopRenderLoop()
-        streamComplete.value = true
-        streamConnected.value = false
-        streamPaused.value = false
+        inferenceDone.value = true
         streamStats.value = {
           ...streamStats.value,
-          progress: 100,
-          current_frame: totalFrames,
           total_detections: totalDetections,
           status: 'completed',
         }
@@ -1066,8 +1092,9 @@ const handleRerun = async (rec: RecentRecord) => {
         })
       })
       client.onError((error) => {
-        stopRenderLoop()
-        ElMessage.error(`视频检测错误: ${error}`)
+        // 不立即停止渲染，先排空已缓存的帧
+        ElMessage.warning(`连接异常: ${error}，正在播放缓存帧...`)
+        inferenceDone.value = true
         streamConnected.value = false
       })
 
@@ -1242,6 +1269,18 @@ const renderFrame = async (frame: StreamFrame) => {
       ctx.fillStyle = 'white'
       ctx.fillText(label, x1 + 4, y1 - 7)
     }
+
+    // 日志与实际渲染帧同步（后端推送速率无关）
+    addConsoleEntry('视频帧',
+      `帧 #${frame.frame_id} | ${frame.detections.length} 个目标 | ${frame.stats.inference_ms}ms`,
+      {
+        frame_id: frame.frame_id,
+        timestamp: frame.timestamp,
+        detections: frame.detections,
+        stats: frame.stats,
+      },
+      frame.frame_id,
+    )
   } catch (e) {
     console.error('[Launch] 渲染帧失败', e)
   }
@@ -1286,43 +1325,28 @@ const startVideoDetection = async () => {
         progress: 0,
         total_detections: 0,
         status: 'processing',
-        buffer_frame: 0,
       }
       frameCache.value = []
+      totalReceivedFrames.value = 0
 
       // 创建 StreamClient 并连接
       const client = new StreamClient()
       client.onFrame((frame) => {
-        // 始终缓存，由渲染循环按帧率消费
         frameCache.value.push(frame)
+        totalReceivedFrames.value++
 
         streamStats.value = {
           ...streamStats.value,
+          // 从首帧同步 total_frames（兜底：服务端数据比前端 videoInfo 更可靠）
+          total_frames: streamStats.value.total_frames || frame.progress?.total_frames || 0,
           total_detections: frame.stats.total_detections,
-          buffer_frame: frameCache.value.length,
           buffered_frames: frameCache.value.length,
         }
-        // 写入监控台（节流到每秒 5 条）
-        addConsoleEntry('视频帧',
-          `帧 #${frame.frame_id} | ${frame.detections.length} 个目标 | ${frame.stats.inference_ms}ms`,
-          {
-            frame_id: frame.frame_id,
-            timestamp: frame.timestamp,
-            detections: frame.detections,
-            stats: frame.stats,
-          },
-          frame.frame_id,
-        )
       })
       client.onComplete((totalFrames, totalDetections) => {
-        stopRenderLoop()
-        streamComplete.value = true
-        streamConnected.value = false
-        streamPaused.value = false
+        inferenceDone.value = true
         streamStats.value = {
           ...streamStats.value,
-          progress: 100,
-          current_frame: totalFrames,
           total_detections: totalDetections,
           status: 'completed',
         }
@@ -1333,8 +1357,8 @@ const startVideoDetection = async () => {
         })
       })
       client.onError((error) => {
-        stopRenderLoop()
-        ElMessage.error(`视频检测错误: ${error}`)
+        ElMessage.warning(`连接异常: ${error}，正在播放缓存帧...`)
+        inferenceDone.value = true
         streamConnected.value = false
       })
 
@@ -1368,6 +1392,7 @@ const stopVideoDetection = () => {
   streamComplete.value = false
   streamPaused.value = false
   categoryColors.value = {}
+  totalReceivedFrames.value = 0
   streamStats.value = {
     fps: 24,
     total_frames: 0,
@@ -1375,7 +1400,6 @@ const stopVideoDetection = () => {
     progress: 0,
     total_detections: 0,
     status: 'pending',
-    buffer_frame: 0,
   }
   frameCache.value = []
 }
@@ -1402,6 +1426,8 @@ const loadDeviceInfo = async () => {
     // 自动设置推荐设备
     if (res.data.devices?.cuda) {
       device.value = 'cuda'
+    } else if (res.data.devices?.directml) {
+      device.value = 'directml'
     }
   } catch (error) {
     console.error('获取设备信息失败', error)
@@ -2082,6 +2108,18 @@ onUnmounted(() => {
   &:hover:not(.disabled) {
     filter: brightness(1.2);
   }
+}
+
+.device-hint {
+  @apply text-xs block mt-1;
+  color: var(--text-muted);
+}
+
+.compatibility-warning {
+  @apply text-xs block mt-1 px-2 py-1 rounded;
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.2);
 }
 
 </style>

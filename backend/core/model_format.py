@@ -20,21 +20,34 @@ class ModelFormat(Enum):
         """根据文件路径推断格式。
 
         Args:
-            path: 模型文件路径
+            path: 模型文件路径或 OpenVINO 导出目录
 
         Returns:
             ModelFormat 枚举值，默认为 YOLO_PT
         """
+        import os
+
         suffix = Path(path).suffix.lower()
         format_map: Dict[str, "ModelFormat"] = {
             ".pt": cls.YOLO_PT,
             ".pth": cls.PYTORCH,
             ".onnx": cls.ONNX,
-            ".xml": cls.OPENVINO,  # OpenVINO IR 中 .xml 是模型描述文件
+            ".xml": cls.OPENVINO,
             ".engine": cls.TENSORRT,
             ".plan": cls.TENSORRT,
         }
-        return format_map.get(suffix, cls.YOLO_PT)
+
+        detected = format_map.get(suffix)
+        if detected is not None:
+            return detected
+
+        # suffix 为空时可能是目录路径（ultralytics 导出 OpenVINO 返回目录）
+        if os.path.isdir(path):
+            for f in os.listdir(path):
+                if f.endswith(".xml"):
+                    return cls.OPENVINO
+
+        return cls.YOLO_PT
 
     @property
     def file_extensions(self) -> List[str]:

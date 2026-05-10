@@ -33,6 +33,11 @@ class StreamConnectionManager:
 
     async def connect(self, job_id: str, websocket: WebSocket):
         await websocket.accept()
+        # 清理同 job_id 的旧 pusher 任务（rerun 场景）
+        if job_id in self._pusher_tasks:
+            old_task = self._pusher_tasks[job_id]
+            old_task.cancel()
+            del self._pusher_tasks[job_id]
         self._connections[job_id] = websocket
         if job_id not in self._locks:
             self._locks[job_id] = asyncio.Lock()
@@ -63,6 +68,9 @@ class StreamConnectionManager:
     def start_pusher(self, job_id: str, frame_buffer: FrameBuffer):
         if self._loop is None:
             return
+        # 取消旧的 pusher 任务（安全措施，防止重复启动）
+        if job_id in self._pusher_tasks:
+            self._pusher_tasks[job_id].cancel()
         task = self._loop.create_task(self._push_frames(job_id, frame_buffer))
         self._pusher_tasks[job_id] = task
 
@@ -105,17 +113,31 @@ class StreamConnectionManager:
         })
 
     async def _push_frames(self, job_id: str, frame_buffer: FrameBuffer):
-        """从帧缓冲取帧并立即推送，不做节流——前端自行控制渲染帧率。"""
+        """从帧缓冲取帧并立即推送，不做节流——前端自行控制渲染帧率。
+
+        frame_buffer.get() 是同步阻塞调用（threading.Condition.wait），
+        必须通过 run_in_executor 异步化，否则会卡住整个 asyncio 事件循环。
+        """
+        loop = asyncio.get_event_loop()
         while True:
-            frame = frame_buffer.get(timeout=0.5)
+            # 异步化同步阻塞的 buffer.get()，避免阻塞事件循环
+            frame = await loop.run_in_executor(
+                None, lambda: frame_buffer.get(timeout=0.5)
+            )
 
             if frame is not None:
-                await self._send_frame(job_id, frame)
-                stream_job_manager.update_job(job_id, playback_frame=frame.frame_id)
+                try:
+                    await self._send_frame(job_id, frame)
+                    stream_job_manager.update_job(job_id, playback_frame=frame.frame_id)
+                except Exception:
+                    break  # WebSocket 断开，退出推送循环
             else:
                 job = stream_job_manager.get_job(job_id)
                 if job is None or job["status"] in ("completed", "failed", "stopped"):
-                    await self._send_complete(job_id, job)
+                    try:
+                        await self._send_complete(job_id, job)
+                    except Exception:
+                        pass
                     break
                 await asyncio.sleep(0.1)
 

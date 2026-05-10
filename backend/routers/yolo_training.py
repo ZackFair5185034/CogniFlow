@@ -12,40 +12,53 @@ from sqlalchemy.orm import Session
 
 
 def check_gpu_available() -> Dict:
-    """检查 GPU 是否可用。
+    """检查 GPU 是否可用（使用启动时缓存的设备信息）。
 
     Returns:
         设备信息字典，包含：
         - available: bool，是否可用
-        - device: str，'cuda' 或 'cpu'
+        - device: str，推荐设备
         - device_name: str，设备名称
         - memory_total: int，总显存(MB)，仅 CUDA 时有效
         - memory_free: int，可用显存(MB)，仅 CUDA 时有效
         - devices: dict，所有可用设备的详细信息
     """
-    try:
-        from backend.core.backends import DeviceDetector
+    from backend.core.backends.auto_detector import get_cached_device_info
 
-        # 使用 DeviceDetector 获取完整设备信息
-        summary = DeviceDetector.get_device_info_summary()
+    try:
+        summary = get_cached_device_info()
         devices = summary.get("devices", {})
 
-        # 检查 CUDA 是否可用
-        if "cuda" in devices:
-            cuda_info = devices["cuda"]
-            return {
-                "available": True,
-                "device": "cuda",
-                "device_name": cuda_info.get("device_name", "Unknown"),
-                "memory_total": cuda_info.get("memory_total_mb", 0),
-                "memory_free": cuda_info.get("memory_free_mb", 0),
-                "devices": devices,
-            }
-    except ImportError:
-        # 降级：使用原有检测逻辑
+        # 确定推荐设备和可用性
+        recommended = summary.get("recommended", "cpu")
+        gpu_device = recommended if recommended != "cpu" else None
+
+        # 查找最佳 GPU 设备
+        for dev_type in ("cuda", "directml", "openvino"):
+            if dev_type in devices:
+                info = devices[dev_type]
+                return {
+                    "available": True,
+                    "device": dev_type,
+                    "device_name": info.get("device_name", "Unknown"),
+                    "memory_total": info.get("memory_total_mb", 0),
+                    "memory_free": info.get("memory_free_mb", 0),
+                    "devices": devices,
+                }
+
+        # 只有 CPU
+        return {
+            "available": False,
+            "device": "cpu",
+            "device_name": "CPU",
+            "memory_total": 0,
+            "memory_free": 0,
+            "devices": devices,
+        }
+    except Exception:
         pass
 
-    # 原有检测逻辑（保持向后兼容）
+    # 降级：原有检测逻辑
     try:
         import torch
         if torch.cuda.is_available():
@@ -441,12 +454,14 @@ def train_yolo(
     return result
 
 
-def load_yolo_model(model_path: str, device: str = "cpu"):
+def load_yolo_model(model_path: str, device: str = "cpu", class_names: dict = None, precision: str = "fp32"):
     """加载 YOLO 模型用于推理。
 
     Args:
         model_path: 模型文件路径
-        device: 设备标识 (cpu/cuda)
+        device: 设备标识 (cpu/cuda/directml/openvino)
+        class_names: 类别名称映射 {id: name}，用于 ONNX/OpenVINO 格式的 fallback
+        precision: 推理精度 (fp32/fp16)，仅对 ONNX DirectML/CUDA 有效
 
     Returns:
         YOLO 模型实例（向后兼容），或 handler 本身（如果是 ONNX 等格式）
@@ -458,12 +473,20 @@ def load_yolo_model(model_path: str, device: str = "cpu"):
 
     # 如果是 ONNX 或 OpenVINO 格式，尝试从对应 PT 文件提取类别名称
     extra_kwargs = {}
-    if model_path.endswith((".onnx", ".xml")):
+    extra_kwargs["precision"] = precision
+    _is_onnx_ov = model_path.endswith((".onnx", ".xml")) or (
+        os.path.isdir(model_path) and any(f.endswith(".xml") for f in (os.listdir(model_path) if os.path.isdir(model_path) else []))
+    )
+    if _is_onnx_ov:
         pt_path = _find_pt_model(model_path)
         if pt_path:
-            class_names = _extract_class_names(pt_path)
-            if class_names:
-                extra_kwargs["class_names"] = class_names
+            names = _extract_class_names(pt_path)
+            if names:
+                extra_kwargs["class_names"] = names
+
+        # fallback：从 DB 传入的类别名称（PT 文件找不到时使用）
+        if not extra_kwargs.get("class_names") and class_names:
+            extra_kwargs["class_names"] = class_names
 
     # 通过注册表创建处理器
     handler = ModelHandlerRegistry().from_path(model_path, device=device, **extra_kwargs)

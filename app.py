@@ -89,6 +89,9 @@ async def lifespan(app: FastAPI):
         ws_stream.stream_conn_manager.set_loop(loop)
     except RuntimeError:
         pass
+    # 启动时一次性检测所有推理设备（耗时操作，避免每次请求重复执行）
+    from backend.core.backends.auto_detector import init_device_cache
+    init_device_cache()
     yield
 
 

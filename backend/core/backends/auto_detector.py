@@ -1,9 +1,55 @@
 # -*- coding: utf-8 -*-
-"""硬件设备自动检测。"""
+"""硬件设备自动检测。
 
+设备检测在应用启动时执行一次，结果缓存复用，避免每次请求都重复检测。
+"""
+
+import logging
 from typing import Any, Dict, Optional
 
 from backend.core.backends.base import HardwareInfo
+
+_logger = logging.getLogger(__name__)
+
+# 启动时初始化的缓存
+_device_cache: Optional[Dict[str, Any]] = None
+
+
+def init_device_cache():
+    """应用启动时调用一次，检测并缓存所有可用设备。"""
+    global _device_cache
+    _logger.info("正在检测推理设备...")
+    _device_cache = DeviceDetector.detect_all()
+    summary = {k: v.to_dict() for k, v in _device_cache.items()}
+    recommended = DeviceDetector.pick_best()
+    _logger.info(f"设备检测完成: {list(_device_cache.keys())}, 推荐: {recommended}")
+    return {"devices": summary, "recommended": recommended}
+
+
+def get_cached_device_info() -> Dict[str, Any]:
+    """获取缓存的设备信息，如果尚未初始化则实时检测。"""
+    global _device_cache
+    if _device_cache is None:
+        _logger.warning("设备缓存未初始化，执行实时检测（应在启动时调用 init_device_cache）")
+        return init_device_cache()
+    summary = {k: v.to_dict() for k, v in _device_cache.items()}
+    recommended = DeviceDetector.pick_best()
+    return {"devices": summary, "recommended": recommended}
+
+
+def resolve_device_cached(preference: str = "auto") -> str:
+    """使用缓存的设备信息解析最佳设备。
+
+    Args:
+        preference: 用户偏好 (auto/cpu/cuda/openvino/directml)
+
+    Returns:
+        实际使用的设备字符串
+    """
+    if preference in ("cpu", "cuda", "openvino", "directml"):
+        return preference
+
+    return DeviceDetector.pick_best(preference)
 
 
 class DeviceDetector:
@@ -38,6 +84,11 @@ class DeviceDetector:
         openvino_info = DeviceDetector._detect_openvino()
         if openvino_info is not None:
             devices["openvino"] = openvino_info
+
+        # DirectML - Windows 通用 GPU 加速（AMD Radeon / NVIDIA / Intel）
+        directml_info = DeviceDetector._detect_directml()
+        if directml_info is not None:
+            devices["directml"] = directml_info
 
         # TensorRT - 检测 NVIDIA TensorRT
         tensorrt_info = DeviceDetector._detect_tensorrt()
@@ -99,19 +150,16 @@ class DeviceDetector:
             # 获取具体设备名称
             device_name = "CPU"
             try:
-                # 尝试获取 GPU 全名（兼容 Intel/AMD 等）
                 if "GPU" in devices:
                     gpu_name = core.get_property("GPU", "FULL_DEVICE_NAME")
-                    device_name = gpu_name
+                    device_name = f"GPU: {gpu_name} (OpenVINO)"
                 elif "CPU" in devices:
-                    cpu_name = core.get_property("CPU", "FULL_DEVICE_NAME")
-                    device_name = cpu_name
+                    device_name = "CPU (OpenVINO)"
             except Exception:
-                # 降级：仅报告设备类型
                 if "GPU" in devices:
-                    device_name = "GPU"
+                    device_name = "GPU (OpenVINO)"
                 elif "CPU" in devices:
-                    device_name = "CPU"
+                    device_name = "CPU (OpenVINO)"
 
             return HardwareInfo(
                 device_type="openvino",
@@ -120,6 +168,47 @@ class DeviceDetector:
                 supports_int8=True,
                 extra={"available_devices": devices},
             )
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+        return None
+
+    @staticmethod
+    def _detect_directml() -> Optional[HardwareInfo]:
+        """检测 DirectML 可用性（Windows 通用 GPU 加速）。
+
+        通过 ONNX Runtime 的 DmlExecutionProvider 检测，
+        支持 AMD Radeon / NVIDIA / Intel 显卡。
+
+        Returns:
+            DirectML 设备信息，如果不可用返回 None
+        """
+        try:
+            import onnxruntime as ort
+
+            if "DmlExecutionProvider" in ort.get_available_providers():
+                # 尝试获取 GPU 名称
+                gpu_name = "DirectML GPU"
+                try:
+                    import subprocess
+                    result = subprocess.run(
+                        ['powershell', '-Command',
+                         'Get-CimInstance Win32_VideoController | Where-Object {$_.Name -notlike "*Oray*" -and $_.Name -notlike "*Virtual*"} | Select-Object -ExpandProperty Name -First 1'],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.stdout.strip():
+                        gpu_name = result.stdout.strip()
+                except Exception:
+                    pass
+
+                return HardwareInfo(
+                    device_type="directml",
+                    device_name=gpu_name,
+                    supports_fp16=True,
+                    supports_int8=False,
+                )
         except ImportError:
             pass
         except Exception:
@@ -183,6 +272,10 @@ class DeviceDetector:
                     pass  # 不支持 FP16，继续检查其他
                 else:
                     return "cuda"
+
+        if preference == "directml" or preference == "auto":
+            if "directml" in devices:
+                return "directml"
 
         if preference == "tensorrt" or preference == "auto":
             if "tensorrt" in devices:
