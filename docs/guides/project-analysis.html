@@ -1,0 +1,278 @@
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  CogniFlow 项目分析文档 - 现状与迭代计划
+
+  分析日期：2026-05-10，分支：develop
+  用途：记录现状和迭代计划，供后续讨论参考。
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>项目分析报告 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+
+    <h1 class="doc-title">CogniFlow 项目分析文档</h1>
+    <p class="doc-subtitle">分析日期：2026-05-10 | 分支：develop | 用途：记录现状和迭代计划</p>
+
+    <hr class="doc-divider">
+
+    <!-- 一、项目现状总览 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">一、项目现状总览</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px;">技术栈</h3>
+      <table class="doc-table">
+        <thead>
+          <tr><th>层级</th><th>技术</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>后端</td><td>FastAPI + SQLAlchemy</td><td>Python 3.x</td></tr>
+          <tr><td>前端</td><td>Vue3 + TypeScript + Vite</td><td>UnoCSS 原子化 CSS + Element Plus</td></tr>
+          <tr><td>深度学习</td><td>Ultralytics YOLO (v8)</td><td>PyTorch 训练/推理</td></tr>
+          <tr><td>数据库</td><td>SQLite</td><td>轻量嵌入式</td></tr>
+          <tr><td>规则引擎</td><td>自研 Kahn 拓扑排序执行器</td><td>节点化设计 + WebSocket 推送</td></tr>
+          <tr><td>视频处理</td><td>OpenCV + ffmpeg-python</td><td>视频流处理</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px; margin-top: 24px;">已实现功能</h3>
+      <table class="doc-table">
+        <thead>
+          <tr><th>模块</th><th>状态</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>图集管理</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>上传/标注/目录管理/YOLO 格式导出</td></tr>
+          <tr><td><strong>类别管理</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>树形目录结构，支持嵌套</td></tr>
+          <tr><td><strong>标注管理</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>边界框标注 CRUD</td></tr>
+          <tr><td><strong>模型训练</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>YOLO 训练 + ckpt 解析 + mAP 指标记录</td></tr>
+          <tr><td><strong>模型推理</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>图片/视频检测，流水线架构</td></tr>
+          <tr><td><strong>视频流 WebSocket</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>双线程流水线 + 动态 JPEG 压缩</td></tr>
+          <tr><td><strong>训练进度 WebSocket</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>实时推送 loss/mAP 指标</td></tr>
+          <tr><td><strong>规则图 CRUD</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>创建/编辑/验证/激活/停用</td></tr>
+          <tr><td><strong>规则引擎执行器</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>Kahn 拓扑排序 + 层内并行执行</td></tr>
+          <tr><td><strong>规则引擎节点系统</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>17+ 节点：触发器/条件/动作/逻辑/检测节点</td></tr>
+          <tr><td><strong>节点注册表</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>@register 装饰器</td></tr>
+          <tr><td><strong>Cron 定时调度</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>APScheduler 集成</td></tr>
+          <tr><td><strong>Webhook 触发</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>外部系统可 POST 触发</td></tr>
+          <tr><td><strong>多格式模型管理</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>YOLO/ONNX/OpenVINO handler</td></tr>
+          <tr><td><strong>模型导出</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>onnx/openvino/tensorrt 格式</td></tr>
+          <tr><td><strong>设备自动检测</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>推理设备自动选择</td></tr>
+          <tr><td><strong>DATA_DIR 统一数据</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>2026-05 重构</td></tr>
+          <tr><td><strong>深色主题 UI</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>UnoCSS + CSS 变量设计系统</td></tr>
+          <tr><td><strong>WebUI 路由进度条</strong></td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">完整</span></td><td>nprogress 集成</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px; margin-top: 24px;">待完善功能</h3>
+      <table class="doc-table">
+        <thead>
+          <tr><th>模块</th><th>问题</th><th>优先级</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>GPU 训练</strong></td><td>device 参数未暴露给前端</td><td><span class="doc-badge" style="color: #ff4466;">P0</span></td></tr>
+          <tr><td><strong>GPU 推理</strong></td><td>inference 不传 device，硬编码 CPU</td><td><span class="doc-badge" style="color: #ff4466;">P0</span></td></tr>
+          <tr><td><strong>画布编辑器</strong></td><td>RuleCanvas.vue 是空壳，无 VueFlow 集成</td><td><span class="doc-badge" style="color: #ff4466;">P0</span></td></tr>
+          <tr><td><strong>规则引擎节点连通</strong></td><td>YOLO触发/键盘/鼠标节点未与 engine 层打通</td><td><span class="doc-badge" style="color: #ff4466;">P0</span></td></tr>
+          <tr><td><strong>执行状态 WebSocket 高亮</strong></td><td>规则执行时画布节点高亮未实现</td><td><span class="doc-badge">P1</span></td></tr>
+          <tr><td><strong>LoopNode 迭代逻辑</strong></td><td>执行器未处理循环迭代</td><td><span class="doc-badge">P1</span></td></tr>
+          <tr><td><strong>Launch 实时采集</strong></td><td>ScreenCapture 存在但未对接 launch.py</td><td><span class="doc-badge">P2</span></td></tr>
+          <tr><td><strong>强化学习模块</strong></td><td>engine/rl 完整但无 API/前端/文档</td><td><span class="doc-badge">P2</span></td></tr>
+          <tr><td><strong>系统托盘</strong></td><td>有设计文档但无实现</td><td><span class="doc-badge">P3</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 二、架构亮点 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">二、架构亮点</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px;">2.1 多格式模型处理架构</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;">
+        <code>backend/core/formats/</code> 实现了工厂模式的多格式处理器：
+      </p>
+      <div class="doc-code">
+<pre>backend/core/formats/
+├── base.py              # FormatHandler 基类
+├── yolo_handler.py      # YOLO .pt 格式
+├── onnx_handler.py      # ONNX 格式
+└── openvino_handler.py  # OpenVINO 格式</pre>
+      </div>
+      <p style="color: var(--text-secondary); margin-top: 8px;">特性：运行时自动选择最优格式；统一接口 FormatHandler；支持格式转换和导出。</p>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px; margin-top: 20px;">2.2 推理流水线架构</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;"><code>inference.py</code> 中的双线程流水线：</p>
+      <div class="doc-code" style="text-align: center;">
+<pre>┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ _inference_worker│ →  │  _encode_worker │  →  │  WebSocket 推送  │
+│   (推理线程)      │     │  (JPEG 编码线程) │     │   (前端渲染)     │
+└─────────────────┘     └─────────────────┘     └─────────────────┘</pre>
+      </div>
+      <ul class="doc-list" style="margin-top: 12px;">
+        <li>推理与编码分离，避免阻塞</li>
+        <li>动态 JPEG 压缩质量自适应</li>
+        <li>视频抽帧策略</li>
+        <li>实时 FPS 显示</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px; margin-top: 20px;">2.3 规则引擎执行器</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;"><code>executor.py</code> 实现的执行模型：</p>
+      <div class="doc-code">
+<pre># Kahn 拓扑排序：确保依赖节点先执行
+sorted_nodes = topological_sort(nodes, edges)
+
+# 层内并行执行：同一层的节点可以并发
+for layer in layers:
+    await asyncio.gather(*[execute_node(n) for n in layer])</pre>
+      </div>
+      <p style="color: var(--text-secondary); margin-top: 8px;">端口类型：ANY / IMAGE / BBOX / MASK / SCORES / TRIGGER / CONTROL / MODEL / INT / FLOAT / BOOLEAN / STRING / ARRAY / OBJECT</p>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px; margin-top: 20px;">2.4 统一数据目录</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;">2026-05 重构将所有数据统一到 <code>data/</code> 目录：</p>
+      <div class="doc-code">
+<pre>data/
+├── datasets/             # 训练数据集 (YOLO 格式)
+├── checkpoints/          # 模型权重文件
+├── model_cache/          # 模型缓存
+├── inference_output/     # 推理结果图片
+├── runs/                 # YOLO 训练输出
+│   ├── detect/          # 推理结果
+│   └── train/           # 训练输出
+└── database/            # SQLite 数据库</pre>
+      </div>
+    </div>
+
+    <!-- 三、规则引擎详细分析 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">三、规则引擎详细分析</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px;">3.1 节点分类（17+ 节点）</h3>
+      <table class="doc-table">
+        <thead>
+          <tr><th>分类</th><th>节点</th><th>状态</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>触发器</strong></td><td>ManualTrigger</td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">可用</span></td></tr>
+          <tr><td></td><td>TimerTrigger</td><td><span class="doc-badge">框架完成</span></td></tr>
+          <tr><td></td><td>YOLOTrigger</td><td><span class="doc-badge">⚠️ 未对接推理</span></td></tr>
+          <tr><td></td><td>WebhookTrigger</td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">可用</span></td></tr>
+          <tr><td><strong>条件</strong></td><td>ObjectExistsCondition, ConfidenceThreshold, VariableCondition, CountCondition</td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">可用</span></td></tr>
+          <tr><td><strong>动作</strong></td><td>LogAction, HttpRequestAction, DelayAction</td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">可用</span></td></tr>
+          <tr><td></td><td>KeyboardAction, MouseAction</td><td><span class="doc-badge">⚠️ 未对接 engine</span></td></tr>
+          <tr><td><strong>逻辑</strong></td><td>BranchNode, VariableSet/GetVariable</td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">可用</span></td></tr>
+          <tr><td></td><td>ParallelBranch</td><td><span class="doc-badge">框架完成</span></td></tr>
+          <tr><td></td><td>LoopNode</td><td><span class="doc-badge">⚠️ 执行器未处理迭代</span></td></tr>
+          <tr><td><strong>检测</strong></td><td>ImageInput, VideoInput</td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">可用</span></td></tr>
+          <tr><td></td><td>ScreenCapture</td><td><span class="doc-badge">⚠️ 未集成</span></td></tr>
+          <tr><td></td><td>YOLODetect</td><td><span class="doc-badge">⚠️ 未对接</span></td></tr>
+          <tr><td><strong>输出</strong></td><td>DisplayResult, SaveResult</td><td><span class="doc-badge" style="color: var(--accent-green); border-color: var(--accent-green);">可用</span></td></tr>
+          <tr><td><strong>处理</strong></td><td>ImagePreprocess, DrawBBox, CountObjects</td><td><span class="doc-badge">框架完成</span></td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px; margin-top: 20px;">3.2 典型连通性缺失场景</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;">目标场景："检测到金币 → 按空格键"</p>
+      <div class="doc-code">
+<pre>用户手动触发
+    ↓
+YOLOTriggerNode（⚠️ 未对接推理）
+    ↓
+ObjectExistsConditionNode（✅ 可用）
+    ↓
+KeyboardActionNode（⚠️ 未对接 engine）</pre>
+      </div>
+    </div>
+
+    <!-- 四、GPU 相关问题 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">四、GPU 相关问题</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px;">训练 GPU 支持</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;">
+        <strong>现状：</strong><code>check_gpu_available()</code> 返回 GPU 列表，支持多卡 ✅；
+        训练 API <code>/api/training/device-info</code> 返回设备信息 ✅；
+        <code>yolo_training.py</code> 的 <code>train_yolo()</code> 支持 <code>device</code> 参数 ✅；
+        <strong>前端没有暴露 GPU 选择 UI</strong> ❌
+      </p>
+      <p style="color: var(--text-secondary);">需要改动：Training.vue 添加设备选择器；将 device 参数传给 <code>/api/training/start</code></p>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px; margin-top: 20px;">推理 GPU 支持</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;">
+        <strong>现状：</strong><code>inference_yolo()</code> 不传 device，默认 CPU；
+        <code>backend/core/backends/auto_detector.py</code> 已有设备检测。
+      </p>
+      <p style="color: var(--text-secondary);">需要改动：inference.py 添加 device 参数；前端暴露设备选择。</p>
+    </div>
+
+    <!-- 五、engine 模块分析 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">五、engine 模块分析</h2>
+      <table class="doc-table">
+        <thead>
+          <tr><th>模块</th><th>文件</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>ScreenCapture</strong></td><td><code>engine/core/data_input/capture/screen_capture.py</code></td><td>屏幕采集，未对接 launch.py</td></tr>
+          <tr><td><strong>强化学习</strong></td><td><code>engine/core/rl/ppo.py, sac.py, game_env.py, trainer.py</code></td><td>完整实现，无 API/前端</td></tr>
+          <tr><td><strong>输入模拟</strong></td><td><code>engine/core/control/input_emulator/</code></td><td>Keyboard/Mouse Emulator，规则引擎未对接</td></tr>
+          <tr><td><strong>标注工具</strong></td><td><code>engine/annotation/bounding_box.py</code></td><td>独立实现，后端未使用</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 六、迭代计划 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">六、迭代计划</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px;">Phase 0: 连通性补全（当前最优先）</h3>
+      <table class="doc-table">
+        <thead>
+          <tr><th>任务</th><th>说明</th><th>状态</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>YOLO 触发器对接推理服务</td><td>调用 inference API</td><td><span class="doc-badge">⚠️ 待做</span></td></tr>
+          <tr><td>键盘/鼠标动作对接 engine</td><td>input_emulator 集成</td><td><span class="doc-badge">⚠️ 待做</span></td></tr>
+          <tr><td>WebSocket 实时状态推送</td><td>节点执行时前端高亮</td><td><span class="doc-badge">⚠️ 待做</span></td></tr>
+          <tr><td>GPU 训练入口</td><td>前端设备选择器</td><td><span class="doc-badge">⚠️ 待做</span></td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 1rem; margin-bottom: 8px; margin-top: 20px;">Phase 1: 画布编辑器</h3>
+      <table class="doc-table">
+        <thead>
+          <tr><th>任务</th><th>说明</th><th>状态</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>VueFlow 集成</td><td>画布渲染</td><td><span class="doc-badge">⚠️ 待做</span></td></tr>
+          <tr><td>节点面板</td><td>节点搜索/拖放</td><td><span class="doc-badge">⚠️ 待做</span></td></tr>
+          <tr><td>属性配置面板</td><td>节点参数配置</td><td><span class="doc-badge">⚠️ 待做</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 七、优先级总结 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">七、优先级总结</h2>
+      <table class="doc-table">
+        <thead>
+          <tr><th>优先级</th><th>事项</th><th>理由</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="doc-badge" style="color: #ff4466;">P0</span></td><td>规则引擎节点连通性</td><td>核心不连通，规则引擎无法实际工作</td></tr>
+          <tr><td><span class="doc-badge" style="color: #ff4466;">P0</span></td><td>GPU 训练入口</td><td>前端加设备选择，后端已支持</td></tr>
+          <tr><td><span class="doc-badge" style="color: #ff4466;">P0</span></td><td>画布编辑器</td><td>前端工作量较大，尽早启动</td></tr>
+          <tr><td><span class="doc-badge">P1</span></td><td>GPU 推理支持</td><td>inference 添加 device 参数</td></tr>
+          <tr><td><span class="doc-badge">P1</span></td><td>WebSocket 执行高亮</td><td>调试体验关键</td></tr>
+          <tr><td><span class="doc-badge">P2</span></td><td>LoopNode 迭代逻辑</td><td>复杂规则需要</td></tr>
+          <tr><td><span class="doc-badge">P2</span></td><td>ScreenCapture 集成</td><td>Launch 页面的"实时采集"</td></tr>
+          <tr><td><span class="doc-badge">P3</span></td><td>强化学习模块</td><td>长期目标</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

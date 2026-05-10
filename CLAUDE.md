@@ -247,25 +247,41 @@ webui/
 └── package.json
 ```
 
-### 7.3 按钮体系
+### 7.3 样式体系
 
-CogniFlow WebUI 使用全局统一的 `.ui-btn` 按钮体系，定义在 `webui/src/style/_common.scss` 和 `webui/src/style/index.scss`。
+CogniFlow WebUI 样式系统由 SCSS 模块组成，定义在 `webui/src/style/` 目录：
 
-**按钮层级：**
+```
+style/
+├── _variables.scss         # CSS 变量（:root）+ SCSS 变量
+├── _animations.scss        # @keyframes 动画定义
+├── _element-plus-vars.scss # Element Plus CSS 变量主题
+├── _element-plus.scss      # Element Plus 全局样式覆盖
+├── _common.scss            # .ui-* 组件样式
+└── index.scss              # 主入口，@use 导入所有模块
+```
 
-| 类名 | 用途 | 尺寸 |
+#### 按钮体系
+
+全局统一的 `.ui-btn` 按钮体系，定义在 `_common.scss`：
+
+| 类名 | 用途 | 说明 |
 |------|------|------|
-| `.ui-btn` | 默认按钮 | `padding: 8px 16px`，`font-size: 14px`，`border-radius: 8px` |
-| `.ui-btn-primary` | 主操作按钮（青色渐变） | 继承默认尺寸 |
-| `.ui-btn-secondary` | 次级按钮（透明背景） | 继承默认尺寸 |
-| `.ui-btn-sm` | 紧凑按钮（工具栏等） | `padding: 6px 14px`，`font-size: 13px`，`border-radius: 6px` |
-| `.ui-btn-small` | 与 `.ui-btn-sm` 等效 | 同上 |
-| `.ui-btn-danger` | 危险操作（红色渐变） | 继承默认尺寸 |
-| `.ui-btn-icon` | 图标按钮（36×36） | `width/height: 36px`，`padding: 0` |
+| `.ui-btn` | 默认按钮 | `padding: 10px 20px`，`font-size: 14px`，`border-radius: 8px`，透明背景+边框 |
+| `.ui-btn-primary` | 主操作按钮 | 青色渐变背景 |
+| `.ui-btn-success` | 成功操作 | 绿色渐变背景 |
+| `.ui-btn-danger` | 危险操作 | 红色渐变背景 |
+| `.ui-btn-small` | 紧凑按钮 | `padding: 4px 8px`，`font-size: 13px` |
+| `.ui-btn-icon` | 图标按钮 | 36×36 方形，透明背景 |
+| `.ui-tag` | 标签 | `.ui-tag-cyan`、`.ui-tag-green`、`.ui-tag-yellow`、`.ui-tag-magenta` |
+| `.ui-card` | 卡片容器 | 背景+边框+圆角，悬停顶部渐变条 |
+| `.ui-input` | 输入框 | 全宽，深色背景 |
+| `.ui-badge` | 徽章 | mono 字体，等宽显示 |
+| `.ui-scrollbar` | 滚动条 | 统一滚动条样式 |
 
 **使用规范：**
 - 页面主操作按钮使用 `.ui-btn .ui-btn-primary`
-- 工具栏/卡片内操作使用 `.ui-btn .ui-btn-sm`
+- 工具栏/卡片内操作使用 `.ui-btn .ui-btn-small`
 - 不允许在视图组件中覆盖 `.ui-btn` 的 padding、border-radius 等基础样式
 - 图标按钮使用 `.ui-btn-icon`
 - Element Plus 的 `el-button--text` 已全局统一样式为青色
@@ -367,7 +383,7 @@ UnoCSS 是原子化 CSS 引擎，提供即时按需编译。所有原子化样�
 - 组件私有样式（局部使用）→ scoped SCSS
 - 通用样式（多处复用）→ uno.config.ts 添加 cf- 快捷方式
 
-### 7.6 代码规范
+### 7.4 代码规范
 
 **Vue 组件规范：**
 - 使用 `<script setup lang="ts">` 语法
@@ -508,7 +524,7 @@ const jobs = res.data as TrainingJobResponse[]
 - 组件样式使用 `scoped`
 - 避免行内样式（除了动态值）
 
-### 7.6.1 Element Plus 表单组件规范
+### 7.4.1 Element Plus 表单组件规范
 
 **禁止使用原生 HTML 表单标签，所有表单输入必须使用 Element Plus 组件：**
 
@@ -524,7 +540,7 @@ const jobs = res.data as TrainingJobResponse[]
 
 **深色主题适配（CSS 变量方式）：**
 
-在 `src/style/index.scss` 的 `:root` 中覆盖 Element Plus 设计令牌（推荐方式，比 scoped `:deep()` 更优雅）：
+在 `src/style/_element-plus-vars.scss` 中覆盖 Element Plus 设计令牌（推荐方式，比 scoped `:deep()` 更优雅）：
 
 ```scss
 :root {
@@ -543,7 +559,7 @@ const jobs = res.data as TrainingJobResponse[]
 }
 ```
 
-全局 `:deep()` 样式覆盖（背景/边框/下拉面板，放在 `src/style/index.scss` 中）：
+全局 `:deep()` 样式覆盖（背景/边框/下拉面板，放在 `src/style/_element-plus.scss` 中）：
 
 ```scss
 // el-input / el-select 背景边框适配
@@ -570,7 +586,7 @@ const jobs = res.data as TrainingJobResponse[]
 
 `display: none` 的 `<input type="file">` 用于程序化触发文件对话框（如按钮触发），保持原生实现，无需替换为 `el-upload`。
 
-### 7.7 ESLint 规则
+### 7.6 ESLint 规则
 
 ```javascript
 // eslint.config.mjs 核心规则
@@ -583,7 +599,7 @@ const jobs = res.data as TrainingJobResponse[]
 }
 ```
 
-### 7.8 Git 提交规范（前端）
+### 7.7 Git 提交规范（前端）
 
 提交前端代码时，scope 使用以下值：
 - `webui`: WebUI 通用修改
@@ -591,7 +607,7 @@ const jobs = res.data as TrainingJobResponse[]
 - `webui/components`: 组件相关
 - `webui/views`: 页面相关
 
-### 7.9 常用命令
+### 7.8 常用命令
 
 ```bash
 cd webui
@@ -605,16 +621,136 @@ pnpm lint:fix       # ESLint 自动修复
 
 ## 8. 文档规范
 
-项目所有文档（`.md` 除外）一律使用 **HTML** 编写，禁止使用 Markdown。
+### 8.1 文档类型
+
+项目文档按用途分为五类，每类有明确的定位和编写要求：
+
+| 类型 | 目录 | 用途 | 示例 |
+|------|------|------|------|
+| **用户文档** | `docs/guides/` | 面向最终用户的操作手册 | 功能使用、配置说明 |
+| **开发文档** | `docs/dev/` | 面向开发者的技术参考 | API 文档、架构说明 |
+| **设计文档** | `docs/design/` | 面向设计师的规范说明 | UI 规范、交互流程 |
+| **研究文档** | `docs/research/` | 探索性文档 | 技术调研、方案对比 |
+| **归档文档** | `docs/archives/` | 历史版本保留 | 旧版本说明 |
+
+**README.md 除外**，所有文档一律使用 **HTML** 编写，禁止使用 Markdown。
 
 **原因：** Markdown 在复杂布局、样式控制和嵌入交互内容时能力有限，HTML 可提供更精细的控制和一致性。
 
-**规范：**
-- 文档文件使用 `.html` 扩展名
-- HTML 文档放在 `docs/` 目录下
-- 文档样式独立存放在 `docs/css/` 目录下，不与项目前端样式（`webui/src/style/`）混淆
-- 文件头部包含中文注释说明文档用途
-- 禁止在 HTML 文档中使用内联 `style` 属性
+### 8.2 HTML 文档编写规范
+
+**文件组织：**
+```
+docs/
+├── css/
+│   └── main.css          # 文档全局样式（必须）
+├── guides/               # 用户文档
+├── dev/                  # 开发文档
+├── design/               # 设计文档
+├── research/             # 研究文档
+├── archives/            # 归档文档
+└── index.html           # 文档首页入口
+```
+
+**文件命名：**
+- 使用 kebab-case 小写字母 + 连字符（例：`user-guide.html`、`api-reference.html`）
+- 避免使用中文文件名
+- 每个文档目录下应有 `index.html` 作为入口
+
+**HTML 文档头部结构：**
+```html
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  功能名称 - 功能简述
+
+  文档用途说明，包含适用读者、前置条件。
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>功能名称 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+    <!-- 文档内容 -->
+  </div>
+</body>
+</html>
+```
+
+**内容结构规范：**
+
+每个 HTML 文档应按以下层级组织内容：
+
+1. **文档标题**（`.doc-title`）— 文档主标题，仅一个
+2. **文档副标题**（`.doc-subtitle`）— 文档目的和范围说明
+3. **章节**（`.doc-section`）— 按逻辑划分的内容区块
+4. **章节标题**（`.doc-section-title`）— 章节小标题
+5. **段落、列表、表格、代码块**— 具体内容
+
+**禁止事项：**
+- 禁止使用内联 `style` 属性，所有样式必须在 `docs/css/main.css` 中定义
+- 禁止使用 `<font>`、`<center>` 等废弃标签
+- 禁止使用表格做布局（仅用于展示结构化数据）
+- 禁止在文档中硬编码颜色值，统一使用 CSS 变量
+
+**可复用样式类（定义在 `docs/css/main.css`）：**
+
+| 类名 | 用途 |
+|------|------|
+| `.doc-container` | 文档主体容器，居中，最大宽度 900px |
+| `.doc-title` | 文档主标题，渐变色文字 |
+| `.doc-subtitle` | 文档副标题，次要文字色 |
+| `.doc-section` | 内容章节区块，margin-bottom: 32px |
+| `.doc-section-title` | 章节标题，青色下划线分隔 |
+| `.doc-table` | 表格，全宽，深色主题 |
+| `.doc-code` / `.doc-code-block` | 代码块，等宽字体，深色背景 |
+| `.doc-list` | 无序列表，青色圆点前缀 |
+| `.doc-badge` | 徽章，mono 字体，青色边框 |
+| `.doc-divider` | 水平分割线 |
+
+### 8.3 样式编写规范
+
+**文件：`docs/css/main.css`**
+
+- 文件头部包含中文注释说明文件用途
+- 所有颜色使用 CSS 变量，禁止硬编码十六进制值
+- 选择器尽量简短，避免三层以上的嵌套
+- 响应式布局使用相对单位（em、rem、%），避免固定像素值
+
+**CSS 变量命名约定（docs 专用）：**
+```css
+/* 文档专用变量放在 [data-doc] 作用域下 */
+[data-doc] {
+  --doc-bg-primary: #0a0a0f;
+  --doc-text-primary: #ffffff;
+  --doc-accent: #00f0ff;
+}
+```
+
+### 8.4 编写流程
+
+1. **规划** — 确定文档属于哪类（用户/开发/设计/研究），决定放在哪个目录
+2. **编写** — 按 8.2 的头部结构创建 HTML 文件，引用 `docs/css/main.css`
+3. **自审** — 检查是否有内联样式、硬编码颜色、废弃标签
+4. **更新入口** — 如有必要，更新对应目录的 `index.html` 添加链接
+5. **提交** — Git commit message 使用 `docs:` 前缀
+
+### 8.5 评审清单
+
+提交文档前逐项检查：
+
+- [ ] 文件放在正确目录（guides/dev/design/research/archives）
+- [ ] 使用 `.html` 扩展名，非 `.md`
+- [ ] 头部包含中文注释说明文档用途
+- [ ] 引用了 `docs/css/main.css`
+- [ ] 无内联 `style` 属性
+- [ ] 无硬编码十六进制颜色值
+- [ ] 无废弃 HTML 标签
+- [ ] 有对应的 `index.html` 入口链接（若是子文档）
 
 ## 9. 许可证
 

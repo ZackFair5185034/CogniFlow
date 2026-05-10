@@ -1,0 +1,115 @@
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  CogniFlow Logo 设计规范
+
+  "CF交织" Logo 设计方案，紫蓝对角渐变，抽象几何拼接型。
+  版本: v1.0 | 日期: 2026-05-01 | 归档: 2026-05
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logo 设计规范 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+
+    <h1 class="doc-title">CogniFlow Logo 设计规范</h1>
+    <p class="doc-subtitle">"CF交织" Logo 设计方案，紫蓝对角渐变，抽象几何拼接型</p>
+
+    <hr class="doc-divider">
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">一、概念与愿景</h2>
+      <p class="doc-text" style="color: var(--text-secondary);">CogniFlow 是一个通用视觉感知处理框架，集模型训练、测试、推理、规则引擎于一体。Logo 需要传达"融合"与"智能感知"的核心概念，同时具备科技感与专业性。</p>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">二、设计方向</h2>
+      <table class="doc-table">
+        <thead><tr><th>维度</th><th>选择</th></tr></thead>
+        <tbody>
+          <tr><td>形态</td><td>抽象几何拼接型</td></tr>
+          <tr><td>风格</td><td>科技感，未来感、简洁有力</td></tr>
+          <tr><td>配色</td><td>紫蓝撞色对角渐变</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">三、设计方案：CF交织</h2>
+
+      <h3 class="doc-subsection-title">3.1 主 Logo（256x256）</h3>
+      <p class="doc-text" style="color: var(--text-secondary);"><strong>核心概念：</strong></p>
+      <ul class="doc-list">
+        <li>左侧半圆环缺口形成"C"形，紫色</li>
+        <li>右侧方形框架形成"F"形，青蓝色</li>
+        <li>两图形中心交叠处有3个连接节点，形成数据流动网络</li>
+        <li>整体构图形成"C"+"F"交织融合的视觉效果</li>
+      </ul>
+
+      <h3 class="doc-subsection-title">3.2 SVG 结构</h3>
+      <div class="doc-code" style="font-size: 0.82rem; line-height: 1.4;">
+<pre>&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"&gt;
+  &lt;defs&gt;
+    &lt;linearGradient id="cfGradient" x1="0%" y1="100%" x2="100%" y2="0%"&gt;
+      &lt;stop offset="0%" stop-color="#8B5CF6"/&gt;
+      &lt;stop offset="100%" stop-color="#00D4FF"/&gt;
+    &lt;/linearGradient&gt;
+  &lt;/defs&gt;
+
+  &lt;!-- C 形（左侧半圆环） --&gt;
+  &lt;path d="M 80 48 A 80 80 0 1 0 80 208"
+       fill="none" stroke="url(#cfGradient)" stroke-width="24" stroke-linecap="round"/&gt;
+
+  &lt;!-- F 形（右侧方形框架） --&gt;
+  &lt;path d="M 176 48 L 176 64 L 112 64 L 112 112 L 160 112 L 160 128
+           L 112 128 L 112 192 L 176 192"
+       fill="none" stroke="url(#cfGradient)" stroke-width="24"
+       stroke-linecap="round" stroke-linejoin="round"/&gt;
+
+  &lt;!-- 连接节点（中心交叠处） --&gt;
+  &lt;circle cx="128" cy="128" r="12" fill="#00D4FF"/&gt;
+  &lt;circle cx="108" cy="108" r="8" fill="#8B5CF6"/&gt;
+  &lt;circle cx="148" cy="148" r="8" fill="#00D4FF"/&gt;
+&lt;/svg&gt;</pre>
+      </div>
+
+      <h3 class="doc-subsection-title">3.3 颜色规范</h3>
+      <table class="doc-table">
+        <thead><tr><th>颜色名称</th><th>色值</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td>紫色</td><td><code class="doc-badge">#8B5CF6</code></td><td>Logo 主体色、C 形、节点点缀</td></tr>
+          <tr><td>青蓝色</td><td><code class="doc-badge">#00D4FF</code></td><td>Logo 主体色、F 形、节点点缀</td></tr>
+          <tr><td>深色背景</td><td><code class="doc-badge">#1a1a2e</code></td><td>Logo 容器背景（可选）</td></tr>
+          <tr><td>白色</td><td><code class="doc-badge">#FFFFFF</code></td><td>节点高光、强调元素</td></tr>
+        </tbody>
+      </table>
+
+      <h3 class="doc-subsection-title">3.4 尺寸规范</h3>
+      <table class="doc-table">
+        <thead><tr><th>用途</th><th>推荐尺寸</th><th>最小尺寸</th></tr></thead>
+        <tbody>
+          <tr><td>主 Logo</td><td>256×256</td><td>64×64</td></tr>
+          <tr><td>Favicon</td><td>32×32</td><td>16×16</td></tr>
+          <tr><td>网站标题栏</td><td>32×32</td><td>16×16</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="doc-section">
+      <h2 class="doc-section-title">四、验收标准</h2>
+      <ul class="doc-list">
+        <li>Logo 清晰可辨，在 64×64 以上尺寸完整呈现</li>
+        <li>Favicon 在 16×16 下仍然可识别为 CF 交织图形</li>
+        <li>紫蓝渐变平滑自然，无色带断层</li>
+        <li>深色背景下有足够的对比度</li>
+        <li>SVG 文件可无损缩放</li>
+      </ul>
+    </div>
+
+  </div>
+</body>
+</html>

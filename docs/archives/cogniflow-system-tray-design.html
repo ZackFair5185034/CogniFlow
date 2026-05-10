@@ -1,0 +1,94 @@
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  CogniFlow 系统托盘功能设计
+
+  pystray/Pillow 实现系统托盘、菜单、事件处理的完整设计方案。
+  日期: 2026-05-04
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系统托盘功能设计 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+
+    <h1 class="doc-title">CogniFlow 系统托盘功能设计</h1>
+    <p class="doc-subtitle">pystray/Pillow 实现系统托盘、菜单、事件处理 | 日期: 2026-05-04</p>
+
+    <hr class="doc-divider">
+
+    <!-- 1. 概述 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">一、概述</h2>
+      <p style="color: var(--text-secondary);">为 CogniFlow 实现 Windows 系统托盘功能，支持在后台运行并通过托盘图标管理应用。</p>
+    </div>
+
+    <!-- 2. 行为定义 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">二、行为定义</h2>
+      <table class="doc-table">
+        <thead><tr><th>动作</th><th>行为</th></tr></thead>
+        <tbody>
+          <tr><td>应用启动</td><td>自动打开浏览器访问 WebUI，同时创建系统托盘图标</td></tr>
+          <tr><td>双击托盘图标</td><td>打开浏览器窗口</td></tr>
+          <tr><td>右键 → "打开浏览器"</td><td>同上</td></tr>
+          <tr><td>右键 → "退出"</td><td>退出应用程序</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 3. 技术方案 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">三、技术方案</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">3.1 依赖</h3>
+      <ul class="doc-list">
+        <li><span class="doc-badge">pystray</span> — 系统托盘实现</li>
+        <li><span class="doc-badge">Pillow</span> — 图标图像处理</li>
+        <li><span class="doc-badge">webbrowser</span> — 浏览器打开</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.2 文件结构</h3>
+      <div class="doc-code">
+<pre>CogniFlow/
+├── system_tray/
+│   ├── __init__.py
+│   ├── tray_manager.py    # 托盘管理、菜单、事件处理
+│   └── browser.py         # 浏览器打开逻辑</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.3 托盘菜单</h3>
+      <ul class="doc-list">
+        <li>"打开浏览器" — 打开默认浏览器访问 http://localhost:8000</li>
+        <li>分隔线</li>
+        <li>"退出" — 退出应用程序</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.4 入口修改</h3>
+      <p style="color: var(--text-secondary);">修改 <span class="doc-badge">app.py</span>：</p>
+      <ul class="doc-list">
+        <li>添加托盘初始化逻辑</li>
+        <li>启动时自动打开浏览器</li>
+        <li>启动托盘事件循环</li>
+      </ul>
+    </div>
+
+    <!-- 4. 状态 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">四、实现状态</h2>
+      <table class="doc-table">
+        <thead><tr><th>阶段</th><th>状态</th></tr></thead>
+        <tbody>
+          <tr><td>设计完成</td><td><span class="doc-badge">已完成</span></td></tr>
+          <tr><td>实现中</td><td><span class="doc-badge" style="color: var(--text-muted); border-color: var(--text-muted);">待开始</span></td></tr>
+          <tr><td>待测试</td><td><span class="doc-badge" style="color: var(--text-muted); border-color: var(--text-muted);">待开始</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

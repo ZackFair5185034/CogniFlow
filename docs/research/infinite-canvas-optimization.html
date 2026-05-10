@@ -1,0 +1,230 @@
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  无限画布缩放/平移性能优化技术研究报告
+
+  SVG/Canvas/WebGL 对比、视口裁剪、LOD、Web Workers 等优化技术研究。
+  日期: 2026-05
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>无限画布性能优化研究 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+
+    <h1 class="doc-title">无限画布性能优化研究</h1>
+    <p class="doc-subtitle">SVG/Canvas/WebGL 对比、视口裁剪、LOD、Web Workers</p>
+
+    <hr class="doc-divider">
+
+    <!-- 一、渲染技术对比 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">一、渲染技术对比</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">1.1 Canvas vs SVG vs WebGL</h3>
+      <table class="doc-table">
+        <thead><tr><th>维度</th><th>SVG</th><th>Canvas 2D</th><th>WebGL</th></tr></thead>
+        <tbody>
+          <tr><td><strong>适用场景</strong></td><td>编辑器（节点数 &lt;1000）</td><td>数据可视化、图表</td><td>游戏、3D、大型可视化</td></tr>
+          <tr><td><strong>DOM 事件</strong></td><td>原生支持</td><td>需手动绑定</td><td>需射线投射</td></tr>
+          <tr><td><strong>内存占用</strong></td><td>高（每个元素是 DOM）</td><td>低（位图）</td><td>中等</td></tr>
+          <tr><td><strong>重绘粒度</strong></td><td>元素级</td><td>全量/区域</td><td>全量/区域</td></tr>
+          <tr><td><strong>缩放质量</strong></td><td>矢量无损</td><td>位图有锯齿</td><td>可过滤优化</td></tr>
+          <tr><td><strong>实现复杂度</strong></td><td>低</td><td>中</td><td>高</td></tr>
+          <tr><td><strong>Node-RED 选用</strong></td><td>✅ SVG</td><td>❌</td><td>❌</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">1.2 工业级画布库对比</h3>
+      <table class="doc-table">
+        <thead><tr><th>库</th><th>渲染</th><th>虚拟化</th><th>缩放范围</th><th>移动端</th></tr></thead>
+        <tbody>
+          <tr><td>Konva</td><td>Canvas</td><td>✅</td><td>自定义</td><td>✅</td></tr>
+          <tr><td>Fabric.js</td><td>Canvas</td><td>✅</td><td>自定义</td><td>✅</td></tr>
+          <tr><td>D3.js</td><td>SVG</td><td>❌</td><td>依赖实现</td><td>✅</td></tr>
+          <tr><td>Leaflet</td><td>Canvas/Image</td><td>✅</td><td>有限</td><td>✅</td></tr>
+          <tr><td>PixiJS</td><td>WebGL</td><td>✅</td><td>任意</td><td>✅</td></tr>
+          <tr><td>Excalidraw</td><td>Canvas</td><td>❌</td><td>0.1x-10x</td><td>✅</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 二、Node-RED 画布实现分析 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">二、Node-RED 画布实现分析</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">2.1 固定空间画布</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;">Node-RED 使用<strong>固定 8000×8000 SVG 空间</strong>，通过 CSS scroll 模拟平移。</p>
+      <div class="doc-code">
+<pre>outer = d3.select("#red-ui-workspace-chart")
+    .append("svg:svg")
+    .attr("width", 8000)    // 固定画布尺寸
+    .attr("height", 8000)
+    .style("overflow", "scroll");  // CSS 滚动</pre>
+      </div>
+      <p style="color: var(--text-secondary); margin-top: 8px;"><strong>优点:</strong>实现简单，浏览器原生滚动 | <strong>缺点:</strong>大画布下 DOM 节点多，内存压力大</p>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">2.2 dirty flag 优化</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;">Node-RED 不计算 viewport 裁剪，而是用 <strong>dirty flag</strong> 避免不必要重绘。</p>
+      <div class="doc-code">
+<pre>// 节点/连线变更时标记 dirty
+node.dirty = true;
+node.dirtyGroup = true;
+
+// redraw() 只重绘脏区域
+if (node.dirty) {
+    // 重绘该节点
+}</pre>
+      </div>
+    </div>
+
+    <!-- 三、性能优化技术 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">三、性能优化技术</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">3.1 视口裁剪（Viewport Culling）原理</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;"><strong>核心思想:</strong>只渲染视口内可见的元素。</p>
+      <div class="doc-code" style="font-size: 0.85rem;">
+<pre>function getVisibleNodes(viewport, nodes) {
+    const { x, y, width, height, scale } = viewport;
+    const viewBounds = {
+        left: x / scale, right: (x + width) / scale,
+        top: y / scale, bottom: (y + height) / scale
+    };
+    return nodes.filter(node => rectsIntersect(viewBounds, getNodeBounds(node)));
+}
+
+function rectsIntersect(a, b) {
+    return !(a.right &lt; b.left || a.left &gt; b.right ||
+             a.bottom &lt; b.top || a.top &gt; b.bottom);
+}</pre>
+      </div>
+      <p style="color: var(--accent-green); margin-top: 8px;"><strong>性能收益:</strong>10000 节点场景下，视野内通常 &lt;100 节点，DOM 操作减少 99%。</p>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.2 矩阵变换（缩放/平移数学）</h3>
+      <div class="doc-code" style="font-size: 0.85rem;">
+<pre>// 齐次坐标变换
+[x'] = [scale  0    tx] [x]
+[y'] = [0      scale ty] [y]
+[1 ] = [0      0     1 ] [1]
+
+// 以屏幕中心点为缩放中心
+function zoomAtPoint(viewport, newScale, centerScreen) {
+    const centerBefore = screenToCanvas(viewport, centerScreen);
+    viewport.scale = newScale;
+    const centerAfter = screenToCanvas(viewport, centerScreen);
+    viewport.x += (centerAfter.x - centerBefore.x) * viewport.scale;
+    viewport.y += (centerAfter.y - centerBefore.y) * viewport.scale;
+}</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.3 LOD (Level of Detail) 策略</h3>
+      <table class="doc-table">
+        <thead><tr><th>缩放级别</th><th>渲染内容</th></tr></thead>
+        <tbody>
+          <tr><td>&gt; 50%</td><td>完整节点 + 标签</td></tr>
+          <tr><td>20%-50%</td><td>简化节点（无标签）</td></tr>
+          <tr><td>&lt; 20%</td><td>占位符方块</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.4 requestAnimationFrame 优化</h3>
+      <div class="doc-code">
+<pre>let rafId = null;
+let pendingUpdate = false;
+
+function scheduleRedraw() {
+    if (!pendingUpdate) {
+        pendingUpdate = true;
+        rafId = requestAnimationFrame(() => {
+            pendingUpdate = false;
+            render(viewport);
+        });
+    }
+}</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.5 Web Workers 在画布渲染中的应用</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;"><strong>适合放入 Worker 的任务:</strong></p>
+      <ul class="doc-list">
+        <li>视口裁剪计算</li>
+        <li>连线路径计算（Bezier 曲线）</li>
+        <li>布局算法（dagre, elkjs）</li>
+        <li>搜索/过滤</li>
+      </ul>
+    </div>
+
+    <!-- 四、性能数据参考 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">四、性能数据参考</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">4.1 不同规模下的渲染性能</h3>
+      <table class="doc-table">
+        <thead><tr><th>节点数</th><th>SVG 重绘</th><th>Canvas 重绘</th><th>WebGL 重绘</th></tr></thead>
+        <tbody>
+          <tr><td>100</td><td>&lt;5ms</td><td>&lt;2ms</td><td>&lt;1ms</td></tr>
+          <tr><td>500</td><td>&lt;16ms</td><td>&lt;5ms</td><td>&lt;2ms</td></tr>
+          <tr><td>1000</td><td>&lt;33ms</td><td>&lt;10ms</td><td>&lt;3ms</td></tr>
+          <tr><td>5000</td><td>&gt;100ms</td><td>&lt;50ms</td><td>&lt;10ms</td></tr>
+          <tr><td>10000</td><td>&gt;200ms</td><td>&lt;100ms</td><td>&lt;20ms</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">4.2 优化后的性能目标</h3>
+      <table class="doc-table">
+        <thead><tr><th>指标</th><th>目标帧率</th><th>实现</th></tr></thead>
+        <tbody>
+          <tr><td>平移</td><td>60fps</td><td>viewport culling + RAF</td></tr>
+          <tr><td>缩放</td><td>30fps</td><td>scale 缓存 + RAF</td></tr>
+          <tr><td>拖拽</td><td>60fps</td><td>直接 DOM 操作</td></tr>
+          <tr><td>连接线</td><td>60fps</td><td>Bezier 路径缓存</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 五、实现方案推荐 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">五、实现方案推荐</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">5.1 编辑态（节点编辑器）</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 8px;"><strong>推荐: Canvas 2D (Konva.js)</strong> — 性能好，支持绑定，API 友好</p>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">5.2 运行态（监控/预览）</h3>
+      <p style="color: var(--text-secondary);">推荐: 虚拟化 Canvas — 只渲染视口内元素，Web Worker 处理裁剪计算。</p>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">5.3 混合方案</h3>
+      <table class="doc-table">
+        <thead><tr><th>场景</th><th>技术</th></tr></thead>
+        <tbody>
+          <tr><td>节点编辑</td><td>Konva (Canvas)</td></tr>
+          <tr><td>流程监控</td><td>Canvas 虚拟化</td></tr>
+          <tr><td>子流程预览</td><td>WebGL (PixiJS)</td></tr>
+          <tr><td>缩略图/小地图</td><td>Canvas 降采样</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 六、CogniFlow 画布实现建议 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">六、CogniFlow 画布实现建议</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 12px;">基于 Node-RED 和业界实践，推荐：</p>
+      <ul class="doc-list">
+        <li><strong>初期:</strong> SVG + D3（类似 Node-RED），快速开发</li>
+        <li><strong>中期:</strong> 引入 dirty flag + viewport culling</li>
+        <li><strong>后期:</strong> Canvas (Konva) 迁移，支持大规模流程</li>
+      </ul>
+      <p style="color: var(--text-secondary); margin-top: 12px;"><strong>关键优化点:</strong></p>
+      <ul class="doc-list">
+        <li>用 requestAnimationFrame 节流重绘</li>
+        <li>Web Worker 处理布局计算</li>
+        <li>缩放时用 LOD 降级渲染细节</li>
+        <li>连线路径用 Path2D 缓存</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,629 @@
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  规则引擎节点连接设计规范
+
+  Blender 风格端口类型颜色体系、兼容性矩阵、完整节点端口详表。
+  日期: 2026-05
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>规则引擎端口连接设计 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+
+    <h1 class="doc-title">规则引擎节点连接设计规范</h1>
+    <p class="doc-subtitle">Blender 风格端口类型颜色体系、兼容性矩阵、完整节点端口详表</p>
+
+    <hr class="doc-divider">
+
+    <p style="color: var(--text-secondary); margin-bottom: 24px; font-style: italic;">
+      设计原则：能相互连接的端口使用相同的颜色标识，用户通过颜色即可直观判断两个端口是否兼容。
+    </p>
+
+    <!-- 1. 端口类型体系 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">一、端口类型体系</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">1.1 完整端口类型</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 12px;">前端 <span class="doc-badge">PortType</span> 枚举缺失部分类型，与后端实际使用的类型不一致，需要统一。</p>
+      <table class="doc-table">
+        <thead><tr><th>端口类型</th><th>语义</th><th>后端枚举</th><th>前端验证</th><th>前端 CSS</th></tr></thead>
+        <tbody>
+          <tr><td><span class="doc-badge">IMAGE</span></td><td>图片数据</td><td>✅</td><td>✅</td><td>✅</td></tr>
+          <tr><td><span class="doc-badge">BBOX</span></td><td>检测框坐标</td><td>✅</td><td>✅</td><td>✅</td></tr>
+          <tr><td><span class="doc-badge">MASK</span></td><td>分割掩码</td><td>✅</td><td>✅</td><td>✅</td></tr>
+          <tr><td><span class="doc-badge">SCORES</span></td><td>置信度分数</td><td>✅</td><td>✅</td><td>✅</td></tr>
+          <tr><td><span class="doc-badge">TRIGGER</span></td><td>触发信号</td><td>✅</td><td>✅</td><td>✅</td></tr>
+          <tr><td><span class="doc-badge">CONTROL</span></td><td>控制流信号</td><td>✅</td><td>✅</td><td>✅</td></tr>
+          <tr><td><span class="doc-badge">MODEL</span></td><td>模型引用</td><td>✅</td><td>✅</td><td>❌</td></tr>
+          <tr><td><span class="doc-badge">ANY</span></td><td>任意类型</td><td>✅</td><td>✅</td><td>✅</td></tr>
+          <tr><td><span class="doc-badge">INT</span></td><td>整数值</td><td>❌</td><td>❌</td><td>❌</td></tr>
+          <tr><td><span class="doc-badge">FLOAT</span></td><td>浮点值</td><td>❌</td><td>❌</td><td>❌</td></tr>
+          <tr><td><span class="doc-badge">BOOLEAN</span></td><td>布尔值</td><td>❌</td><td>❌</td><td>✅（CSS 有但无 PortType）</td></tr>
+          <tr><td><span class="doc-badge">STRING</span></td><td>字符串</td><td>❌</td><td>❌</td><td>❌</td></tr>
+          <tr><td><span class="doc-badge">ARRAY</span></td><td>数组/列表</td><td>❌</td><td>❌</td><td>✅（CSS 有但无 PortType）</td></tr>
+          <tr><td><span class="doc-badge">OBJECT</span></td><td>对象/字典</td><td>❌</td><td>❌</td><td>❌</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">1.2 整改要求</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 12px;">后端 <span class="doc-badge">models.py</span> 补充完整类型，前端 <span class="doc-badge">RuleCanvas.vue</span> 的 <span class="doc-badge">PORT_TYPES</span> 数组同步更新：</p>
+      <div class="doc-code">
+<pre>class PortType(str, Enum):
+    """端口数据类型枚举。"""
+    IMAGE = "IMAGE"
+    BBOX = "BBOX"
+    MASK = "MASK"
+    SCORES = "SCORES"
+    TRIGGER = "TRIGGER"
+    CONTROL = "CONTROL"
+    MODEL = "MODEL"
+    ANY = "ANY"
+    INT = "INT"          # 新增
+    FLOAT = "FLOAT"      # 新增
+    BOOLEAN = "BOOLEAN"  # 新增
+    STRING = "STRING"    # 新增
+    ARRAY = "ARRAY"      # 新增
+    OBJECT = "OBJECT"    # 新增</pre>
+      </div>
+    </div>
+
+    <!-- 2. 端口颜色体系 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">二、端口颜色体系</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">2.1 颜色映射表</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 12px;">核心原则：<strong>同色可连</strong>。颜色完全由端口类型决定，与节点类别无关。</p>
+      <div class="doc-code">
+<pre>/* 执行流 — 紫色系 */
+.type-trigger  { border-color: #DC4FDC; }  /* 触发信号 ↦ 触发、控制 */
+.type-control  { border-color: #DC4FDC; }  /* 控制流  ↦ 控制 */
+
+/* 视觉数据 — 绿色系 */
+.type-image    { border-color: #4CFF4C; }  /* 图片数据 ↦ 图片 */
+
+/* 检测数据 — 蓝色/橙色系 */
+.type-bbox     { border-color: #00f0FF; }  /* 检测框 ↦ 检测框 */
+.type-mask     { border-color: #00f0FF; }  /* 掩码 ↦ 掩码 */
+.type-scores   { border-color: #FF7F4C; }  /* 置信度 ↦ 置信度 */
+
+/* 集合数据 — 黄色系 */
+.type-array    { border-color: #FFFF4C; }  /* 列表/数组 ↦ 列表 */
+.type-object   { border-color: #FFFF4C; }  /* 对象/字典 ↦ 对象 */
+
+/* 基本类型 — 红/蓝色系 */
+.type-boolean  { border-color: #FF4C4C; }  /* 布尔值 ↦ 布尔 */
+.type-int      { border-color: #3B82F6; }  /* 整数 ↦ 整数 */
+.type-float    { border-color: #14B8A6; }  /* 浮点数 ↦ 浮点 */
+.type-string   { border-color: #8B5CF6; }  /* 字符串 ↦ 字符串 */
+
+/* 泛型 — 灰色系 */
+.type-model    { border-color: #888888; }  /* 模型引用 ↦ 模型 */
+.type-any      { border-color: #E0E0E0; }  /* 任意类型 ↦ 任意类型 */</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">2.2 颜色分组说明</h3>
+      <table class="doc-table">
+        <thead><tr><th>色组</th><th>包含类型</th><th>互连规则</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td style="color: #DC4FDC;">紫色</td><td>TRIGGER, CONTROL</td><td>TRIGGER→TRIGGER/CONTROL, CONTROL→CONTROL</td><td>执行链信号，触发信号可以启动控制流节点</td></tr>
+          <tr><td style="color: #4CFF4C;">绿色</td><td>IMAGE</td><td>IMAGE↔IMAGE</td><td>视觉数据流</td></tr>
+          <tr><td style="color: #00f0FF;">青色</td><td>BBOX, MASK</td><td>BBOX↔BBOX, MASK↔MASK</td><td>检测空间数据</td></tr>
+          <tr><td style="color: #FF7F4C;">橙色</td><td>SCORES</td><td>SCORES↔SCORES</td><td>检测置信度</td></tr>
+          <tr><td style="color: #FFFF4C;">黄色</td><td>ARRAY, OBJECT</td><td>ARRAY↔ARRAY, OBJECT↔OBJECT</td><td>集合/结构化数据（独立互连，不能跨类型）</td></tr>
+          <tr><td style="color: #FF4C4C;">红色</td><td>BOOLEAN</td><td>BOOLEAN↔BOOLEAN</td><td>真/假值</td></tr>
+          <tr><td style="color: #3B82F6;">蓝色</td><td>INT</td><td>INT↔INT</td><td>整数值</td></tr>
+          <tr><td style="color: #14B8A6;">青色系</td><td>FLOAT</td><td>FLOAT↔FLOAT</td><td>浮点值</td></tr>
+          <tr><td style="color: #8B5CF6;">紫色系</td><td>STRING</td><td>STRING↔STRING</td><td>文本</td></tr>
+          <tr><td>灰色</td><td>MODEL</td><td>MODEL↔MODEL</td><td>模型引用</td></tr>
+          <tr><td>亮灰色</td><td>ANY</td><td>ANY↔ANY + ANY↔任意</td><td>通配类型</td></tr>
+        </tbody>
+      </table>
+      <p style="color: var(--text-secondary); margin-top: 12px; font-size: 0.875rem;">
+        <strong>注意：</strong>TRIGGER 和 CONTROL 共用紫色，因为 TRIGGER 可以连接 CONTROL（触发信号驱动控制流）。
+        但 CONTROL→TRIGGER 不允许（控制流完成不会反过来触发）。
+      </p>
+    </div>
+
+    <!-- 3. 兼容性矩阵 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">三、兼容性矩阵</h2>
+      <div class="doc-code">
+<pre>const TYPE_COMPATIBILITY: Record&lt;string, string[]&gt; = {
+  IMAGE:    ['IMAGE'],
+  BBOX:     ['BBOX'],
+  MASK:     ['MASK'],
+  SCORES:   ['SCORES'],
+  TRIGGER:  ['TRIGGER', 'CONTROL'],
+  CONTROL:  ['CONTROL'],
+  BOOLEAN:  ['BOOLEAN'],
+  INT:      ['INT'],
+  FLOAT:    ['FLOAT'],
+  STRING:   ['STRING'],
+  ARRAY:    ['ARRAY'],
+  OBJECT:   ['OBJECT'],
+  MODEL:    ['MODEL'],
+  ANY:      ['ANY', 'IMAGE', 'BBOX', 'MASK', 'SCORES', 'TRIGGER', 'CONTROL',
+             'BOOLEAN', 'INT', 'FLOAT', 'STRING', 'ARRAY', 'OBJECT', 'MODEL'],
+}</pre>
+      </div>
+    </div>
+
+    <!-- 4. 全节点端口详表 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">四、全节点端口详表</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">4.1 input — 输入类（节点类别色：#4CFF4C）</h3>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">ImageCaptureNode (<span class="doc-badge">image_capture</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>➡输出</td><td>image</td><td>IMAGE</td><td>—</td><td>图片</td><td>采集到的图片数据</td></tr>
+          <tr><td>➡输出</td><td>width</td><td>INT</td><td>—</td><td>宽度</td><td>图片宽度（像素）</td></tr>
+          <tr><td>➡输出</td><td>height</td><td>INT</td><td>—</td><td>高度</td><td>图片高度（像素）</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">VideoCaptureNode (<span class="doc-badge">video_capture</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>➡输出</td><td>image</td><td>IMAGE</td><td>—</td><td>帧图片</td><td>采集到的视频帧</td></tr>
+          <tr><td>➡输出</td><td>frame_id</td><td>INT</td><td>—</td><td>帧序号</td><td>帧序号</td></tr>
+          <tr><td>➡输出</td><td>timestamp</td><td>FLOAT</td><td>—</td><td>时间戳</td><td>时间戳（秒）</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">ScreenCaptureNode (<span class="doc-badge">screen_capture</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>➡输出</td><td>image</td><td>IMAGE</td><td>—</td><td>截图</td><td>屏幕截图</td></tr>
+          <tr><td>➡输出</td><td>region</td><td>OBJECT</td><td>—</td><td>区域</td><td>采集区域信息</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">ManualTriggerNode (<span class="doc-badge">manual_trigger</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>➡输出</td><td>triggered</td><td>BOOLEAN</td><td>—</td><td>触发</td><td>是否触发</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">TimerTriggerNode (<span class="doc-badge">timer_trigger</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>➡输出</td><td>triggered</td><td>BOOLEAN</td><td>—</td><td>触发</td><td>是否触发</td></tr>
+          <tr><td>➡输出</td><td>timestamp</td><td>FLOAT</td><td>—</td><td>时间戳</td><td>触发时间戳</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">CronTriggerNode (<span class="doc-badge">cron_trigger</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>➡输出</td><td>triggered</td><td>BOOLEAN</td><td>—</td><td>触发</td><td>是否触发</td></tr>
+          <tr><td>➡输出</td><td>timestamp</td><td>FLOAT</td><td>—</td><td>时间戳</td><td>触发时间戳</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">WebhookTriggerNode (<span class="doc-badge">webhook_trigger</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>➡输出</td><td>triggered</td><td>BOOLEAN</td><td>—</td><td>触发</td><td>是否触发</td></tr>
+          <tr><td>➡输出</td><td>request_data</td><td>ANY</td><td>—</td><td>请求数据</td><td>HTTP 请求数据</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">ApiTriggerNode (<span class="doc-badge">api_trigger</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>➡输出</td><td>triggered</td><td>BOOLEAN</td><td>—</td><td>触发</td><td>是否触发</td></tr>
+          <tr><td>➡输出</td><td>api_response</td><td>ANY</td><td>—</td><td>API响应</td><td>API 响应数据</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 24px;">4.2 detection — 检测类（节点类别色：#00f0FF）</h3>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">YOLOModelNode (<span class="doc-badge">yolo_model</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>image</td><td>IMAGE</td><td>✅</td><td>图片输入</td><td>待检测的图片</td></tr>
+          <tr><td>➡输出</td><td>bboxes</td><td>BBOX</td><td>—</td><td>检测框</td><td>检测到的目标框列表</td></tr>
+          <tr><td>➡输出</td><td>scores</td><td>SCORES</td><td>—</td><td>置信度</td><td>各检测框对应的置信度</td></tr>
+          <tr><td>➡输出</td><td>class_ids</td><td>ARRAY</td><td>—</td><td>类别ID</td><td>各检测框对应的类别 ID</td></tr>
+          <tr><td>➡输出</td><td>class_names</td><td>ARRAY</td><td>—</td><td>类别名称</td><td>各检测框对应的类别名称</td></tr>
+          <tr><td>➡输出</td><td>count</td><td>INT</td><td>—</td><td>检测数量</td><td>检测到的目标数量</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">YOLOTriggerNode (<span class="doc-badge">yolo_trigger</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>image</td><td>IMAGE</td><td>❌</td><td>图片输入</td><td>待检测的图片（可选）</td></tr>
+          <tr><td>➡输出</td><td>triggered</td><td>BOOLEAN</td><td>—</td><td>触发</td><td>是否满足触发条件</td></tr>
+          <tr><td>➡输出</td><td>detections</td><td>ARRAY</td><td>—</td><td>检测结果</td><td>检测到的目标列表</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">ObjectDetectorNode (<span class="doc-badge">object_detector</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>image</td><td>IMAGE</td><td>✅</td><td>图片输入</td><td>待检测的图片</td></tr>
+          <tr><td>➡输出</td><td>detections</td><td>ARRAY</td><td>—</td><td>检测结果</td><td>检测到的目标列表</td></tr>
+          <tr><td>➡输出</td><td>count</td><td>INT</td><td>—</td><td>数量</td><td>检测数量</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 24px;">4.3 processing — 处理类（节点类别色：#FFFF4C）</h3>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">CategoryEncodeNode (<span class="doc-badge">category_encode</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>class_names</td><td>ARRAY</td><td>✅</td><td>类别名称</td><td>类别名称列表</td></tr>
+          <tr><td>➡输出</td><td>class_ids</td><td>ARRAY</td><td>—</td><td>类别ID</td><td>类别 ID 列表</td></tr>
+          <tr><td>➡输出</td><td>class_names</td><td>ARRAY</td><td>—</td><td>类别名称</td><td>类别名称列表（带映射）</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">FilterNode (<span class="doc-badge">filter</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>detections</td><td>ARRAY</td><td>✅</td><td>检测结果</td><td>待过滤的检测结果</td></tr>
+          <tr><td>➡输出</td><td>filtered</td><td>ARRAY</td><td>—</td><td>过滤结果</td><td>过滤后的结果</td></tr>
+          <tr><td>➡输出</td><td>count</td><td>INT</td><td>—</td><td>数量</td><td>过滤后数量</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">TrackerNode (<span class="doc-badge">tracker</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>detections</td><td>ARRAY</td><td>✅</td><td>检测结果</td><td>当前帧检测结果</td></tr>
+          <tr><td>➡输出</td><td>tracked</td><td>ARRAY</td><td>—</td><td>跟踪结果</td><td>带跟踪 ID 的结果</td></tr>
+          <tr><td>➡输出</td><td>track_ids</td><td>ARRAY</td><td>—</td><td>跟踪ID</td><td>跟踪 ID 列表</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">ImagePreprocessorNode (<span class="doc-badge">image_preprocessor</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>image</td><td>IMAGE</td><td>✅</td><td>图片</td><td>待处理的图片</td></tr>
+          <tr><td>➡输出</td><td>image</td><td>IMAGE</td><td>—</td><td>处理后图片</td><td>处理后的图片</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 24px;">4.4 action — 动作类（节点类别色：#FF7F4C）</h3>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">KeyboardActionNode (<span class="doc-badge">keyboard_action</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>trigger</td><td>TRIGGER</td><td>✅</td><td>触发</td><td>触发信号</td></tr>
+          <tr><td>➡输出</td><td>success</td><td>BOOLEAN</td><td>—</td><td>成功</td><td>是否执行成功</td></tr>
+          <tr><td>➡输出</td><td>executed_keys</td><td>ARRAY</td><td>—</td><td>按键列表</td><td>已执行的按键列表</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">MouseActionNode (<span class="doc-badge">mouse_action</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>trigger</td><td>TRIGGER</td><td>✅</td><td>触发</td><td>触发信号</td></tr>
+          <tr><td>➡输出</td><td>success</td><td>BOOLEAN</td><td>—</td><td>成功</td><td>是否执行成功</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">WaitActionNode (<span class="doc-badge">wait_action</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>trigger</td><td>TRIGGER</td><td>✅</td><td>触发</td><td>触发信号</td></tr>
+          <tr><td>➡输出</td><td>completed</td><td>BOOLEAN</td><td>—</td><td>完成</td><td>等待完成</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">HttpRequestActionNode (<span class="doc-badge">http_request_action</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>trigger</td><td>TRIGGER</td><td>✅</td><td>触发</td><td>触发信号</td></tr>
+          <tr><td>➡输出</td><td>success</td><td>BOOLEAN</td><td>—</td><td>成功</td><td>请求是否成功</td></tr>
+          <tr><td>➡输出</td><td>status_code</td><td>INT</td><td>—</td><td>状态码</td><td>HTTP 状态码</td></tr>
+          <tr><td>➡输出</td><td>response</td><td>ANY</td><td>—</td><td>响应</td><td>响应内容</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">LogActionNode (<span class="doc-badge">log_action</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>trigger</td><td>TRIGGER</td><td>✅</td><td>触发</td><td>触发信号</td></tr>
+          <tr><td>➡输出</td><td>logged</td><td>BOOLEAN</td><td>—</td><td>已记录</td><td>是否记录成功</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 24px;">4.5 logic — 逻辑类（节点类别色：#DC4FDC）</h3>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">BranchNode (<span class="doc-badge">branch</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>condition</td><td>BOOLEAN</td><td>✅</td><td>条件</td><td>分支条件</td></tr>
+          <tr><td>➡输出</td><td>true</td><td>CONTROL</td><td>—</td><td>条件成立</td><td>条件成立时的输出</td></tr>
+          <tr><td>➡输出</td><td>false</td><td>CONTROL</td><td>—</td><td>条件不成立</td><td>条件不成立时的输出</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">ParallelBranchNode (<span class="doc-badge">parallel_branch</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>trigger</td><td>TRIGGER</td><td>✅</td><td>触发</td><td>触发信号</td></tr>
+          <tr><td>➡输出</td><td>branch_1</td><td>CONTROL</td><td>—</td><td>分支1</td><td>分支1输出</td></tr>
+          <tr><td>➡输出</td><td>branch_2</td><td>CONTROL</td><td>—</td><td>分支2</td><td>分支2输出</td></tr>
+          <tr><td>➡输出</td><td>branch_3</td><td>CONTROL</td><td>—</td><td>分支3</td><td>分支3输出</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">DelayNode (<span class="doc-badge">delay</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>input</td><td>CONTROL</td><td>✅</td><td>输入</td><td>输入信号</td></tr>
+          <tr><td>➡输出</td><td>output</td><td>CONTROL</td><td>—</td><td>输出</td><td>延迟后的输出</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">SetVariableNode (<span class="doc-badge">set_variable</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>trigger</td><td>TRIGGER</td><td>❌</td><td>触发</td><td>触发信号</td></tr>
+          <tr><td>➡输出</td><td>next</td><td>CONTROL</td><td>—</td><td>完成</td><td>完成信号</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">CounterNode (<span class="doc-badge">counter</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>trigger</td><td>TRIGGER</td><td>✅</td><td>触发</td><td>计数触发</td></tr>
+          <tr><td>➡输出</td><td>count</td><td>INT</td><td>—</td><td>计数</td><td>当前计数值</td></tr>
+          <tr><td>➡输出</td><td>overflow</td><td>BOOLEAN</td><td>—</td><td>溢出</td><td>是否达到上限</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">ObjectExistsConditionNode (<span class="doc-badge">object_exists_condition</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>detections</td><td>ARRAY</td><td>✅</td><td>检测结果</td><td>检测结果列表</td></tr>
+          <tr><td>➡输出</td><td>result</td><td>BOOLEAN</td><td>—</td><td>结果</td><td>条件是否满足</td></tr>
+          <tr><td>➡输出</td><td>matched_count</td><td>INT</td><td>—</td><td>匹配数量</td><td>符合条件的数量</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">ConfidenceThresholdConditionNode (<span class="doc-badge">confidence_threshold_condition</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>detections</td><td>ARRAY</td><td>✅</td><td>检测结果</td><td>检测结果列表</td></tr>
+          <tr><td>➡输出</td><td>result</td><td>BOOLEAN</td><td>—</td><td>结果</td><td>条件是否满足</td></tr>
+          <tr><td>➡输出</td><td>max_confidence</td><td>FLOAT</td><td>—</td><td>最大置信度</td><td>最高置信度值</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">VariableConditionNode (<span class="doc-badge">variable_condition</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>➡输出</td><td>result</td><td>BOOLEAN</td><td>—</td><td>结果</td><td>条件是否满足</td></tr>
+          <tr><td>➡输出</td><td>actual_value</td><td>ANY</td><td>—</td><td>实际值</td><td>变量的实际值</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 24px;">4.6 output — 输出类（节点类别色：#FF4C4C）</h3>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px;">SaveResultNode (<span class="doc-badge">save_result</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>data</td><td>ANY</td><td>✅</td><td>数据</td><td>要保存的数据</td></tr>
+          <tr><td>➡输出</td><td>success</td><td>BOOLEAN</td><td>—</td><td>成功</td><td>是否保存成功</td></tr>
+          <tr><td>➡输出</td><td>path</td><td>STRING</td><td>—</td><td>文件路径</td><td>保存的文件路径</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">NotificationNode (<span class="doc-badge">notification</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>trigger</td><td>TRIGGER</td><td>✅</td><td>触发</td><td>触发信号</td></tr>
+          <tr><td>➡输出</td><td>sent</td><td>BOOLEAN</td><td>—</td><td>已发送</td><td>是否发送成功</td></tr>
+        </tbody>
+      </table>
+
+      <h4 style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 8px; margin-top: 12px;">DisplayNode (<span class="doc-badge">display</span>)</h4>
+      <table class="doc-table">
+        <thead><tr><th>方向</th><th>端口名</th><th>类型</th><th>必需</th><th>标签</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>←输入</td><td>data</td><td>ANY</td><td>✅</td><td>数据</td><td>要显示的数据</td></tr>
+          <tr><td>➡输出</td><td>displayed</td><td>BOOLEAN</td><td>—</td><td>已显示</td><td>是否显示成功</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 5. 端口类型分布 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">五、端口类型分布统计</h2>
+      <table class="doc-table">
+        <thead><tr><th>端口类型</th><th>出现次数</th><th>作为输入</th><th>作为输出</th><th>常见位置</th></tr></thead>
+        <tbody>
+          <tr><td>BOOLEAN</td><td>17</td><td>1</td><td>16</td><td>触发节点输出、动作结果、条件结果</td></tr>
+          <tr><td>INT</td><td>9</td><td>0</td><td>9</td><td>宽度/高度、计数、状态码</td></tr>
+          <tr><td>ARRAY</td><td>13</td><td>6</td><td>7</td><td>检测结果列表、类别列表、过滤/跟踪结果</td></tr>
+          <tr><td>TRIGGER</td><td>7</td><td>7</td><td>0</td><td>动作节点输入、逻辑节点输入</td></tr>
+          <tr><td>IMAGE</td><td>6</td><td>3</td><td>3</td><td>输入源→检测模型、图像预处理</td></tr>
+          <tr><td>CONTROL</td><td>6</td><td>1</td><td>5</td><td>分支输出、延迟输入/输出</td></tr>
+          <tr><td>FLOAT</td><td>4</td><td>0</td><td>4</td><td>时间戳、最大置信度</td></tr>
+          <tr><td>ANY</td><td>4</td><td>2</td><td>2</td><td>Webhook数据、HTTP响应、变量值、保存数据</td></tr>
+          <tr><td>BBOX</td><td>1</td><td>0</td><td>1</td><td>检测框（仅在YOLO模型输出）</td></tr>
+          <tr><td>SCORES</td><td>1</td><td>0</td><td>1</td><td>置信度（仅在YOLO模型输出）</td></tr>
+          <tr><td>STRING</td><td>1</td><td>0</td><td>1</td><td>文件路径</td></tr>
+          <tr><td>OBJECT</td><td>1</td><td>0</td><td>1</td><td>采集区域信息（ScreenCapture）</td></tr>
+          <tr><td>MASK</td><td>0</td><td>0</td><td>0</td><td>预留，当前未使用</td></tr>
+          <tr><td>MODEL</td><td>0</td><td>0</td><td>0</td><td>预留，当前未使用</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">端口类型频率分析</h3>
+      <div class="doc-code" style="font-size: 0.8rem; line-height: 1.6;">
+<pre>BOOLEAN  ■■■■■■■■■■■■■■■■■ 17
+ARRAY     ■■■■■■■■■■■■■    13
+INT       ■■■■■■■■■         9
+TRIGGER   ■■■■■■■           7
+IMAGE     ■■■■■■            6
+CONTROL   ■■■■■■            6
+FLOAT     ■■■■              4
+ANY       ■■■■              4
+BBOX      ■                  1
+SCORES    ■                  1
+STRING    ■                  1
+OBJECT    ■                  1
+MASK      (未使用)
+MODEL     (未使用)</pre>
+      </div>
+    </div>
+
+    <!-- 6. 典型连接模式 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">六、典型连接模式</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">模式 1：采集→检测→处理</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.6;">
+<pre>[ScreenCapture]────────IMAGE────────▶[YOLOModel]
+                                       │
+                              ARRAY ───┤──▶ [Filter] ──ARRAY──▶ [Tracker]
+                                       │
+                                     BBOX → (下游BBOX处理)
+                                   SCORES → (下游SCORES处理)
+
+关键颜色链：
+  IMAGE（绿色）：ScreenCapture → YOLOModel
+  ARRAY（黄色）：YOLOModel → Filter → Tracker
+  BBOX（青色）：YOLOModel → （后续）
+  SCORES（橙色）：YOLOModel → （后续）</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 20px;">模式 2：触发→动作链</h3>
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.6;">
+<pre>[ManualTrigger]
+       │
+   BOOLEAN（红色）
+       │
+    [Branch]
+    ┌──┴──┐
+ CONTROL  CONTROL（紫色）
+    │       │
+[Keyboard] [MouseAction]
+   TRIGGER    TRIGGER（紫色）
+    │          │
+[Wait]      [HttpRequest]
+   TRIGGER     TRIGGER
+    │          │
+[LogAction]  [Notification]
+
+关键颜色链：
+  BOOLEAN（红色）：ManualTrigger → Branch
+  CONTROL / TRIGGER（紫色）：Branch → Keyboard → Wait → Log</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 20px;">模式 3：条件检测</h3>
+      <div class="doc-code" style="font-size: 0.85rem;">
+<pre>[YOLOModel]────────ARRAY──▶[ObjectExistsCondition]──BOOLEAN──▶[Branch]
+                ──ARRAY──▶[ConfidenceThreshold]    ──BOOLEAN──▶[Branch]
+
+关键颜色链：
+  ARRAY（黄色）：YOLOModel → 条件节点
+  BOOLEAN（红色）：条件节点 → Branch（控制是否执行下游）</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 20px;">模式 4：图像预处理循环</h3>
+      <div class="doc-code" style="font-size: 0.85rem;">
+<pre>[ScreenCapture]──IMAGE──▶[ImagePreprocessor]──IMAGE──▶[YOLOModel]</pre>
+      </div>
+    </div>
+
+    <!-- 7. 设计规则总结 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">七、设计规则总结</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">规则 1：颜色标识类型而非节点</h3>
+      <p style="color: var(--text-secondary);">端口颜色代表<strong>数据类型</strong>，与节点所属类别完全无关。节点标题栏颜色表示节点类别，端口颜色表示数据类型，二者独立。</p>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">规则 2：同色可连</h3>
+      <p style="color: var(--text-secondary);">两个端口如果颜色相同，表示它们是兼容类型，可以连接。例外是 <span class="doc-badge">ANY</span>（亮灰色），它可以连接任何类型的端口，但 <span class="doc-badge">ANY</span> 端口本身只接受 <span class="doc-badge">ANY</span> 输入。</p>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">规则 3：TRIGGER/CONTROL 同色</h3>
+      <p style="color: var(--text-secondary);"><span class="doc-badge">TRIGGER</span> 和 <span class="doc-badge">CONTROL</span> 共用紫色，但连接方向有限制：</p>
+      <ul class="doc-list">
+        <li>✅ TRIGGER → CONTROL（触发信号启动控制流）</li>
+        <li>✅ TRIGGER → TRIGGER（触发信号链）</li>
+        <li>✅ CONTROL → CONTROL（控制流链接）</li>
+        <li>❌ CONTROL → TRIGGER（控制流完成不会触发）</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">规则 4：端口用圆点标识，类型用颜色标识</h3>
+      <p style="color: var(--text-secondary);">Handle 采用小圆点设计，宽度/高度 12px。颜色填充在边框上，已连接的端口边框变为绿色（<span class="doc-badge">#00ff88</span>）。</p>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">规则 5：类继承与端口类型扩展</h3>
+      <p style="color: var(--text-secondary);">如需新增端口类型，必须在以下 4 处同步更新：</p>
+      <ol style="color: var(--text-secondary); padding-left: 20px; line-height: 1.8;">
+        <li>后端 <span class="doc-badge">models.py</span> 的 <span class="doc-badge">PortType</span> 枚举</li>
+        <li>后端 <span class="doc-badge">TYPE_COMPATIBILITY</span> 兼容性矩阵</li>
+        <li>前端 <span class="doc-badge">RuleCanvas.vue</span> 的 <span class="doc-badge">PORT_TYPES</span> 数组 + <span class="doc-badge">isPortCompatible</span> 函数</li>
+        <li>前端 <span class="doc-badge">RuleNode.vue</span> 的 <span class="doc-badge">.type-{name}</span> CSS 颜色</li>
+      </ol>
+    </div>
+
+    <!-- 8. 当前问题与整改项 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">八、当前问题与整改项</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">问题 1：PortType 枚举不完整</h3>
+      <p style="color: var(--text-secondary);"><strong>现状：</strong>后端 <span class="doc-badge">PortType</span> 只有 8 种，但节点定义实际使用了 INT, FLOAT, BOOLEAN, STRING, ARRAY, OBJECT。</p>
+      <p style="color: var(--text-secondary); margin-top: 8px;"><strong>影响：</strong>前端验证 <span class="doc-badge">isPortCompatible</span> 对这 6 种类型返回 <span class="doc-badge">false</span>（默认走 <span class="doc-badge">return false</span>），导致连接被错误拒绝。</p>
+      <p style="color: var(--text-secondary); margin-top: 8px;"><strong>整改：</strong>在 <span class="doc-badge">PortType</span> 枚举中补充全部类型，同步更新前端 <span class="doc-badge">PORT_TYPES</span> 和 <span class="doc-badge">isPortCompatible</span>。</p>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">问题 2：前端 CSS 缺少部分端口类型颜色</h3>
+      <p style="color: var(--text-secondary);"><strong>现状：</strong><span class="doc-badge">RuleNode.vue</span> 已有 <span class="doc-badge">.type-image</span>、<span class="doc-badge">.type-bbox</span> 等样式，但缺少 <span class="doc-badge">.type-int</span>、<span class="doc-badge">.type-float</span>、<span class="doc-badge">.type-string</span>、<span class="doc-badge">.type-object</span>、<span class="doc-badge">.type-model</span>。</p>
+      <p style="color: var(--text-secondary); margin-top: 8px;"><strong>整改：</strong>补充全部 14 种端口类型的 CSS 颜色定义。</p>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">问题 3：Handle 未应用端口类型 class</h3>
+      <p style="color: var(--text-secondary);"><strong>现状：</strong><span class="doc-badge">RuleNode.vue</span> 的 Handle 模板没有根据端口类型动态添加 CSS class。</p>
+      <p style="color: var(--text-secondary); margin-top: 8px;"><strong>整改：</strong>添加动态类型 class：<span class="doc-badge">:class="['node-handle', `type-${(input.type || 'any').toLowerCase()}`]"</span></p>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">问题 4：已连接端口状态反馈不准确</h3>
+      <p style="color: var(--text-secondary);"><strong>现状：</strong><span class="doc-badge">.vue-flow-handle-connected</span> 将所有已连接端口标记为绿色，但此时端口原本的类型颜色丢失。</p>
+      <p style="color: var(--text-secondary); margin-top: 8px;"><strong>整改：</strong>使用 <span class="doc-badge">:class</span> 叠加类型颜色和连接状态，用内边框或高亮效果表示连接状态而非替换颜色。</p>
+    </div>
+  </div>
+</body>
+</html>
