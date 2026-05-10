@@ -713,7 +713,7 @@ function updateConfig(key: string, value: string | number | boolean | null) {
 
 .ports-side.outputs {
   justify-content: center;
-  align-items: flex-end;
+  /* 移除 align-items: flex-end，让输出端口在右侧边框垂直居中 */
 }
 
 .port-item {
