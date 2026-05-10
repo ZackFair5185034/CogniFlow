@@ -155,9 +155,9 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         const vars = JSON.parse(res.data.variables_json)
         variables.value = Object.entries(vars).map(([name, config]: [string, any]) => ({
           name,
-          type: (config.type as VariableType) || 'STRING',
-          defaultValue: config.defaultValue || '',
-          description: config.description || ''
+          type: (config.type as VariableType) ?? 'STRING',
+          defaultValue: config.defaultValue ?? '',
+          description: config.description ?? ''
         }))
       } catch {
         variables.value = []
@@ -231,7 +231,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   function updateNodeConfig(nodeId: string, key: string, value: any) {
     const node = currentGraph.value?.nodes.find(n => n.id === nodeId)
     if (node) {
-      node.data.config = node.data.config || {}
+      node.data.config = node.data.config ?? {}
       node.data.config[key] = value
     }
   }
@@ -336,10 +336,10 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    */
   function addVariable(variable?: Partial<Variable>): Variable {
     const newVar: Variable = {
-      name: variable?.name || `var_${variables.value.length + 1}`,
-      type: variable?.type || 'STRING',
-      defaultValue: variable?.defaultValue || '',
-      description: variable?.description || ''
+      name: variable?.name ?? `var_${variables.value.length + 1}`,
+      type: variable?.type ?? 'STRING',
+      defaultValue: variable?.defaultValue ?? '',
+      description: variable?.description ?? ''
     }
     variables.value.push(newVar)
     return newVar

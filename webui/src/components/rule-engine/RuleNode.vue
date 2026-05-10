@@ -166,7 +166,7 @@
             type="target"
             :position="Position.Left"
             :id="input.name"
-            :class="['node-handle', `type-${(input.type || 'any').toLowerCase()}`]"
+            :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`]"
           />
           <span class="port-label">{{ input.label || input.name }}</span>
         </div>
@@ -184,7 +184,7 @@
             type="source"
             :position="Position.Right"
             :id="output.name"
-            :class="['node-handle', `type-${(output.type || 'any').toLowerCase()}`]"
+            :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`]"
           />
         </div>
       </div>
@@ -329,7 +329,7 @@ const configSummary = computed(() => {
       if (val !== '' && val !== null && val !== undefined) {
         // 截断过长值
         const displayVal = String(val).length > 12
-          ? String(val).slice(0, 10) + '...'
+          ? `${String(val).slice(0, 10)}...`
           : String(val)
         parts.push(`${label}: ${displayVal}`)
       }

@@ -20,7 +20,7 @@ export interface Variable {
 
 // ============ Props & Emits ============
 
-const props = defineProps<{
+defineProps<{
   variables: Variable[]
   disabled?: boolean
 }>()

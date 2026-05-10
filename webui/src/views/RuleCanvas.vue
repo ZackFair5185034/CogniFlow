@@ -386,10 +386,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { VueFlow, useVueFlow, Position, MarkerType, SelectionMode } from '@vue-flow/core'
-import { Background } from '@vue-flow/background'
+import { VueFlow, useVueFlow, MarkerType, SelectionMode } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { ruleEngineApi } from '@/api'
@@ -402,13 +401,10 @@ import RuleNode from '@/components/rule-engine/RuleNode.vue'
 
 const router = useRouter()
 const route = useRoute()
-const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate, getZoom, getPan } = useVueFlow()
+const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate } = useVueFlow()
 
 // 常量
 const gridSize = 30
-const gridColor = '#2a2a32'
-const rulerStep = 100
-const showRulers = ref(true)
 
 // 状态
 const graphId = computed(() => Number(route.params.id))
@@ -437,8 +433,6 @@ const executionId = ref<number | null>(null)
 const flowContainer = ref<HTMLElement | null>(null)
 const vueFlowRef = ref<any>(null)
 const canvasWrapper = ref<HTMLElement | null>(null)
-const canvasWidth = ref(5000)
-const canvasHeight = ref(5000)
 const panX = ref(0)
 const panY = ref(0)
 const zoomLevel = ref(1)
@@ -792,7 +786,6 @@ function handlePaste() {
   const container = flowContainer.value
   if (!container) return
 
-  const rect = container.getBoundingClientRect()
   const offsetX = 50
   const offsetY = 50
 
@@ -902,41 +895,6 @@ function hideContextMenu() {
   contextMenu.show = false
 }
 
-// 获取输入端口的连接信息
-function getInputConnection(inputName: string) {
-  const edge = edges.value.find(
-    (e: any) => e.target === selectedNode.value?.id && e.targetHandle === inputName
-  )
-  if (!edge) return null
-  const sourceNode = nodes.value.find((n: any) => n.id === edge.source)
-  return {
-    edge,
-    sourceNode
-  }
-}
-
-// 断开连接
-function disconnectInput(inputName: string) {
-  const edge = edges.value.find(
-    (e: any) => e.target === selectedNode.value?.id && e.targetHandle === inputName
-  )
-  if (!edge) return
-  const idx = edges.value.findIndex((e: any) => e.id === edge.id)
-  if (idx !== -1) edges.value.splice(idx, 1)
-  saveHistory()
-  showToast('已断开连接', 'info')
-}
-
-// 显示变量绑定菜单
-function showVariableMenu(key: string, event: MouseEvent) {
-  event.preventDefault()
-  event.stopPropagation()
-  varMenu.show = true
-  varMenu.x = event.clientX
-  varMenu.y = event.clientY
-  varMenu.fieldKey = key
-}
-
 // 隐藏变量菜单
 function hideVariableMenu() {
   varMenu.show = false
@@ -948,7 +906,7 @@ function insertVariable(varName: string) {
   const currentValue = nodeConfig.value[varMenu.fieldKey] || ''
   // 如果当前值已包含 {{}}，则追加；否则添加 {{varName}}
   if (currentValue.includes('{{') && currentValue.includes('}}')) {
-    nodeConfig.value[varMenu.fieldKey] = currentValue + `{{${varName}}}`
+    nodeConfig.value[varMenu.fieldKey] = `${currentValue}{{${varName}}}`
   } else {
     nodeConfig.value[varMenu.fieldKey] = `{{${varName}}}`
   }
@@ -1107,7 +1065,7 @@ async function handleNameChange() {
       await ruleEngineApi.updateGraph(graphId.value, { name: graphName.value })
       graph.value.name = graphName.value
       showToast('名称已更新', 'success')
-    } catch (err) {
+    } catch {
       showToast('更新名称失败', 'error')
     }
   }
@@ -1212,8 +1170,6 @@ function handlePaneClick() {
 }
 
 // 端口类型兼容性检查（14种类型 + ANY通配）
-const PORT_TYPES = ['IMAGE', 'BBOX', 'MASK', 'SCORES', 'TRIGGER', 'CONTROL', 'MODEL', 'ANY', 'INT', 'FLOAT', 'BOOLEAN', 'STRING', 'ARRAY', 'OBJECT']
-
 function isPortCompatible(sourceType: string, targetType: string): boolean {
   // ANY 可以连接任何类型
   if (sourceType === 'ANY' || targetType === 'ANY') return true
@@ -1323,7 +1279,7 @@ function handleNodesChange(changes: any[]) {
   }
 }
 
-function handleEdgesChange(changes: any[]) {
+function handleEdgesChange(_changes: any[]) {
   // 只在外部变化时保存历史
 }
 
@@ -1393,28 +1349,6 @@ function updateConfig(key: string, value: any) {
     node.data = node.data || {}
     node.data.config = { ...nodeConfig.value }
   }
-}
-
-// 数组操作
-function addArrayItem(key: string) {
-  if (!nodeConfig.value[key]) nodeConfig.value[key] = []
-  nodeConfig.value[key] = [...nodeConfig.value[key], '']
-  updateNodeData()
-}
-
-function removeArrayItem(key: string, index: number) {
-  nodeConfig.value[key] = nodeConfig.value[key].filter((_: any, i: number) => i !== index)
-  updateNodeData()
-}
-
-function updateArrayItem(key: string, index: number, value: string) {
-  nodeConfig.value[key][index] = value
-  updateNodeData()
-}
-
-function updateNodeData() {
-  const node = nodes.value.find(n => n.id === selectedNode.value?.id)
-  if (node) node.data = { ...nodeConfig.value }
 }
 
 // ============ 变量管理 ============
@@ -1607,7 +1541,7 @@ async function handleValidate() {
     } else {
       showToast(`校验失败: ${res.data.errors?.join(', ') || '未知错误'}`, 'error')
     }
-  } catch (err) {
+  } catch {
     showToast('校验请求失败', 'error')
   }
 }
@@ -1649,9 +1583,7 @@ async function handleExecute() {
   }
 }
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
-
-async function pollExecutionStatus(execId: number) {
+async function pollExecutionStatus(_execId: number) {
   // WebSocket 足够可靠，仅在连接失败时启用轮询备用
 }
 

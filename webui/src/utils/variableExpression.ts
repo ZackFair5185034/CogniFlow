@@ -22,7 +22,7 @@ export interface EvaluationContext {
 // ============ 内置变量 ============
 
 export const BUILTIN_VARIABLES: Record<string, any> = {
-  '$now': () => new Date().toISOString(),
+  $now: () => new Date().toISOString(),
   '$graph.id': null,
   '$execution.id': null,
   '$node.id': null,
@@ -166,7 +166,7 @@ function sanitizeExpression(expr: string): string {
 
   // 允许的字符集：a-zA-Z0-9_.\s+\-*/%<>=!&|?():,"'[]
   const allowed = expr.replace(
-    /[^a-zA-Z0-9_.\s+\-*/%<>=!&|?():,"'\[\]]+/g,
+    /[^a-zA-Z0-9_.\s+\-*/%<>=!&|?():,"'[\]]+/g,
     ''
   )
   return allowed
