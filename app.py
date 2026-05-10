@@ -130,7 +130,7 @@ app.include_router(training.router, prefix="/api/training", tags=["训练管理"
 app.include_router(launch.router, prefix="/api/launch", tags=["模型启动"])
 app.include_router(inference.router, prefix="/api/inference", tags=["模型测试"])
 app.include_router(rule_engine.router, tags=["规则引擎"])
-app.include_router(websocket.router, prefix="/ws", tags=["WebSocket"])
+app.include_router(websocket.router, tags=["WebSocket"])
 app.include_router(ws_stream.router, prefix="/ws", tags=["流式推理WebSocket"])
 
 # 挂载上传文件目录为静态文件服务
