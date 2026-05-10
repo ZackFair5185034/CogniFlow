@@ -75,21 +75,21 @@
             <template #default="{ row }">
               <div class="action-buttons">
                 <el-button
-                  type="text"
+                  link
                   size="small"
                   @click="handleRename(row)"
                 >
                   编辑
                 </el-button>
                 <el-button
-                  type="text"
+                  link
                   size="small"
                   @click="$router.push(`/atlas/${row.id}`)"
                 >
                   查看
                 </el-button>
                 <el-button
-                  type="text"
+                  link
                   size="small"
                   @click="handleDelete(row)"
                 >

@@ -219,7 +219,7 @@
                 class="job-actions"
               >
                 <el-button
-                  type="text"
+                  link
                   size="small"
                   @click="handleStop(job)"
                 >

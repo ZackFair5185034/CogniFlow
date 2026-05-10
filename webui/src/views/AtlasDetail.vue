@@ -486,13 +486,13 @@
           <h3>图片详情</h3>
           <div class="dialog-actions">
             <el-button
-              type="text"
+              link
               @click="handleAnnotateImage(selectedImage)"
             >
               标注
             </el-button>
             <el-button
-              type="text"
+              link
               @click="handleDeleteImage(selectedImage)"
             >
               删除
