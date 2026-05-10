@@ -1518,7 +1518,7 @@ onUnmounted(() => {
 
 .select-wrapper {
   select {
-    @apply w-full px-3 py-2.5 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] cursor-pointer appearance-none;
+    @apply w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] cursor-pointer appearance-none;
 
     &:focus {
       @apply outline-none border-[var(--accent-cyan)];
