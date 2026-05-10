@@ -84,7 +84,7 @@ export const categoryApi = {
 }
 
 /** 类别树节点（支持递归 children） */
-interface CategoryNode {
+export interface CategoryNode {
   name: string
   color: string
   is_directory: boolean

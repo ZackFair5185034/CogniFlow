@@ -155,6 +155,8 @@ export interface TrainingJobResponse {
   metrics?: Record<string, unknown>
   started_at?: string
   finished_at?: string
+  _displayStatus?: string
+  message?: string
 }
 
 // ============ Launch ============

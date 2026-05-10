@@ -17,7 +17,7 @@
             class="rule-name-input"
             placeholder="规则名称..."
             @blur="handleNameChange"
-            @keyup.enter="$event.target.blur()"
+            @keyup.enter="handleNameChange"
           >
           <span
             class="rule-status-badge"
@@ -69,7 +69,7 @@
           <button
             class="icon-btn"
             title="适应画布"
-            @click="fitView"
+            @click="() => fitView()"
           >
             <SvgIcon name="fit-view" />
           </button>
@@ -705,7 +705,7 @@ const nodeCategories = computed(() => [
   { name: 'output', label: '输出' },
 ].map(cat => ({
   ...cat,
-  expanded: categoryExpanded[cat.name],
+  expanded: categoryExpanded[cat.name as keyof typeof categoryExpanded],
   nodes: nodeDefinitions.value.filter((d) => d.category === cat.name)
 })))
 
@@ -773,7 +773,7 @@ const connectionLineStyle = {
 // 节点类型 - 注册自定义节点组件
 const nodeTypes = {
   ruleNode: RuleNode
-}
+} as unknown as Record<string, any>
 
 // 小地图颜色 - 6色分类体系
 function miniMapNodeColor(node: any) {
@@ -794,8 +794,8 @@ const toast = reactive({ show: false, message: '', type: 'info' as 'success' | '
 function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
   toast.message = message
   toast.type = type
-  toast.visible = true
-  setTimeout(() => { toast.visible = false }, 3000)
+  toast.show = true
+  setTimeout(() => { toast.show = false }, 3000)
 }
 
 // WebSocket 连接（Phase 5 实时推送）
@@ -1132,7 +1132,7 @@ function handleContextAction(action: string) {
   switch (action) {
     case 'copy':
       if (contextMenu.targetType === 'node') {
-        nodes.value.forEach((n: any) => { n.selected = n.id === contextMenu.target?.id })
+        (nodes.value as unknown as any[]).forEach((n: any) => { n.selected = n.id === (contextMenu.target as any)?.id })
         handleCopy()
       }
       break
@@ -1141,9 +1141,9 @@ function handleContextAction(action: string) {
       break
     case 'delete':
       if (contextMenu.targetType === 'node') {
-        nodes.value.forEach((n: any) => { n.selected = n.id === contextMenu.target?.id })
+        (nodes.value as unknown as any[]).forEach((n: any) => { n.selected = n.id === (contextMenu.target as any)?.id })
       } else if (contextMenu.targetType === 'edge') {
-        edges.value.forEach((e: any) => { e.selected = e.id === contextMenu.target?.id })
+        (edges.value as unknown as any[]).forEach((e: any) => { e.selected = e.id === (contextMenu.target as any)?.id })
       }
       handleDelete()
       break
@@ -1496,13 +1496,13 @@ function handleEdgesChange(_changes: any[]) {
 }
 
 // 画布平移
-function handlePan(pan: { x: number, y: number }) {
-  panX.value = -pan.x
-  panY.value = -pan.y
+function handlePan(moveEvent: { event: unknown; flowTransform: { x: number; y: number; zoom: number } }) {
+  panX.value = -moveEvent.flowTransform.x
+  panY.value = -moveEvent.flowTransform.y
 }
 
 // 缩放
-function handleZoom(zoom: number) {
+function handleZoom({ zoom }: { zoom: number; event: unknown }) {
   zoomLevel.value = zoom
 }
 
@@ -1582,7 +1582,7 @@ function removeVariable(index: number) {
 
 function updateVariable(index: number, field: string, value: any) {
   if (variables.value[index]) {
-    variables.value[index][field] = value
+    ;(variables.value[index] as any)[field] = value
   }
 }
 

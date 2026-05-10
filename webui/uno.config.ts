@@ -65,6 +65,30 @@ export default defineConfig({
     // === 动画 ===
     'vg-animate-fade-in': 'animate-fade-in',
     'vg-transition': 'transition-all duration-200',
+
+    // === 项目通用组件样式 ===
+    // 页面头部（统一结构）
+    'vg-page-header': 'flex justify-between items-center gap-4 flex-shrink-0',
+    // 对话框遮罩
+    'vg-dialog-overlay': 'fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[1000]',
+    // 对话框面板
+    'vg-dialog-panel': 'bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl w-full max-w-[450px]',
+    // 表格单元格滚动包装
+    'vg-table-wrapper': 'w-full overflow-x-auto min-w-0',
+    // 工具栏（标注页面等）
+    'vg-toolbar': 'flex justify-between items-center',
+    // 内容区（flex-1 overflow-hidden）
+    'vg-content-area': 'flex flex-1 overflow-hidden',
+    // 面板（固定宽度，sidebar）
+    'vg-panel': 'flex flex-col flex-shrink-0 bg-[var(--bg-secondary)] border-[var(--border-color)]',
+    // 加载状态
+    'vg-loading': 'absolute inset-0 flex flex-col items-center justify-center',
+    // 空状态
+    'vg-empty': 'flex flex-col items-center justify-center py-15 px-5 text-center',
+    // 滚动区域
+    'vg-scroll-y': 'overflow-y-auto',
+    // 滚动条样式
+    'vg-scrollbar': '[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-[var(--bg-secondary)] [&::-webkit-scrollbar-thumb]:bg-[var(--border-color)] [&::-webkit-scrollbar-thumb]:rounded',
   },
   theme: {
     animation: {

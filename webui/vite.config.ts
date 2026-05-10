@@ -1,6 +1,8 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import UnoCSS from 'unocss/vite'
+import AutoImport from 'unplugin-auto-import/vite'
+import Components from 'unplugin-vue-components/vite'
 import { resolve } from 'path'
 import { createSvgIconsPlugin } from 'vite-plugin-svg-icons'
 
@@ -11,6 +13,42 @@ export default defineConfig(({ mode }) => {
     plugins: [
       vue(),
       UnoCSS(),
+      AutoImport({
+        imports: [
+          // Vue 预设（包含所有 Composition API）
+          'vue',
+          'vue-router',
+          'pinia',
+          // Element Plus 常用函数
+          {
+            'element-plus': ['ElMessage', 'ElMessageBox', 'ElNotification', 'ElLoadingDirective'],
+          },
+          // Pinia stores
+          {
+            '@/stores/ruleEngine': ['useRuleEngineStore'],
+          },
+          // 工具函数
+          {
+            '@/utils/toast': ['registerToast'],
+          },
+        ],
+        // API 模块按需显式导入（named exports 无法自动按名导入）
+        eslintrc: {
+          enabled: true,
+        },
+        dts: 'src/auto-imports.d.ts',
+      }),
+      Components({
+        // Element Plus 组件自动导入
+        resolvers: [
+          (name) => {
+            if (name.startsWith('El')) {
+              return { name, from: 'element-plus' }
+            }
+          },
+        ],
+        dts: 'src/components.d.ts',
+      }),
       createSvgIconsPlugin({
         iconDirs: [resolve(__dirname, 'src/icons')],
         symbolId: 'icon-[name]',
