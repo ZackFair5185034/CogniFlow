@@ -357,6 +357,7 @@
             :connection-radius="20"
             :is-valid-connection="isValidConnection"
             @node-click="handleNodeClick"
+            @node-drag-start="handleNodeDragStart"
             @node-drag-stop="handleNodeDragStop"
             @pane-click="handlePaneClick"
             @connect="handleConnect"
@@ -704,11 +705,23 @@ const varMenu = reactive({
   fieldKey: '' as string
 })
 
-// 撤销/重做
+// 撤销/重做（使用 pause/unpause 机制优化拖拽时的历史记录）
 const historyStack = ref<{ nodes: Node<RuleNodeData>[]; edges: Edge[] }[]>([])
 const historyIndex = ref(-1)
+const isHistoryPaused = ref(false)  // 暂停历史记录（用于拖拽等批量操作）
 const canUndo = computed(() => historyIndex.value > 0)
 const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
+
+// 暂停历史记录（拖拽开始时调用）
+function pauseHistory() {
+  isHistoryPaused.value = true
+}
+
+// 恢复历史记录并保存快照（拖拽结束时调用）
+function unpauseHistory() {
+  isHistoryPaused.value = false
+  saveHistory()
+}
 
 // 节点分类展开状态（reactive，分离避免循环引用）
 const categoryExpanded = reactive({
@@ -929,6 +942,8 @@ const flushHistory = debounce(() => {
 
 // 右键菜单操作
 function saveHistory() {
+  // 暂停时不保存（等待 unpause 时统一保存）
+  if (isHistoryPaused.value) return
   historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
   historyStack.value.push({
     nodes: JSON.parse(JSON.stringify(nodes.value.map((n) => ({ ...n, selected: false, dragging: false })))),
@@ -1426,8 +1441,12 @@ function handleNodeClick(event: any) {
 }
 
 // 节点拖拽
+function handleNodeDragStart() {
+  pauseHistory()
+}
+
 function handleNodeDragStop() {
-  saveHistory()
+  unpauseHistory()
 }
 
 // 画布点击
@@ -1545,8 +1564,12 @@ function handleNodesChange(changes: Array<{ type: string; id?: string }>) {
   }
 }
 
-function handleEdgesChange(_changes: Array<{ type: string; id?: string }>) {
-  // 只在外部变化时保存历史
+function handleEdgesChange(changes: Array<{ type: string; id?: string }>) {
+  // 边的增删操作时保存历史
+  const hasEdgeChange = changes.some(c => c.type === 'add' || c.type === 'remove')
+  if (hasEdgeChange) {
+    flushHistory()
+  }
 }
 
 // 画布平移

@@ -158,17 +158,55 @@ interface HistoryState {
 
 ---
 
-## 六、参考文档
+## 六、实际实施情况
 
-- [VueFlow History Documentation](https://vueflow.dev/guide/components/history.html)
-- [VueFlow GitHub - useHistory](https://github.com/xyflow/xyflow/blob/main/packages/svelte/src/lib/components/History.svelte)
+### 6.1 @vue-flow/history 包状态
+
+**调查结论**：`@vue-flow/history` 包在 npm 上不存在（404 错误）。
+
+- 使用 `pnpm add @vue-flow/history` 测试：返回 `ERR_PNPM_FETCH_404`
+- 使用 `npm install @vue-flow/history` 测试：返回 `Cannot read properties of null`
+- 检查 `@vue-flow/core` v1.48.2：内置 composables 列表中无 `useHistory`
+- `@vue-flow/core` 的 composables 目录：`useConnection`, `useDrag`, `useEdge`, `useNode`, `useVueFlow` 等，不包含 history
+
+### 6.2 替代实现方案
+
+采用**手动 pause/unpause 机制**实现与 `useHistory` 类似的拖拽优化功能：
+
+```typescript
+// 暂停历史记录（拖拽开始时调用）
+function pauseHistory() {
+  isHistoryPaused.value = true
+}
+
+// 恢复历史记录并保存快照（拖拽结束时调用）
+function unpauseHistory() {
+  isHistoryPaused.value = false
+  saveHistory()
+}
+```
+
+**效果**：节点拖拽过程中不会产生大量中间快照，只在拖拽结束时保存一次。
 
 ---
 
 ## 七、结论
 
-**当前状态**：撤销/重做功能已基本实现，但使用的是手动 history stack，未使用 VueFlow 官方提供的 `useHistory` API。
+**当前状态**：撤销/重做功能已基本实现，采用了手动 pause/unpause 机制优化拖拽过程中的历史记录管理。
 
-**推荐方案**：集成 `@vue-flow/history` 包，利用其提供的 `pause`/`unpause` API 优化拖拽过程中的历史记录管理，减少不必要的快照。
+**调查结论**：`@vue-flow/history` 包在 npm 上不存在（404 错误），无法安装。`@vue-flow/core` v1.48.2 也没有内置 `useHistory` composable。
+
+**实现效果**：
+- 节点拖拽开始时暂停历史记录（`pauseHistory`）
+- 节点拖拽结束时恢复记录并统一保存快照（`unpauseHistory`）
+- 边的增删操作也能正确触发历史保存
+- 避免拖拽过程中产生大量中间状态快照
+
+---
+
+## 八、参考文档
+
+- [VueFlow History Documentation](https://vueflow.dev/guide/components/history.html)
+- [VueFlow GitHub - useHistory](https://github.com/xyflow/xyflow/blob/main/packages/svelte/src/lib/components/History.svelte)
 
 **工作量预估**：2-4 小时（包含测试）

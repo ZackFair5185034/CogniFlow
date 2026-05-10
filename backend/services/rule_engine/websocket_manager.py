@@ -5,7 +5,7 @@
 """
 import asyncio
 import json
-from typing import Dict, Set
+from typing import Dict, List, Set, Optional
 from fastapi import WebSocket
 from datetime import datetime
 
@@ -16,8 +16,11 @@ class RuleExecutionConnectionManager:
     负责：
     1. 管理所有活跃的 WebSocket 连接
     2. 按 execution_id 订阅/取消订阅
-    3. 向订阅的连接推送消息
+    3. 向订阅的连接推送消息（带批处理机制）
     """
+
+    # 批处理窗口大小（秒），约 60fps 一帧的时间
+    BATCH_WINDOW_SEC: float = 0.016
 
     def __init__(self):
         # 所有活跃连接: websocket -> set of execution_ids
@@ -28,6 +31,12 @@ class RuleExecutionConnectionManager:
 
         # 锁，保证线程安全
         self._lock = asyncio.Lock()
+
+        # 批处理：待发送的消息缓冲，按 execution_id 分组
+        self._pending_messages: Dict[int, List[dict]] = {}
+
+        # 批处理刷新任务
+        self._flush_task: Optional[asyncio.Task] = None
 
     async def connect(self, websocket: WebSocket, execution_ids: list[int] = None):
         """客户端连接并订阅执行ID列表。"""
@@ -70,31 +79,72 @@ class RuleExecutionConnectionManager:
                 self._subscriptions[execution_id].discard(websocket)
 
     async def broadcast(self, message: dict):
-        """向消息中指定的 execution_id 广播消息。
+        """向消息中指定的 execution_id 广播消息（带批处理）。
 
         兼容 executor.py 的调用方式（message 中已含 execution_id）。
+        消息会被缓冲一段时间后批量发送，减少网络往返次数。
         """
         execution_id = message.get("execution_id")
         if not execution_id:
             return
 
-        async with self._lock:
-            subscribers = self._subscriptions.get(execution_id, set()).copy()
-
-        if not subscribers:
-            return
-
+        # 添加时间戳
         message["timestamp"] = datetime.now().isoformat()
-        text = json.dumps(message, ensure_ascii=False)
 
-        # 并发发送给所有订阅者
-        async def send_to(ws: WebSocket):
-            try:
-                await ws.send_text(text)
-            except Exception:
-                pass  # 忽略发送失败的连接
+        async with self._lock:
+            # 将消息加入待发送缓冲
+            if execution_id not in self._pending_messages:
+                self._pending_messages[execution_id] = []
+            self._pending_messages[execution_id].append(message)
 
-        await asyncio.gather(*[send_to(ws) for ws in subscribers], return_exceptions=True)
+            # 如果没有正在运行的刷新任务，则创建一个
+            if not self._flush_task or self._flush_task.done():
+                self._flush_task = asyncio.create_task(self._flush_messages())
+
+    async def _flush_messages(self):
+        """将缓冲的消息批量发送出去。
+
+        在 BATCH_WINDOW_SEC 时间窗口结束后，将该时间段内收集的所有消息
+        按 execution_id 分组合并后发送。
+        """
+        # 等待一个批处理窗口
+        await asyncio.sleep(self.BATCH_WINDOW_SEC)
+
+        async with self._lock:
+            # 取出所有待发送的消息
+            pending = self._pending_messages
+            self._pending_messages = {}
+
+        # 发送给各个 execution_id 的订阅者
+        for execution_id, messages in pending.items():
+            if not messages:
+                continue
+
+            # 获取订阅者
+            async with self._lock:
+                subscribers = self._subscriptions.get(execution_id, set()).copy()
+
+            if not subscribers:
+                continue
+
+            # 合并消息为批量消息
+            if len(messages) == 1:
+                # 只有一条消息，直接发送原消息
+                batch = messages[0]
+            else:
+                # 多条消息，包装为批量消息
+                batch = {"type": "batch", "messages": messages}
+
+            text = json.dumps(batch, ensure_ascii=False)
+
+            # 并发发送给所有订阅者
+            async def send_to(ws: WebSocket):
+                try:
+                    await ws.send_text(text)
+                except Exception:
+                    pass  # 忽略发送失败的连接
+
+            await asyncio.gather(*[send_to(ws) for ws in subscribers], return_exceptions=True)
 
     async def send_node_started(self, execution_id: int, node_id: str, node_type: str):
         """广播节点开始执行。"""
