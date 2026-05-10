@@ -130,6 +130,7 @@ node_modules
 
 # Claude
 .claude/
+.omc/
 
 # Uploads (runtime data)
 uploads/
