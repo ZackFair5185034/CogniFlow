@@ -395,7 +395,7 @@
             <div
               v-for="dir in directories"
               :key="dir"
-              class="dir-item"
+              :class="['dir-item', { active: dir === selectedDirectory }]"
             >
               <div class="dir-info">
                 <SvgIcon name="folder" class="dir-icon" />
@@ -1539,6 +1539,10 @@ onMounted(() => {
 
 .dir-item:hover {
   @apply border-[var(--accent-cyan)];
+}
+
+.dir-item.active {
+  @apply border-[var(--accent-cyan)] bg-[var(--bg-hover)];
 }
 
 .dir-info {
