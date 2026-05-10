@@ -27,17 +27,17 @@ def _resolve_device(device_preference: str, model) -> str:
     """根据用户偏好和硬件情况解析实际设备。
 
     Args:
-        device_preference: 用户指定偏好 (auto/cpu/cuda)
+        device_preference: 用户指定偏好 (auto/cpu/cuda/openvino)
         model: 模型对象
 
     Returns:
         实际使用的设备字符串
     """
     # 如果用户明确指定，优先使用
-    if device_preference in ("cpu", "cuda"):
+    if device_preference in ("cpu", "cuda", "openvino"):
         return device_preference
 
-    # 检查 CUDA 是否可用
+    # 自动检测：CUDA > OpenVINO GPU > CPU
     try:
         import torch
         if torch.cuda.is_available():
@@ -45,7 +45,14 @@ def _resolve_device(device_preference: str, model) -> str:
     except ImportError:
         pass
 
-    # 默认使用 CPU
+    try:
+        import openvino as ov
+        core = ov.Core()
+        if "GPU" in core.available_devices:
+            return "openvino"
+    except ImportError:
+        pass
+
     return "cpu"
 
 
@@ -757,6 +764,14 @@ async def rerun_inference_job(
                 categories = json.loads(model.metrics).get('categories', [])
             except json.JSONDecodeError:
                 pass
+
+        # 从 Category 表补充颜色（覆盖模型训练时保存的默认色）
+        from backend.routers.category import Category as CategoryModel
+        name_to_color = {}
+        for cat in db.query(CategoryModel).filter(CategoryModel.is_directory == False).all():
+            name_to_color[cat.name] = cat.color
+        for cat in categories:
+            cat['color'] = name_to_color.get(cat['name'], cat.get('color', '#FF0000'))
 
         cap = cv2.VideoCapture(job.file_path)
         fps = round(cap.get(cv2.CAP_PROP_FPS)) or 24

@@ -699,10 +699,34 @@ const streamComplete = ref(false)
 const streamPaused = ref(false)
 const videoFps = ref(24)
 
-// 前端帧缓存：暂停时累积，恢复时快速重放
+// 前端帧缓存：服务端来帧即存，渲染循环按 videoFps 消费
 const frameCache = ref<StreamFrame[]>([])
-const isReplaying = ref(false)
-let replayTimer: number | null = null
+let renderTimer: ReturnType<typeof setInterval> | null = null
+
+/** 启动渲染循环，按当前 videoFps 从缓存取帧渲染 */
+const startRenderLoop = () => {
+  stopRenderLoop()
+  renderTimer = setInterval(() => {
+    if (!streamPaused.value && frameCache.value.length > 0) {
+      const frame = frameCache.value.shift()!
+      renderFrame(frame)
+      // 播放进度基于实际渲染的帧
+      streamStats.value = {
+        ...streamStats.value,
+        current_frame: frame.frame_id,
+        progress: Math.min(100, Math.ceil((frame.frame_id / (streamStats.value.total_frames || 1)) * 100)),
+      }
+    }
+  }, 1000 / videoFps.value)
+}
+
+/** 停止渲染循环 */
+const stopRenderLoop = () => {
+  if (renderTimer !== null) {
+    clearInterval(renderTimer)
+    renderTimer = null
+  }
+}
 /** 类别颜色映射，来自后端数据库配置 */
 const categoryColors = ref<Record<number, string>>({})
 
@@ -981,8 +1005,14 @@ const handleRerun = async (rec: RecentRecord) => {
       // 视频重检：WebSocket 流式
       mode.value = 'stream'
       streamJobId.value = res.data.job_id
+
+      // 构建类别颜色映射
+      const colors: Record<number, string> = {}
+      for (const cat of (res.data.categories || [])) {
+        colors[cat.id] = cat.color || '#FF0000'
+      }
+      categoryColors.value = colors
       const videoInfo = res.data.video_info
-      videoFps.value = videoInfo.fps || 24
       streamStats.value = {
         fps: videoInfo.fps || 24,
         total_frames: videoInfo.total_frames || 0,
@@ -993,29 +1023,18 @@ const handleRerun = async (rec: RecentRecord) => {
         buffer_frame: 0,
       }
       frameCache.value = []
-      isReplaying.value = false
 
       const client = new StreamClient()
       client.onFrame((frame) => {
-        if (streamPaused.value || isReplaying.value) {
-          frameCache.value.push(frame)
-          streamStats.value = {
-            ...streamStats.value,
-            buffer_frame: frame.progress?.buffer_frame || streamStats.value.buffer_frame || frame.frame_id,
-            buffered_frames: frameCache.value.length,
-          }
-          return
-        }
+        // 始终缓存，由渲染循环按帧率消费
+        frameCache.value.push(frame)
 
         streamStats.value = {
           ...streamStats.value,
-          current_frame: frame.frame_id,
           total_detections: frame.stats.total_detections,
-          progress: Math.min(99, Math.ceil((frame.frame_id / (videoInfo.total_frames || 1)) * 100)),
-          buffer_frame: frame.progress?.buffer_frame || streamStats.value.buffer_frame,
+          buffer_frame: frameCache.value.length,
           buffered_frames: frameCache.value.length,
         }
-        renderFrame(frame)
         addConsoleEntry('视频帧',
           `帧 #${frame.frame_id} | ${frame.detections.length} 个目标 | ${frame.stats.inference_ms}ms`,
           {
@@ -1028,6 +1047,7 @@ const handleRerun = async (rec: RecentRecord) => {
         )
       })
       client.onComplete((totalFrames, totalDetections) => {
+        stopRenderLoop()
         streamComplete.value = true
         streamConnected.value = false
         streamPaused.value = false
@@ -1046,21 +1066,14 @@ const handleRerun = async (rec: RecentRecord) => {
         })
       })
       client.onError((error) => {
+        stopRenderLoop()
         ElMessage.error(`视频检测错误: ${error}`)
         streamConnected.value = false
-      })
-      client.onPaused(() => { streamPaused.value = true })
-      client.onResumed(() => { streamPaused.value = false })
-      client.onFpsUpdated((fps) => { videoFps.value = fps })
-      client.onProgress((progress) => {
-        streamStats.value = {
-          ...streamStats.value,
-          buffer_frame: progress.buffer_frame,
-        }
       })
 
       client.connect(res.data.job_id, res.data.stream_url)
       videoClient.value = client
+      startRenderLoop()
       streamConnected.value = true
       streamPaused.value = false
       streamComplete.value = false
@@ -1266,7 +1279,6 @@ const startVideoDetection = async () => {
       categoryColors.value = colors
 
       streamJobId.value = jobId
-      videoFps.value = videoInfo.fps || 24
       streamStats.value = {
         fps: videoInfo.fps || 24,
         total_frames: videoInfo.total_frames || 0,
@@ -1277,31 +1289,19 @@ const startVideoDetection = async () => {
         buffer_frame: 0,
       }
       frameCache.value = []
-      isReplaying.value = false
 
       // 创建 StreamClient 并连接
       const client = new StreamClient()
       client.onFrame((frame) => {
-        // 暂停或重放中 → 前端缓存，不渲染
-        if (streamPaused.value || isReplaying.value) {
-          frameCache.value.push(frame)
-          streamStats.value = {
-            ...streamStats.value,
-            buffer_frame: frame.progress?.buffer_frame || streamStats.value.buffer_frame || frame.frame_id,
-            buffered_frames: frameCache.value.length,
-          }
-          return
-        }
+        // 始终缓存，由渲染循环按帧率消费
+        frameCache.value.push(frame)
 
         streamStats.value = {
           ...streamStats.value,
-          current_frame: frame.frame_id,
           total_detections: frame.stats.total_detections,
-          progress: Math.min(99, Math.ceil((frame.frame_id / (videoInfo.total_frames || 1)) * 100)),
-          buffer_frame: frame.progress?.buffer_frame || streamStats.value.buffer_frame,
+          buffer_frame: frameCache.value.length,
           buffered_frames: frameCache.value.length,
         }
-        renderFrame(frame)
         // 写入监控台（节流到每秒 5 条）
         addConsoleEntry('视频帧',
           `帧 #${frame.frame_id} | ${frame.detections.length} 个目标 | ${frame.stats.inference_ms}ms`,
@@ -1315,6 +1315,7 @@ const startVideoDetection = async () => {
         )
       })
       client.onComplete((totalFrames, totalDetections) => {
+        stopRenderLoop()
         streamComplete.value = true
         streamConnected.value = false
         streamPaused.value = false
@@ -1332,27 +1333,14 @@ const startVideoDetection = async () => {
         })
       })
       client.onError((error) => {
+        stopRenderLoop()
         ElMessage.error(`视频检测错误: ${error}`)
         streamConnected.value = false
-      })
-      client.onPaused(() => {
-        streamPaused.value = true
-      })
-      client.onResumed(() => {
-        streamPaused.value = false
-      })
-      client.onFpsUpdated((fps) => {
-        videoFps.value = fps
-      })
-      client.onProgress((progress) => {
-        streamStats.value = {
-          ...streamStats.value,
-          buffer_frame: progress.buffer_frame,
-        }
       })
 
       client.connect(jobId, streamUrl)
       videoClient.value = client
+      startRenderLoop()
       streamConnected.value = true
       streamPaused.value = false
       streamComplete.value = false
@@ -1367,6 +1355,7 @@ const startVideoDetection = async () => {
 
 // 停止视频检测
 const stopVideoDetection = () => {
+  stopRenderLoop()
   if (videoClient.value) {
     videoClient.value.disconnect()
     videoClient.value = null
@@ -1389,64 +1378,18 @@ const stopVideoDetection = () => {
     buffer_frame: 0,
   }
   frameCache.value = []
-  isReplaying.value = false
 }
 
-// 暂停/继续切换
+// 暂停/继续切换（纯前端控制，不涉及服务端）
 const togglePause = () => {
-  const client = videoClient.value
-  if (!client) return
-  if (streamPaused.value) {
-    // 恢复：先快速重放缓存帧，再切回实时
-    if (frameCache.value.length > 0) {
-      isReplaying.value = true
-      burstReplay()
-    }
-    client.sendResume()
-  } else {
-    // 暂停：清旧缓存，开始累积
-    frameCache.value = []
-    isReplaying.value = false
-    if (replayTimer !== null) {
-      clearInterval(replayTimer)
-      replayTimer = null
-    }
-    client.sendPause()
-  }
+  streamPaused.value = !streamPaused.value
 }
 
-/** 快速重放暂停期间缓存的帧 */
-const burstReplay = () => {
-  const tick = () => {
-    const batch = Math.min(5, frameCache.value.length)
-    for (let i = 0; i < batch; i++) {
-      const frame = frameCache.value.shift()
-      if (!frame) break
-      renderFrame(frame)
-      streamStats.value = {
-        ...streamStats.value,
-        current_frame: frame.frame_id,
-        progress: Math.min(99, Math.ceil((frame.frame_id / (streamStats.value.total_frames || 1)) * 100)),
-        buffered_frames: frameCache.value.length,
-      }
-    }
-
-    if (frameCache.value.length > 0) {
-      requestAnimationFrame(tick)
-    } else {
-      // 缓存耗尽，切回实时模式
-      isReplaying.value = false
-      streamStats.value.buffered_frames = 0
-    }
-  }
-  requestAnimationFrame(tick)
-}
-
-// 调整帧率
+// 调整帧率（本地渲染循环帧率，不涉及服务端）
 const adjustFps = (delta: number) => {
   const newFps = Math.max(1, Math.min(60, videoFps.value + delta))
   videoFps.value = newFps
-  videoClient.value?.setFps(newFps)
+  startRenderLoop()
 }
 
 watch(mode, handleModeChange)

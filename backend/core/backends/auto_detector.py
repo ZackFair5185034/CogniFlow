@@ -96,12 +96,22 @@ class DeviceDetector:
             if not devices:
                 return None
 
-            # 优先使用 GPU
-            device_name = "Intel"
-            if "GPU" in devices:
-                device_name = "Intel GPU"
-            elif "CPU" in devices:
-                device_name = "Intel CPU"
+            # 获取具体设备名称
+            device_name = "CPU"
+            try:
+                # 尝试获取 GPU 全名（兼容 Intel/AMD 等）
+                if "GPU" in devices:
+                    gpu_name = core.get_property("GPU", "FULL_DEVICE_NAME")
+                    device_name = gpu_name
+                elif "CPU" in devices:
+                    cpu_name = core.get_property("CPU", "FULL_DEVICE_NAME")
+                    device_name = cpu_name
+            except Exception:
+                # 降级：仅报告设备类型
+                if "GPU" in devices:
+                    device_name = "GPU"
+                elif "CPU" in devices:
+                    device_name = "CPU"
 
             return HardwareInfo(
                 device_type="openvino",

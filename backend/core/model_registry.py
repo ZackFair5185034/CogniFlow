@@ -120,9 +120,11 @@ def init_model_handlers() -> ModelHandlerRegistry:
     # 注册内置处理器
     from backend.core.formats.yolo_handler import YoloModelHandler
     from backend.core.formats.onnx_handler import OnnxModelHandler
+    from backend.core.formats.openvino_handler import OpenVinoModelHandler
 
     registry.register(ModelFormat.YOLO_PT, YoloModelHandler)
     registry.register(ModelFormat.ONNX, OnnxModelHandler)
+    registry.register(ModelFormat.OPENVINO, OpenVinoModelHandler)
 
     return registry
 

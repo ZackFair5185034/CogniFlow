@@ -31,7 +31,13 @@
       <!-- 左侧：参数配置 -->
       <div class="config-panel ui-card">
         <div class="section-header">
-          <h3>参数配置</h3>
+          <div class="header-left">
+            <SvgIcon
+              name="box"
+              class="panel-icon"
+            />
+            <h3>参数配置</h3>
+          </div>
         </div>
         <div class="config-form">
           <div class="form-group">
@@ -162,7 +168,13 @@
         <!-- 训练任务列表 -->
         <div class="training-list-section ui-card">
           <div class="section-header">
-            <h3>训练任务</h3>
+            <div class="header-left">
+              <SvgIcon
+                name="chart"
+                class="panel-icon"
+              />
+              <h3>训练任务</h3>
+            </div>
             <button
               class="refresh-btn"
               @click="loadJobs"
@@ -545,7 +557,8 @@ onUnmounted(() => {
 
 /* 左侧配置面板 */
 .config-panel {
-  @apply flex flex-col w-64 flex-shrink-0 overflow-hidden;
+  @apply flex flex-col flex-shrink-0 overflow-hidden;
+  width: 360px;
 }
 
 .config-form {
@@ -571,6 +584,10 @@ onUnmounted(() => {
 
 .section-header {
   @apply flex justify-between items-center px-4 py-3 border-b border-[var(--border-color)] flex-shrink-0;
+
+  .header-left {
+    @apply flex items-center gap-2;
+  }
 
   h3 {
     @apply text-sm font-semibold;
@@ -814,7 +831,7 @@ onUnmounted(() => {
   }
 }
 
-.device-hint {
-  @apply text-[10px] text-[var(--text-muted)] mt-1;
+.panel-icon {
+  @apply w-4 h-4 text-[var(--accent-cyan)];
 }
 </style>

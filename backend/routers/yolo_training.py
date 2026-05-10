@@ -456,9 +456,9 @@ def load_yolo_model(model_path: str, device: str = "cpu"):
     # 初始化内置处理器
     init_model_handlers()
 
-    # 如果是 ONNX 格式，尝试从对应 PT 文件提取类别名称
+    # 如果是 ONNX 或 OpenVINO 格式，尝试从对应 PT 文件提取类别名称
     extra_kwargs = {}
-    if model_path.endswith(".onnx"):
+    if model_path.endswith((".onnx", ".xml")):
         pt_path = _find_pt_model(model_path)
         if pt_path:
             class_names = _extract_class_names(pt_path)
@@ -475,22 +475,38 @@ def load_yolo_model(model_path: str, device: str = "cpu"):
     return handler
 
 
-def _find_pt_model(onnx_path: str) -> Optional[str]:
-    """查找与 ONNX 模型对应的 PT 模型文件。
+def _find_pt_model(model_path: str) -> Optional[str]:
+    """查找与指定模型对应的 PT 模型文件。
 
     搜索策略：
     1. 同目录下同名 .pt 文件
-    2. 父目录下同名 .pt 文件（处理 best.onnx 在子目录的情况）
+    2. 目录本身是 OpenVINO 导出目录时，在上级查找
+    3. 父目录下任意 .pt 文件
+
+    Args:
+        model_path: 模型文件路径（.onnx/.xml 或 OpenVINO 目录）
+
+    Returns:
+        .pt 文件路径，未找到返回 None
     """
     import os
 
+    # 如果是目录（OpenVINO 导出目录），在上级目录查找
+    if os.path.isdir(model_path):
+        parent_dir = os.path.dirname(model_path)
+        if os.path.exists(parent_dir):
+            for f in os.listdir(parent_dir):
+                if f.endswith(".pt"):
+                    return os.path.join(parent_dir, f)
+        return None
+
     # 同名替换扩展名
-    pt_path = onnx_path.rsplit(".", 1)[0] + ".pt"
+    pt_path = model_path.rsplit(".", 1)[0] + ".pt"
     if os.path.exists(pt_path):
         return pt_path
 
     # 处理可能的命名差异（如 model_best.onnx -> best.pt）
-    base_dir = os.path.dirname(onnx_path)
+    base_dir = os.path.dirname(model_path)
     if os.path.exists(base_dir):
         for f in os.listdir(base_dir):
             if f.endswith(".pt"):
