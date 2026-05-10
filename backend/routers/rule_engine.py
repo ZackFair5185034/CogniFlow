@@ -31,7 +31,7 @@ async def get_node_definitions():
         return registry.get_definitions()
     except Exception as e:
         traceback.print_exc()
-        # Return 500 with error details
+        # 返回 500 错误及详情
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
 
 

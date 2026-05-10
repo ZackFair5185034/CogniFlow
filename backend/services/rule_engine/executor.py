@@ -369,7 +369,7 @@ class RuleGraphExecutor:
             raise ValidationError("规则图为空")
 
         # 校验图连接（端口类型兼容性）
-        # _validate_graph_connections 期望 List[Dict]，但 nodes 是 Dict[str, Dict]
+        # _validate_graph_connections 期望 List[Dict]，但 nodes 是 Dict[str, Dict] 结构
         nodes_list = [node for node in nodes.values()] if isinstance(nodes, dict) else nodes
         self._validate_graph_connections(nodes_list, edges)
 

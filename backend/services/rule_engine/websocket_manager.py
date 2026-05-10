@@ -23,7 +23,7 @@ class RuleExecutionConnectionManager:
         # 所有活跃连接: websocket -> set of execution_ids
         self._connections: Dict[WebSocket, Set[int]] = {}
 
-        # execution_id -> set of subscribed websockets
+        # execution_id -> 已订阅的 WebSocket 集合
         self._subscriptions: Dict[int, Set[WebSocket]] = {}
 
         # 锁，保证线程安全

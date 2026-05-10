@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""Model management routes.
+"""模型管理路由。
 
-Provides model metadata management and best model settings.
+提供模型元数据管理和最优模型配置功能。
 """
 import json
 import os
@@ -18,14 +18,14 @@ from backend.websocket_manager import ws_manager
 
 router = APIRouter()
 
-# Model storage root directory (unified DATA_DIR)
+# 模型存储根目录（统一 DATA_DIR）
 _DEFAULT_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
 _DATA_DIR = os.environ.get("DATA_DIR", _DEFAULT_DATA_DIR)
 MODEL_STORAGE_DIR = os.path.join(_DATA_DIR, "uploads", "models")
 
 
 def _detect_format(file_path: str) -> str:
-    """Detect model format by file extension."""
+    """根据文件扩展名检测模型格式。"""
     suffix = os.path.splitext(file_path)[1].lower()
     format_map = {
         ".pt": "yolo_pt",
@@ -39,7 +39,7 @@ def _detect_format(file_path: str) -> str:
 
 
 def _build_model_file_response(mf: ModelFile) -> ModelFileResponse:
-    """Build ModelFileResponse."""
+    """构建 ModelFileResponse。"""
     return ModelFileResponse(
         id=mf.id,
         model_id=mf.model_id,
@@ -53,8 +53,8 @@ def _build_model_file_response(mf: ModelFile) -> ModelFileResponse:
 
 
 def _build_model_response(m: Model, db: Session = None) -> ModelResponse:
-    """Build ModelResponse, helper function."""
-    # Get file list from model_files table via direct query
+    """构建 ModelResponse，辅助函数。"""
+    # 从 model_files 表直接查询获取文件列表
     if db is not None:
         model_files = db.query(ModelFile).filter(ModelFile.model_id == m.id).all()
         files = [_build_model_file_response(mf) for mf in model_files]
@@ -84,15 +84,15 @@ def _build_model_response(m: Model, db: Session = None) -> ModelResponse:
 
 @router.get("", response_model=List[ModelResponse])
 async def list_models(db: Session = Depends(get_db)):
-    """Get model list."""
+    """获取模型列表。"""
     models = db.query(Model).order_by(Model.created_at.desc()).all()
     return [_build_model_response(m, db) for m in models]
 
 
 @router.post("", response_model=ModelResponse, status_code=201)
 async def create_model(data: ModelCreate, db: Session = Depends(get_db)):
-    """Create new model record."""
-    # Check if name+version combination already exists
+    """创建新模型记录。"""
+    # 检查 name+version 组合是否已存在
     existing = db.query(Model).filter(
         Model.name == data.name,
         Model.version == data.version
@@ -115,7 +115,7 @@ async def create_model(data: ModelCreate, db: Session = Depends(get_db)):
 
 @router.get("/{model_id}", response_model=ModelResponse)
 async def get_model(model_id: int, db: Session = Depends(get_db)):
-    """Get model details."""
+    """获取模型详情。"""
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -128,7 +128,7 @@ async def update_model(
     data: ModelUpdate,
     db: Session = Depends(get_db)
 ):
-    """Update model."""
+    """更新模型。"""
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -159,12 +159,12 @@ async def update_model(
 
 @router.delete("/{model_id}", status_code=204)
 async def delete_model(model_id: int, db: Session = Depends(get_db)):
-    """Delete model (cascade delete all format files)."""
+    """删除模型（级联删除所有格式文件）。"""
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    # Delete all associated format files (direct query)
+    # 删除所有关联的格式文件（直接查询）
     model_files = db.query(ModelFile).filter(ModelFile.model_id == model_id).all()
     for mf in model_files:
         if os.path.exists(mf.file_path):
@@ -180,12 +180,12 @@ async def delete_model(model_id: int, db: Session = Depends(get_db)):
 
 @router.post("/{model_id}/set-best", response_model=ModelResponse)
 async def set_best_model(model_id: int, db: Session = Depends(get_db)):
-    """Set model as best model."""
+    """设置模型为最优模型。"""
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    # Cancel other best models
+    # 取消其他最优模型
     db.query(Model).filter(Model.is_best == True).update({"is_best": False})
 
     m.is_best = True
@@ -200,26 +200,26 @@ async def upload_model_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    """Upload model file."""
+    """上传模型文件。"""
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Model not found")
 
-    # Ensure upload directory exists
+    # 确保上传目录存在
     os.makedirs(MODEL_STORAGE_DIR, exist_ok=True)
 
-    # Save model file
+    # 保存模型文件
     file_path = os.path.join(MODEL_STORAGE_DIR, f"model_{model_id}_{file.filename}")
     with open(file_path, "wb") as buffer:
         content = await file.read()
         buffer.write(content)
 
-    # Parse model ckpt, extract metrics metadata
+    # 解析模型 ckpt，提取指标元数据
     try:
         from ultralytics import YOLO
         detector = YOLO(file_path)
         ckpt = detector.ckpt
-        # Safe extraction of fields
+        # 安全提取字段
         def safe_get(d, *keys, default=None):
             for k in keys:
                 if d is None:
@@ -253,17 +253,17 @@ async def upload_model_file(
         }
         m.metrics = json.dumps(parsed_metrics)
     except Exception as e:
-        # Parsing failure does not affect upload, just log
+        # 解析失败不影响上传，仅记录日志
         import logging
         logging.getLogger(__name__).warning(f"Failed to parse model metadata: {e}")
 
-    # Update model record
+    # 更新模型记录
     m.file_path = file_path
 
-    # Auto-detect format and create ModelFile record
+    # 自动检测格式并创建 ModelFile 记录
     detected_format = _detect_format(file_path)
 
-    # If this is the first file of this format, set as default
+    # 如果是该格式的第一个文件，则设为默认
     existing_formats = [mf.format for mf in db.query(ModelFile).filter(ModelFile.model_id == m.id).all()]
     is_first_of_format = detected_format not in existing_formats
     is_default = is_first_of_format and len(existing_formats) == 0
@@ -278,7 +278,7 @@ async def upload_model_file(
     )
     db.add(model_file)
 
-    # Update Model's format and available_formats compatible fields
+    # 更新 Model 的 format 和 available_formats 兼容字段
     if not m.format:
         m.format = detected_format
 
@@ -290,7 +290,7 @@ async def upload_model_file(
 
 @router.get("/{model_id}/training-history")
 async def get_model_training_history(model_id: int, db: Session = Depends(get_db)):
-    """Get model's training history."""
+    """获取模型的训练历史。"""
     from backend.database import TrainingJob
 
     m = db.query(Model).filter(Model.id == model_id).first()
@@ -318,7 +318,7 @@ async def get_model_training_history(model_id: int, db: Session = Depends(get_db
 
 @router.get("/{model_id}/download")
 async def download_model(model_id: int, db: Session = Depends(get_db)):
-    """Download model file."""
+    """下载模型文件。"""
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -334,14 +334,14 @@ async def export_model_async(
     data: ModelExportRequest,
     db: Session = Depends(get_db)
 ):
-    """Export model to specified format (async with progress push).
+    """导出模型到指定格式（异步，带进度推送）。
 
     Args:
-        model_id: Model ID
-        data: Export request, including target format, half precision, etc.
+        model_id: 模型 ID
+        data: 导出请求，包含目标格式、半精度等参数。
 
     Returns:
-        Export task ID, frontend can subscribe to progress via WebSocket
+        导出任务 ID，前端可通过 WebSocket 订阅进度
     """
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:
@@ -349,14 +349,14 @@ async def export_model_async(
     if not m.file_path or not os.path.exists(m.file_path):
         raise HTTPException(status_code=400, detail="Model file not found")
 
-    # Check if YOLO .pt model
+    # 检查是否为 YOLO .pt 模型
     if m.format and m.format != "yolo_pt":
         raise HTTPException(status_code=400, detail="Only export from YOLO .pt format is supported")
 
-    # Generate export task ID
+    # 生成导出任务 ID
     export_id = str(uuid.uuid4())[:8]
 
-    # Start background export task
+    # 启动后台导出任务
     thread = threading.Thread(
         target=_export_model_background,
         args=(model_id, export_id, data.target_format, data.half),
@@ -372,13 +372,13 @@ async def export_model_async(
 
 
 def _export_model_background(model_id: int, export_id: str, target_format: str, half: bool):
-    """Background model export, push progress via WebSocket."""
+    """后台模型导出，通过 WebSocket 推送进度。"""
     from backend.database import SessionLocal
     import asyncio
 
     db = SessionLocal()
     try:
-        # Send start progress
+        # 发送开始进度
         asyncio.run(ws_manager.send_export_update(export_id, {
             "status": "starting",
             "progress": 0,
@@ -394,14 +394,14 @@ def _export_model_background(model_id: int, export_id: str, target_format: str, 
             }))
             return
 
-        # Send loading model progress
+        # 发送加载模型进度
         asyncio.run(ws_manager.send_export_update(export_id, {
             "status": "loading",
             "progress": 20,
             "message": "Loading model...",
         }))
 
-        # Check if format already exists and delete old file before creating new
+        # 检查格式是否已存在，创建前删除旧文件
         precision = "fp16" if half else "fp32"
         existing_file = db.query(ModelFile).filter(
             ModelFile.model_id == m.id,
@@ -414,7 +414,7 @@ def _export_model_background(model_id: int, export_id: str, target_format: str, 
             except OSError:
                 pass
 
-        # Execute export (new file overwrites old at same path)
+        # 执行导出（新文件覆盖同路径的旧文件）
         try:
             from backend.core.export import export_model
 
@@ -425,7 +425,7 @@ def _export_model_background(model_id: int, export_id: str, target_format: str, 
                 half=half,
             )
 
-            # Send saving progress
+            # 发送保存进度
             asyncio.run(ws_manager.send_export_update(export_id, {
                 "status": "saving",
                 "progress": 80,
@@ -433,12 +433,12 @@ def _export_model_background(model_id: int, export_id: str, target_format: str, 
             }))
 
             if existing_file:
-                # Update record
+                # 更新记录
                 existing_file.file_path = result["output_path"]
                 existing_file.file_size = result["file_size"]
                 existing_file.precision = precision
             else:
-                # Create new ModelFile record
+                # 创建新的 ModelFile 记录
                 model_file = ModelFile(
                     model_id=m.id,
                     format=target_format,
@@ -449,7 +449,7 @@ def _export_model_background(model_id: int, export_id: str, target_format: str, 
                 )
                 db.add(model_file)
 
-            # Update Model's available_formats compatible field
+            # 更新 Model 的 available_formats 兼容字段
             model_files = db.query(ModelFile).filter(ModelFile.model_id == m.id).all()
             available_formats = [mf.format for mf in model_files]
             if target_format not in available_formats:
@@ -457,7 +457,7 @@ def _export_model_background(model_id: int, export_id: str, target_format: str, 
             m.available_formats = json.dumps(available_formats)
             db.commit()
 
-            # Send completion
+            # 发送完成状态
             asyncio.run(ws_manager.send_export_update(export_id, {
                 "status": "completed",
                 "progress": 100,
@@ -479,25 +479,25 @@ def _export_model_background(model_id: int, export_id: str, target_format: str, 
         db.close()
 
 
-# Keep old sync export endpoint (compatible)
+# 保留旧的同步导出端点（兼容）
 @router.post("/{model_id}/export/sync", response_model=ModelExportResponse)
 async def export_model_sync(
     model_id: int,
     data: ModelExportRequest,
     db: Session = Depends(get_db)
 ):
-    """Export model to specified format (sync, no progress push)."""
+    """导出模型到指定格式（同步，无进度推送）。"""
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Model not found")
     if not m.file_path or not os.path.exists(m.file_path):
         raise HTTPException(status_code=400, detail="Model file not found")
 
-    # Check if YOLO .pt model
+    # 检查是否为 YOLO .pt 模型
     if m.format and m.format != "yolo_pt":
         raise HTTPException(status_code=400, detail="Only export from YOLO .pt format is supported")
 
-    # Check if format already exists and delete old file before creating new
+    # 检查格式是否已存在，创建前删除旧文件
     precision = "fp16" if data.half else "fp32"
     existing_file = db.query(ModelFile).filter(
         ModelFile.model_id == m.id,
@@ -510,7 +510,7 @@ async def export_model_sync(
         except OSError:
             pass
 
-    # Execute export (new file overwrites old at same path)
+    # 执行导出（新文件覆盖同路径的旧文件）
     try:
         from backend.core.export import export_model
 
@@ -522,12 +522,12 @@ async def export_model_sync(
         )
 
         if existing_file:
-            # Update record
+            # 更新记录
             existing_file.file_path = result["output_path"]
             existing_file.file_size = result["file_size"]
             existing_file.precision = precision
         else:
-            # Create new ModelFile record
+            # 创建新的 ModelFile 记录
             model_file = ModelFile(
                 model_id=m.id,
                 format=data.target_format,
@@ -538,7 +538,7 @@ async def export_model_sync(
             )
             db.add(model_file)
 
-        # Update Model's available_formats compatible field
+        # 更新 Model 的 available_formats 兼容字段
         model_files = db.query(ModelFile).filter(ModelFile.model_id == m.id).all()
         available_formats = [mf.format for mf in model_files]
         if data.target_format not in available_formats:
@@ -566,7 +566,7 @@ async def export_model_sync(
 
 @router.get("/{model_id}/files", response_model=List[ModelFileResponse])
 async def list_model_files(model_id: int, db: Session = Depends(get_db)):
-    """Get all format files associated with the model."""
+    """获取模型关联的所有格式文件。"""
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -576,7 +576,7 @@ async def list_model_files(model_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{model_id}/files/{file_id}", status_code=204)
 async def delete_model_file(model_id: int, file_id: int, db: Session = Depends(get_db)):
-    """Delete specific format file of the model."""
+    """删除模型的指定格式文件。"""
     mf = db.query(ModelFile).filter(
         ModelFile.id == file_id,
         ModelFile.model_id == model_id
@@ -584,7 +584,7 @@ async def delete_model_file(model_id: int, file_id: int, db: Session = Depends(g
     if not mf:
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Delete physical file
+    # 删除物理文件
     if os.path.exists(mf.file_path):
         try:
             os.remove(mf.file_path)
@@ -598,7 +598,7 @@ async def delete_model_file(model_id: int, file_id: int, db: Session = Depends(g
 
 @router.post("/{model_id}/files/{file_id}/set-default", response_model=ModelResponse)
 async def set_default_format(model_id: int, file_id: int, db: Session = Depends(get_db)):
-    """Set default inference format for the model."""
+    """设置模型的默认推理格式。"""
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -610,12 +610,12 @@ async def set_default_format(model_id: int, file_id: int, db: Session = Depends(
     if not mf:
         raise HTTPException(status_code=404, detail="File not found")
 
-    # Cancel all is_default for this format (direct query)
+    # 取消该格式的所有 is_default（直接查询）
     model_files = db.query(ModelFile).filter(ModelFile.model_id == model_id).all()
     for f in model_files:
         f.is_default = (f.id == file_id)
 
-    # Update Model's format field
+    # 更新 Model 的 format 字段
     m.format = mf.format
     db.commit()
     db.refresh(m)
@@ -624,7 +624,7 @@ async def set_default_format(model_id: int, file_id: int, db: Session = Depends(
 
 @router.get("/{model_id}/files/{file_id}/download")
 async def download_model_file(model_id: int, file_id: int, db: Session = Depends(get_db)):
-    """Download specific format file of the model."""
+    """下载模型的指定格式文件。"""
     m = db.query(Model).filter(Model.id == model_id).first()
     if not m:
         raise HTTPException(status_code=404, detail="Model not found")
