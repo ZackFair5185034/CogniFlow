@@ -612,9 +612,9 @@ pnpm lint:fix       # ESLint 自动修复
 **规范：**
 - 文档文件使用 `.html` 扩展名
 - HTML 文档放在 `docs/` 目录下
-- 使用项目统一的 CSS 类名和设计令牌
+- 文档样式独立存放在 `docs/css/` 目录下，不与项目前端样式（`webui/src/style/`）混淆
 - 文件头部包含中文注释说明文档用途
-- 禁止在 HTML 文档中使用内联 `style` 属性，统一引用 `webui/src/style/` 中的样式文件
+- 禁止在 HTML 文档中使用内联 `style` 属性
 
 ## 9. 许可证
 
