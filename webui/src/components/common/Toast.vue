@@ -70,9 +70,18 @@ defineExpose({ show, hide })
       @click="hide"
     >
       <!-- 类型图标 -->
-      <span v-if="toast.type === 'success'" class="toast-icon">✓</span>
-      <span v-else-if="toast.type === 'error'" class="toast-icon">✕</span>
-      <span v-else class="toast-icon">ℹ</span>
+      <span
+        v-if="toast.type === 'success'"
+        class="toast-icon"
+      >✓</span>
+      <span
+        v-else-if="toast.type === 'error'"
+        class="toast-icon"
+      >✕</span>
+      <span
+        v-else
+        class="toast-icon"
+      >ℹ</span>
 
       <!-- 消息内容 -->
       <span class="toast-message">{{ toast.message }}</span>

@@ -6,7 +6,10 @@
         <h2>规则引擎</h2>
         <span class="subtitle">可视化规则流程编排与执行</span>
       </div>
-      <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
+      <button
+        class="ui-btn ui-btn-primary"
+        @click="showCreateDialog = true"
+      >
         <SvgIcon name="plus" />
         新建规则
       </button>
@@ -14,24 +17,36 @@
 
     <!-- 规则列表 -->
     <div class="rules-container">
-      <div v-if="loading" class="loading-state">
-        <div class="spinner"></div>
+      <div
+        v-if="loading"
+        class="loading-state"
+      >
+        <div class="spinner" />
         <span>加载中...</span>
       </div>
 
-      <div v-else-if="graphs.length === 0" class="empty-state">
+      <div
+        v-else-if="graphs.length === 0"
+        class="empty-state"
+      >
         <div class="empty-icon">
           <SvgIcon name="flow" />
         </div>
         <h3>暂无规则</h3>
         <p>创建您的第一条规则，开始自动化流程设计</p>
-        <button class="ui-btn ui-btn-primary" @click="showCreateDialog = true">
+        <button
+          class="ui-btn ui-btn-primary"
+          @click="showCreateDialog = true"
+        >
           <SvgIcon name="plus" />
           新建规则
         </button>
       </div>
 
-      <div v-else class="rules-grid">
+      <div
+        v-else
+        class="rules-grid"
+      >
         <div
           v-for="graph in graphs"
           :key="graph.id"
@@ -40,32 +55,49 @@
           @click="goToDesign(graph.id)"
         >
           <!-- 无快照时的渐变背景 -->
-          <div v-if="!graph.thumbnail" class="card-placeholder-bg"></div>
+          <div
+            v-if="!graph.thumbnail"
+            class="card-placeholder-bg"
+          />
 
           <!-- 快照遮罩 -->
-          <div class="card-snapshot-overlay"></div>
+          <div class="card-snapshot-overlay" />
 
           <!-- 卡片内容 -->
           <div class="card-content">
             <div class="card-header">
               <div class="card-title">
                 <h3>{{ graph.name }}</h3>
-                <span class="card-version" v-if="graph.version">v{{ graph.version }}</span>
+                <span
+                  v-if="graph.version"
+                  class="card-version"
+                >v{{ graph.version }}</span>
               </div>
-              <div class="card-actions" @click.stop>
+              <div
+                class="card-actions"
+                @click.stop
+              >
                 <!-- 激活/停用开关 -->
                 <button
                   class="action-btn"
                   :class="{ active: graph.is_active }"
-                  @click="toggleActive(graph)"
                   :title="graph.is_active ? '停用规则' : '激活规则'"
+                  @click="toggleActive(graph)"
                 >
                   <SvgIcon :name="graph.is_active ? 'pause' : 'play'" />
                 </button>
-                <button class="action-btn" @click="goToDesign(graph.id)" title="编辑规则">
+                <button
+                  class="action-btn"
+                  title="编辑规则"
+                  @click="goToDesign(graph.id)"
+                >
                   <SvgIcon name="edit" />
                 </button>
-                <button class="action-btn danger" @click="handleDelete(graph)" title="删除规则">
+                <button
+                  class="action-btn danger"
+                  title="删除规则"
+                  @click="handleDelete(graph)"
+                >
                   <SvgIcon name="trash" />
                 </button>
               </div>
@@ -73,20 +105,31 @@
 
             <!-- 规则状态标签 -->
             <div class="rule-status-tags">
-              <span class="status-tag" :class="graph.is_active ? 'active' : 'inactive'">
+              <span
+                class="status-tag"
+                :class="graph.is_active ? 'active' : 'inactive'"
+              >
                 {{ graph.is_active ? '已激活' : '未激活' }}
               </span>
-              <span class="cron-tag" v-if="graph.cron_expression">
+              <span
+                v-if="graph.cron_expression"
+                class="cron-tag"
+              >
                 <SvgIcon name="clock" />
                 {{ graph.cron_expression }}
               </span>
             </div>
 
-            <p class="card-desc">{{ graph.description || '暂无描述' }}</p>
+            <p class="card-desc">
+              {{ graph.description || '暂无描述' }}
+            </p>
 
             <div class="card-footer">
               <div class="card-meta">
-                <span class="meta-item" v-if="graph.last_executed_at">
+                <span
+                  v-if="graph.last_executed_at"
+                  class="meta-item"
+                >
                   <SvgIcon name="clock" />
                   {{ formatDate(graph.last_executed_at) }}
                 </span>
@@ -95,7 +138,10 @@
                   {{ formatDate(graph.updated_at) }}
                 </span>
               </div>
-              <span class="has-snapshot" v-if="graph.thumbnail">
+              <span
+                v-if="graph.thumbnail"
+                class="has-snapshot"
+              >
                 <SvgIcon name="image" />
                 快照
               </span>
@@ -106,11 +152,18 @@
     </div>
 
     <!-- 创建规则对话框 -->
-    <div class="dialog-overlay" v-if="showCreateDialog" @click.self="showCreateDialog = false">
+    <div
+      v-if="showCreateDialog"
+      class="dialog-overlay"
+      @click.self="showCreateDialog = false"
+    >
       <div class="dialog">
         <div class="dialog-header">
           <h3>新建规则</h3>
-          <button class="close-btn" @click="showCreateDialog = false">
+          <button
+            class="close-btn"
+            @click="showCreateDialog = false"
+          >
             <SvgIcon name="close" />
           </button>
         </div>
@@ -118,11 +171,11 @@
           <div class="form-group">
             <label>规则名称</label>
             <input
-              type="text"
               v-model="createForm.name"
+              type="text"
               placeholder="例如：目标检测自动响应"
               @keyup.enter="handleCreate"
-            />
+            >
           </div>
           <div class="form-group">
             <label>描述（可选）</label>
@@ -130,23 +183,28 @@
               v-model="createForm.description"
               rows="3"
               placeholder="描述规则的用途..."
-            ></textarea>
+            />
           </div>
           <div class="form-group">
             <label>版本（可选）</label>
             <input
-              type="text"
               v-model="createForm.version"
+              type="text"
               placeholder="例如：1.0.0"
-            />
+            >
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="btn secondary" @click="showCreateDialog = false">取消</button>
+          <button
+            class="btn secondary"
+            @click="showCreateDialog = false"
+          >
+            取消
+          </button>
           <button
             class="btn primary"
-            @click="handleCreate"
             :disabled="!createForm.name.trim() || creating"
+            @click="handleCreate"
           >
             {{ creating ? '创建中...' : '创建' }}
           </button>
@@ -155,7 +213,11 @@
     </div>
 
     <!-- Toast -->
-    <div class="toast" v-if="toast.show" :class="toast.type">
+    <div
+      v-if="toast.show"
+      class="toast"
+      :class="toast.type"
+    >
       {{ toast.message }}
     </div>
   </div>

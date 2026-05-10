@@ -3,19 +3,26 @@
     <!-- 顶部工具栏 -->
     <header class="canvas-header">
       <div class="header-left">
-        <button class="icon-btn back-btn" @click="goBack" title="返回规则列表">
+        <button
+          class="icon-btn back-btn"
+          title="返回规则列表"
+          @click="goBack"
+        >
           <SvgIcon name="back" />
         </button>
         <div class="rule-name-section">
           <input
+            v-model="graphName"
             type="text"
             class="rule-name-input"
-            v-model="graphName"
+            placeholder="规则名称..."
             @blur="handleNameChange"
             @keyup.enter="$event.target.blur()"
-            placeholder="规则名称..."
-          />
-          <span class="rule-status-badge" :class="{ active: graph?.is_active }">
+          >
+          <span
+            class="rule-status-badge"
+            :class="{ active: graph?.is_active }"
+          >
             {{ graph?.is_active ? '运行中' : '已停止' }}
           </span>
         </div>
@@ -23,54 +30,102 @@
 
       <div class="header-center">
         <div class="tool-group">
-          <button class="icon-btn" @click="handleUndo" :disabled="!canUndo" title="撤销 (Ctrl+Z)">
+          <button
+            class="icon-btn"
+            :disabled="!canUndo"
+            title="撤销 (Ctrl+Z)"
+            @click="handleUndo"
+          >
             <SvgIcon name="undo" />
           </button>
-          <button class="icon-btn" @click="handleRedo" :disabled="!canRedo" title="重做 (Ctrl+Y)">
+          <button
+            class="icon-btn"
+            :disabled="!canRedo"
+            title="重做 (Ctrl+Y)"
+            @click="handleRedo"
+          >
             <SvgIcon name="redo" />
           </button>
         </div>
 
-        <div class="tool-divider"></div>
+        <div class="tool-divider" />
 
         <div class="tool-group">
-          <button class="icon-btn" @click="zoomIn" title="放大">
+          <button
+            class="icon-btn"
+            title="放大"
+            @click="zoomIn"
+          >
             <SvgIcon name="zoom-in" />
           </button>
           <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button class="icon-btn" @click="zoomOut" title="缩小">
+          <button
+            class="icon-btn"
+            title="缩小"
+            @click="zoomOut"
+          >
             <SvgIcon name="zoom-out" />
           </button>
-          <button class="icon-btn" @click="fitView" title="适应画布">
+          <button
+            class="icon-btn"
+            title="适应画布"
+            @click="fitView"
+          >
             <SvgIcon name="fit-view" />
           </button>
         </div>
 
-        <div class="tool-divider"></div>
+        <div class="tool-divider" />
 
         <div class="tool-group">
-          <button class="icon-btn" :class="{ active: showGrid }" @click="showGrid = !showGrid" title="显示网格">
+          <button
+            class="icon-btn"
+            :class="{ active: showGrid }"
+            title="显示网格"
+            @click="showGrid = !showGrid"
+          >
             <SvgIcon name="grid" />
           </button>
-          <button class="icon-btn" :class="{ active: snapGrid }" @click="snapGrid = !snapGrid" title="网格吸附">
+          <button
+            class="icon-btn"
+            :class="{ active: snapGrid }"
+            title="网格吸附"
+            @click="snapGrid = !snapGrid"
+          >
             <SvgIcon name="snap" />
           </button>
-          <button class="icon-btn" :class="{ active: showMiniMap }" @click="showMiniMap = !showMiniMap" title="小地图">
+          <button
+            class="icon-btn"
+            :class="{ active: showMiniMap }"
+            title="小地图"
+            @click="showMiniMap = !showMiniMap"
+          >
             <SvgIcon name="minimap" />
           </button>
         </div>
       </div>
 
       <div class="header-right">
-        <button class="action-btn secondary" @click="handleValidate">
+        <button
+          class="action-btn secondary"
+          @click="handleValidate"
+        >
           <SvgIcon name="check" />
           校验
         </button>
-        <button class="action-btn secondary" @click="handleSave" :disabled="saving">
+        <button
+          class="action-btn secondary"
+          :disabled="saving"
+          @click="handleSave"
+        >
           <SvgIcon name="save" />
           {{ saving ? '保存中...' : '保存' }}
         </button>
-        <button class="action-btn primary" @click="handleExecute" :disabled="executing || !hasNodes">
+        <button
+          class="action-btn primary"
+          :disabled="executing || !hasNodes"
+          @click="handleExecute"
+        >
           <SvgIcon name="play" />
           {{ executing ? '执行中...' : '执行' }}
         </button>
@@ -80,46 +135,78 @@
     <!-- 主体区域 -->
     <div class="canvas-body">
       <!-- 左侧节点面板 -->
-      <aside class="node-palette" :class="{ collapsed: !showPalette }">
-        <button class="collapse-btn" :class="{ collapsed: !showPalette }" @click="showPalette = !showPalette" :title="showPalette ? '收起面板' : '展开面板'">
+      <aside
+        class="node-palette"
+        :class="{ collapsed: !showPalette }"
+      >
+        <button
+          class="collapse-btn"
+          :class="{ collapsed: !showPalette }"
+          :title="showPalette ? '收起面板' : '展开面板'"
+          @click="showPalette = !showPalette"
+        >
           <SvgIcon :name="showPalette ? 'chevron-left' : 'chevron-right'" />
         </button>
-        <div class="palette-header" v-show="showPalette">
+        <div
+          v-show="showPalette"
+          class="palette-header"
+        >
           <h3>节点库</h3>
         </div>
 
-        <div class="palette-search" v-show="showPalette">
+        <div
+          v-show="showPalette"
+          class="palette-search"
+        >
           <input
             v-model="nodeSearchQuery"
             type="text"
             placeholder="搜索节点..."
             class="search-input"
             @input="handleSearchInput"
-          />
+          >
           <button
             v-if="nodeSearchQuery"
             class="search-clear"
-            @click="nodeSearchQuery = ''"
             title="清除搜索"
-          >×</button>
+            @click="nodeSearchQuery = ''"
+          >
+            ×
+          </button>
         </div>
 
-        <div class="palette-content" v-show="showPalette">
+        <div
+          v-show="showPalette"
+          class="palette-content"
+        >
           <div
             v-for="category in filteredCategories"
             :key="category.name"
             class="node-category"
           >
-            <div class="category-header" @click="toggleCategory(category.name)">
-              <div class="category-icon-wrapper" :class="category.name">
+            <div
+              class="category-header"
+              @click="toggleCategory(category.name)"
+            >
+              <div
+                class="category-icon-wrapper"
+                :class="category.name"
+              >
                 <SvgIcon :name="category.name" />
               </div>
               <span class="category-name">{{ category.label }}</span>
               <span class="category-count">{{ category.nodes.length }}</span>
-              <SvgIcon class="chevron" :class="{ expanded: category.expanded }" name="chevron" />
+              <SvgIcon
+                class="chevron"
+                :class="{ expanded: category.expanded }"
+                name="chevron"
+              />
             </div>
 
-            <div v-show="category.expanded" class="node-list">
+            <div
+              v-show="category.expanded"
+              class="node-list"
+            >
               <div
                 v-for="node in category.nodes"
                 :key="node.type"
@@ -129,7 +216,10 @@
                 @dblclick="quickAddNode(node)"
                 @contextmenu.prevent="handlePaletteContextMenu($event, node)"
               >
-                <div class="node-icon-wrapper" :class="category.name">
+                <div
+                  class="node-icon-wrapper"
+                  :class="category.name"
+                >
                   <SvgIcon :name="node.category || category.name" />
                 </div>
                 <div class="node-info">
@@ -142,12 +232,22 @@
 
           <!-- 变量管理面板 -->
           <div class="variables-section">
-            <div class="section-header" @click="showVariables = !showVariables">
+            <div
+              class="section-header"
+              @click="showVariables = !showVariables"
+            >
               <span class="section-title">📌 变量</span>
               <span class="section-count">{{ variables.length }}</span>
-              <SvgIcon class="chevron" :class="{ expanded: showVariables }" name="chevron" />
+              <SvgIcon
+                class="chevron"
+                :class="{ expanded: showVariables }"
+                name="chevron"
+              />
             </div>
-            <div v-show="showVariables" class="variables-list">
+            <div
+              v-show="showVariables"
+              class="variables-list"
+            >
               <div
                 v-for="(variable, index) in variables"
                 :key="index"
@@ -156,24 +256,43 @@
                 <input
                   type="text"
                   :value="variable.name"
-                  @input="updateVariable(index, 'name', ($event.target as HTMLInputElement).value)"
                   class="var-name-input"
                   placeholder="变量名"
-                />
+                  @input="updateVariable(index, 'name', ($event.target as HTMLInputElement).value)"
+                >
                 <select
                   :value="variable.type"
-                  @change="updateVariable(index, 'type', ($event.target as HTMLSelectElement).value)"
                   class="var-type-select"
+                  @change="updateVariable(index, 'type', ($event.target as HTMLSelectElement).value)"
                 >
-                  <option value="STRING">STRING</option>
-                  <option value="NUMBER">NUMBER</option>
-                  <option value="BOOLEAN">BOOLEAN</option>
-                  <option value="IMAGE">IMAGE</option>
-                  <option value="BBOX">BBOX</option>
+                  <option value="STRING">
+                    STRING
+                  </option>
+                  <option value="NUMBER">
+                    NUMBER
+                  </option>
+                  <option value="BOOLEAN">
+                    BOOLEAN
+                  </option>
+                  <option value="IMAGE">
+                    IMAGE
+                  </option>
+                  <option value="BBOX">
+                    BBOX
+                  </option>
                 </select>
-                <button class="var-remove-btn" @click="removeVariable(index)" title="删除变量">×</button>
+                <button
+                  class="var-remove-btn"
+                  title="删除变量"
+                  @click="removeVariable(index)"
+                >
+                  ×
+                </button>
               </div>
-              <button class="add-var-btn" @click="addVariable">
+              <button
+                class="add-var-btn"
+                @click="addVariable"
+              >
                 <SvgIcon name="plus" /> 添加变量
               </button>
             </div>
@@ -182,12 +301,14 @@
       </aside>
 
       <!-- 画布区域 -->
-      <div class="canvas-wrapper" ref="canvasWrapper">
-        
+      <div
+        ref="canvasWrapper"
+        class="canvas-wrapper"
+      >
         <!-- VueFlow 画布 -->
         <div
-          class="flow-container"
           ref="flowContainer"
+          class="flow-container"
           @drop="handleDrop"
           @dragover.prevent
           @dragenter.prevent
@@ -196,7 +317,7 @@
           @mousemove="handleCanvasMouseMove"
           @mouseup="handleCanvasMouseUp"
         >
-            <VueFlow
+          <VueFlow
             ref="vueFlowRef"
             v-model:nodes="nodes"
             v-model:edges="edges"
@@ -208,31 +329,30 @@
             fit-view-on-init
             @node-click="handleNodeClick"
             @node-drag-stop="handleNodeDragStop"
-            @pane-click="handlePaneClick"
-            @connect="handleConnect"
-            @move="handlePan"
-            @zoom="handleZoom"
-            @nodes-change="handleNodesChange"
-            @edges-change="handleEdgesChange"
-            @node-context-menu="(event: any, node: any) => handleContextMenu(event, node, 'node')"
-            @pane-context-menu="(event: any) => handleContextMenu(event, null, 'pane')"
-            @edge-context-menu="(event: any, edge: any) => handleContextMenu(event, edge, 'edge')"
-            @node-delete="handleNodeDelete"
             :pan-on-drag="[]"
+            @pane-click="handlePaneClick"
             :pan-on-scroll="true"
+            @connect="handleConnect"
             :zoom-on-scroll="true"
+            @move="handlePan"
             :min-zoom="0.1"
+            @zoom="handleZoom"
             :max-zoom="4"
+            @nodes-change="handleNodesChange"
             :nodes-draggable="true"
+            @edges-change="handleEdgesChange"
             :nodes-connectable="true"
+            @node-context-menu="(event: any, node: any) => handleContextMenu(event, node, 'node')"
             :elements-selectable="true"
+            @pane-context-menu="(event: any) => handleContextMenu(event, null, 'pane')"
             :select-nodes-on-drag="true"
+            @edge-context-menu="(event: any, edge: any) => handleContextMenu(event, edge, 'edge')"
             :selection-mode="SelectionMode.Partial"
+            @node-delete="handleNodeDelete"
             :connection-radius="20"
-            @selection-change="handleSelectionChange"
             :is-valid-connection="isValidConnection"
+            @selection-change="handleSelectionChange"
           >
-            
             <!-- 小地图 -->
             <MiniMap
               v-if="showMiniMap"
@@ -249,7 +369,10 @@
 
           
           <!-- 空画布提示 -->
-          <div class="empty-state" v-if="nodes.length === 0 && !isLoading">
+          <div
+            v-if="nodes.length === 0 && !isLoading"
+            class="empty-state"
+          >
             <div class="empty-icon">
               <SvgIcon name="stream" />
             </div>
@@ -262,7 +385,10 @@
                 class="quick-add-btn"
                 @click="quickAddNode(node)"
               >
-                <span class="btn-icon" :class="node.category">
+                <span
+                  class="btn-icon"
+                  :class="node.category"
+                >
                   <SvgIcon :name="node.category" />
                 </span>
                 {{ node.label }}
@@ -271,42 +397,73 @@
           </div>
 
           <!-- 加载状态 -->
-          <div class="loading-state" v-if="isLoading">
-            <div class="spinner"></div>
+          <div
+            v-if="isLoading"
+            class="loading-state"
+          >
+            <div class="spinner" />
             <span>加载规则图...</span>
           </div>
         </div>
       </div>
-
-          </div>
+    </div>
 
     <!-- 执行日志面板 -->
-    <div class="execution-panel" :class="{ expanded: showExecutionPanel }"
+    <div
+      class="execution-panel"
+      :class="{ expanded: showExecutionPanel }"
       :style="{
         height: showExecutionPanel ? panelHeight + 'px' : '44px',
         left: showPalette ? EXPANDED_WIDTH + 'px' : COLLAPSED_WIDTH + 'px'
-      }">
+      }"
+    >
       <!-- 拖拽调整高度 -->
-      <div class="panel-resize-handle" @mousedown="startPanelResize"></div>
-      <div class="execution-header" @click="showExecutionPanel = !showExecutionPanel">
+      <div
+        class="panel-resize-handle"
+        @mousedown="startPanelResize"
+      />
+      <div
+        class="execution-header"
+        @click="showExecutionPanel = !showExecutionPanel"
+      >
         <div class="execution-title">
           <SvgIcon name="file-text" />
           <span>执行日志</span>
-          <span class="execution-status" :class="executionStatus">{{ executionStatusText }}</span>
+          <span
+            class="execution-status"
+            :class="executionStatus"
+          >{{ executionStatusText }}</span>
         </div>
         <div class="execution-actions">
-          <button class="icon-btn small" @click.stop="clearLogs" v-if="showExecutionPanel">
+          <button
+            v-if="showExecutionPanel"
+            class="icon-btn small"
+            @click.stop="clearLogs"
+          >
             <SvgIcon name="trash" />
           </button>
-          <SvgIcon class="expand-icon" :class="{ expanded: showExecutionPanel }" name="chevron" />
+          <SvgIcon
+            class="expand-icon"
+            :class="{ expanded: showExecutionPanel }"
+            name="chevron"
+          />
         </div>
       </div>
 
-      <div class="execution-content" v-show="showExecutionPanel">
+      <div
+        v-show="showExecutionPanel"
+        class="execution-content"
+      >
         <!-- 进度条 -->
-        <div class="progress-bar-wrapper" v-if="executionStatus === 'running'">
+        <div
+          v-if="executionStatus === 'running'"
+          class="progress-bar-wrapper"
+        >
           <div class="progress-bar">
-            <div class="progress-fill" :style="{ width: executionProgress + '%' }"></div>
+            <div
+              class="progress-fill"
+              :style="{ width: executionProgress + '%' }"
+            />
           </div>
           <span class="progress-text">{{ executionProgress }}%</span>
         </div>
@@ -320,10 +477,16 @@
           >
             <span class="log-time">{{ log.timestamp }}</span>
             <span class="log-level-badge">{{ log.level.toUpperCase() }}</span>
-            <span class="log-node" v-if="log.node_type">{{ log.node_type }}</span>
+            <span
+              v-if="log.node_type"
+              class="log-node"
+            >{{ log.node_type }}</span>
             <span class="log-message">{{ log.message }}</span>
           </div>
-          <div v-if="executionLogs.length === 0" class="no-logs">
+          <div
+            v-if="executionLogs.length === 0"
+            class="no-logs"
+          >
             暂无执行日志
           </div>
         </div>
@@ -332,7 +495,11 @@
 
     <!-- Toast 提示 -->
     <transition name="toast">
-      <div class="toast-notification" v-if="toast.show" :class="toast.type">
+      <div
+        v-if="toast.show"
+        class="toast-notification"
+        :class="toast.type"
+      >
         {{ toast.message }}
       </div>
     </transition>
@@ -345,43 +512,87 @@
       @contextmenu.prevent
     >
       <template v-if="contextMenu.targetType === 'node'">
-        <div class="context-menu-item" @click="handleContextAction('copy')">
+        <div
+          class="context-menu-item"
+          @click="handleContextAction('copy')"
+        >
           <SvgIcon name="copy" /> 复制
         </div>
-        <div class="context-menu-item" @click="handleContextAction('cut')">
+        <div
+          class="context-menu-item"
+          @click="handleContextAction('cut')"
+        >
           <SvgIcon name="cut" /> 剪切
         </div>
-        <div class="context-menu-item danger" @click="handleContextAction('delete')">
+        <div
+          class="context-menu-item danger"
+          @click="handleContextAction('delete')"
+        >
           <SvgIcon name="delete" /> 删除
         </div>
         <div class="context-menu-divider" />
       </template>
       <template v-if="contextMenu.targetType === 'edge'">
-        <div class="context-menu-item danger" @click="handleContextAction('delete')">
+        <div
+          class="context-menu-item danger"
+          @click="handleContextAction('delete')"
+        >
           <SvgIcon name="delete" /> 删除连线
         </div>
         <div class="context-menu-divider" />
       </template>
-      <div class="context-menu-item" @click="handleContextAction('paste')">
+      <div
+        class="context-menu-item"
+        @click="handleContextAction('paste')"
+      >
         <SvgIcon name="paste" /> 粘贴
       </div>
-      <div class="context-menu-item" @click="handleContextAction('selectAll')">
+      <div
+        class="context-menu-item"
+        @click="handleContextAction('selectAll')"
+      >
         <SvgIcon name="select" /> 全选
       </div>
     </div>
 
     <!-- 点击其他区域隐藏右键菜单 -->
-    <div v-if="contextMenu.show" class="context-menu-overlay" @click="hideContextMenu" @contextmenu.prevent="hideContextMenu" />
+    <div
+      v-if="contextMenu.show"
+      class="context-menu-overlay"
+      @click="hideContextMenu"
+      @contextmenu.prevent="hideContextMenu"
+    />
 
     <!-- 变量绑定菜单 -->
-    <div v-if="varMenu.show" class="var-menu" :style="{ left: varMenu.x + 'px', top: varMenu.y + 'px' }" @click.stop>
-      <div class="var-menu-title">插入变量</div>
-      <div v-if="variables.length === 0" class="var-menu-empty">暂无变量，请先在左侧添加</div>
-      <div v-for="v in variables" :key="v.name" class="var-menu-item" @click="insertVariable(v.name)">
+    <div
+      v-if="varMenu.show"
+      class="var-menu"
+      :style="{ left: varMenu.x + 'px', top: varMenu.y + 'px' }"
+      @click.stop
+    >
+      <div class="var-menu-title">
+        插入变量
+      </div>
+      <div
+        v-if="variables.length === 0"
+        class="var-menu-empty"
+      >
+        暂无变量，请先在左侧添加
+      </div>
+      <div
+        v-for="v in variables"
+        :key="v.name"
+        class="var-menu-item"
+        @click="insertVariable(v.name)"
+      >
         📌 {{ v.name }} <span class="var-type-tag">{{ v.type }}</span>
       </div>
     </div>
-    <div v-if="varMenu.show" class="var-menu-overlay" @click="hideVariableMenu" />
+    <div
+      v-if="varMenu.show"
+      class="var-menu-overlay"
+      @click="hideVariableMenu"
+    />
   </div>
 </template>
 

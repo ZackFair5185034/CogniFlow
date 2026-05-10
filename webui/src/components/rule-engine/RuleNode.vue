@@ -1,8 +1,15 @@
 <template>
-  <div class="rule-node" :class="[`category-${data.category}`, { selected }]" @contextmenu.prevent="handleContextMenu">
+  <div
+    class="rule-node"
+    :class="[`category-${data.category}`, { selected }]"
+    @contextmenu.prevent="handleContextMenu"
+  >
     <!-- 标题栏 -->
     <div class="node-header">
-      <div class="node-icon" :class="data.category">
+      <div
+        class="node-icon"
+        :class="data.category"
+      >
         <SvgIcon :name="data.category" />
       </div>
       <div class="node-title">
@@ -12,7 +19,10 @@
     </div>
 
     <!-- 配置控件区域 -->
-    <div class="node-body" v-if="hasConfig">
+    <div
+      v-if="hasConfig"
+      class="node-body"
+    >
       <div
         v-for="(schema, key) in configProperties"
         :key="key"
@@ -28,9 +38,9 @@
               :max="schema.maximum"
               :step="schema.step"
               :value="nodeConfig[key]"
-              @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
               class="slider-input"
-            />
+              @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
+            >
             <span class="slider-value">{{ nodeConfig[key] }}</span>
           </template>
 
@@ -42,23 +52,25 @@
               :max="schema.maximum"
               :step="schema.step"
               :value="nodeConfig[key]"
-              @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
               class="number-input"
-            />
+              @input="updateConfig(key, Number(($event.target as HTMLInputElement).value))"
+            >
           </template>
 
           <!-- Dropdown -->
           <template v-else-if="schema.widget === 'dropdown'">
             <select
               :value="nodeConfig[key]"
-              @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
               class="select-input"
+              @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
             >
               <option
                 v-for="opt in schema.enum"
                 :key="opt"
                 :value="opt"
-              >{{ opt }}</option>
+              >
+                {{ opt }}
+              </option>
             </select>
           </template>
 
@@ -66,15 +78,19 @@
           <template v-else-if="schema.widget === 'model-select'">
             <select
               :value="nodeConfig[key]"
-              @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
               class="select-input model-select"
+              @change="updateConfig(key, ($event.target as HTMLSelectElement).value)"
             >
-              <option value="">选择模型...</option>
+              <option value="">
+                选择模型...
+              </option>
               <option
                 v-for="model in availableModels"
                 :key="model.id"
                 :value="model.id"
-              >{{ model.name }}</option>
+              >
+                {{ model.name }}
+              </option>
             </select>
           </template>
 
@@ -82,22 +98,22 @@
           <template v-else-if="schema.widget === 'textarea'">
             <textarea
               :value="nodeConfig[key]"
-              @input="updateConfig(key, ($event.target as HTMLTextAreaElement).value)"
               class="textarea-input"
               :placeholder="schema.description || ''"
               rows="2"
-            ></textarea>
+              @input="updateConfig(key, ($event.target as HTMLTextAreaElement).value)"
+            />
           </template>
 
           <!-- Code -->
           <template v-else-if="schema.widget === 'code'">
             <textarea
               :value="nodeConfig[key]"
-              @input="updateConfig(key, ($event.target as HTMLTextAreaElement).value)"
               class="code-input"
               :placeholder="schema.description || ''"
               rows="2"
-            ></textarea>
+              @input="updateConfig(key, ($event.target as HTMLTextAreaElement).value)"
+            />
           </template>
 
           <!-- Checkbox -->
@@ -106,9 +122,9 @@
               <input
                 type="checkbox"
                 :checked="nodeConfig[key]"
-                @change="updateConfig(key, ($event.target as HTMLInputElement).checked)"
                 class="checkbox-input"
-              />
+                @change="updateConfig(key, ($event.target as HTMLInputElement).checked)"
+              >
               <span class="checkbox-label">{{ schema.description || '' }}</span>
             </label>
           </template>
@@ -118,19 +134,21 @@
             <input
               type="text"
               :value="nodeConfig[key]"
-              @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
               class="text-input"
               :placeholder="schema.description || ''"
-            />
+              @input="updateConfig(key, ($event.target as HTMLInputElement).value)"
+            >
           </template>
 
           <!-- 变量绑定按钮 -->
           <button
             v-if="schema.widget !== 'checkbox'"
             class="var-bind-btn"
-            @click.stop="toggleVarMenu(key)"
             title="绑定变量"
-          >📎</button>
+            @click.stop="toggleVarMenu(key)"
+          >
+            📎
+          </button>
 
           <!-- 变量下拉菜单 -->
           <div
@@ -142,30 +160,38 @@
               :key="v.name"
               class="var-option"
               @click="bindVariable(key, v.name)"
-            >{{ formatVarRef(v.name) }}</div>
+            >
+              {{ formatVarRef(v.name) }}
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 底部配置摘要 -->
-    <div class="node-footer" v-if="configSummary">
+    <div
+      v-if="configSummary"
+      class="node-footer"
+    >
       <span class="summary-text">{{ configSummary }}</span>
     </div>
 
     <!-- 端口区域 - 左进右出 -->
     <div class="node-ports">
       <!-- 左侧输入端口 -->
-      <div class="ports-side inputs" v-if="data.inputs?.length">
+      <div
+        v-if="data.inputs?.length"
+        class="ports-side inputs"
+      >
         <div
           v-for="input in data.inputs"
           :key="input.name"
           class="port-item"
         >
           <Handle
+            :id="input.name"
             type="target"
             :position="Position.Left"
-            :id="input.name"
             :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`]"
           />
           <span class="port-label">{{ input.label || input.name }}</span>
@@ -173,7 +199,10 @@
       </div>
 
       <!-- 右侧输出端口 -->
-      <div class="ports-side outputs" v-if="data.outputs?.length">
+      <div
+        v-if="data.outputs?.length"
+        class="ports-side outputs"
+      >
         <div
           v-for="output in data.outputs"
           :key="output.name"
@@ -181,9 +210,9 @@
         >
           <span class="port-label">{{ output.label || output.name }}</span>
           <Handle
+            :id="output.name"
             type="source"
             :position="Position.Right"
-            :id="output.name"
             :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`]"
           />
         </div>
@@ -191,12 +220,24 @@
     </div>
 
     <!-- 执行状态指示 -->
-    <div class="node-status" v-if="data.status">
-      <div class="status-indicator" :class="data.status"></div>
+    <div
+      v-if="data.status"
+      class="node-status"
+    >
+      <div
+        class="status-indicator"
+        :class="data.status"
+      />
     </div>
 
     <!-- 删除按钮 -->
-    <button class="node-delete-btn" @click.stop="props.onDelete?.(data.id)" title="删除节点">×</button>
+    <button
+      class="node-delete-btn"
+      title="删除节点"
+      @click.stop="props.onDelete?.(data.id)"
+    >
+      ×
+    </button>
   </div>
 </template>
 
