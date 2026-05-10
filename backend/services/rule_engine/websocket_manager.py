@@ -98,7 +98,8 @@ class RuleExecutionConnectionManager:
 
     async def send_node_started(self, execution_id: int, node_id: str, node_type: str):
         """广播节点开始执行。"""
-        await self.broadcast(execution_id, {
+        await self.broadcast({
+            "execution_id": execution_id,
             "type": "node_started",
             "node_id": node_id,
             "node_type": node_type,
@@ -106,7 +107,8 @@ class RuleExecutionConnectionManager:
 
     async def send_node_executed(self, execution_id: int, node_id: str, status: str, outputs: dict):
         """广播节点执行完成。"""
-        await self.broadcast(execution_id, {
+        await self.broadcast({
+            "execution_id": execution_id,
             "type": "node_executed",
             "node_id": node_id,
             "status": status,
@@ -115,7 +117,8 @@ class RuleExecutionConnectionManager:
 
     async def send_node_failed(self, execution_id: int, node_id: str, error: str):
         """广播节点执行失败。"""
-        await self.broadcast(execution_id, {
+        await self.broadcast({
+            "execution_id": execution_id,
             "type": "node_failed",
             "node_id": node_id,
             "error": error,
@@ -124,7 +127,8 @@ class RuleExecutionConnectionManager:
     async def send_progress(self, execution_id: int, progress: float, current_level: int,
                             total_levels: int, completed_nodes: int, total_nodes: int):
         """广播执行进度。"""
-        await self.broadcast(execution_id, {
+        await self.broadcast({
+            "execution_id": execution_id,
             "type": "execution_progress",
             "progress": progress,
             "current_level": current_level,
@@ -143,7 +147,7 @@ class RuleExecutionConnectionManager:
             msg["result"] = result
         if error:
             msg["error"] = error
-        await self.broadcast(execution_id, msg)
+        await self.broadcast({"execution_id": execution_id, **msg})
 
 
 # 全局单例

@@ -50,6 +50,18 @@
 
         <div class="tool-divider" />
 
+        <!-- WebSocket 连接状态 -->
+        <div
+          class="ws-status"
+          :class="{ connected: wsConnected }"
+          :title="wsConnected ? 'WebSocket 已连接' : 'WebSocket 未连接'"
+        >
+          <span class="ws-dot" />
+          <span class="ws-label">{{ wsConnected ? '已连接' : '未连接' }}</span>
+        </div>
+
+        <div class="tool-divider" />
+
         <div class="tool-group">
           <button
             class="icon-btn"
@@ -806,6 +818,7 @@ function showToast(message: string, type: 'success' | 'error' | 'info' = 'info')
 // WebSocket 连接（Phase 5 实时推送）
 let ws: WebSocket | null = null
 let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
+const wsConnected = ref(false)
 
 function getWsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -822,6 +835,7 @@ function connectWebSocket(execId: number) {
     ws = new WebSocket(getWsUrl())
 
     ws.onopen = () => {
+      wsConnected.value = true
       // 订阅该 execution_id
       ws?.send(JSON.stringify({ action: 'subscribe', execution_id: execId }))
     }
@@ -836,6 +850,7 @@ function connectWebSocket(execId: number) {
     }
 
     ws.onerror = () => {
+      wsConnected.value = false
       // 自动重连
       if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
       wsReconnectTimer = setTimeout(() => {
@@ -846,6 +861,7 @@ function connectWebSocket(execId: number) {
     }
 
     ws.onclose = () => {
+      wsConnected.value = false
       ws = null
     }
   } catch (e) {
@@ -1019,6 +1035,8 @@ function handlePaste() {
       selected: false,
       data: {
         ...(cloned.data || {}),
+        id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        selected: false,
         onDelete: handleNodeDelete
       }
     }
@@ -1223,6 +1241,13 @@ async function loadGraph() {
       category: getNodeCategory(n.type)
     }))
 
+    // 同步节点执行状态
+    for (const n of nodes.value) {
+      if (n.data.status) {
+        nodeStates.value[n.id] = n.data.status
+      }
+    }
+
     edges.value = (graph.value.edges || []).map((e: any) => ({
       id: e.id,
       source: e.source,
@@ -1327,6 +1352,7 @@ function handleDrop(event: DragEvent) {
       inputs: nodeDef.inputs,
       outputs: nodeDef.outputs,
       config: {},
+      selected: false,
       onDelete: handleNodeDelete
     }
   }
@@ -1357,6 +1383,7 @@ function quickAddNode(nodeDef: any) {
       inputs: nodeDef.inputs,
       outputs: nodeDef.outputs,
       config: {},
+      selected: false,
       onDelete: handleNodeDelete
     }
   }
@@ -1923,6 +1950,37 @@ $panel-header-height: 52px;
   min-width: 48px;
   text-align: center;
   font-family: 'JetBrains Mono', monospace;
+}
+
+.ws-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: #1a1a24;
+  font-size: 11px;
+  color: #666;
+
+  .ws-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #444;
+    transition: background 0.3s;
+  }
+
+  .ws-label {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  &.connected {
+    color: #00ff88;
+    .ws-dot {
+      background: #00ff88;
+      box-shadow: 0 0 6px rgba(0, 255, 136, 0.6);
+    }
+  }
 }
 
 // 按钮样式
