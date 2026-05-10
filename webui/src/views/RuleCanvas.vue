@@ -3435,39 +3435,4 @@ $panel-header-height: 52px;
   }
 }
 
-// Element Plus 深色主题覆盖
-:deep(.el-input__wrapper) {
-  background: var(--bg-primary) !important;
-  box-shadow: none !important;
-  border: 1px solid var(--border-color);
-}
-:deep(.el-input__wrapper:hover) {
-  border-color: var(--accent-cyan);
-}
-:deep(.el-input__wrapper.is-focus) {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
-}
-:deep(.el-input__inner) {
-  color: var(--text-primary);
-}
-:deep(.el-select__wrapper) {
-  background: var(--bg-primary) !important;
-  box-shadow: none !important;
-  border: 1px solid var(--border-color);
-}
-:deep(.el-select-dropdown) {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-}
-:deep(.el-select-dropdown__item) {
-  color: var(--text-primary);
-}
-:deep(.el-select-dropdown__item.hover),
-:deep(.el-select-dropdown__item:hover) {
-  background: var(--bg-hover);
-}
-:deep(.el-select-dropdown__item.is-selected) {
-  color: var(--accent-cyan);
-}
 </style>

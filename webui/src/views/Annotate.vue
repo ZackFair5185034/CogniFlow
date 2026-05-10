@@ -1808,20 +1808,4 @@ onUnmounted(() => {
   background: rgba(255, 68, 102, 0.1);
 }
 
-// Element Plus 深色主题覆盖
-:deep(.el-input__wrapper) {
-  background: var(--bg-primary) !important;
-  box-shadow: none !important;
-  border: 1px solid var(--border-color);
-}
-:deep(.el-input__wrapper:hover) {
-  border-color: var(--accent-cyan);
-}
-:deep(.el-input__wrapper.is-focus) {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
-}
-:deep(.el-input__inner) {
-  color: var(--text-primary);
-}
 </style>

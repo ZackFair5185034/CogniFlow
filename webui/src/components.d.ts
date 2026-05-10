@@ -11,6 +11,18 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ElButton: typeof import('element-plus')['ElButton']
+    ElCheckbox: typeof import('element-plus')['ElCheckbox']
+    ElDropdown: typeof import('element-plus')['ElDropdown']
+    ElDropdownItem: typeof import('element-plus')['ElDropdownItem']
+    ElDropdownMenu: typeof import('element-plus')['ElDropdownMenu']
+    ElInput: typeof import('element-plus')['ElInput']
+    ElInputNumber: typeof import('element-plus')['ElInputNumber']
+    ElOption: typeof import('element-plus')['ElOption']
+    ElSelect: typeof import('element-plus')['ElSelect']
+    ElSlider: typeof import('element-plus')['ElSlider']
+    ElTable: typeof import('element-plus')['ElTable']
+    ElTableColumn: typeof import('element-plus')['ElTableColumn']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     RuleNode: typeof import('./components/rule-engine/RuleNode.vue')['default']

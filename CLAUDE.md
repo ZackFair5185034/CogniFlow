@@ -522,55 +522,49 @@ const jobs = res.data as TrainingJobResponse[]
 | `<select>` + `<option>` | `<el-select>` + `<el-option>` | 下拉选择 |
 | `<textarea>` | `<el-input type="textarea">` | 多行文本 |
 
-**深色主题适配：**
+**深色主题适配（CSS 变量方式）：**
 
-Element Plus 默认样式在深色主题下可能与项目主题不一致。在文件 scoped `<style>` 末尾添加 `:deep()` 覆盖：
+在 `src/style/index.scss` 的 `:root` 中覆盖 Element Plus 设计令牌（推荐方式，比 scoped `:deep()` 更优雅）：
+
+```scss
+:root {
+  // CogniFlow 品牌主色替换 EP 默认蓝色
+  --el-color-primary: #00f0ff;
+  --el-text-color-primary: #ffffff;
+  --el-text-color-regular: #d0d0e0;
+  --el-text-color-secondary: #8888aa;
+  --el-text-color-placeholder: #555566;
+  --el-border-color: #2a2a3a;
+  --el-border-color-light: #222230;
+  --el-fill-color-blank: #0a0a0f;
+  --el-bg-color: #0a0a0f;
+  --el-bg-color-page: #0a0a0f;
+  --el-bg-color-overlay: #1a1a24;
+}
+```
+
+全局 `:deep()` 样式覆盖（背景/边框/下拉面板，放在 `src/style/index.scss` 中）：
 
 ```scss
 // el-input / el-select 背景边框适配
-:deep(.el-input__wrapper),
-:deep(.el-select__wrapper) {
+.el-input__wrapper,
+.el-select__wrapper {
   background: var(--bg-primary) !important;
   box-shadow: none !important;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border-color) !important;
 }
-:deep(.el-input__wrapper:hover),
-:deep(.el-select__wrapper:hover) {
-  border-color: var(--accent-cyan);
+// 下拉面板（Teleport 渲染，必须全局）
+.el-select-dropdown {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
 }
-:deep(.el-input__wrapper.is-focus),
-:deep(.el-select__wrapper.is-focus) {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
-}
-:deep(.el-input__inner),
-:deep(.el-select__placeholder) {
-  color: var(--text-primary);
-}
-
-// el-select 下拉菜单
-:deep(.el-select-dropdown) {
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-}
-:deep(.el-select-dropdown__item) {
-  color: var(--text-primary);
-}
-:deep(.el-select-dropdown__item.hover),
-:deep(.el-select-dropdown__item:hover) {
-  background: var(--bg-hover);
-}
-:deep(.el-select-dropdown__item.is-selected) {
-  color: var(--accent-cyan);
-}
-
-// el-checkbox / el-slider 主题色
-:deep(.el-checkbox__input.is-checked .el-checkbox__inner),
-:deep(.el-slider__bar) {
-  background: var(--accent-cyan);
-  border-color: var(--accent-cyan);
+// el-button link 类型（AtlasList 等操作按钮）
+.el-button.is-link {
+  color: var(--accent-cyan) !important;
 }
 ```
+
+**说明：** Element Plus 的 el-select / el-dropdown 下拉面板使用 `<Teleport to="body">` 渲染到 DOM 末尾，Vue scoped 样式无法穿透，必须在全局 `index.scss` 中覆盖。
 
 **例外：`type="file"` 隐藏输入**
 

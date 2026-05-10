@@ -484,35 +484,4 @@ onMounted(loadAtlases)
   @apply flex justify-end gap-3 px-6 py-5 border-t border-[var(--border-color)];
 }
 
-/* el-input 深色主题覆盖 */
-:deep(.el-input__wrapper) {
-  background: var(--bg-primary);
-  box-shadow: none;
-  border: 1px solid var(--border-color);
-}
-
-:deep(.el-input__wrapper:hover) {
-  border-color: var(--accent-cyan);
-}
-
-:deep(.el-input__wrapper.is-focus) {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 1px var(--accent-cyan) inset;
-}
-
-:deep(.el-textarea__inner) {
-  background: var(--bg-primary);
-  box-shadow: none;
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-}
-
-:deep(.el-textarea__inner:hover) {
-  border-color: var(--accent-cyan);
-}
-
-:deep(.el-textarea__inner:focus) {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 0 1px var(--accent-cyan) inset;
-}
 </style>

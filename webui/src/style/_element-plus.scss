@@ -1,0 +1,308 @@
+// -*- coding: utf-8 -*-
+/**
+ * Element Plus 全局样式覆盖
+ *
+ * el-select / el-dropdown 等下拉组件使用 <Teleport to="body"> 渲染到 DOM 末尾，
+ * scoped :deep() 无法穿透，必须使用全局样式。
+ *
+ * 背景色和边框使用 CogniFlow 设计令牌变量。
+ */
+
+// el-loading 加载状态
+.el-loading-mask {
+  background-color: rgba(10, 10, 15, 0.75) !important;
+}
+.el-loading-spinner .el-loading-text {
+  color: var(--text-secondary) !important;
+}
+.el-loading-spinner .circular {
+  color: var(--accent-cyan) !important;
+}
+
+// el-message-box 对话框
+.el-message-box {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+}
+.el-message-box__title {
+  color: var(--text-primary) !important;
+}
+.el-message-box__content {
+  color: var(--text-secondary) !important;
+}
+.el-message-box__message {
+  color: var(--text-secondary) !important;
+}
+.el-message-box .el-button {
+  border-radius: 50px !important;
+}
+.el-message-box .el-button--primary {
+  background: rgba(255, 68, 102, 0.1) !important;
+  border-color: rgba(255, 68, 102, 0.3) !important;
+  color: #ff4466 !important;
+}
+.el-message-box .el-button--primary:hover {
+  background: rgba(255, 68, 102, 0.2) !important;
+  border-color: #ff4466 !important;
+}
+.el-message-box .el-button--default {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+.el-message-box .el-button--default:hover {
+  border-color: var(--accent-cyan) !important;
+  color: var(--accent-cyan) !important;
+}
+
+// el-button--text 文字按钮
+.el-button--text {
+  border: none !important;
+  background: transparent !important;
+  color: var(--accent-cyan) !important;
+  font-size: 13px !important;
+  padding: 4px 8px !important;
+
+  &:hover {
+    color: var(--accent-cyan) !important;
+    opacity: 0.8;
+  }
+
+  &:disabled {
+    color: var(--text-muted) !important;
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// el-dropdown 下拉菜单
+.el-dropdown__popper {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+
+  .el-dropdown-menu {
+    background: var(--bg-card) !important;
+    border: none !important;
+    padding: 4px !important;
+  }
+
+  .el-dropdown-menu__item {
+    color: var(--text-primary) !important;
+    border-radius: 4px;
+    margin: 2px 4px;
+    padding: 8px 12px !important;
+
+    &:not(.is-disabled):hover,
+    &:not(.is-disabled):focus,
+    &.is-active {
+      background: var(--bg-hover) !important;
+      color: var(--accent-cyan) !important;
+    }
+
+    &.delete-item:hover {
+      background: rgba(239, 68, 68, 0.1) !important;
+      color: #ef4444 !important;
+    }
+
+    &.is-divided {
+      border-top: 1px solid var(--border-color) !important;
+      margin-top: 4px;
+      padding-top: 8px !important;
+    }
+  }
+}
+
+// el-input 文本输入框
+.el-input__wrapper {
+  background: var(--bg-primary) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+  transition: border-color 0.2s ease !important;
+}
+.el-input__wrapper:hover {
+  border-color: var(--accent-cyan) !important;
+}
+.el-input__wrapper.is-focus {
+  border-color: var(--accent-cyan) !important;
+  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
+}
+.el-input__inner {
+  color: var(--text-primary) !important;
+}
+.el-input__inner::placeholder {
+  color: var(--text-muted) !important;
+}
+
+// el-input-number 数字输入
+.el-input-number {
+  --el-input-bg-color: var(--bg-primary);
+  --el-input-border-color: var(--border-color);
+  --el-input-text-color: var(--text-primary);
+  --el-input-hover-border-color: var(--accent-cyan);
+  --el-input-focus-border-color: var(--accent-cyan);
+}
+.el-input-number .el-input__wrapper {
+  background: var(--bg-primary) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+}
+.el-input-number__decrease,
+.el-input-number__increase {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+}
+.el-input-number__decrease:hover,
+.el-input-number__increase:hover {
+  color: var(--accent-cyan) !important;
+}
+
+// el-select 选择器
+.el-select__wrapper {
+  background: var(--bg-primary) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+  min-height: 32px !important;
+  transition: border-color 0.2s ease !important;
+}
+.el-select__wrapper:hover {
+  border-color: var(--accent-cyan) !important;
+}
+.el-select__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  border-color: var(--accent-cyan) !important;
+  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
+}
+.el-select__placeholder {
+  color: var(--text-muted) !important;
+}
+.el-select__tags {
+  background: transparent !important;
+}
+
+// el-popper 通用下拉容器（el-select / el-dropdown 共享）
+.el-popper.is-light {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+}
+.el-popper .el-popper__arrow::before {
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+}
+
+// el-select 下拉面板（Teleport 到 body）
+.el-select-dropdown {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+  padding: 4px !important;
+}
+.el-select-dropdown__item {
+  color: var(--text-primary) !important;
+  border-radius: 4px !important;
+  padding: 6px 12px !important;
+  margin: 1px 0 !important;
+  transition: background 0.15s ease !important;
+  display: flex !important;
+  align-items: center !important;
+}
+.el-select-dropdown__item:hover,
+.el-select-dropdown__item.hover {
+  background: var(--bg-hover) !important;
+}
+.el-select-dropdown__item.is-selected {
+  color: var(--accent-cyan) !important;
+  font-weight: 500 !important;
+}
+.el-select-dropdown__item.is-disabled {
+  color: var(--text-muted) !important;
+  opacity: 0.5 !important;
+}
+
+// el-textarea 多行文本
+.el-textarea__inner {
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 6px !important;
+  color: var(--text-primary) !important;
+  transition: border-color 0.2s ease !important;
+}
+.el-textarea__inner:hover {
+  border-color: var(--accent-cyan) !important;
+}
+.el-textarea__inner:focus {
+  border-color: var(--accent-cyan) !important;
+  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
+}
+
+// el-slider 滑块
+.el-slider__runway {
+  background: var(--border-color) !important;
+}
+.el-slider__bar {
+  background: var(--accent-cyan) !important;
+}
+.el-slider__button {
+  border-color: var(--accent-cyan) !important;
+}
+.el-slider__button:hover {
+  border-color: var(--accent-cyan) !important;
+  transform: scale(1.1) !important;
+}
+
+// el-button link 类型（AtlasList 等列表页的操作按钮）
+// Element Plus link 属性渲染为 .is-link 类修饰符
+.el-button.is-link {
+  color: var(--accent-cyan) !important;
+  border: none !important;
+  background: transparent !important;
+  padding: 2px 8px !important;
+  font-size: 14px !important;
+
+  &:hover {
+    color: #00d4e0 !important;
+    background: rgba(0, 240, 255, 0.08) !important;
+  }
+
+  &:active {
+    color: #00b8cc !important;
+  }
+}
+
+// el-link 组件（CogniFlow 风格：青色链接）
+.el-link {
+  --el-link-text-color: var(--accent-cyan) !important;
+  color: var(--accent-cyan) !important;
+
+  &:hover {
+    color: #00d4e0 !important;
+  }
+
+  &:active {
+    color: #00b8cc !important;
+  }
+}
+
+// el-checkbox 复选框
+.el-checkbox__inner {
+  background: var(--bg-primary) !important;
+  border-color: var(--border-color) !important;
+  border-radius: 4px !important;
+}
+.el-checkbox__input.is-checked .el-checkbox__inner {
+  background: var(--accent-cyan) !important;
+  border-color: var(--accent-cyan) !important;
+}
+.el-checkbox__label {
+  color: var(--text-primary) !important;
+}
+.el-checkbox__input.is-checked + .el-checkbox__label {
+  color: var(--text-primary) !important;
+}
