@@ -795,7 +795,7 @@ onUnmounted(() => {
   @apply relative;
 
   select {
-    @apply w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-xs text-[var(--text-primary)] cursor-pointer appearance-none transition-all;
+    @apply w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border-color)] text-xs text-[var(--text-primary)] cursor-pointer appearance-none transition-all;
 
     &:focus {
       @apply outline-none border-[var(--accent-cyan)];
