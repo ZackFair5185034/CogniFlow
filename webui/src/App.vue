@@ -552,4 +552,15 @@ onUnmounted(() => {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+// 页面切换淡入淡出
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.page-fade-enter-from,
+.page-fade-leave-to {
+  opacity: 0;
+}
 </style>
