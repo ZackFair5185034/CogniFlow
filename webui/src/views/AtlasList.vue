@@ -67,25 +67,30 @@
           </el-table-column>
           <el-table-column
             label="操作"
-            width="240"
+            width="200"
             fixed="right"
+            align="center"
+            header-align="center"
           >
             <template #default="{ row }">
               <div class="action-buttons">
                 <el-button
                   type="text"
+                  size="small"
                   @click="handleRename(row)"
                 >
                   编辑
                 </el-button>
                 <el-button
                   type="text"
+                  size="small"
                   @click="$router.push(`/atlas/${row.id}`)"
                 >
                   查看
                 </el-button>
                 <el-button
                   type="text"
+                  size="small"
                   @click="handleDelete(row)"
                 >
                   删除
@@ -401,7 +406,8 @@ onMounted(loadAtlases)
 }
 
 .action-buttons {
-  @apply flex gap-4 items-center;
+  @apply flex items-center justify-around;
+  width: 100%;
 }
 
 /* 对话框 */

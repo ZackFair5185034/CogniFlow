@@ -197,8 +197,10 @@
           </el-table-column>
           <el-table-column
             label="操作"
-            width="150"
+            width="200"
             fixed="right"
+            align="center"
+            header-align="center"
           >
             <template #default="{ row }">
               <div class="action-cell">
@@ -1081,7 +1083,8 @@ onMounted(() => {
 }
 
 .action-cell {
-  @apply flex items-center gap-1;
+  @apply flex items-center justify-around;
+  width: 100%;
 }
 
 .action-text {

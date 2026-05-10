@@ -22,6 +22,8 @@ class OnnxModelHandler(BaseModelHandler):
         self._input_name: Optional[str] = None
         self._output_names: Optional[List[str]] = None
         self._input_shape: Optional[List[int]] = None
+        self._letterbox_pad: Optional[tuple] = None  # (pad_left, pad_top, scale, orig_h, orig_w)
+        self._class_names: Dict[int, str] = {}  # class_id -> class_name 映射
 
     @property
     def format(self) -> ModelFormat:
@@ -34,8 +36,13 @@ class OnnxModelHandler(BaseModelHandler):
         Args:
             model_path: .onnx 文件路径
             device: 设备 (cpu/cuda/mps)
+            **kwargs: 可包含 class_names (Dict[int, str]) 类别名称映射
         """
         super().load(model_path, device, **kwargs)
+
+        # 提取类别名称映射
+        if "class_names" in kwargs:
+            self._class_names = kwargs["class_names"]
 
         import onnxruntime as ort
 
@@ -113,6 +120,8 @@ class OnnxModelHandler(BaseModelHandler):
     def _preprocess(self, image: np.ndarray) -> np.ndarray:
         """预处理图片。
 
+        使用 letterbox 方式将图片缩放到 640x640，保持宽高比并在左侧和顶部填充。
+
         Args:
             image: RGB 图片数组
 
@@ -121,12 +130,29 @@ class OnnxModelHandler(BaseModelHandler):
         """
         import cv2
 
-        # 调整大小为模型输入尺寸（假设 640x640）
         input_size = self._input_shape[2] if self._input_shape and len(self._input_shape) == 4 else 640
-        resized = cv2.resize(image, (input_size, input_size))
+
+        orig_h, orig_w = image.shape[:2]
+
+        # 计算缩放因子，保持宽高比
+        scale = input_size / max(orig_h, orig_w)
+        new_w = int(orig_w * scale)
+        new_h = int(orig_h * scale)
+
+        # 保存 letterbox 信息用于后处理
+        pad_left = (input_size - new_w) // 2
+        pad_top = (input_size - new_h) // 2
+        self._letterbox_pad = (pad_left, pad_top, scale, orig_h, orig_w)
+
+        # 缩放图片
+        resized = cv2.resize(image, (new_w, new_h))
+
+        # 创建 640x640 的画布并填充
+        padded = np.zeros((input_size, input_size, 3), dtype=image.dtype)
+        padded[pad_top:pad_top + new_h, pad_left:pad_left + new_w] = resized
 
         # 归一化到 [0, 1]
-        normalized = resized.astype(np.float32) / 255.0
+        normalized = padded.astype(np.float32) / 255.0
 
         # 转换维度 HWC -> CHW
         transposed = np.transpose(normalized, (2, 0, 1))
@@ -139,8 +165,11 @@ class OnnxModelHandler(BaseModelHandler):
     def _postprocess(self, outputs: List[np.ndarray], conf: float) -> List[Dict[str, Any]]:
         """后处理输出。
 
-        YOLOv8 ONNX 输出形状 [batch, (4+1+num_classes), num_anchors]
-        例如 [1, 10, 8400] 其中 10 = 4(bbox) + 1(obj) + 6(num_classes)
+        YOLOv8 ONNX 输出形状 [batch, 4+num_classes, num_anchors]
+        例如 [1, 10, 8400] 其中 10 = 4(bbox) + 6(class_scores)
+
+        每个 class 通道都是独立的置信度分数（已在 ONNX 导出时包含 sigmoid 激活），
+        无需 obj * class_scores 乘法。
 
         Args:
             outputs: 模型输出列表
@@ -155,30 +184,18 @@ class OnnxModelHandler(BaseModelHandler):
         if not outputs or outputs[0] is None:
             return detections
 
-        output = outputs[0]  # shape: [1, 10, 8400]
+        output = outputs[0]  # shape: [1, 4+num_classes, 8400]
 
-        # YOLOv8 输出: [batch, (4+1+num_classes), num_anchors]
-        # 0-3: bbox (cx, cy, w, h)，4: obj_conf，5-: class_scores
-        num_classes = output.shape[1] - 5
-        if num_classes < 1:
-            num_classes = 6  # 默认值
-
-        # 转置: [1, 10, 8400] -> [1, 8400, 10]
-        output = output[0].T  # shape: [8400, 10]
+        # 转置: [1, C, 8400] -> [8400, C]
+        output = output[0].T
 
         # 分离各部分
-        bboxes_xywh = output[:, :4]     # [8400, 4]
-        obj_conf = output[:, 4]          # [8400]
-        class_scores = output[:, 5:]     # [8400, num_classes]
-
-        # 计算 class_conf = obj_conf * class_prob (sigmoid)
-        # 对 class_scores 做 sigmoid
-        class_probs = 1 / (1 + np.exp(-class_scores))  # sigmoid
-        class_conf = obj_conf[:, np.newaxis] * class_probs  # [8400, num_classes]
+        bboxes_xywh = output[:, :4]     # [8400, 4] bbox 坐标 (cx, cy, w, h)
+        class_scores = output[:, 4:]    # [8400, num_classes] 各类别独立置信度（已 sigmoid 激活）
 
         # 取每个锚框最高置信度类别
-        max_class_conf = np.max(class_conf, axis=1)   # [8400]
-        max_class_ids = np.argmax(class_conf, axis=1)  # [8400]
+        max_class_conf = np.max(class_scores, axis=1)  # [8400]
+        max_class_ids = np.argmax(class_scores, axis=1)  # [8400]
 
         # 应用置信度阈值
         mask = max_class_conf >= conf
@@ -190,31 +207,104 @@ class OnnxModelHandler(BaseModelHandler):
         final_cls_ids = max_class_ids[mask]
         final_xywh = bboxes_xywh[mask]
 
-        # 转换 bbox: xywh -> xyxy (归一化坐标 -> 绝对坐标)
-        # output 是归一化的，需要乘以特征图大小
-        img_size = 640  # 假设固定输入尺寸
+        # 获取 letterbox 信息用于坐标逆变换
+        pad_left, pad_top, scale, orig_h, orig_w = self._letterbox_pad if self._letterbox_pad else (0, 0, 1.0, 640, 640)
+
+        # 转换 bbox: xywh -> xyxy 并进行 letterbox 逆变换
+        # YOLOv8 ONNX 输出的 bbox 是在 640x640 letterbox 坐标系中的值
+        # 需要减去 padding 并除以 scale 来获取原图坐标
+
+        all_boxes = []
+        all_scores = []
+        all_class_ids = []
+
         for i in range(len(final_xywh)):
             cx, cy, w, h = final_xywh[i]
-            # 归一化坐标转绝对坐标
-            x1 = (cx - w / 2) * img_size
-            y1 = (cy - h / 2) * img_size
-            x2 = (cx + w / 2) * img_size
-            y2 = (cy + h / 2) * img_size
 
-            # clamp 到图像范围
-            x1 = max(0, min(x1, img_size))
-            y1 = max(0, min(y1, img_size))
-            x2 = max(0, min(x2, img_size))
-            y2 = max(0, min(y2, img_size))
+            # 转换中心点+尺寸格式为角点格式
+            x1 = cx - w / 2
+            y1 = cy - h / 2
+            x2 = cx + w / 2
+            y2 = cy + h / 2
 
-            detections.append({
-                "bbox": [int(x1), int(y1), int(x2), int(y2)],
-                "confidence": round(float(final_conf[i]), 4),
-                "class_id": int(final_cls_ids[i]),
-                "class_name": f"Class {int(final_cls_ids[i])}",
-            })
+            # 逆 letterbox 变换：减去 padding 并除以 scale
+            x1 = (x1 - pad_left) / scale
+            y1 = (y1 - pad_top) / scale
+            x2 = (x2 - pad_left) / scale
+            y2 = (y2 - pad_top) / scale
+
+            # clamp 到图像范围（原图尺寸）
+            x1 = max(0, min(x1, orig_w))
+            y1 = max(0, min(y1, orig_h))
+            x2 = max(0, min(x2, orig_w))
+            y2 = max(0, min(y2, orig_h))
+
+            # 确保 bbox 有效（宽度和高度大于0）
+            if x2 - x1 < 1 or y2 - y1 < 1:
+                continue
+
+            all_boxes.append([x1, y1, x2, y2])
+            all_scores.append(final_conf[i])
+            all_class_ids.append(final_cls_ids[i])
+
+        if not all_boxes:
+            return detections
+
+        # NMS 处理去除重复检测
+        boxes_np = np.array(all_boxes)
+        scores_np = np.array(all_scores)
+        class_ids_np = np.array(all_class_ids)
+
+        # 对每个类别分别做 NMS
+        keep_indices = []
+        for cls_id in np.unique(class_ids_np):
+            cls_mask = class_ids_np == cls_id
+            cls_boxes = boxes_np[cls_mask]
+            cls_scores = scores_np[cls_mask]
+
+            if len(cls_boxes) == 0:
+                continue
+
+            # 计算 box 面积
+            x1, y1, x2, y2 = cls_boxes.T
+            areas = (x2 - x1) * (y2 - y1)
+
+            # 按分数排序
+            order = cls_scores.argsort()[::-1]
+
+            while len(order) > 0:
+                i = order[0]
+                keep_indices.append(np.where(cls_mask)[0][i])
+
+                if len(order) == 1:
+                    break
+
+                # 计算 IoU
+                xx1 = np.maximum(cls_boxes[i, 0], cls_boxes[order[1:], 0])
+                yy1 = np.maximum(cls_boxes[i, 1], cls_boxes[order[1:], 1])
+                xx2 = np.minimum(cls_boxes[i, 2], cls_boxes[order[1:], 2])
+                yy2 = np.minimum(cls_boxes[i, 3], cls_boxes[order[1:], 3])
+
+                w = np.maximum(0.0, xx2 - xx1)
+                h = np.maximum(0.0, yy2 - yy1)
+                inter = w * h
+
+                iou = inter / (areas[i] + areas[order[1:]] - inter)
+
+                # 保留 IoU < thresh 的
+                keep_mask = iou <= 0.5
+                order = order[1:][keep_mask]
 
         # 按置信度排序
-        detections.sort(key=lambda x: x["confidence"], reverse=True)
+        keep_indices = sorted(keep_indices, key=lambda i: all_scores[i], reverse=True)
+
+        for i in keep_indices:
+            cls_id = int(all_class_ids[i])
+            detections.append({
+                "bbox": [int(x) for x in all_boxes[i]],
+                "confidence": round(float(all_scores[i]), 4),
+                "class_id": cls_id,
+                "class_name": self._class_names.get(cls_id, f"Class {cls_id}"),
+            })
 
         return detections

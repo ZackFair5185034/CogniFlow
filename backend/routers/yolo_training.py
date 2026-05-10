@@ -449,20 +449,76 @@ def load_yolo_model(model_path: str, device: str = "cpu"):
         device: 设备标识 (cpu/cuda)
 
     Returns:
-        YOLO 模型实例（向后兼容）
+        YOLO 模型实例（向后兼容），或 handler 本身（如果是 ONNX 等格式）
     """
     from backend.core.model_registry import ModelHandlerRegistry, init_model_handlers
 
     # 初始化内置处理器
     init_model_handlers()
 
+    # 如果是 ONNX 格式，尝试从对应 PT 文件提取类别名称
+    extra_kwargs = {}
+    if model_path.endswith(".onnx"):
+        pt_path = _find_pt_model(model_path)
+        if pt_path:
+            class_names = _extract_class_names(pt_path)
+            if class_names:
+                extra_kwargs["class_names"] = class_names
+
     # 通过注册表创建处理器
-    handler = ModelHandlerRegistry().from_path(model_path, device=device)
+    handler = ModelHandlerRegistry().from_path(model_path, device=device, **extra_kwargs)
 
     # 返回原始 YOLO 实例供现有代码使用（向后兼容）
-    if hasattr(handler, "_model"):
+    if hasattr(handler, "_model") and handler._model is not None:
         return handler._model
+    # ONNX 等格式没有 _model，返回 handler 本身
     return handler
+
+
+def _find_pt_model(onnx_path: str) -> Optional[str]:
+    """查找与 ONNX 模型对应的 PT 模型文件。
+
+    搜索策略：
+    1. 同目录下同名 .pt 文件
+    2. 父目录下同名 .pt 文件（处理 best.onnx 在子目录的情况）
+    """
+    import os
+
+    # 同名替换扩展名
+    pt_path = onnx_path.rsplit(".", 1)[0] + ".pt"
+    if os.path.exists(pt_path):
+        return pt_path
+
+    # 处理可能的命名差异（如 model_best.onnx -> best.pt）
+    base_dir = os.path.dirname(onnx_path)
+    if os.path.exists(base_dir):
+        for f in os.listdir(base_dir):
+            if f.endswith(".pt"):
+                return os.path.join(base_dir, f)
+
+    return None
+
+
+def _extract_class_names(pt_model_path: str) -> Optional[Dict[int, str]]:
+    """从 PT 模型文件中提取类别名称映射。
+
+    Args:
+        pt_model_path: .pt 文件路径
+
+    Returns:
+        class_id -> class_name 映射字典，失败返回 None
+    """
+    try:
+        import torch
+
+        ckpt = torch.load(pt_model_path, map_location="cpu", weights_only=False)
+        model = ckpt.get("model")
+        if model and hasattr(model, "names"):
+            return model.names
+    except Exception:
+        pass
+
+    return None
 
 
 def inference_yolo(model, image_path: str, conf_threshold: float = 0.25) -> Dict:

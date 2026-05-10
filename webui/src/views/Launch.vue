@@ -262,8 +262,42 @@
             </div>
           </template>
 
+          <!-- 检测按钮 -->
+          <el-button
+            v-if="mode === 'image'"
+            class="detect-btn"
+            type="primary"
+            :disabled="!canDetect || detecting"
+            :loading="detecting"
+            @click="startDetection"
+          >
+            {{ detecting ? '检测中...' : '开始检测' }}
+          </el-button>
+
+          <!-- 视频检测按钮 -->
+          <template v-if="mode === 'stream'">
+            <el-button
+              v-if="!streamConnected"
+              class="detect-btn"
+              type="primary"
+              :disabled="!canStreamDetect || streamUploading"
+              :loading="streamUploading"
+              @click="startVideoDetection"
+            >
+              {{ streamUploading ? '上传中...' : '开始视频检测' }}
+            </el-button>
+            <el-button
+              v-else
+              class="detect-btn"
+              type="danger"
+              @click="stopVideoDetection"
+            >
+              停止检测
+            </el-button>
+          </template>
+
           <!-- 最近记录 -->
-          <div class="config-section">
+          <div class="config-section recent-section">
             <div
               class="section-label-row"
               @click="recentRecordsExpanded = !recentRecordsExpanded"
@@ -307,54 +341,26 @@
                 >
                 <div class="record-info">
                   <span class="record-name">{{ rec.file_name }}</span>
-                  <span class="record-meta">{{ rec.model_name }} · {{ rec.total_detections }} 个目标</span>
+                  <span class="record-meta">
+                    {{ rec.model_name }} · {{ rec.total_detections }} 个目标
+                  </span>
+                  <div class="record-badges">
+                    <span class="record-param">{{ formatLabel(rec.used_format) }}</span>
+                    <span class="record-param">{{ rec.device?.toUpperCase() || 'CPU' }}</span>
+                    <span class="record-param">{{ (rec.precision || 'fp32').toUpperCase() }}</span>
+                  </div>
                   <span class="record-time">{{ formatRelativeTime(rec.created_at) }}</span>
                 </div>
-                <el-button
-                  size="small"
-                  class="rerun-btn"
-                  :disabled="!rec.file_path"
-                  @click="handleRerun(rec)"
+                <span
+                  class="rerun-link"
+                  :class="{ disabled: !rec.file_path }"
+                  @click="rec.file_path && handleRerun(rec)"
                 >
                   {{ rec.file_type === 'image' ? '图片重检' : '重新检测' }}
-                </el-button>
+                </span>
               </div>
             </div>
           </div>
-
-          <!-- 检测按钮 -->
-          <el-button
-            v-if="mode === 'image'"
-            class="detect-btn"
-            type="primary"
-            :disabled="!canDetect || detecting"
-            :loading="detecting"
-            @click="startDetection"
-          >
-            {{ detecting ? '检测中...' : '开始检测' }}
-          </el-button>
-
-          <!-- 视频检测按钮 -->
-          <template v-if="mode === 'stream'">
-            <el-button
-              v-if="!streamConnected"
-              class="detect-btn"
-              type="primary"
-              :disabled="!canStreamDetect || streamUploading"
-              :loading="streamUploading"
-              @click="startVideoDetection"
-            >
-              {{ streamUploading ? '上传中...' : '开始视频检测' }}
-            </el-button>
-            <el-button
-              v-else
-              class="detect-btn"
-              type="danger"
-              @click="stopVideoDetection"
-            >
-              停止检测
-            </el-button>
-          </template>
         </div>
       </div>
 
@@ -868,6 +874,9 @@ interface RecentRecord {
   file_path: string
   file_type: 'image' | 'video'
   conf_threshold: number
+  device: string
+  precision: string
+  used_format: string
   status: string
   total_frames: number | null
   total_detections: number
@@ -893,6 +902,18 @@ const loadRecentRecords = async () => {
 }
 
 // 相对时间格式化
+/** 格式标签映射 */
+const FORMAT_LABELS: Record<string, string> = {
+  yolo_pt: 'PT',
+  onnx: 'ONNX',
+  openvino: 'OpenVINO',
+  tensorrt: 'TensorRT',
+}
+
+const formatLabel = (fmt: string): string => {
+  return FORMAT_LABELS[fmt] || fmt?.toUpperCase() || 'PT'
+}
+
 const formatRelativeTime = (isoString: string): string => {
   if (!isoString) return '未知'
   const serverTime = new Date(isoString.endsWith('Z') ? isoString : `${isoString  }Z`).getTime()
@@ -919,13 +940,16 @@ const handleClearRecords = async () => {
   }
 }
 
-// 重新检测
+// 重新检测 - 使用当前UI配置
 const handleRerun = async (rec: RecentRecord) => {
-  selectedModelId.value = rec.model_id
-  confThreshold.value = rec.conf_threshold
+  // 使用当前UI配置（允许用户修改参数后重新检测）
+  const currentModelId = selectedModelId.value ?? rec.model_id
+  const currentConf = confThreshold.value
+  const currentDevice = device.value
+  const currentFormat = modelFormat.value
 
   try {
-    const res = await inferenceApi.rerunInferenceJob(rec.job_id, rec.model_id, rec.conf_threshold)
+    const res = await inferenceApi.rerunInferenceJob(rec.job_id, currentModelId, currentConf, currentDevice, currentFormat)
     if (res.data.success) {
       // 图片重检：内联结果
       if (res.data.file_type === 'image') {
@@ -1230,6 +1254,9 @@ const startVideoDetection = async () => {
       const jobId = res.data.job_id
       const streamUrl = res.data.stream_url
       const videoInfo = res.data.video_info
+
+      // 记录实际使用的模型格式
+      usedFormat.value = res.data.used_format || null
 
       // 构建类别颜色映射（来自数据库配置）
       const colors: Record<number, string> = {}
@@ -2049,15 +2076,19 @@ onUnmounted(() => {
 }
 
 .recent-records {
-  @apply mt-2 flex flex-col gap-2 max-h-64 overflow-y-auto;
+  @apply mt-2 flex flex-col gap-2 max-h-72 overflow-y-auto;
 }
 
 .records-empty {
   @apply text-sm text-[var(--text-muted)] text-center py-4;
 }
 
+.recent-section {
+  margin-top: 20px;
+}
+
 .record-item {
-  @apply flex items-center gap-2 p-2 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-color)];
+  @apply flex items-center gap-3 p-3 rounded-lg bg-[var(--bg-primary)] border border-[var(--border-color)];
 
   &.expired {
     @apply opacity-50;
@@ -2065,7 +2096,7 @@ onUnmounted(() => {
 }
 
 .record-thumb {
-  @apply w-10 h-10 rounded object-cover flex-shrink-0 border border-[var(--border-color)];
+  @apply w-12 h-12 rounded object-cover flex-shrink-0 border border-[var(--border-color)];
 }
 
 .record-info {
@@ -2084,8 +2115,30 @@ onUnmounted(() => {
   @apply text-xs text-[var(--text-muted)];
 }
 
-.rerun-btn {
-  @apply flex-shrink-0 text-xs py-1 px-2;
+.record-badges {
+  @apply flex flex-wrap items-center gap-1;
+}
+
+.record-param {
+  @apply inline-block text-[11px] px-1 py-px rounded;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+
+.rerun-link {
+  @apply flex-shrink-0 text-xs cursor-pointer whitespace-nowrap;
+  color: var(--accent-cyan);
+
+  &.disabled {
+    @apply cursor-not-allowed;
+    color: var(--text-muted);
+    opacity: 0.5;
+  }
+
+  &:hover:not(.disabled) {
+    filter: brightness(1.2);
+  }
 }
 
 </style>

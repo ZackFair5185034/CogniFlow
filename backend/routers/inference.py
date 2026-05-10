@@ -77,7 +77,12 @@ def _select_model_file(db: Session, model: Model, format_preference: str = "auto
         return None, None
 
     if format_preference == "auto":
-        # 自动模式：按优先级 tensorrt > openvino > onnx > yolo_pt，同时检查文件存在
+        # 自动模式：优先使用默认格式，如果没有默认格式则按性能优先级
+        # 首先尝试查找 is_default=True 且文件存在的格式
+        for mf in files:
+            if mf.is_default and os.path.exists(mf.file_path):
+                return mf, mf.format
+        # 如果没有默认格式，按性能优先级 tensorrt > openvino > onnx > yolo_pt，同时检查文件存在
         priority = ["tensorrt", "openvino", "onnx", "yolo_pt"]
         for fmt in priority:
             for mf in files:
@@ -144,12 +149,30 @@ async def detect_image(
 
     try:
         from backend.routers.yolo_training import load_yolo_model, inference_yolo
+        import cv2
+        import numpy as np
 
         # 根据模型格式和设备偏好确定实际设备
         actual_device = _resolve_device(device, model)
 
         detector = load_yolo_model(model_file.file_path, device=actual_device)
-        result = inference_yolo(detector, str(file_path), conf_threshold)
+
+        # 读取图片为 numpy 数组
+        img = cv2.imread(str(file_path))
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+        # 根据 detector 类型选择推理方式
+        if hasattr(detector, '_model') and detector._model is None:
+            # ONNX 等格式的 handler，没有 _model，直接调用 infer 方法
+            infer_result = detector.infer(img_rgb, conf=conf_threshold)
+            result = {
+                'image_path': str(file_path),
+                'num_detections': infer_result.num_detections,
+                'detections': infer_result.detections,
+            }
+        else:
+            # YOLO 模型，使用原有的 inference_yolo
+            result = inference_yolo(detector, str(file_path), conf_threshold)
 
         # 返回原图（画框由前端 SVG overlay 负责）
         with open(file_path, 'rb') as f:
@@ -179,6 +202,9 @@ async def detect_image(
             file_path=str(file_path),  # 输入图路径，保留在磁盘
             file_type="image",
             conf_threshold=conf_threshold,
+            device=actual_device,
+            precision=precision,
+            used_format=used_format,
             status="completed",
             total_detections=result['num_detections'],
             thumbnail=f"data:image/jpeg;base64,{thumb_b64}",
@@ -208,7 +234,7 @@ async def detect_image(
             "categories": categories,
             "used_format": used_format,  # 实际使用的格式
         }
-    except Exception:
+    except Exception as e:
         # 检测失败时不记录
         raise HTTPException(status_code=500, detail="图片检测失败")
 
@@ -311,23 +337,38 @@ def _inference_worker(
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             try:
-                results = detector(rgb_frame, conf=conf_threshold, verbose=False)
-                detections = []
-                for result in results:
-                    boxes = result.boxes
-                    if boxes is not None:
-                        for box in boxes:
-                            x1, y1, x2, y2 = box.xyxy[0].tolist()
-                            conf = float(box.conf[0])
-                            cls_id = int(box.cls[0])
-                            cls_name = result.names[cls_id] if cls_id < len(result.names) else f'Class {cls_id}'
-                            detections.append({
-                                "bbox": [int(x1), int(y1), int(x2), int(y2)],
-                                "class_id": cls_id,
-                                "class_name": cls_name,
-                                "confidence": round(conf, 4),
-                            })
-                            total_detections += 1
+                # 检测 detector 类型
+                if hasattr(detector, 'infer'):
+                    # ONNX 等 handler，使用 .infer() 方法
+                    infer_result = detector.infer(rgb_frame, conf=conf_threshold)
+                    detections = []
+                    for det in infer_result.detections:
+                        detections.append({
+                            "bbox": det["bbox"],
+                            "class_id": det["class_id"],
+                            "class_name": det["class_name"],
+                            "confidence": det["confidence"],
+                        })
+                        total_detections += 1
+                else:
+                    # PT YOLO 模型，使用调用接口
+                    results = detector(rgb_frame, conf=conf_threshold, verbose=False)
+                    detections = []
+                    for result in results:
+                        boxes = result.boxes
+                        if boxes is not None:
+                            for box in boxes:
+                                x1, y1, x2, y2 = box.xyxy[0].tolist()
+                                conf = float(box.conf[0])
+                                cls_id = int(box.cls[0])
+                                cls_name = result.names[cls_id] if cls_id < len(result.names) else f'Class {cls_id}'
+                                detections.append({
+                                    "bbox": [int(x1), int(y1), int(x2), int(y2)],
+                                    "class_id": cls_id,
+                                    "class_name": cls_name,
+                                    "confidence": round(conf, 4),
+                                })
+                                total_detections += 1
             except Exception:
                 detections = []
 
@@ -538,6 +579,14 @@ async def detect_video_stream(
         except json.JSONDecodeError:
             pass
 
+    # 从 Category 表补充颜色（覆盖模型训练时保存的默认色）
+    from backend.routers.category import Category as CategoryModel
+    name_to_color = {}
+    for cat in db.query(CategoryModel).filter(CategoryModel.is_directory == False).all():
+        name_to_color[cat.name] = cat.color
+    for cat in categories:
+        cat['color'] = name_to_color.get(cat['name'], cat.get('color', '#FF0000'))
+
     # 保存上传的视频
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     input_path = INFERENCE_OUTPUT_DIR / f"stream_{timestamp}_{file.filename}"
@@ -598,6 +647,9 @@ async def detect_video_stream(
         file_path=str(input_path),
         file_type="video",
         conf_threshold=conf_threshold,
+        device=actual_device,
+        precision=precision,
+        used_format=used_format,
         status="processing",
         thumbnail=video_thumbnail,
     )
@@ -614,6 +666,7 @@ async def detect_video_stream(
             "duration": round(total_frames / fps) if fps > 0 else 0,
         },
         "categories": categories,
+        "used_format": used_format,
     }
 
 
@@ -636,6 +689,9 @@ async def list_inference_jobs(db: Session = Depends(get_db)):
             "file_path": job.file_path,
             "file_type": job.file_type,
             "conf_threshold": job.conf_threshold,
+            "device": getattr(job, 'device', 'cpu') or 'cpu',
+            "precision": getattr(job, 'precision', 'fp32') or 'fp32',
+            "used_format": getattr(job, 'used_format', 'yolo_pt') or 'yolo_pt',
             "status": job.status,
             "total_frames": job.total_frames,
             "total_detections": job.total_detections,
@@ -655,14 +711,22 @@ async def clear_inference_jobs(db: Session = Depends(get_db)):
 
 
 @router.post("/jobs/{job_id}/rerun")
-async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold: float = 0.25, device: str = Form(default="auto"), db: Session = Depends(get_db)):
-    """复用已有记录的配置重新发起检测（图片或视频）。
+async def rerun_inference_job(
+    job_id: str,
+    model_id: int = None,
+    conf_threshold: float = Form(default=0.25),
+    device: str = Form(default="auto"),
+    format: str = Form(default="auto"),
+    db: Session = Depends(get_db)
+):
+    """使用当前配置（而非历史配置）重新发起检测（图片或视频）。
 
     Args:
         job_id: 原有任务 ID
-        model_id: 可选的模型 ID（默认使用原任务的模型）
+        model_id: 模型 ID（默认使用原任务的模型）
         conf_threshold: 置信度阈值
         device: 推理设备 (auto/cpu/cuda)
+        format: 模型格式 (auto/yolo_pt/onnx/openvino/tensorrt)
     """
     job = db.query(InferenceJob).filter(InferenceJob.job_id == job_id).first()
     if not job:
@@ -679,6 +743,11 @@ async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold:
 
     # 解析实际设备
     actual_device = _resolve_device(device, model)
+
+    # 根据格式偏好选择模型文件
+    model_file, used_format = _select_model_file(db, model, format)
+    if not model_file or not os.path.exists(model_file.file_path):
+        raise HTTPException(status_code=400, detail="模型文件不存在")
 
     if job.file_type == "video":
         import cv2
@@ -704,9 +773,28 @@ async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold:
             total_frames=total_frames,
         )
 
+        # 使用当前UI参数创建新的推理记录
+        import uuid as uuid_mod
+        new_record = InferenceJob(
+            job_id=new_job_id,
+            model_id=model.id,
+            file_name=job.file_name,
+            file_path=job.file_path,
+            file_type="video",
+            conf_threshold=conf_threshold,
+            device=actual_device,
+            precision="fp32",
+            used_format=used_format,
+            status="processing",
+            total_frames=total_frames,
+            thumbnail=job.thumbnail,
+        )
+        db.add(new_record)
+        db.commit()
+
         thread = threading.Thread(
             target=process_video_stream_background,
-            args=(new_job_id, model.file_path, conf_threshold, categories, job.file_path, actual_device),
+            args=(new_job_id, model_file.file_path, conf_threshold, categories, job.file_path, actual_device),
             daemon=True,
         )
         thread.start()
@@ -721,23 +809,60 @@ async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold:
                 "duration": round(total_frames / fps) if fps > 0 else 0,
             },
             "categories": categories,
+            "used_format": used_format,
             "file_type": "video",
         }
     else:
         # 图片：重新执行 detect_image 逻辑（只返回原图，画框由前端负责）
         from backend.routers.yolo_training import load_yolo_model, inference_yolo
 
-        detector = load_yolo_model(model.file_path, device=actual_device)
-        result = inference_yolo(detector, job.file_path, conf_threshold)
+        detector = load_yolo_model(model_file.file_path, device=actual_device)
+
+        # 根据 detector 类型选择推理方式
+        if hasattr(detector, '_model') and detector._model is None:
+            # ONNX 等格式的 handler
+            import cv2
+            img = cv2.imread(job.file_path)
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            infer_result = detector.infer(img_rgb, conf=conf_threshold)
+            result = {
+                'num_detections': infer_result.num_detections,
+                'detections': infer_result.detections,
+            }
+        else:
+            # YOLO 模型
+            result = inference_yolo(detector, job.file_path, conf_threshold)
 
         # 返回原图（画框由前端 SVG overlay 负责）
         with open(job.file_path, 'rb') as f:
             result_image_b64 = base64.b64encode(f.read()).decode('utf-8')
 
-        # 更新原记录的检测结果和完成时间
-        job.status = "completed"
-        job.total_detections = result['num_detections']
-        job.finished_at = datetime.utcnow()
+        # 生成缩略图
+        from PIL import Image as PILImage
+        thumb_img = PILImage.open(job.file_path)
+        thumb_img.thumbnail((40, 40))
+        import io
+        thumb_buf = io.BytesIO()
+        thumb_img.save(thumb_buf, format='JPEG', quality=60)
+        thumb_b64 = base64.b64encode(thumb_buf.getvalue()).decode('utf-8')
+
+        # 使用当前UI参数创建新记录（而非修改历史记录）
+        import uuid
+        new_record = InferenceJob(
+            job_id=str(uuid.uuid4())[:8],
+            model_id=model.id,
+            file_name=job.file_name,
+            file_path=job.file_path,
+            file_type="image",
+            conf_threshold=conf_threshold,
+            device=actual_device,
+            precision="fp32",
+            used_format=used_format,
+            status="completed",
+            total_detections=result['num_detections'],
+            thumbnail=f"data:image/jpeg;base64,{thumb_b64}",
+        )
+        db.add(new_record)
         db.commit()
 
         # 构建 name -> color 映射（从 Category 表）
@@ -767,6 +892,7 @@ async def rerun_inference_job(job_id: str, model_id: int = None, conf_threshold:
             "num_detections": result['num_detections'],
             "categories": categories,
             "file_type": "image",
+            "used_format": used_format,
         }
 
 

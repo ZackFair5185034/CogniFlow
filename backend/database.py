@@ -217,6 +217,9 @@ class InferenceJob(Base):
     file_path = Column(String(500), nullable=False)
     file_type = Column(String(10), nullable=False)                   # "image" / "video"
     conf_threshold = Column(Float, default=0.25)
+    device = Column(String(20), default="cpu")                        # 推理设备: auto/cpu/cuda
+    precision = Column(String(10), default="fp32")                    # 推理精度: fp32/fp16
+    used_format = Column(String(20), default="yolo_pt")               # 实际使用的模型格式
     status = Column(String(20), default="completed")                 # completed / processing / failed
     total_frames = Column(Integer, nullable=True)
     total_detections = Column(Integer, default=0)
@@ -259,5 +262,24 @@ def get_db():
 
 
 def init_db():
-    """初始化数据库，创建所有表。"""
+    """初始化数据库，创建所有表并执行迁移。"""
     Base.metadata.create_all(bind=engine)
+
+    # 迁移：为已有数据库添加新列（2026-05 添加 device/precision/used_format）
+    _migrate_add_column("inference_job", "device", "VARCHAR(20) DEFAULT 'cpu'")
+    _migrate_add_column("inference_job", "precision", "VARCHAR(10) DEFAULT 'fp32'")
+    _migrate_add_column("inference_job", "used_format", "VARCHAR(20) DEFAULT 'yolo_pt'")
+
+
+def _migrate_add_column(table: str, column: str, column_def: str):
+    """安全地向已有表添加列（SQLite 不支持 IF NOT EXISTS，忽略重复列错误）。"""
+    import sqlite3
+    try:
+        db_path = engine.url.database
+        if db_path and os.path.exists(db_path):
+            conn = sqlite3.connect(db_path)
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_def}")
+            conn.commit()
+            conn.close()
+    except Exception:
+        pass  # 列已存在则忽略

@@ -229,8 +229,9 @@ export const inferenceApi = {
     modelId: number,
     confThreshold: number = 0.25,
     device: string = 'auto',
+    format: string = 'auto',
   ) =>
-    api.post(`/inference/jobs/${jobId}/rerun?model_id=${modelId}&conf_threshold=${confThreshold}&device=${device}`),
+    api.post(`/inference/jobs/${jobId}/rerun?model_id=${modelId}&conf_threshold=${confThreshold}&device=${device}&format=${format}`),
   clearInferenceJobs: () => api.delete('/inference/jobs'),
 }
 

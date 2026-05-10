@@ -187,13 +187,25 @@ export interface DetectImageResponse {
   inference_time: number
 }
 
-/** 流式推理任务 */
+/** 推理任务记录 */
 export interface InferenceJob {
-  id: string
-  status: string
-  started_at: string
+  id: number
+  job_id: string
   model_id: number
-  model_name?: string
+  model_name: string
+  file_name: string
+  file_path: string
+  file_type: 'image' | 'video'
+  conf_threshold: number
+  device: string
+  precision: string
+  used_format: string
+  status: string
+  total_frames: number | null
+  total_detections: number
+  thumbnail: string | null
+  created_at: string
+  finished_at: string | null
 }
 
 // ============ RuleEngine ============

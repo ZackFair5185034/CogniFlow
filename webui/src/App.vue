@@ -336,6 +336,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   padding: 14px 20px;
+  margin: 0 8px;
+  border-radius: 8px;
   color: var(--text-secondary);
   text-decoration: none;
   position: relative;
@@ -351,6 +353,7 @@ onUnmounted(() => {
     height: 0;
     background: var(--accent-cyan);
     transition: height 0.3s ease;
+    border-radius: 0 2px 2px 0;
   }
 
   &:hover {
