@@ -802,7 +802,8 @@ const defaultEdgeOptions = {
 // 连接线样式
 const connectionLineStyle = {
   stroke: '#00f0ff',
-  strokeWidth: 2
+  strokeWidth: 2,
+  markerEnd: MarkerType.ArrowClosed
 }
 
 // 节点类型 - 注册自定义节点组件
