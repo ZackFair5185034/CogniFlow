@@ -1,6 +1,4 @@
 <template>
-  <!-- Toast 全局通知 -->
-  <Toast ref="toastRef" />
 
   <!-- 规则设计器 - 顶层全屏页面，不走 App 布局 -->
   <router-view v-if="$route.meta.layout === 'none'" />
@@ -97,21 +95,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import Toast from '@/components/common/Toast.vue'
-import { registerToast } from '@/utils/toast'
 
 const route = useRoute()
 const isOnline = ref(true)
 const currentTime = ref('')
 const collapsed = ref(false)
-const toastRef = ref<InstanceType<typeof Toast> | null>(null)
-
-// 注册 Toast
-onMounted(() => {
-  if (toastRef.value) {
-    registerToast(toastRef.value)
-  }
-})
 
 const toggleSidebar = () => {
   collapsed.value = !collapsed.value

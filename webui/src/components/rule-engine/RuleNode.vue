@@ -3,7 +3,7 @@
     class="rule-node"
     :class="[`category-${data.category}`, { selected }]"
     @contextmenu.prevent="handleContextMenu"
-    v-memo="[data.category, data.status, data.label, configSummary]"
+    v-memo="[data.category, data.status, data.label, configSummary, selected]"
   >
     <!-- 标题栏 -->
     <div class="node-header">
@@ -38,7 +38,7 @@
               :min="schema.minimum"
               :max="schema.maximum"
               :step="schema.step"
-              @update:model-value="updateConfig(key, $event)"
+              @update:model-value="(v: number | number[]) => updateConfig(key, Array.isArray(v) ? v[0] : v)"
             />
             <span class="slider-value">{{ getNodeValue(key) }}</span>
           </template>
@@ -52,7 +52,7 @@
               :step="schema.step"
               :controls="false"
               class="number-input"
-              @update:model-value="updateConfig(key, $event)"
+              @update:model-value="(v: number | undefined) => updateConfig(key, v ?? null)"
             />
           </template>
 
@@ -172,46 +172,38 @@
       <span class="summary-text">{{ configSummary }}</span>
     </div>
 
-    <!-- 端口区域 - 左进右出 -->
-    <div class="node-ports">
-      <!-- 左侧输入端口 -->
+    <!-- 端口区域 - 左进右出（自然连接流） -->
+    <div
+      v-if="(data.inputs?.length || 0) > 0 || (data.outputs?.length || 0) > 0"
+      class="node-ports"
+    >
+      <!-- 输入端口：Handle 在左，文字在右（左对齐） -->
       <div
-        v-if="data.inputs?.length"
-        class="ports-side inputs"
+        v-for="input in data.inputs"
+        :key="'in-' + input.name"
+        class="port-item port-in"
       >
-        <div
-          v-for="input in data.inputs"
-          :key="input.name"
-          class="port-item"
-        >
-          <Handle
-            :id="input.name"
-            type="target"
-            :position="Position.Left"
-            :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`]"
-          />
-          <span class="port-label">{{ input.label || input.name }}</span>
-        </div>
+        <Handle
+          :id="input.name"
+          type="target"
+          :position="Position.Left"
+          :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`]"
+        />
+        <span class="port-label">{{ input.label || input.name }}</span>
       </div>
-
-      <!-- 右侧输出端口 -->
+      <!-- 输出端口：文字在左，Handle 在右（右对齐） -->
       <div
-        v-if="data.outputs?.length"
-        class="ports-side outputs"
+        v-for="output in data.outputs"
+        :key="'out-' + output.name"
+        class="port-item port-out"
       >
-        <div
-          v-for="output in data.outputs"
-          :key="output.name"
-          class="port-item"
-        >
-          <span class="port-label">{{ output.label || output.name }}</span>
-          <Handle
-            :id="output.name"
-            type="source"
-            :position="Position.Right"
-            :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`]"
-          />
-        </div>
+        <span class="port-label">{{ output.label || output.name }}</span>
+        <Handle
+          :id="output.name"
+          type="source"
+          :position="Position.Right"
+          :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`]"
+        />
       </div>
     </div>
 
@@ -230,7 +222,7 @@
     <button
       class="node-delete-btn"
       title="删除节点"
-      @click.stop="props.onDelete?.(data.id)"
+      @click.stop="data.onDelete?.(data.id)"
     >
       ×
     </button>
@@ -238,7 +230,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, ref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import SvgIcon from '@/components/SvgIcon.vue'
 
@@ -271,18 +263,16 @@ interface NodeData {
   description?: string
   inputs?: Port[]
   outputs?: Port[]
-  configSchema?: {
-    properties?: Record<string, ConfigSchemaProperty>
-  }
+  configSchema?: Record<string, ConfigSchemaProperty>
   config?: Record<string, NodeConfigValue>
   status?: string
+  onDelete?: (nodeId: string) => void
 }
 
 // 删除按钮点击回调 - 通过 props 传入
 const props = defineProps<{
   data: NodeData
   selected?: boolean
-  onDelete?: (nodeId: string) => void
 }>()
 
 const emit = defineEmits<{
@@ -298,7 +288,7 @@ function handleContextMenu(event: MouseEvent) {
 
 // 可用模型（model-select用）
 const configProperties = computed((): Record<string, ConfigSchemaProperty> => {
-  return props.data.configSchema?.properties ?? Object.create(null) as Record<string, ConfigSchemaProperty>
+  return props.data.configSchema ?? (Object.create(null) as Record<string, ConfigSchemaProperty>)
 })
 
 // 是否有配置
@@ -309,7 +299,7 @@ const hasConfig = computed(() => {
 // 节点配置（合并默认值）
 const nodeConfig = computed((): Record<string, NodeConfigValue> => {
   const defaults: Record<string, NodeConfigValue> = {}
-  const schema = props.data.configSchema?.properties ?? {}
+  const schema = props.data.configSchema ?? {}
   for (const [key, prop] of Object.entries(schema)) {
     if ((prop as ConfigSchemaProperty).default !== undefined) {
       defaults[key] = (prop as ConfigSchemaProperty).default as NodeConfigValue
@@ -366,7 +356,7 @@ function bindVariable(key: string, varName: string) {
 
   // 检查重复引用
   if (currentValue.includes(varRef)) {
-    console.warn(`变量 ${varName} 已存在于此字段中`)
+    // 变量已存在，静默忽略
     activeVarMenu.value = null
     return
   }
@@ -415,9 +405,9 @@ const configSummary = computed(() => {
                         'interval_ms', 'delay_ms', 'expression', 'method', 'url']
 
   for (const key of summaryKeys) {
-    if (schema.properties?.[key] && config[key] !== undefined) {
+    if (schema[key] && config[key] !== undefined) {
       const val = config[key]
-      const label = schema.properties[key]?.title || key
+      const label = schema[key]?.title || key
       if (val !== '' && val !== null && val !== undefined) {
         // 截断过长值
         const displayVal = String(val).length > 12
@@ -435,6 +425,11 @@ const configSummary = computed(() => {
 function updateConfig(key: string, value: string | number | boolean | null) {
   emit('update:config', key, value)
 }
+
+// 清理 inputRefs 避免内存泄漏
+onBeforeUnmount(() => {
+  inputRefs.value = {}
+})
 </script>
 
 <style scoped lang="scss">
@@ -741,38 +736,31 @@ function updateConfig(key: string, value: string | number | boolean | null) {
   display: block;
 }
 
-/* 端口区域 */
+/* 端口区域 - 左进右出自然连接流 */
 .node-ports {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 6px;
   padding: 8px 0;
   min-height: 24px;
-}
-
-/* 端口区域垂直居中分布 */
-.ports-side {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px 0;
-}
-
-/* 单端口时垂直居中，多端口时均匀分布 */
-.ports-side.inputs {
-  justify-content: center;
-}
-
-.ports-side.outputs {
-  justify-content: center;
-  /* 移除 align-items: flex-end，让输出端口在右侧边框垂直居中 */
 }
 
 .port-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 4px 0;
+  gap: 10px;
+  padding: 2px 12px;
   position: relative;
+}
+
+/* 输入端口：Handle 在左，整体左对齐 */
+.port-item.port-in {
+  justify-content: flex-start;
+}
+
+/* 输出端口：Handle 在右，整体右对齐 */
+.port-item.port-out {
+  justify-content: flex-end;
 }
 
 /* VueFlow Handle 样式 - 确保连接点定位在节点边框上 */
@@ -787,15 +775,17 @@ function updateConfig(key: string, value: string | number | boolean | null) {
   flex-shrink: 0;
 }
 
-/* 强制 Handle 定位到节点边框（边缘贴齐，无偏移） */
+/* 强制 Handle 定位到节点边框，垂直居中对齐 port-item */
 :deep(.vue-flow__handle-left) {
   left: -7px !important;
-  transform: none !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
 }
 
 :deep(.vue-flow__handle-right) {
   right: -7px !important;
-  transform: none !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
 }
 
 /* 确保 handle 容器不裁剪 */
@@ -836,7 +826,6 @@ function updateConfig(key: string, value: string | number | boolean | null) {
   font-size: 12px;
   color: #aaa;
   white-space: nowrap;
-  margin-left: 4px;
 }
 
 /* 执行状态 */
@@ -885,20 +874,23 @@ function updateConfig(key: string, value: string | number | boolean | null) {
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
-  opacity: 0.7;
+  opacity: 0;
   transition: opacity 0.15s ease, transform 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: none;
 
   &:hover {
     opacity: 1;
     transform: scale(1.1);
   }
 
-  /* 选中时始终显示删除按钮 */
-  .selected & {
-    opacity: 0.9;
+  /* 节点选中或悬停时显示删除按钮 */
+  .rule-node:hover &,
+  .rule-node.selected & {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 

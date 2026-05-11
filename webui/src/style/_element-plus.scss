@@ -269,7 +269,33 @@
   transform: scale(1.1) !important;
 }
 
-// el-button link 类型（AtlasList 等列表页的操作按钮）
+// ============ 通用 el-button 样式重置 ============
+// RuleCanvas 等页面使用 action-btn / icon-btn 等自定义类控制样式，
+// 但 el-button 自带 background-color 优先级更高，需要全局覆盖。
+.el-button {
+  --el-button-bg-color: transparent;
+  --el-button-border-color: transparent;
+  --el-button-text-color: inherit;
+  --el-button-hover-bg-color: transparent;
+  --el-button-hover-border-color: transparent;
+  --el-button-hover-text-color: inherit;
+  --el-button-active-bg-color: transparent;
+  --el-button-active-border-color: transparent;
+  --el-button-active-text-color: inherit;
+  --el-button-disabled-bg-color: transparent;
+  --el-button-disabled-border-color: transparent;
+  --el-button-disabled-text-color: inherit;
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+
+  & + & {
+    margin-left: 0;
+  }
+}
+
+// ============ el-button link 类型（AtlasList 等列表页的操作按钮）
 // Element Plus link 属性渲染为 .is-link 类修饰符
 .el-button.is-link {
   color: var(--accent-cyan) !important;

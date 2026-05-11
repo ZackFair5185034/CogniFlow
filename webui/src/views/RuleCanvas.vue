@@ -3,13 +3,13 @@
     <!-- 顶部工具栏 -->
     <header class="canvas-header">
       <div class="header-left">
-        <button
+        <el-button
           class="icon-btn back-btn"
           title="返回规则列表"
           @click="goBack"
         >
           <SvgIcon name="back" />
-        </button>
+        </el-button>
         <div class="rule-name-section">
           <el-input
             v-model="graphName"
@@ -30,22 +30,22 @@
 
       <div class="header-center">
         <div class="tool-group">
-          <button
+          <el-button
             class="icon-btn"
             :disabled="!canUndo"
             title="撤销 (Ctrl+Z)"
             @click="handleUndo"
           >
             <SvgIcon name="undo" />
-          </button>
-          <button
+          </el-button>
+          <el-button
             class="icon-btn"
             :disabled="!canRedo"
             title="重做 (Ctrl+Y)"
             @click="handleRedo"
           >
             <SvgIcon name="redo" />
-          </button>
+          </el-button>
         </div>
 
         <div class="tool-divider" />
@@ -63,84 +63,84 @@
         <div class="tool-divider" />
 
         <div class="tool-group">
-          <button
+          <el-button
             class="icon-btn"
             title="放大"
             @click="zoomIn"
           >
             <SvgIcon name="zoom-in" />
-          </button>
+          </el-button>
           <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button
+          <el-button
             class="icon-btn"
             title="缩小"
             @click="zoomOut"
           >
             <SvgIcon name="zoom-out" />
-          </button>
-          <button
+          </el-button>
+          <el-button
             class="icon-btn"
             title="适应画布"
             @click="() => fitView()"
           >
             <SvgIcon name="fit-view" />
-          </button>
+          </el-button>
         </div>
 
         <div class="tool-divider" />
 
         <div class="tool-group">
-          <button
+          <el-button
             class="icon-btn"
             :class="{ active: showGrid }"
             title="显示网格"
             @click="showGrid = !showGrid"
           >
             <SvgIcon name="grid" />
-          </button>
-          <button
+          </el-button>
+          <el-button
             class="icon-btn"
             :class="{ active: snapGrid }"
             title="网格吸附"
             @click="snapGrid = !snapGrid"
           >
             <SvgIcon name="snap" />
-          </button>
-          <button
+          </el-button>
+          <el-button
             class="icon-btn"
             :class="{ active: showMiniMap }"
             title="小地图"
             @click="showMiniMap = !showMiniMap"
           >
             <SvgIcon name="minimap" />
-          </button>
+          </el-button>
         </div>
       </div>
 
       <div class="header-right">
-        <button
+        <el-button
           class="action-btn secondary"
           @click="handleValidate"
         >
           <SvgIcon name="check" />
           校验
-        </button>
-        <button
+        </el-button>
+        <el-button
           class="action-btn secondary"
           :disabled="saving"
           @click="handleSave"
         >
           <SvgIcon name="save" />
           {{ saving ? '保存中...' : '保存' }}
-        </button>
-        <button
+        </el-button>
+        <el-button
           class="action-btn primary"
           :disabled="executing || !hasNodes"
           @click="handleExecute"
         >
           <SvgIcon name="play" />
           {{ executing ? '执行中...' : '执行' }}
-        </button>
+        </el-button>
       </div>
     </header>
 
@@ -151,14 +151,14 @@
         class="node-palette"
         :class="{ collapsed: !showPalette }"
       >
-        <button
+        <el-button
           class="collapse-btn"
           :class="{ collapsed: !showPalette }"
           :title="showPalette ? '收起面板' : '展开面板'"
           @click="showPalette = !showPalette"
         >
           <SvgIcon :name="showPalette ? 'chevron-left' : 'chevron-right'" />
-        </button>
+        </el-button>
         <div
           v-show="showPalette"
           class="palette-header"
@@ -177,14 +177,14 @@
             class="search-input"
             @input="handleSearchInput"
           />
-          <button
+          <el-button
             v-if="nodeSearchQuery"
             class="search-clear"
             title="清除搜索"
             @click="nodeSearchQuery = ''"
           >
             ×
-          </button>
+          </el-button>
         </div>
 
         <div
@@ -298,20 +298,20 @@
                     label="BBOX"
                   />
                 </el-select>
-                <button
+                <el-button
                   class="var-remove-btn"
                   title="删除变量"
                   @click="removeVariable(index)"
                 >
                   ×
-                </button>
+                </el-button>
               </div>
-              <button
+              <el-button
                 class="add-var-btn"
                 @click="addVariable"
               >
                 <SvgIcon name="plus" /> 添加变量
-              </button>
+              </el-button>
             </div>
           </div>
         </div>
@@ -343,8 +343,8 @@
             :connection-line-style="connectionLineStyle"
             :snap-to-grid="false"
             :snap-grid="[gridSize, gridSize]"
-            fit-view-on-init
-            :pan-on-drag="[]"
+            :default-viewport="{ x: 0, y: 0, zoom: 0.65 }"
+            :pan-on-drag="false"
             :pan-on-scroll="true"
             :zoom-on-scroll="true"
             :min-zoom="0.1"
@@ -353,6 +353,7 @@
             :nodes-connectable="true"
             :elements-selectable="true"
             :select-nodes-on-drag="true"
+            :selection-key-code="true"
             :selection-mode="SelectionMode.Partial"
             :connection-radius="20"
             :is-valid-connection="isValidConnection"
@@ -369,7 +370,7 @@
             @pane-context-menu="(e: MouseEvent) => handleContextMenu(e, null, 'pane')"
             @edge-context-menu="(e: EdgeMouseEvent) => handleContextMenu(e.event as MouseEvent, e.edge, 'edge')"
             @node-delete="handleNodeDelete"
-            @selection-change="handleSelectionChange"
+            @selection-drag-stop="handleSelectionDragStop"
           >
             <!-- 小地图 -->
             <MiniMap
@@ -397,7 +398,7 @@
             <h3>开始设计规则流程</h3>
             <p>从左侧拖拽节点到画布，或双击节点快速添加</p>
             <div class="quick-add-nodes">
-              <button
+              <el-button
                 v-for="node in quickAddNodes"
                 :key="node.type"
                 class="quick-add-btn"
@@ -410,7 +411,7 @@
                   <SvgIcon :name="node.category" />
                 </span>
                 {{ node.label }}
-              </button>
+              </el-button>
             </div>
           </div>
 
@@ -453,13 +454,13 @@
           >{{ executionStatusText }}</span>
         </div>
         <div class="execution-actions">
-          <button
+          <el-button
             v-if="showExecutionPanel"
             class="icon-btn small"
             @click.stop="clearLogs"
           >
             <SvgIcon name="trash" />
-          </button>
+          </el-button>
           <SvgIcon
             class="expand-icon"
             :class="{ expanded: showExecutionPanel }"
@@ -511,17 +512,7 @@
       </div>
     </div>
 
-    <!-- Toast 提示 -->
-    <transition name="toast">
-      <div
-        v-if="toast.show"
-        class="toast-notification"
-        :class="toast.type"
-      >
-        {{ toast.message }}
-      </div>
-    </transition>
-
+    
     <!-- 右键菜单 -->
     <div
       v-if="contextMenu.show"
@@ -621,8 +612,9 @@ import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow, MarkerType, SelectionMode, type Node, type Edge, type NodeMouseEvent, type EdgeMouseEvent } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
-import { ruleEngineApi } from '@/api'
+import { ElMessage } from 'element-plus'
 import { type NodeDefinition, type RuleNodeData } from '@/stores/ruleEngine'
+import { ruleEngineApi } from '@/api'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -632,7 +624,7 @@ import RuleNode from '@/components/rule-engine/RuleNode.vue'
 
 const router = useRouter()
 const route = useRoute()
-const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate } = useVueFlow()
+const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate, userSelectionRect } = useVueFlow()
 
 // 常量
 const gridSize = 30
@@ -692,6 +684,7 @@ const contextMenu = reactive({
 // 执行日志面板高度
 const panelHeight = ref(200)
 const isResizingPanel = ref(false)
+const panelResizeCleanup = ref<(() => void) | null>(null)
 
 // palette 折叠后的宽度（配合 execution-panel left 动态响应）
 const COLLAPSED_WIDTH = 48
@@ -825,15 +818,6 @@ function miniMapNodeColor(node: { category?: string }) {
   return NODE_CATEGORY_COLORS[node.category || ''] || '#888'
 }
 
-// Toast
-const toast = reactive({ show: false, message: '', type: 'info' as 'success' | 'error' | 'info' })
-
-function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
-  toast.message = message
-  toast.type = type
-  toast.show = true
-  setTimeout(() => { toast.show = false }, 3000)
-}
 
 // WebSocket 连接（Phase 5 实时推送）
 let ws: WebSocket | null = null
@@ -910,7 +894,7 @@ function handleWsMessage(msg: any) {
       break
     case 'node_failed':
       nodeStates.value[msg.node_id] = 'failed'
-      showToast(`节点执行失败: ${msg.error}`, 'error')
+      ElMessage.error(`节点执行失败: ${msg.error}`)
       break
     case 'execution_progress':
       // 节流进度更新，限制为每秒最多2次更新（500ms间隔）
@@ -919,10 +903,11 @@ function handleWsMessage(msg: any) {
     case 'execution_complete':
       executionStatus.value = msg.status === 'completed' ? 'success' : 'failed'
       executionProgress.value = 100
-      showToast(
-        msg.status === 'completed' ? '执行成功' : `执行失败: ${msg.error || ''}`,
-        msg.status === 'completed' ? 'success' : 'error'
-      )
+      if (msg.status === 'completed') {
+        ElMessage.success('执行成功')
+      } else {
+        ElMessage.error(`执行失败: ${msg.error || ''}`)
+      }
       // 重置节点状态
       setTimeout(() => { nodeStates.value = {} }, 2000)
       disconnectWebSocket()
@@ -1014,19 +999,19 @@ function handleKeyDown(event: KeyboardEvent) {
 function handleCopy() {
   const selected = nodes.value.filter((n) => (n as any).selected)
   if (selected.length === 0) {
-    showToast('请先选择要复制的节点', 'info')
+    ElMessage.warning('请先选择要复制的节点')
     return
   }
   clipboard.value = selected.map((n) => JSON.parse(JSON.stringify(n)))
   clipboardMode.value = 'copy'
-  showToast(`已复制 ${selected.length} 个节点`, 'info')
+  ElMessage.success(`已复制 ${selected.length} 个节点`)
 }
 
 // 剪切
 function handleCut() {
   const selected = nodes.value.filter((n) => (n as any).selected)
   if (selected.length === 0) {
-    showToast('请先选择要剪切的节点', 'info')
+    ElMessage.warning('请先选择要剪切的节点')
     return
   }
   clipboard.value = selected.map((n) => JSON.parse(JSON.stringify(n)))
@@ -1037,13 +1022,13 @@ function handleCut() {
   edges.value = edges.value.filter((e) =>
     !selected.some((n) => n.id === e.source || n.id === e.target)
   )
-  showToast(`已剪切 ${selected.length} 个节点`, 'info')
+  ElMessage.success(`已剪切 ${selected.length} 个节点`)
 }
 
 // 粘贴
 function handlePaste() {
   if (clipboard.value.length === 0) {
-    showToast('剪贴板为空', 'info')
+    ElMessage.warning('剪贴板为空')
     return
   }
 
@@ -1055,9 +1040,10 @@ function handlePaste() {
 
   const newNodes = clipboard.value.map((n) => {
     const cloned = JSON.parse(JSON.stringify(n))
+    const newId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
     return {
       ...cloned,
-      id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      id: newId,
       type: 'ruleNode',  // 确保使用自定义节点组件
       position: {
         x: n.position.x + offsetX,
@@ -1066,7 +1052,7 @@ function handlePaste() {
       selected: false,
       data: {
         ...(cloned.data || {}),
-        id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        id: newId,
         selected: false,
         onDelete: handleNodeDelete
       }
@@ -1080,18 +1066,17 @@ function handlePaste() {
 
   addNodes(newNodes)
   saveHistory()
-  showToast(`已粘贴 ${newNodes.length} 个节点`, 'info')
+  ElMessage.success(`已粘贴 ${newNodes.length} 个节点`)
 }
 
-// 框选变化 - 同步 VueFlow 选中状态到 nodes
-function handleSelectionChange({ nodes: selectedNodes }: { nodes: Node<RuleNodeData>[] }) {
-  // 先清除所有节点的选中状态
-  nodes.value.forEach((n) => { (n as any).selected = false })
-  // 再设置当前选中的节点
-  selectedNodes.forEach((n) => {
-    const node = nodes.value.find((node) => node.id === n.id)
-    if (node) (node as any).selected = true
-  })
+// 框选结束 - 同步 VueFlow 选中状态到本地 nodes 副本
+function handleSelectionDragStop({ nodes: selectedNodes }: { nodes: Node<RuleNodeData>[] }) {
+  const selectedIds = new Set(selectedNodes.map((n) => n.id))
+  nodes.value = nodes.value.map((n) => ({
+    ...n,
+    selected: selectedIds.has(n.id)
+  }))
+  userSelectionRect.value = null
 }
 
 // 节点删除按钮点击
@@ -1101,7 +1086,7 @@ function handleNodeDelete(nodeId: string) {
   // 同时删除关联的边
   edges.value = edges.value.filter((e) => e.source !== nodeId && e.target !== nodeId)
   saveHistory()
-  showToast('节点已删除', 'info')
+  ElMessage.info('节点已删除')
 }
 
 // 删除选中
@@ -1116,23 +1101,18 @@ function handleDelete() {
   // 删除节点时同步删除关联的边
   const nodeIds = selectedNodes.map((n) => n.id)
   edges.value = edges.value.filter((e) =>
-    !nodeIds.includes(e.source) && !nodeIds.includes(e.target) && !(e as any).selected
+    !nodeIds.includes(e.source) && !nodeIds.includes(e.target)
   )
 
-  // 删除节点
-  selectedNodes.forEach((n) => {
-    const idx = nodes.value.findIndex((node) => node.id === n.id)
-    if (idx !== -1) nodes.value.splice(idx, 1)
-  })
+  // 删除节点 - 使用 filter 保持响应式
+  nodes.value = nodes.value.filter((node) => !selectedNodes.some((n) => n.id === node.id))
 
-  selectedEdges.forEach((e) => {
-    const idx = edges.value.findIndex((edge) => edge.id === e.id)
-    if (idx !== -1) edges.value.splice(idx, 1)
-  })
+  // 删除边
+  edges.value = edges.value.filter((edge) => !selectedEdges.some((e) => e.id === edge.id))
 
   selectedNode.value = null
   saveHistory()
-  showToast(`已删除 ${selectedNodes.length} 个节点`, 'info')
+  ElMessage.success(`已删除 ${selectedNodes.length} 个节点`)
 }
 
 // 右键菜单
@@ -1184,8 +1164,9 @@ function insertVariable(varName: string) {
 function handleContextAction(action: string) {
   switch (action) {
     case 'copy':
-      if (contextMenu.targetType === 'node') {
-        nodes.value.forEach((n) => { n.selected = n.id === (contextMenu.target as Node<RuleNodeData>)?.id })
+      if (contextMenu.targetType === 'node' && contextMenu.target) {
+        const targetNode = contextMenu.target as Node<RuleNodeData>
+        nodes.value.forEach((n) => { n.selected = n.id === targetNode.id })
         handleCopy()
       }
       hideContextMenu()
@@ -1195,10 +1176,12 @@ function handleContextAction(action: string) {
       hideContextMenu()
       break
     case 'delete':
-      if (contextMenu.targetType === 'node') {
-        nodes.value.forEach((n) => { n.selected = n.id === (contextMenu.target as Node<RuleNodeData>)?.id })
-      } else if (contextMenu.targetType === 'edge') {
-        edges.value.forEach((e) => { e.selected = e.id === (contextMenu.target as Edge)?.id })
+      if (contextMenu.targetType === 'node' && contextMenu.target) {
+        const targetNode = contextMenu.target as Node<RuleNodeData>
+        nodes.value.forEach((n) => { n.selected = n.id === targetNode.id })
+      } else if (contextMenu.targetType === 'edge' && contextMenu.target) {
+        const targetEdge = contextMenu.target as Edge
+        edges.value.forEach((e) => { e.selected = e.id === targetEdge.id })
       }
       handleDelete()
       hideContextMenu()
@@ -1259,6 +1242,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
   // 取消防抖历史记录的挂起调用
   flushHistory.cancel()
+  // 清理面板 resize 事件监听
+  panelResizeCleanup.value?.()
 })
 
 // 加载规则图
@@ -1311,7 +1296,7 @@ async function loadGraph() {
     }
   } catch (err) {
     console.error('加载规则图失败:', err)
-    showToast('加载规则图失败', 'error')
+    ElMessage.error('加载规则图失败')
   } finally {
     isLoading.value = false
   }
@@ -1344,9 +1329,9 @@ async function handleNameChange() {
     try {
       await ruleEngineApi.updateGraph(graphId.value, { name: graphName.value })
       graph.value.name = graphName.value
-      showToast('名称已更新', 'success')
+      ElMessage.success('名称已更新')
     } catch {
-      showToast('更新名称失败', 'error')
+      ElMessage.error('更新名称失败')
     }
   }
 }
@@ -1428,7 +1413,7 @@ function quickAddNode(nodeDef: NodeDefinition) {
 
   addNodes([newNode])
   saveHistory()
-  showToast(`已添加 ${nodeDef.label}`, 'info')
+  ElMessage.success(`已添加 ${nodeDef.label}`)
 }
 
 // 节点点击
@@ -1536,7 +1521,7 @@ function handleConnect(params: any) {
   // 验证连接类型兼容性
   const validation = validateConnection(params)
   if (!validation.valid) {
-    showToast(validation.error || '连接失败', 'error')
+    ElMessage.error(validation.error || '连接失败')
     return
   }
   
@@ -1627,6 +1612,11 @@ function startPanelResize(e: MouseEvent) {
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
   }
+  // 存储清理函数供卸载时调用
+  panelResizeCleanup.value = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
 }
@@ -1696,11 +1686,11 @@ async function handleSave() {
     })
     // 生成并保存缩略图
     await captureAndSaveThumbnail()
-    showToast('保存成功', 'success')
+    ElMessage.success('保存成功')
     saveHistory()
   } catch (err) {
     console.error('保存失败:', err)
-    showToast('保存失败', 'error')
+    ElMessage.error('保存失败')
   } finally {
     saving.value = false
   }
@@ -1827,12 +1817,12 @@ async function handleValidate() {
   try {
     const res = await ruleEngineApi.validateGraph(graphId.value)
     if (res.data.valid) {
-      showToast('规则图校验通过', 'success')
+      ElMessage.success('规则图校验通过')
     } else {
-      showToast(`校验失败: ${res.data.errors?.join(', ') || '未知错误'}`, 'error')
+      ElMessage.error(`校验失败: ${res.data.errors?.join(', ') || '未知错误'}`)
     }
   } catch {
-    showToast('校验请求失败', 'error')
+    ElMessage.error('校验请求失败')
   }
 }
 
@@ -1858,8 +1848,7 @@ async function handleExecute() {
     executionId.value = execId
     connectWebSocket(execId)
 
-    // 前端轮询作为降级（备用）
-    pollExecutionStatus(execId)
+    // WebSocket 足够可靠，前端轮询备用方案暂不实现
 
   } catch (err: any) {
     executionStatus.value = 'failed'
@@ -1868,13 +1857,9 @@ async function handleExecute() {
       timestamp: new Date().toLocaleTimeString(),
       message: err?.response?.data?.detail || '执行失败'
     })
-    showToast('执行失败', 'error')
+    ElMessage.error('执行失败')
     executing.value = false
   }
-}
-
-async function pollExecutionStatus(_execId: number) {
-  // WebSocket 足够可靠，仅在连接失败时启用轮询备用
 }
 
 // 清空日志
@@ -1885,10 +1870,10 @@ function clearLogs() {
 
 <style scoped lang="scss">
 // 变量
-$header-height: 56px;
+$header-height: 44px;
 $palette-width: 280px;
 $panel-width: 320px;
-$panel-header-height: 52px;
+$panel-header-height: 44px;
 
 // 全屏布局
 .rule-canvas-fullscreen {
@@ -1906,12 +1891,12 @@ $panel-header-height: 52px;
 // 顶部工具栏
 .canvas-header {
   height: $header-height;
-  background: linear-gradient(180deg, #12121a 0%, #0e0e14 100%);
-  border-bottom: 1px solid #1e1e2e;
+  background: linear-gradient(180deg, #0f0f18 0%, #0a0a10 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 12px;
   flex-shrink: 0;
   z-index: 100;
 
@@ -1923,53 +1908,71 @@ $panel-header-height: 52px;
     gap: 8px;
   }
 
-  .header-left { flex: 0 0 auto; }
-  .header-center { flex: 0 0 auto; }
-  .header-right { flex: 0 0 auto; }
+  .header-left {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+  .header-center {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: center;
+  }
+  .header-right {
+    flex: 0 0 auto;
+    min-width: 0;
+    gap: 8px;
+  }
 }
 
 .rule-name-section {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-left: 12px;
+  gap: 8px;
+  margin-left: 10px;
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  flex-wrap: nowrap;
 }
 
 .rule-name-input {
   background: transparent;
-  border: 1px solid transparent;
-  padding: 8px 14px;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  min-width: 200px;
-  transition: all 0.2s;
+  padding: 4px 10px;
+  border-radius: 5px;
+  color: #d0d0e0;
+  font-size: 13px;
+  font-weight: 500;
+  min-width: 140px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
 
   &:hover {
-    border-color: #2a2a3a;
-    background: rgba(255,255,255,0.03);
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.02);
   }
 
   &:focus {
     outline: none;
     border-color: #00f0ff;
-    background: rgba(0, 240, 255, 0.05);
+    background: rgba(0, 240, 255, 0.04);
   }
 }
 
 .rule-status-badge {
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  background: #1e1e2e;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
 
   &.active {
-    background: rgba(0, 255, 136, 0.15);
+    background: rgba(0, 255, 136, 0.06);
+    border-color: rgba(0, 255, 136, 0.2);
     color: #00ff88;
   }
 }
@@ -1977,23 +1980,24 @@ $panel-header-height: 52px;
 .tool-group {
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: #1a1a24;
-  padding: 4px;
-  border-radius: 8px;
+  gap: 1px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 2px 4px;
+  border-radius: 6px;
 }
 
 .tool-divider {
   width: 1px;
-  height: 24px;
-  background: #2a2a3a;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.06);
   margin: 0 4px;
 }
 
 .zoom-level {
-  font-size: 12px;
-  color: #888;
-  min-width: 48px;
+  font-size: 11px;
+  color: #666;
+  min-width: 36px;
   text-align: center;
   font-family: 'JetBrains Mono', monospace;
 }
@@ -2001,12 +2005,13 @@ $panel-header-height: 52px;
 .ws-status {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 12px;
-  background: #1a1a24;
-  font-size: 11px;
-  color: #666;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 10px;
+  color: #555;
 
   .ws-dot {
     width: 6px;
@@ -2031,63 +2036,118 @@ $panel-header-height: 52px;
 
 // 按钮样式
 .icon-btn {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 6px;
-  color: #888;
+  border-radius: 5px;
+  color: #666;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
+
+  :deep(button) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+  }
 
   svg {
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
   }
 
   &:hover:not(:disabled) {
-    background: #2a2a3a;
-    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+    color: #c0c0d0;
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    transform: scale(0.92);
   }
 
   &:disabled {
-    opacity: 0.3;
+    opacity: 0.2;
     cursor: not-allowed;
   }
 
   &.active {
-    background: rgba(0, 240, 255, 0.15);
+    background: rgba(0, 240, 255, 0.1);
     color: #00f0ff;
   }
 
   &.small {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
 
-    svg { width: 14px; height: 14px; }
+    svg { width: 13px; height: 13px; }
   }
 }
 
-.back-btn:hover {
-  background: rgba(0, 240, 255, 0.1);
-  color: #00f0ff;
+.back-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #888;
+
+  :deep(button) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    color: inherit;
+  }
+
+  &:hover {
+    background: rgba(0, 240, 255, 0.06);
+    border-color: rgba(0, 240, 255, 0.2);
+    color: #00f0ff;
+  }
 }
 
 .action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 16px;
+  height: 30px;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: 0.4px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
   white-space: nowrap;
+  flex-shrink: 0;
+
+  :deep(button) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    width: 100%;
+    height: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: inherit;
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    white-space: inherit;
+  }
 
   svg {
     width: 14px;
@@ -2096,26 +2156,41 @@ $panel-header-height: 52px;
   }
 
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.3;
     cursor: not-allowed;
   }
 
   &.secondary {
-    background: #1e1e2e;
-    color: #ccc;
+    background: rgba(255, 255, 255, 0.06);
+    color: #8888a8;
+    border: 1px solid rgba(255, 255, 255, 0.06);
 
     &:hover:not(:disabled) {
-      background: #2a2a3a;
-      color: #fff;
+      background: rgba(255, 255, 255, 0.09);
+      color: #c0c0d0;
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    &:active:not(:disabled) {
+      background: rgba(255, 255, 255, 0.05);
     }
   }
 
   &.primary {
-    background: linear-gradient(135deg, #00f0ff, #00aa88);
-    color: #000;
+    background: #00f0ff;
+    color: #060610;
+    font-weight: 600;
+    border: 1px solid rgba(0, 240, 255, 0.3);
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
 
     &:hover:not(:disabled) {
-      box-shadow: 0 4px 20px rgba(0, 240, 255, 0.3);
+      background: #1af5ff;
+      box-shadow: 0 0 18px rgba(0, 240, 255, 0.3);
+    }
+
+    &:active:not(:disabled) {
+      background: #00d8e8;
+      box-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
     }
   }
 }
@@ -2187,6 +2262,19 @@ $panel-header-height: 52px;
   z-index: 20;
   padding: 0;
 
+  :deep(button) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit;
+  }
+
   &:hover {
     color: #00f0ff;
     border-color: #00f0ff;
@@ -2207,27 +2295,26 @@ $panel-header-height: 52px;
   display: flex;
   align-items: center;
   padding: 8px 12px;
-  border-bottom: 1px solid #1e1e2e;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   gap: 6px;
 
   .search-input {
     flex: 1;
     height: 30px;
     padding: 0 10px;
-    background: #12121a;
-    border: 1px solid #2a2a3e;
     border-radius: 6px;
-    color: #e0e0e0;
-    font-size: 13px;
+    color: #b0b0c0;
+    font-size: 12px;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.15s ease;
 
     &::placeholder {
       color: #555;
     }
 
     &:focus {
-      border-color: #4a4a6e;
+      border-color: #00f0ff;
+      background: rgba(0, 240, 255, 0.04);
     }
   }
 
@@ -2237,17 +2324,32 @@ $panel-header-height: 52px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #2a2a3e;
-    border: none;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 50%;
-    color: #888;
-    font-size: 14px;
+    color: #666;
+    font-size: 12px;
     cursor: pointer;
     flex-shrink: 0;
+    transition: all 0.15s ease;
+
+    :deep(button) {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: inherit;
+    }
 
     &:hover {
-      background: #3a3a5e;
-      color: #fff;
+      background: rgba(0, 240, 255, 0.08);
+      border-color: rgba(0, 240, 255, 0.2);
+      color: #00f0ff;
     }
   }
 }
@@ -2358,6 +2460,14 @@ $panel-header-height: 52px;
       font-size: 14px;
       transition: all 0.2s;
 
+      :deep(button) {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        color: inherit;
+      }
+
       &:hover {
         background: rgba(255, 76, 76, 0.2);
         color: #ff4c4c;
@@ -2380,6 +2490,16 @@ $panel-header-height: 52px;
     font-size: 12px;
     cursor: pointer;
     transition: all 0.2s;
+
+    :deep(button) {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      color: inherit;
+      font-size: inherit;
+      font-weight: inherit;
+    }
 
     &:hover {
       border-color: #00f0ff;
@@ -2712,6 +2832,16 @@ $panel-header-height: 52px;
     font-size: 13px;
     cursor: pointer;
     transition: all 0.2s;
+
+    :deep(button) {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      color: inherit;
+      font-size: inherit;
+      font-weight: inherit;
+    }
 
     .btn-icon {
       width: 24px;
@@ -3346,57 +3476,6 @@ $panel-header-height: 52px;
   padding: 20px;
   color: #444;
   font-size: 13px;
-}
-
-// Toast
-.toast-notification {
-  position: fixed;
-  bottom: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 14px;
-  z-index: 2000;
-  animation: toastIn 0.3s ease;
-
-  &.success {
-    background: linear-gradient(135deg, #00ff88, #00aa66);
-    color: #000;
-  }
-
-  &.error {
-    background: linear-gradient(135deg, #ff4466, #cc0033);
-    color: #fff;
-  }
-
-  &.info {
-    background: #1e1e2e;
-    border: 1px solid #2a2a3a;
-    color: #ccc;
-  }
-}
-
-@keyframes toastIn {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s ease;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(20px);
 }
 
 /* 右键菜单 */

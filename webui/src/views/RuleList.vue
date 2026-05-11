@@ -211,22 +211,14 @@
       </div>
     </div>
 
-    <!-- Toast -->
-    <div
-      v-if="toast.show"
-      class="toast"
-      :class="toast.type"
-    >
-      {{ toast.message }}
-    </div>
-  </div>
+      </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ruleEngineApi } from '@/api'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 /** 规则图列表项 */
 interface GraphItem {
@@ -258,7 +250,6 @@ const loading = ref(false)
 const showCreateDialog = ref(false)
 const creating = ref(false)
 const createForm = reactive({ name: '', description: '', version: '' })
-const toast = reactive({ show: false, message: '', type: 'info' as 'success' | 'error' | 'info' })
 
 onMounted(() => {
   loadGraphs()
@@ -271,7 +262,7 @@ async function loadGraphs() {
     graphs.value = res.data
   } catch (err) {
     console.error('加载规则列表失败:', err)
-    showToast('加载规则列表失败', 'error')
+    ElMessage.error('加载规则列表失败')
   } finally {
     loading.value = false
   }
@@ -288,11 +279,11 @@ async function handleCreate() {
       version: createForm.version
     })
     showCreateDialog.value = false
-    showToast('规则创建成功', 'success')
+    ElMessage.success('规则创建成功')
     router.push(`/rule-engine/design/${res.data.id}`)
   } catch (err) {
     console.error('创建规则失败:', err)
-    showToast('创建规则失败', 'error')
+    ElMessage.error('创建规则失败')
   } finally {
     creating.value = false
   }
@@ -307,15 +298,15 @@ async function toggleActive(graph: GraphItem) {
     if (graph.is_active) {
       await ruleEngineApi.deactivateGraph(graph.id)
       graph.is_active = false
-      showToast('规则已停用', 'info')
+      ElMessage.info('规则已停用')
     } else {
       await ruleEngineApi.activateGraph(graph.id)
       graph.is_active = true
-      showToast('规则已激活', 'success')
+      ElMessage.success('规则已激活')
     }
   } catch (err: unknown) {
     const error = err as ApiError
-    showToast(error?.response?.data?.detail || '操作失败', 'error')
+    ElMessage.error(error?.response?.data?.detail || '操作失败')
   }
 }
 
@@ -327,11 +318,11 @@ async function handleDelete(graph: GraphItem) {
       { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
     )
     await ruleEngineApi.deleteGraph(graph.id)
-    showToast('规则已删除', 'success')
+    ElMessage.success('规则已删除')
     loadGraphs()
   } catch (err: unknown) {
     if (err !== 'cancel') {
-      showToast('删除失败', 'error')
+      ElMessage.error('删除失败')
     }
   }
 }
@@ -347,12 +338,6 @@ function formatDate(dateStr: string) {
   })
 }
 
-function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
-  toast.message = message
-  toast.type = type
-  toast.show = true
-  setTimeout(() => { toast.show = false }, 3000)
-}
 </script>
 
 <style scoped lang="scss">
