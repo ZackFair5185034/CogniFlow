@@ -3,7 +3,7 @@
   CogniFlow 规则引擎 - 前端重构设计方案 v2.2
 
   详细记录 Phase A-G 全部完成的实现规范，包含节点结构设计、配置清单、技术方案。
-  版本: v2.2 | 日期: 2026-05-07
+  版本: v2.3 | 日期: 2026-05-12
 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -268,13 +268,14 @@ LogNode:
       <ul class="doc-list">
         <li><strong>[Phase C: 节点内嵌配置控件] ✅ 已完成</strong> — 根据 config_schema 动态渲染 slider/dropdown/number/checkbox/textarea/code，底部配置摘要，变量绑定按钮（📎）</li>
         <li><strong>[Phase D: 属性面板完善] ✅ 已完成</strong> — 动态表单生成，变量绑定 UI（📎按钮插入 {{name}}），断连/重连操作，执行状态展示</li>
-        <li><strong>[Phase E: 交互完善] ✅ 已完成</strong> — 复制粘贴（Ctrl+C/V），撤销重做（20步），右键菜单，快捷键</li>
+        <li><strong>[Phase E: 交互完善] ✅ 已完成</strong> — 复制粘贴（Ctrl+C/V），撤销重做（50步），右键菜单，快捷键，拖拽时历史暂停防抖</li>
       </ul>
 
       <h3 class="doc-subsection-title">P2 — 体验优化</h3>
       <ul class="doc-list">
         <li><strong>[Phase F: 变量系统] ✅ 已完成</strong> — 变量 CRUD 面板，表达式求值</li>
-        <li><strong>[Phase G: 优化增强] ✅ 已完成</strong> — Toast 通知，MiniMap 类别色点，节点搜索优化</li>
+        <li><strong>[Phase G: 优化增强] ✅ 已完成</strong> — MiniMap 类别色点，节点搜索优化，缩略图自动生成</li>
+        <li><strong>[Phase H: UI 样式优化] ✅ 已完成</strong> — el-button 替换原生按钮，Element Plus 深色主题适配，头部按钮间距和样式优化</li>
       </ul>
     </div>
 
@@ -522,7 +523,7 @@ Response 200:
         <li>节点定义管理（<code class="doc-badge">fetchNodeDefinitions</code>）</li>
         <li>规则图 CRUD（<code class="doc-badge">fetchGraph</code> / <code class="doc-badge">saveGraph</code>）</li>
         <li>节点/边操作（<code class="doc-badge">addNode</code> / <code class="doc-badge">removeNode</code> / <code class="doc-badge">addEdge</code> / <code class="doc-badge">removeEdge</code>）</li>
-        <li>Undo/Redo 栈（20步限制）</li>
+        <li>Undo/Redo 栈（50步限制，拖拽时自动暂停历史，500ms debounce 保存）</li>
         <li>变量系统（<code class="doc-badge">addVariable</code> / <code class="doc-badge">removeVariable</code>）</li>
         <li>执行状态管理（<code class="doc-badge">executingGraphId</code> / <code class="doc-badge">executionHistory</code>）</li>
       </ul>
@@ -684,7 +685,7 @@ ws://host/api/rule-engine/ws/executions/{execution_id}
       <table class="doc-table">
         <thead><tr><th>文件</th><th>改动内容</th></tr></thead>
         <tbody>
-          <tr><td><code class="doc-badge">webui/src/components/common/Toast.vue</code></td><td>复用或新建 Toast 通知组件</td></tr>
+          <tr><td><code class="doc-badge">webui/src/components/common/Toast.vue</code></td><td>已删除，改用 el-message 等 Element Plus 内置通知</td></tr>
           <tr><td><code class="doc-badge">webui/src/views/RuleCanvas.vue</code></td><td>MiniMap 显示类别色点</td></tr>
         </tbody>
       </table>

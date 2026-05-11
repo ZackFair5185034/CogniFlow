@@ -3,7 +3,7 @@
   CogniFlow 规则引擎 - 项目入口
 
   Phase 1-6 + Phase A-G 完整规划、架构设计文档索引。
-  版本: v2.2 | 更新: 2026-05-08
+  版本: v2.3 | 更新: 2026-05-12
 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -17,7 +17,7 @@
   <div class="doc-container">
 
     <h1 class="doc-title">CogniFlow 规则引擎 - 项目入口</h1>
-    <p class="doc-subtitle">Phase 1-6 + Phase A-G 完整规划、架构设计</p>
+    <p class="doc-subtitle">Phase 1-6 + Phase A-H 完整规划、架构设计</p>
 
     <hr class="doc-divider">
 
@@ -38,15 +38,16 @@
         </tbody>
       </table>
 
-      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">1.2 现状评估</h3>
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">1.2 现状评估（2026-05-12）</h3>
       <table class="doc-table">
         <thead><tr><th>维度</th><th>现状</th><th>差距</th></tr></thead>
         <tbody>
-          <tr><td>前端画布</td><td>RuleCanvas.vue 基础布局已完成（2175行）</td><td>缺少节点拖拽、类型检查、撤销重做</td></tr>
-          <tr><td>后端 API</td><td>CRUD + 执行接口已有</td><td>执行引擎是串行，缺拓扑排序和并行</td></tr>
-          <tr><td>节点定义</td><td>无统一类型系统</td><td>需要新建节点注册表</td></tr>
-          <tr><td>实时通信</td><td>WebSocket 基础已有</td><td>缺执行进度推送</td></tr>
-          <tr><td>变量系统</td><td>有 variables_json 字段</td><td>缺表达式解析和绑定 UI</td></tr>
+          <tr><td>前端画布</td><td>RuleCanvas.vue 完整功能（节点拖拽/连接/框选/右键菜单/撤销重做50步/键盘快捷键）</td><td>已完整</td></tr>
+          <tr><td>后端 API</td><td>CRUD + Kahn拓扑排序 + 层内并行执行</td><td>已完整</td></tr>
+          <tr><td>节点定义</td><td>NodeRegistry 统一管理，31 个节点类型</td><td>已完整</td></tr>
+          <tr><td>实时通信</td><td>WebSocket 进度推送（500ms节流）+ 自动重连</td><td>已完整</td></tr>
+          <tr><td>变量系统</td><td>变量 CRUD 面板 + 表达式解析 + {{变量名}} 插值绑定</td><td>已完整</td></tr>
+          <tr><td>前端样式</td><td>el-button 替换原生按钮 + Element Plus 深色主题适配</td><td>已完整</td></tr>
         </tbody>
       </table>
     </div>
@@ -74,7 +75,7 @@
 │   ├── rule-engine-phase5-websocket.md         Phase 5: WebSocket
 │   └── rule-engine-phase6-trigger.md           Phase 6: 触发机制
 │
-└── 🎨 前端重构（Phase A-E）
+└── 🎨 前端重构（Phase A-H）
     └── rule-engine-redesign-v2.md              前端专项重构详细设计</pre>
       </div>
     </div>
@@ -158,7 +159,8 @@
           <tr><td>Phase D</td><td>属性面板完善</td><td>动态表单 + 变量绑定 + 执行状态</td><td><span class="doc-badge">完成</span></td></tr>
           <tr><td>Phase E</td><td>交互完善</td><td>复制粘贴 + 撤销重做(20步) + 右键菜单</td><td><span class="doc-badge">完成</span></td></tr>
           <tr><td>Phase F</td><td>变量系统</td><td>Pinia Store + 表达式工具 + VariablePanel</td><td><span class="doc-badge">完成</span></td></tr>
-          <tr><td>Phase G</td><td>优化增强</td><td>Toast 组件 + MiniMap 彩色节点</td><td><span class="doc-badge">完成</span></td></tr>
+          <tr><td>Phase G</td><td>优化增强</td><td>MiniMap 彩色节点 + 缩略图生成</td><td><span class="doc-badge">完成</span></td></tr>
+          <tr><td>Phase H</td><td>UI 样式优化</td><td>el-button 替换 + Element Plus 深色主题 + 头部按钮优化</td><td><span class="doc-badge">完成</span></td></tr>
         </tbody>
       </table>
     </div>
@@ -291,7 +293,7 @@
 
     <!-- 九、验收清单 -->
     <div class="doc-section">
-      <h2 class="doc-section-title">九、验收清单（2026-05-08 实测更新）</h2>
+      <h2 class="doc-section-title">九、验收清单（2026-05-12 更新）</h2>
       <table class="doc-table">
         <thead><tr><th>阶段</th><th>验收项</th><th>状态</th></tr></thead>
         <tbody>

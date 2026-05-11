@@ -2,9 +2,9 @@
 <!--
   规则引擎 UI 迭代计划 & TODO
 
-  Phase 1-7 任务进度追踪清单。
-  当前阶段：UI 问题修复 & 端口连接规范落地
-  更新: 2026-05-09
+  Phase 1-8 任务进度追踪清单。
+  当前阶段：UI 样式优化（el-button替换 + 头部按钮优化）
+  更新: 2026-05-12
 -->
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -18,7 +18,7 @@
   <div class="doc-container">
 
     <h1 class="doc-title">规则引擎 UI 迭代计划 & TODO</h1>
-    <p class="doc-subtitle">Phase 1-8 任务进度追踪 | 更新: 2026-05-11</p>
+    <p class="doc-subtitle">Phase 1-8 任务进度追踪 | 更新: 2026-05-12</p>
 
     <hr class="doc-divider">
 
@@ -107,7 +107,7 @@
           <tr><td>6.8</td><td>边类型改为贝塞尔曲线</td><td>RuleCanvas.vue</td><td><span class="doc-badge">已完成</span></td><td>smoothstep → default</td></tr>
           <tr><td>6.9</td><td>浮动工具栏移除</td><td>RuleCanvas.vue</td><td><span class="doc-badge">已完成</span></td><td>有节点时不再显示快捷添加工具栏</td></tr>
           <tr><td>6.10</td><td>端口间距增大</td><td>RuleNode.vue</td><td><span class="doc-badge">已完成</span></td><td>Handle 增大到 14px</td></tr>
-          <tr><td>6.11</td><td>连接点边框定位</td><td>RuleNode.vue</td><td><span class="doc-badge" style="color: var(--accent-yellow); border-color: var(--accent-yellow);">进行中</span></td><td>Handle 定位微调</td></tr>
+          <tr><td>6.11</td><td>连接点边框定位</td><td>RuleNode.vue</td><td><span class="doc-badge">已完成</span></td><td>Handle 定位微调</td></tr>
         </tbody>
       </table>
     </div>
@@ -119,6 +119,21 @@
         <thead><tr><th>#</th><th>任务</th><th>说明</th></tr></thead>
         <tbody>
           <tr><td>7.1</td><td>输入类型节点输出端口位置</td><td><span class="doc-badge">已完成</span></td><td>输入类型节点（如 ImageCapture、VideoCapture）的输出端口居中</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Phase 9 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">Phase 9: UI 样式优化 (2026-05-12)</h2>
+      <table class="doc-table">
+        <thead><tr><th>#</th><th>任务</th><th>文件</th><th>状态</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>9.1</td><td>el-button 全局样式重置</td><td>_element-plus.scss</td><td><span class="doc-badge">已完成</span></td><td>移除 el-button 默认蓝色背景</td></tr>
+          <tr><td>9.2</td><td>RuleCanvas 所有 button 替换为 el-button</td><td>RuleCanvas.vue</td><td><span class="doc-badge">已完成</span></td><td>:deep(button) 覆盖透明背景</td></tr>
+          <tr><td>9.3</td><td>头部按钮样式优化（图标按钮、操作按钮）</td><td>RuleCanvas.vue</td><td><span class="doc-badge">已完成</span></td><td>action-btn/secondary/primary 样式完善</td></tr>
+          <tr><td>9.4</td><td>rule-name-section flex-wrap nowrap 防换行</td><td>RuleCanvas.vue</td><td><span class="doc-badge">已完成</span></td><td>状态徽章/输入框文字不换行</td></tr>
+          <tr><td>9.5</td><td>header-right gap 间距 8px</td><td>RuleCanvas.vue</td><td><span class="doc-badge">已完成</span></td><td>校验/保存按钮间距</td></tr>
         </tbody>
       </table>
     </div>
@@ -153,8 +168,9 @@
           <tr><td>2026-05-08</td><td>Phase 2.2 框选功能（SelectionMode.Partial）</td><td>8c3ff3b</td></tr>
           <tr><td>2026-05-08</td><td>Phase 5 快捷添加栏 + 数据库路径修复</td><td>23df2e2</td></tr>
           <tr><td>2026-05-09</td><td>Phase 6 UI交互修复（连接验证/折叠按钮/右键菜单/删除/overflow/贝塞尔曲线）</td><td>待提交</td></tr>
-          <tr><td>2026-05-11</td><td>Phase 7.1 输入类型节点输出端口居中修复</td><td>今晚</td></tr>
-          <tr><td>2026-05-11</td><td>Phase 8 代码审查高/中优先级问题修复 + 后端Bug + Webhook认证 + 进度节流 + 响应式优化</td><td>今晚</td></tr>
+          <tr><td>2026-05-11</td><td>Phase 7.1 输入类型节点输出端口居中修复</td><td>202df72</td></tr>
+          <tr><td>2026-05-11</td><td>Phase 8 代码审查高/中优先级问题修复 + 后端Bug + Webhook认证 + 进度节流 + 响应式优化</td><td>002b50b</td></tr>
+          <tr><td>2026-05-12</td><td>Phase 9 el-button 替换 + 画布头部样式优化</td><td>c4d1539</td></tr>
         </tbody>
       </table>
     </div>
