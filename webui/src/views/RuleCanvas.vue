@@ -615,7 +615,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, shallowRef, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, shallowRef, markRaw, onMounted, onBeforeUnmount } from 'vue'
 import { throttle, debounce } from 'lodash-es'
 import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow, MarkerType, SelectionMode, type Node, type Edge, type NodeMouseEvent, type EdgeMouseEvent } from '@vue-flow/core'
@@ -807,7 +807,7 @@ const connectionLineStyle = {
 
 // 节点类型 - 注册自定义节点组件
 const nodeTypes = {
-  ruleNode: RuleNode
+  ruleNode: markRaw(RuleNode)
 } as unknown as Record<string, any>
 
 // 小地图颜色 - 提取为模块常量避免每次调用创建对象
