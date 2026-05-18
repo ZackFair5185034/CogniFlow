@@ -129,7 +129,9 @@ node_modules
 .playwright-mcp/
 
 # Claude
-.claude/
+**/.claude/
+**/.omc/
+**/.rtk/
 .omc/
 
 # Uploads (runtime data)
