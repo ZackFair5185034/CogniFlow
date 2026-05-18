@@ -21,13 +21,13 @@
         <template v-if="batchMode || selectedImages.length > 0">
           <span class="selected-count">已选 {{ selectedImages.length }}</span>
           <button
-            class="ui-btn ui-btn-sm"
+            class="ui-btn ui-btn-xs"
             @click="selectAllImages"
           >
             全选
           </button>
           <button
-            class="ui-btn ui-btn-sm"
+            class="ui-btn ui-btn-xs"
             @click="clearSelection"
           >
             取消
@@ -50,34 +50,45 @@
               :value="dir"
             />
           </el-select>
-          <button
-            class="ui-btn ui-btn-sm"
+          <el-dropdown
+            trigger="click"
             :disabled="selectedImages.length === 0"
-            @click="handleBatchMoveDirectory"
           >
-            <SvgIcon name="folder" />
-            移动
-          </button>
-          <button
-            class="ui-btn ui-btn-sm"
-            :disabled="selectedImages.length === 0"
-            @click="handleBatchDownload"
-          >
-            <SvgIcon name="download" />
-            下载
-          </button>
-          <button
-            class="ui-btn ui-btn-sm danger"
-            :disabled="selectedImages.length === 0"
-            @click="handleBatchDelete"
-          >
-            <SvgIcon name="trash" />
-            删除
-          </button>
+            <button
+              class="ui-btn ui-btn-xs"
+              :disabled="selectedImages.length === 0"
+            >
+              <SvgIcon name="menu" />
+              更多
+              <SvgIcon name="chevron-down" />
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="handleBatchMoveDirectory">
+                  <SvgIcon name="folder" />
+                  移动到目录
+                </el-dropdown-item>
+                <el-dropdown-item @click="handleBatchDownload">
+                  <SvgIcon name="download" />
+                  打包下载
+                </el-dropdown-item>
+                <el-dropdown-item
+                  divided
+                  @click="handleBatchDelete"
+                >
+                  <SvgIcon
+                    name="trash"
+                    class="text-red-500"
+                  />
+                  <span class="text-red-500">删除选中</span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
         <button
           v-if="batchMode"
-          class="ui-btn ui-btn-sm"
+          class="ui-btn ui-btn-xs"
           @click="exitBatchMode"
         >
           退出批量
@@ -249,12 +260,16 @@
                   :class="{ selected: batchMode && isImageSelected(img.id) }"
                 >
                   <!-- 复选框 - 仅在批量模式下显示 -->
-                  <el-checkbox
+                  <div
                     v-if="batchMode"
-                    :model-value="isImageSelected(img.id)"
-                    @update:model-value="toggleImageSelection(img.id)"
-                    @click.stop
-                  />
+                    class="checkbox-layer"
+                  >
+                    <el-checkbox
+                      :model-value="isImageSelected(img.id)"
+                      @update:model-value="toggleImageSelection(img.id)"
+                      @click.stop
+                    />
+                  </div>
                   <img
                     :src="getImageUrl(img.file_path)"
                     :alt="getFileName(img.file_path)"
@@ -275,15 +290,12 @@
                     class="image-name"
                     :title="getFileName(img.file_path)"
                   >{{ getFileName(img.file_path) }}</span>
-                  <div
-                    v-if="img.directory"
-                    class="image-dir-row"
-                  >
-                    <span class="image-dir">{{ img.directory }}</span>
-                    <div
-                      class="image-actions"
-                      @click.stop
-                    >
+                  <div class="image-bottom-row">
+                    <span
+                      v-if="img.directory"
+                      class="image-dir"
+                    >{{ img.directory }}</span>
+                    <div class="image-actions">
                       <button
                         class="img-action-btn"
                         title="下载"
@@ -1232,7 +1244,16 @@ onMounted(() => {
 
 .batch-dir-select {
   @apply text-xs;
-  width: 140px;
+  width: 120px;
+}
+
+.batch-dir-select :deep(.el-input__wrapper) {
+  padding: 2px 8px;
+}
+
+.batch-dir-select :deep(.el-input__inner) {
+  height: 24px;
+  font-size: 12px;
 }
 
 .ui-btn.danger {
@@ -1409,18 +1430,23 @@ onMounted(() => {
 }
 
 .image-card {
-  @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl overflow-hidden cursor-pointer transition-all;
+  @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md overflow-hidden cursor-pointer transition-all;
 }
 
 .image-card:hover {
   @apply border-[var(--accent-cyan)];
-  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 240, 255, 0.12);
 }
 
 .image-wrapper {
   @apply relative overflow-hidden;
   aspect-ratio: 1;
-  background: var(--bg-secondary);  /* 占位暗色，避免图片加载前闪白 */
+  background: var(--bg-secondary);
+}
+
+.image-wrapper img {
+  @apply w-full h-full object-cover;
+  background: var(--bg-secondary);
 }
 
 /* 选中状态 */
@@ -1428,18 +1454,9 @@ onMounted(() => {
   @apply ring-2 ring-[var(--accent-cyan)] ring-offset-2 ring-offset-[var(--bg-card)];
 }
 
-/* 复选框样式 */
-.checkbox-wrapper {
-  @apply absolute top-2 left-2 z-10 cursor-pointer;
-}
-
-.checkbox-wrapper input[type="checkbox"] {
-  @apply w-5 h-5 cursor-pointer accent-[var(--accent-cyan)];
-}
-
-.image-wrapper img {
-  @apply w-full h-full object-cover;
-  background: var(--bg-secondary);  /* 图片加载完成前不闪白 */
+/* 复选框层 - 绝对定位覆盖在图片左上角 */
+.checkbox-layer {
+  @apply absolute top-2 left-2 z-10;
 }
 
 .image-overlay {
@@ -1463,7 +1480,7 @@ onMounted(() => {
 }
 
 .image-info {
-  @apply p-3;
+  @apply p-2;
   @apply flex flex-col gap-1;
 }
 
@@ -1471,24 +1488,24 @@ onMounted(() => {
   @apply text-xs text-[var(--text-primary)] truncate block w-full min-w-0;
 }
 
-.image-dir-row {
-  @apply flex items-center justify-between gap-2;
+.image-bottom-row {
+  @apply flex items-center min-h-0;
 }
 
 .image-dir {
-  @apply text-[11px] text-[var(--text-muted)] truncate;
+  @apply text-[10px] text-[var(--text-muted)] truncate flex-shrink min-w-0 mr-auto;
 }
 
 .image-actions {
-  @apply flex items-center gap-1;
+  @apply flex items-center gap-0.5 flex-shrink-0 ml-auto;
 }
 
 .img-action-btn {
-  @apply w-5 h-5 flex items-center justify-center rounded text-[var(--text-muted)] cursor-pointer transition-all bg-transparent border-none;
+  @apply w-5 h-5 flex items-center justify-center rounded text-[var(--text-muted)] cursor-pointer transition-all bg-transparent border-none p-0;
 }
 
 .img-action-btn svg {
-  @apply w-3.5 h-3.5;
+  @apply w-3 h-3;
 }
 
 .img-action-btn:hover {
@@ -1496,7 +1513,7 @@ onMounted(() => {
 }
 
 .img-action-btn.danger:hover {
-  @apply text-[#ff4466] bg-[var(--bg-hover)];
+  @apply text-[#ff4466];
 }
 
 /* 目录管理 */

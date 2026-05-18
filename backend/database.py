@@ -280,6 +280,18 @@ def init_db():
     _migrate_add_column("inference_job", "precision", "VARCHAR(10) DEFAULT 'fp32'")
     _migrate_add_column("inference_job", "used_format", "VARCHAR(20) DEFAULT 'yolo_pt'")
 
+    # 迁移：rule_graph 表新增字段
+    _migrate_add_column("rule_graph", "cron_expression", "VARCHAR(100)")
+    _migrate_add_column("rule_graph", "thumbnail", "TEXT")
+    _migrate_add_column("rule_graph", "webhook_api_key", "VARCHAR(64)")
+
+    # 迁移：model 表新增字段（多格式支持）
+    _migrate_add_column("model", "format", "VARCHAR(20) DEFAULT 'yolo_pt'")
+    _migrate_add_column("model", "available_formats", "TEXT DEFAULT '[]'")
+    _migrate_add_column("model", "device_preference", "VARCHAR(20) DEFAULT 'auto'")
+    _migrate_add_column("model", "precision", "VARCHAR(10) DEFAULT 'fp32'")
+    _migrate_add_column("model", "input_shape", "VARCHAR(50)")
+
 
 def _migrate_add_column(table: str, column: str, column_def: str):
     """安全地向已有表添加列（SQLite 不支持 IF NOT EXISTS，忽略重复列错误）。"""

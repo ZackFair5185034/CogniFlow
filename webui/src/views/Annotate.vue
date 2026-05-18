@@ -59,6 +59,7 @@
         <div class="hotkey-hints">
           <span class="hint"><kbd>S</kbd> 保存</span>
           <span class="hint"><kbd>Z</kbd> 撤销</span>
+          <span class="hint"><kbd>DEL</kbd> 删除选中</span>
           <span class="hint"><kbd>← A</kbd> 上一页 <kbd>D →</kbd> 下一页</span>
         </div>
       </div>
@@ -1194,6 +1195,11 @@ const handleKeyDown = (e: KeyboardEvent) => {
 
   if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
     nextImage()
+  }
+
+  if (e.key === 'Delete' && selectedAnnotationIndex.value !== null) {
+    e.preventDefault()
+    removeAnnotation(selectedAnnotationIndex.value)
   }
 }
 

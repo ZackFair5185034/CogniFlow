@@ -215,10 +215,14 @@ def start_with_tray(browser: bool = False) -> None:
             open_browser()
         logger.info("CogniFlow WebUI 已启动 http://localhost:8000")
 
-        # 启动 FastAPI 应用（阻塞）
-        config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
-        server_config["server"] = uvicorn.Server(config)
-        server_config["server"].run()
+        try:
+            # 启动 FastAPI 应用（阻塞）
+            config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
+            server_config["server"] = uvicorn.Server(config)
+            server_config["server"].run()
+        except KeyboardInterrupt:
+            logger.info("收到键盘中断信号，正在关闭服务器...")
+            stop_server()
     else:
         # 非 Windows 平台：直接启动
         if browser:
