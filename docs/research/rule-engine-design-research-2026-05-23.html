@@ -1,0 +1,683 @@
+<!-- -*- coding: utf-8 -*- -->
+<!--
+  规则引擎设计调研报告 - CogniFlow vs ThingsBoard
+
+  研究目标：
+  1. 分析 CogniFlow 当前节点设计问题
+  2. 深度调研 ThingsBoard 规则引擎架构（含执行引擎）
+  3. 提出改进建议
+
+  版本: v2.0 | 日期: 2026-05-23 | 新增: 执行引擎深度分析
+
+  新增内容（v2.0）:
+  - Actor 架构（RuleChainActor / RuleNodeActor）
+  - 消息路由机制（tellNext + RuleNodeToRuleChainTellNextMsg）
+  - 循环检测（input 方法的栈深度检查）
+  - 重入保护（ruleNodeCount 计数器）
+  - 队列持久化（putToQueue + clusterService.pushMsgToRuleEngine）
+  - 分支路由算法（RuleChainActorMessageProcessor.onTellNext）
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>规则引擎设计调研报告 v2.0 - CogniFlow 文档</title>
+  <link rel="stylesheet" href="../css/main.css">
+</head>
+<body>
+  <div class="doc-container">
+
+    <h1 class="doc-title">规则引擎设计调研报告 v2.0</h1>
+    <p class="doc-subtitle">CogniFlow 当前问题分析 + ThingsBoard 架构研究（执行引擎深度） + 改进建议</p>
+    <p style="color: var(--text-muted); font-size: 0.8rem;">更新日期: 2026-05-23 | ThingsBoard 源码版本: 3.8</p>
+
+    <hr class="doc-divider">
+
+    <!-- 一、现状问题分析 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">一、CogniFlow 当前问题分析</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">1.1 YOLOTriggerNode vs YOLOModelNode 职责边界模糊</h3>
+
+      <p style="color: var(--text-secondary);">当前两个节点都在做"检测 + 过滤 + 判断"，导致用户不知道该用哪个。</p>
+
+      <table class="doc-table">
+        <thead><tr><th>维度</th><th>YOLOModelNode</th><th>YOLOTriggerNode</th></tr></thead>
+        <tbody>
+          <tr><td>category</td><td>DETECTION (#00f0FF)</td><td>INPUT (#4CFF4C) ⚠️ 标记错误</td></tr>
+          <tr><td>职责</td><td>执行检测，返回原始结果</td><td>检测 + 判断是否触发</td></tr>
+          <tr><td>输出</td><td>bboxes/scores/class_ids/class_names/count</td><td>triggered(bool) + detections</td></tr>
+          <tr><td>过滤逻辑</td><td>无（返回全部）</td><td>自己做了 class_names + min_confidence 过滤</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">1.2 实际问题场景</h3>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>场景1: "检测到人就触发"
+  → 用 YOLOTriggerNode（一步到位）
+
+场景2: "检测到人 + 数量>3 才触发"
+  → YOLOTriggerNode 不支持数量比较！
+  → 只能用 YOLOModelNode + ObjectExistsConditionNode
+
+场景3: "检测到人 + 置信度>0.8 才触发"
+  → YOLOTriggerNode 自己做了 min_confidence 过滤
+  → 但没有输出置信度值给下游节点</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">1.3 占位节点未标记</h3>
+
+      <table class="doc-table">
+        <thead><tr><th>节点</th><th>问题</th><th>位置</th></tr></thead>
+        <tbody>
+          <tr><td>ObjectDetectorNode</td><td>返回 error: "通用检测器待实现"</td><td>detection_nodes.py:495</td></tr>
+          <tr><td>TimerTriggerNode</td><td>TODO: 需要记录上次触发时间</td><td>triggers.py:138</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">1.4 节点分类问题</h3>
+
+      <p style="color: var(--text-secondary);">当前 6 类分类（input/detection/processing/action/logic/output）存在问题：</p>
+      <ul class="doc-list">
+        <li><strong>INPUT 类别混入了 TRIGGER 概念</strong> — YOLOTriggerNode 标记为 INPUT，但它实际上是"判断节点"</li>
+        <li><strong>缺少 TRIGGER 类型</strong> — ThingsBoard 有独立的 Trigger 类型节点</li>
+        <li><strong>逻辑节点和判断节点混在一起</strong> — ObjectExistsConditionNode 是 LOGIC，但它其实是"判断"</li>
+      </ul>
+    </div>
+
+    <!-- 二、ThingsBoard 架构研究 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">二、ThingsBoard 规则引擎架构研究</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">2.1 核心设计思想</h3>
+
+      <p style="color: var(--text-secondary);">ThingsBoard 的规则引擎是真正的<strong>消息流</strong>架构，所有节点通过 <strong>TbMsg</strong> 传递数据。</p>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>TbMsg 核心结构:
+  - id: UUID - 消息唯一标识
+  - type: String - 消息类型（如 "POST_TELEMETRY"）
+  - originator: EntityId - 消息来源设备/资产
+  - metaData: TbMsgMetaData - 键值对元数据
+  - data: String - 消息体（JSON）
+  - ts: long - 时间戳
+  - ruleChainId: RuleChainId - 当前规则链ID
+  - ruleNodeId: RuleNodeId - 当前节点ID（用于追踪）
+
+TbMsgMetaData:
+  - data: Map&lt;String, String&gt; - 存储设备ID、租户ID等上下文信息</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">2.2 节点类型体系</h3>
+
+      <p style="color: var(--text-secondary);">ThingsBoard 有 <strong>6 种节点类型</strong>，比 CogniFlow 更清晰：</p>
+
+      <table class="doc-table">
+        <thead><tr><th>类型</th><th>说明</th><th>示例节点</th></tr></thead>
+        <tbody>
+          <tr><td>FILTER</td><td>条件过滤，决定消息去向</td><td>TbCheckMessageNode, TbMsgTypeFilterNode</td></tr>
+          <tr><td>TRANSFORMATION</td><td>数据转换/增强</td><td>TbChangeOriginatorNode, TbJsonPathNode</td></tr>
+          <tr><td>ACTION</td><td>执行操作（存储/通知/RPC等）</td><td>TbLogNode, TbCreateAlarmNode</td></tr>
+          <tr><td>ENRICHMENT</td><td>数据丰富（关联查询）</td><td>TbAttributesNode, TbTimeseriesNode</td></tr>
+          <tr><td>EXTERNAL</td><td>外部系统集成</td><td>Kafka, MQTT, HTTP 等</td></tr>
+          <tr><td>FLOW</td><td>流程控制（子规则链）</td><td>TbRuleChainInputNode, TbRuleChainOutputNode</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">2.3 Filter 节点的分支设计（关键）</h3>
+
+      <p style="color: var(--text-secondary);">ThingsBoard 的 Filter 节点通过 <strong>relationTypes</strong> 支持多分支输出：</p>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>@RuleNode(
+    type = ComponentType.FILTER,
+    name = "check fields presence",
+    relationTypes = {TbNodeConnectionType.TRUE, TbNodeConnectionType.FALSE},
+    ...
+)
+public class TbCheckMessageNode implements TbNode {
+
+    @Override
+    public void onMsg(TbContext ctx, TbMsg msg) {
+        // 判断逻辑
+        String relationType = allKeysPresent ?
+            TbNodeConnectionType.TRUE : TbNodeConnectionType.FALSE;
+        ctx.tellNext(msg, relationType);  // 关键：告诉引擎走哪个分支
+    }
+}
+
+ TbNodeConnectionType 定义:
+    SUCCESS = "Success"
+    FAILURE = "Failure"
+    TRUE = "True"
+    FALSE = "False"
+    OTHER = "Other"
+    TO_ROOT_RULE_CHAIN = "To Root Rule Chain"</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">2.4 TbNode 接口设计</h3>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>public interface TbNode {
+    void init(TbContext ctx, TbNodeConfiguration configuration) throws TbNodeException;
+    void onMsg(TbContext ctx, TbMsg msg) throws ExecutionException, InterruptedException, TbNodeException;
+    default void destroy() { }
+    default void onPartitionChangeMsg(TbContext ctx, PartitionChangeMsg msg) { }
+    // 配置升级支持
+    default TbPair&lt;Boolean, JsonNode&gt; upgrade(int fromVersion, JsonNode oldConfiguration) {
+        return new TbPair&lt;&gt;(false, oldConfiguration);
+    }
+}
+
+ TbContext 是核心上下文，提供：
+    - tellNext(msg, relationType) - 发送到下一个节点
+    - tellFailure(msg, exception) - 处理失败
+    - getTenantId() / getSelf() - 获取实体信息
+    - 各种 Service 注入（deviceService, assetService 等）</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">2.5 规则链结构</h3>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>规则链 JSON 结构:
+{
+  "ruleChain": {
+    "name": "Root Rule Chain",
+    "type": "CORE",
+    "root": true
+  },
+  "metadata": {
+    "nodes": [
+      {
+        "type": "org.thingsboard.rule.engine.filter.TbMsgTypeSwitchNode",
+        "name": "Message Type Switch",
+        "configuration": { "version": 0 }
+      },
+      {
+        "type": "org.thingsboard.rule.engine.action.TbLogNode",
+        "name": "Log RPC from Device",
+        "configuration": { "jsScript": "..." }
+      }
+    ],
+    "connections": [
+      { "fromIndex": 2, "toIndex": 4, "type": "Other" },
+      { "fromIndex": 2, "toIndex": 1, "type": "Post attributes" }
+    ]
+  }
+}
+
+ connections 说明:
+    - fromIndex/toIndex: 节点在 nodes 数组中的索引
+    - type: 连接类型（决定了消息走哪个分支）</pre>
+      </div>
+    </div>
+
+    <!-- 三、执行引擎深度分析（新增） -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">三、ThingsBoard 执行引擎深度分析（v2.0 新增）</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">3.1 Actor 架构</h3>
+
+      <p style="color: var(--text-secondary);">ThingsBoard 使用 <strong>Akka Actor 模型</strong>，每个规则链和节点都是独立的 Actor：</p>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>架构层次:
+
+  RuleChainSupervisorActor
+         │
+         ├── RuleChainActor (每个规则链一个)
+         │      │
+         │      ├── RuleNodeActor (规则链内的第一个节点)
+         │      │
+         │      ├── RuleNodeActor (规则链内的第二个节点)
+         │      │
+         │      └── RuleNodeActor (规则链内的第N个节点)
+         │
+         └── RuleNodeActor (独立节点，非规则链内)
+
+ RuleChainActor 职责:
+    - 管理规则链内的所有 RuleNodeActor
+    - 维护 nodeRoutes (RuleNodeId → List&lt;RuleNodeRelation&gt;)
+    - 处理节点间消息路由
+
+ RuleNodeActor 职责:
+    - 创建 TbNode 实例
+    - 调用 tbNode.onMsg(ctx, msg)
+    - 管理节点生命周期（init/destroy）</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.2 TbContext.tellNext 路由机制</h3>
+
+      <p style="color: var(--text-secondary);"><strong>DefaultTbContext.java:170-175</strong> 的 tellNext 实现：</p>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>@Override
+public void tellNext(TbMsg msg, Set&lt;String&gt; relationTypes) {
+    RuleNode ruleNode = nodeCtx.getSelf();  // 获取当前节点
+    persistDebugOutput(msg, relationTypes); // 持久化调试信息
+    msg.getCallback().onProcessingEnd(ruleNode.getId()); // 回调：当前节点处理完成
+    // 关键：发送 RuleNodeToRuleChainTellNextMsg 给父 Actor（规则链）
+    nodeCtx.getChainActor().tell(
+        new RuleNodeToRuleChainTellNextMsg(
+            ruleNode.getRuleChainId(),
+            ruleNode.getId(),
+            relationTypes,
+            msg,
+            null
+        )
+    );
+}
+
+ 流程说明:
+ 1. 节点调用 ctx.tellNext(msg, "True") 或 ctx.tellNext(msg, "False")
+ 2. DefaultTbContext 构造 RuleNodeToRuleChainTellNextMsg 消息
+ 3. 消息发送到 RuleChainActor（父 Actor）
+ 4. RuleChainActor 的 processor 处理这条消息，决定下一步路由</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.3 RuleChainActorMessageProcessor.onTellNext 分支路由算法</h3>
+
+      <p style="color: var(--text-secondary);">这是执行引擎的核心路由逻辑（<strong>RuleChainActorMessageProcessor.java:296-344</strong>）：</p>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>private void onTellNext(TbMsg msg, RuleNodeId originatorNodeId,
+                         Set&lt;String&gt; relationTypes, String failureMessage) {
+    // 1. 解析 TopicPartitionInfo（用于跨分区队列）
+    EntityId entityId = msg.getOriginator();
+    TopicPartitionInfo tpi = systemContext.resolve(tenantId, entityId, msg);
+
+    // 2. 获取当前节点的所有出边（从 nodeRoutes 查找）
+    List&lt;RuleNodeRelation&gt; ruleNodeRelations = nodeRoutes.get(originatorNodeId);
+
+    // 3. 过滤出匹配 relationTypes 的出边
+    List&lt;RuleNodeRelation&gt; relationsByTypes = ruleNodeRelations.stream()
+        .filter(r -&gt; contains(relationTypes, r.getType()))
+        .collect(Collectors.toList());
+
+    // 4. 根据出边数量决定路由策略
+    if (relationsCount == 0) {
+        // 无出边 → 标记成功或失败
+        if (relationTypes.contains(TbNodeConnectionType.FAILURE)) {
+            msg.getCallback().onFailure(...);
+        } else {
+            msg.getCallback().onSuccess();
+        }
+    } else if (relationsCount == 1) {
+        // 单一出边 → 直接推送消息到目标节点
+        pushToTarget(tpi, msg, relation.getOut(), relation.getType());
+    } else {
+        // 多出边 → 广播消息（fan-out），每个分支有独立的 callback
+        MultipleTbQueueTbMsgCallbackWrapper callbackWrapper =
+            new MultipleTbQueueTbMsgCallbackWrapper(relationsCount, msg.getCallback());
+        for (RuleNodeRelation relation : relationsByTypes) {
+            putToQueue(tpi, msg, callbackWrapper, target);
+        }
+    }
+}
+
+ 关键设计:
+ - nodeRoutes: Map&lt;RuleNodeId, List&lt;RuleNodeRelation&gt;&gt; 在 initRoutes() 时构建
+ - RuleNodeRelation 包含 target(EntityId) 和 type(String) 两个字段
+ - 消息可以 fan-out 到多个目标节点（并行处理）</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.4 节点消息处理（RuleNodeActorMessageProcessor）</h3>
+
+      <p style="color: var(--text-secondary);">RuleNodeActorMessageProcessor 是节点执行的大门（<strong>RuleNodeActorMessageProcessor.java:144-166</strong>）：</p>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>void onRuleChainToRuleNodeMsg(RuleChainToRuleNodeMsg msg) throws Exception {
+    // 1. 分区检查：消息是否应该由当前节点处理
+    if (!isMyNodePartition()) {
+        putToNodePartition(msg.getMsg());  // 转发到正确分区
+        return;
+    }
+
+    // 2. 开始处理回调
+    msg.getMsg().getCallback().onProcessingStart(info);
+
+    // 3. 重入保护：检查消息已访问的节点数量
+    TbMsg tbMsg = msg.getMsg();
+    int ruleNodeCount = tbMsg.getAndIncrementRuleNodeCounter();
+    int maxRuleNodeExecutionsPerMessage = tenantProfileConfiguration.get...;
+    if (maxRuleNodeExecutionsPerMessage == 0 ||
+        ruleNodeCount &lt; maxRuleNodeExecutionsPerMessage) {
+        // 4. 持久化调试输入
+        persistDebugInputIfAllowed(msg.getMsg(), msg.getFromRelationType());
+        // 5. 调用节点逻辑
+        try {
+            tbNode.onMsg(msg.getCtx(), msg.getMsg());
+        } catch (Exception e) {
+            msg.getCtx().tellFailure(msg.getMsg(), e);
+        }
+    } else {
+        // 超过阈值，拒绝处理
+        tbMsg.getCallback().onFailure(
+            new RuleNodeException("Message is processed by more than " +
+                maxRuleNodeExecutionsPerMessage + " rule nodes!",
+                ruleChainName, ruleNode)
+        );
+    }
+}</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.5 循环检测机制</h3>
+
+      <p style="color: var(--text-secondary);">TbContext.input() 有栈深度检查防止无限循环（<strong>DefaultTbContext.java:184-200</strong>）：</p>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>@Override
+public void input(TbMsg msg, RuleChainId ruleChainId) {
+    if (!msg.isValid()) return;
+
+    RuleChainId selfRuleChainId = nodeCtx.getSelf().getRuleChainId();
+    RuleNodeId selfId = nodeCtx.getSelf().getId();
+
+    // 关键：检查消息是否已经在当前规则链的处理栈中
+    if (msg.isAlreadyInStack(selfRuleChainId, selfId)) {
+        log.warn("[{}] Detected rule chain processing loop for rule node [{}]...",
+            nodeCtx.getTenantId(), selfId);
+        tellFailure(msg, new RuntimeException(
+            "Detected rule chain processing loop for rule node [" + selfId + "] " +
+            "in rule chain [" + selfRuleChainId + "]. " +
+            "Please check the rule chain configuration for circular references."));
+        return;
+    }
+    // ... 继续正常处理
+}
+
+ TbMsg.isAlreadyInStack() 实现：
+    - 维护一个 Set&lt;RuleChainId&gt; 记录消息已经进入过的规则链
+    - 如果当前规则链已在集合中，说明是循环引用
+    - 抛出异常而不是无限循环</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.6 跨分区队列持久化</h3>
+
+      <p style="color: var(--text-secondary);">消息可能需要跨分区处理，通过 <strong>putToQueue</strong> 写入持久化队列（<strong>RuleChainActorMessageProcessor.java:380-387</strong>）：</p>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>private void putToQueue(TopicPartitionInfo tpi, TbMsg newMsg,
+                        TbQueueCallback callbackWrapper) {
+    ToRuleEngineMsg toQueueMsg = ToRuleEngineMsg.newBuilder()
+        .setTenantIdMSB(tenantId.getId().getMostSignificantBits())
+        .setTenantIdLSB(tenantId.getId().getLeastSignificantBits())
+        .setTbMsgProto(TbMsg.toProto(newMsg))
+        .build();
+    clusterService.pushMsgToRuleEngine(tpi, newMsg.getId(),
+        toQueueMsg, callbackWrapper);
+}
+
+ 设计意义:
+ - 如果目标节点在另一个分区（!tpi.isMyPartition()），消息会被放入队列
+ - 队列保证消息不会丢失（持久化）
+ - 目标分区的消费者负责最终投递到 RuleNodeActor
+ - 这使得 ThingsBoard 可以水平扩展到多个分区/实例</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">3.7 消息回调机制（TbMsgCallback）</h3>
+
+      <p style="color: var(--text-secondary);">TbMsg 的回调机制用于追踪消息处理状态：</p>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>回调接口 TbMsgCallback:
+    - onProcessingStart(info: RuleNodeInfo) - 节点开始处理
+    - onProcessingEnd(ruleNodeId: RuleNodeId) - 节点处理完成
+    - onSuccess() - 整条消息链处理成功
+    - onFailure(exception: Exception) - 处理失败
+
+ 回调链追踪:
+    msg.getCallback().onProcessingStart(info)  // RuleNodeActor 开始
+    msg.getCallback().onProcessingEnd(nodeId)   // 当前节点完成
+    msg.getCallback().onSuccess()                // 最终成功
+
+ fan-out 时使用 MultipleTbQueueTbMsgCallbackWrapper：
+    - 它包装多个 callback
+    - 只有所有分支都成功，才调用原始的 onSuccess()
+    - 任何一个分支失败，都会触发 onFailure()</pre>
+      </div>
+    </div>
+
+    <!-- 四、对比分析 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">四、CogniFlow vs ThingsBoard 对比</h2>
+
+      <table class="doc-table">
+        <thead><tr><th>维度</th><th>CogniFlow</th><th>ThingsBoard</th></tr></thead>
+        <tbody>
+          <tr><td>消息模型</td><td>多端口多类型（IMAGE/BBOX/ARRAY 等）</td><td>单一 TbMsg（通用）</td></tr>
+          <tr><td>数据传递</td><td>通过端口连接传递特定类型数据</td><td>通过 TbMsg 的 data/metaData 传递</td></tr>
+          <tr><td>分支支持</td><td>无（只有顺序执行）</td><td>有（relationTypes 多分支）</td></tr>
+          <tr><td>节点分类</td><td>input/detection/processing/action/logic/output</td><td>FILTER/TRANSFORMATION/ACTION/ENRICHMENT/EXTERNAL/FLOW</td></tr>
+          <tr><td>触发机制</td><td>INPUT 类别节点兼任触发器</td><td>无独立触发器概念，消息即触发</td></tr>
+          <tr><td>节点接口</td><td>BaseExecutor.execute(inputs, context)</td><td>TbNode.onMsg(ctx, msg)</td></tr>
+          <tr><td>执行模型</td><td>顺序执行（无 Actor）</td><td>Akka Actor 模型</td></tr>
+          <tr><td>循环检测</td><td>无</td><td>有（TbMsg.isAlreadyInStack）</td></tr>
+          <tr><td>重入保护</td><td>无</td><td>有（ruleNodeCount 计数器）</td></tr>
+          <tr><td>跨分区</td><td>N/A（单机）</td><td>有（队列持久化）</td></tr>
+          <tr><td>组件注册</td><td>NodeRegistry.register(executor)</td><td>@RuleNode 注解 + 反射</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">4.1 各有优势</h3>
+
+      <p style="color: var(--text-secondary);"><strong>CogniFlow 优势：</strong></p>
+      <ul class="doc-list">
+        <li>类型安全：端口连接时校验类型，避免传错数据</li>
+        <li>可视化好：多端口设计更符合节点编辑器直觉</li>
+        <li>针对视觉感知：IMAGE/BBOX/MASK 等类型天然适合 CV 场景</li>
+      </ul>
+
+      <p style="color: var(--text-secondary);"><strong>ThingsBoard 优势：</strong></p>
+      <ul class="doc-list">
+        <li>简单灵活：单一消息类型，节点组合更容易</li>
+        <li>分支清晰：FILTER 节点天然支持 True/False 分支</li>
+        <li>扩展方便：新增节点只需加 @RuleNode 注解</li>
+        <li>生产级：Actor 模型 + 队列持久化，支持分布式</li>
+      </ul>
+    </div>
+
+    <!-- 五、改进建议 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">五、改进建议</h2>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 8px;">5.1 节点分类重构（推荐）</h3>
+
+      <p style="color: var(--text-secondary);">参考 ThingsBoard，增加 <strong>TRIGGER</strong> 和 <strong>FILTER</strong> 分类：</p>
+
+      <table class="doc-table">
+        <thead><tr><th>类别</th><th>颜色</th><th>说明</th><th>节点示例</th></tr></thead>
+        <tbody>
+          <tr><td>INPUT</td><td>#4CFF4C</td><td>数据采集（摄像头/文件/屏幕）</td><td>ImageCapture, VideoCapture</td></tr>
+          <tr><td>TRIGGER</td><td>#FFD700</td><td>触发条件判断，输出 triggered</td><td>YOLOTriggerNode, ManualTrigger</td></tr>
+          <tr><td>DETECTION</td><td>#00f0FF</td><td>目标检测（纯数据处理）</td><td>YOLOModelNode</td></tr>
+          <tr><td>FILTER</td><td>#DC4FDC</td><td>条件过滤，支持多分支</td><td>ObjectExistsCondition, ConfidenceThreshold</td></tr>
+          <tr><td>PROCESSING</td><td>#FFFF4C</td><td>数据处理变换</td><td>CategoryEncode, Filter</td></tr>
+          <tr><td>ACTION</td><td>#FF7F4C</td><td>执行操作</td><td>MouseClick, Notification</td></tr>
+          <tr><td>OUTPUT</td><td>#FF4C4C</td><td>结果输出</td><td>SaveResult, ActionOutput</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">5.2 修复 YOLOTriggerNode 分类</h3>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>当前（第235行）:
+    category = NodeCategory.INPUT  # 错误
+
+建议改为:
+    category = NodeCategory.TRIGGER  # 新增枚举值
+
+或者保持 INPUT，但在 description 中明确说明它是触发器：
+    description = """当检测到指定目标时触发规则执行。
+
+    使用场景：
+    - 简单判断（检测到XX就触发）→ 用这个节点
+    - 复杂判断（数量/置信度组合）→ 用 YOLOModelNode + 条件节点"""</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">5.3 增加分支支持（重要）</h3>
+
+      <p style="color: var(--text-secondary);">参考 ThingsBoard 的 relationTypes，为 FILTER 类节点增加多分支输出：</p>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>修改 NodeDefinition:
+    outputs: Dict[str, PortDefinition]  # 当前
+
+建议增加:
+    relation_types: List[str] = ["True", "False"]  # 分支类型
+    output_mapping: Dict[str, str]  # relationType -> output port
+
+执行引擎返回结构（新增）:
+    {
+        "result": True/False,
+        "branch": "true" / "false",
+        "next_node_id": "xxx"  # 可选：直接指定下一步
+    }
+
+参考 ThingsBoard 的 tellNext 模式:
+    ctx.tellNext(msg, "True")   # 告诉引擎走 True 分支
+    ctx.tellNext(msg, "False")  # 告诉引擎走 False 分支</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">5.4 增加循环检测和重入保护</h3>
+
+      <p style="color: var(--text-secondary);">参考 ThingsBoard 的机制，在执行引擎中增加保护：</p>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>循环检测（ExecutionContext 新增）:
+    class ExecutionContext:
+        visited_rule_chains: Set[str] = set()
+
+        def check_circular_reference(self, rule_chain_id: str):
+            if rule_chain_id in self.visited_rule_chains:
+                raise CircularReferenceError(
+                    f"Detected rule chain processing loop for {rule_chain_id}"
+                )
+            self.visited_rule_chains.add(rule_chain_id)
+
+重入保护（ExecutionContext 新增）:
+    class ExecutionContext:
+        node_visit_count: Dict[str, int] = {}
+        MAX_NODE_VISITS = 100  # 可配置
+
+        def increment_and_check(self, node_id: str) -> bool:
+            count = self.node_visit_count.get(node_id, 0) + 1
+            if count > self.MAX_NODE_VISITS:
+                raise ReentrancyExceededError(
+                    f"Message processed by more than {self.MAX_NODE_VISITS} nodes"
+                )
+            self.node_visit_count[node_id] = count
+            return True</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">5.5 明确使用决策树</h3>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>Q: 想做什么？
+
+├─ "采集图片" → ImageCapture (INPUT)
+│
+├─ "检测到XX就触发" → YOLOTriggerNode (TRIGGER)
+│   └─ 简单场景，一步到位
+│
+├─ "检测并获取所有结果" → YOLOModelNode (DETECTION)
+│   └─ 返回完整检测数据，不做过滤
+│
+├─ "检测到人 + 数量>3 才触发"
+│   └─ YOLOModelNode + ObjectExistsConditionNode (FILTER)
+│       └─ ObjectExistsConditionNode 的 comparison 支持 gte/lte/eq/gt/lt
+│
+├─ "检测到人 + 置信度>0.8 才触发"
+│   └─ YOLOModelNode + ConfidenceThresholdConditionNode (FILTER)
+│
+└─ "满足条件时执行操作"
+    └─ YOLOModelNode + 条件节点 + ActionNode</pre>
+      </div>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">5.6 标记占位节点</h3>
+
+      <div class="doc-code" style="font-size: 0.85rem; line-height: 1.5;">
+<pre>ObjectDetectorNode.execute() 增加标记:
+    # TODO: Phase X 实现通用检测器（支持 SSD/MTCNN）
+    # 目前为占位实现，实际应对接各种检测模型
+    return {
+        "detections": [],
+        "count": 0,
+        "error": "通用检测器待实现",
+        "status": "placeholder"  # 新增状态标记
+    }
+
+TimerTriggerNode.execute() 增加标记:
+    # TODO: 需要记录上次触发时间（需要持久化状态）
+    # 当前为占位实现，每次都返回 triggered=True
+    return { ... }</pre>
+      </div>
+    </div>
+
+    <!-- 六、总结 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">六、总结</h2>
+
+      <table class="doc-table">
+        <thead><tr><th>问题</th><th>原因</th><th>解决方案</th></tr></thead>
+        <tbody>
+          <tr><td>YOLOTriggerNode vs YOLOModelNode 边界模糊</td><td>两个节点都做了检测+过滤+判断</td><td>明确决策树：简单触发用 Trigger，复杂条件用 Model + Condition</td></tr>
+          <tr><td>YOLOTriggerNode category 标记错误</td><td>设计时没有 TRIGGER 类型</td><td>新增 TRIGGER 类别，或在 description 中说明</td></tr>
+          <tr><td>占位节点未标记</td><td>代码中没有 TODO 或 status 标记</td><td>增加 TODO 注释和 status="placeholder"</td></tr>
+          <tr><td>缺少分支支持</td><td>执行引擎只支持顺序执行</td><td>参考 ThingsBoard relationTypes，为 FILTER 类节点增加多分支</td></tr>
+          <tr><td>缺少循环检测</td><td>执行引擎无状态追踪</td><td>参考 ThingsBoard：维护 visited_rule_chains 集合</td></tr>
+          <tr><td>缺少重入保护</td><td>无消息访问计数</td><td>参考 ThingsBoard：tbMsg.getAndIncrementRuleNodeCounter()</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">ThingsBoard 执行引擎关键设计总结</h3>
+
+      <ul class="doc-list" style="color: var(--text-secondary);">
+        <li><strong>Actor 模型</strong>：每个节点是 RuleNodeActor，规则链是 RuleChainActor，通过消息传递协调</li>
+        <li><strong>tellNext 机制</strong>：节点调用 ctx.tellNext(msg, relationType)，由 RuleChainActor 的 onTellNext 分发到正确分支</li>
+        <li><strong>nodeRoutes 映射</strong>：在规则链初始化时构建 RuleNodeId → List&lt;RuleNodeRelation&gt; 映射表</li>
+        <li><strong>fan-out 支持</strong>：一个节点的结果可以并行发送到多个目标节点，每个分支有独立 callback</li>
+        <li><strong>循环检测</strong>：TbMsg 维护已访问的规则链集合，防止无限循环</li>
+        <li><strong>重入保护</strong>：TbMsg.ruleNodeCounter 记录已访问节点数，超过阈值则拒绝</li>
+        <li><strong>跨分区队列</strong>：消息跨分区时写入持久化队列，保证不丢失</li>
+      </ul>
+
+      <h3 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 8px; margin-top: 16px;">下一步行动</h3>
+
+      <ol class="doc-list" style="color: var(--text-secondary);">
+        <li><strong>立即可做</strong>：修改 YOLOTriggerNode 的 description，加决策树说明</li>
+        <li><strong>短期</strong>：新增 TRIGGER 类别（或新增 NodeCategory 枚举），修复占位节点 TODO 标记</li>
+        <li><strong>中期</strong>：为执行引擎增加分支支持（relationTypes）和循环检测机制</li>
+        <li><strong>长期</strong>：考虑是否需要引入更灵活的消息模型和 Actor 模型</li>
+      </ol>
+    </div>
+
+    <!-- 七、参考 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">七、参考</h2>
+
+      <table class="doc-table">
+        <thead><tr><th>来源</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>ThingsBoard GitHub</td><td>https://github.com/thingsboard/thingsboard</td></tr>
+          <tr><td>TbNode 接口</td><td>rule-engine/rule-engine-api/src/main/java/org/thingsboard/rule/engine/api/TbNode.java</td></tr>
+          <tr><td>TbMsg 消息</td><td>common/message/src/main/java/org/thingsboard/server/common/msg/TbMsg.java</td></tr>
+          <tr><td>TbContext 接口</td><td>rule-engine/rule-engine-api/src/main/java/org/thingsboard/rule/engine/api/TbContext.java</td></tr>
+          <tr><td>DefaultTbContext 实现</td><td>application/src/main/java/org/thingsboard/server/actors/ruleChain/DefaultTbContext.java</td></tr>
+          <tr><td>RuleChainActor</td><td>application/src/main/java/org/thingsboard/server/actors/ruleChain/RuleChainActor.java</td></tr>
+          <tr><td>RuleChainActorMessageProcessor</td><td>application/src/main/java/org/thingsboard/server/actors/ruleChain/RuleChainActorMessageProcessor.java</td></tr>
+          <tr><td>RuleNodeActor</td><td>application/src/main/java/org/thingsboard/server/actors/ruleChain/RuleNodeActor.java</td></tr>
+          <tr><td>RuleNodeActorMessageProcessor</td><td>application/src/main/java/org/thingsboard/server/actors/ruleChain/RuleNodeActorMessageProcessor.java</td></tr>
+          <tr><td>RuleNodeToRuleChainTellNextMsg</td><td>application/src/main/java/org/thingsboard/server/actors/ruleChain/RuleNodeToRuleChainTellNextMsg.java</td></tr>
+          <tr><td>Filter 示例 (TbCheckMessageNode)</td><td>rule-engine/rule-engine-components/src/main/java/org/thingsboard/rule/engine/filter/TbCheckMessageNode.java</td></tr>
+          <tr><td>ComponentType</td><td>common/data/src/main/java/org/thingsboard/server/common/data/plugin/ComponentType.java</td></tr>
+          <tr><td>规则链 JSON</td><td>application/src/main/data/json/tenant/rule_chains/root_rule_chain.json</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</body>
+</html>
