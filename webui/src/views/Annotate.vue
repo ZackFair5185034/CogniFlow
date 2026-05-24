@@ -242,15 +242,13 @@
           @mouseup="handleMouseUp"
           @mouseleave="handleMouseUp"
         />
+        <LoadingSpinner
+          v-if="loading"
+          overlay
+          text="加载图片中..."
+        />
         <div
-          v-if="imageLoading"
-          class="canvas-loading"
-        >
-          <div class="loading-spinner" />
-          <span>加载图片中...</span>
-        </div>
-        <div
-          v-if="!currentImage && !imageLoading"
+          v-if="!currentImage && !loading"
           class="canvas-overlay"
         >
           <div class="no-image">
@@ -380,10 +378,10 @@
           </button>
           <button
             class="ui-btn ui-btn-primary"
-            :disabled="creatingCategory"
+            :disabled="creating"
             @click="handleCreateCategory"
           >
-            {{ creatingCategory ? '创建中...' : '创建' }}
+            {{ creating ? '创建中...' : '创建' }}
           </button>
         </div>
       </div>
@@ -492,11 +490,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { categoryApi, annotationApi, atlasApi } from '@/api'
-import SvgIcon from '@/components/SvgIcon.vue'
 import type { AnnotationResponse } from '@/types/api'
 import type { CategoryNode } from '@/api'
 
@@ -539,10 +533,10 @@ const localAnnotations = ref<Annotation[]>([])
 const selectedCategoryId = ref<number | null>(null)
 const selectedAnnotationIndex = ref<number | null>(null)
 
-const imageLoading = ref(false)
+const loading = ref(false)
 const saving = ref(false)
 const showCategoryDialog = ref(false)
-const creatingCategory = ref(false)
+const creating = ref(false)
 const categoryForm = ref({ name: '', color: '#FF0000', is_directory: false, parent_id: null as number | null })
 
 // 导入导出状态
@@ -819,7 +813,7 @@ const loadCategories = async () => {
 }
 
 const loadImage = async (id: number) => {
-  imageLoading.value = true
+  loading.value = true
   try {
     const res = await fetch(`/api/images/${id}`)
     if (!res.ok) throw new Error('图片不存在')
@@ -833,7 +827,7 @@ const loadImage = async (id: number) => {
     ElMessage.error('加载图片失败')
     console.error(error)
   } finally {
-    imageLoading.value = false
+    loading.value = false
   }
 }
 
@@ -893,7 +887,7 @@ const initCanvas = () => {
   }
   img.onerror = () => {
     ElMessage.error('图片加载失败')
-    imageLoading.value = false
+    loading.value = false
   }
   img.src = getImageUrl(currentImage.value.file_path)
 }
@@ -1115,7 +1109,7 @@ const handleCreateCategory = async () => {
     return
   }
 
-  creatingCategory.value = true
+  creating.value = true
   try {
     await categoryApi.create({
       name: categoryForm.value.name,
@@ -1131,7 +1125,7 @@ const handleCreateCategory = async () => {
     const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '创建失败'
     ElMessage.error(msg)
   } finally {
-    creatingCategory.value = false
+    creating.value = false
   }
 }
 
@@ -1490,23 +1484,6 @@ onUnmounted(() => {
   cursor: crosshair;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   background: #1a1a24;
-}
-
-.canvas-loading {
-  @apply absolute inset-0 flex flex-col items-center justify-center;
-  background: rgba(0, 0, 0, 0.7);
-  @apply gap-4;
-}
-
-.loading-spinner {
-  @apply w-10 h-10 rounded-full;
-  border: 3px solid var(--border-color);
-  border-top-color: var(--accent-blue);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .canvas-overlay {

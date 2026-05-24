@@ -1,7 +1,16 @@
 <template>
-  <div class="flex flex-col gap-5">
-    <!-- 统计卡片 -->
-    <div class="grid grid-cols-4 gap-4">
+  <div
+    class="flex flex-col gap-5"
+    style="position: relative; min-height: 400px;"
+  >
+    <LoadingSpinner
+      v-if="loading"
+      overlay
+      text="加载统计信息..."
+    />
+    <template v-else>
+      <!-- 统计卡片 -->
+      <div class="grid grid-cols-4 gap-4">
       <div
         v-for="stat in stats"
         :key="stat.label"
@@ -118,13 +127,15 @@
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { atlasApi, imageApi, modelApi, trainingApi } from '@/api'
 import type { TrainingJobResponse } from '@/types/api'
+
+const loading = ref(true)
 
 interface StatItem {
   label: string
@@ -297,6 +308,8 @@ onMounted(async () => {
     recentJobs.value = trainingRes.data.slice(0, 5)
   } catch (error) {
     console.error('加载统计数据失败:', error)
+  } finally {
+    loading.value = false
   }
   connectSystemWs()
   connectTrainingWs()

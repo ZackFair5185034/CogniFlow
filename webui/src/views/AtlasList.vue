@@ -209,8 +209,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi } from '@/api'
 import type { AtlasResponse } from '@/types/api'
 

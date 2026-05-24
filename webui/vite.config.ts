@@ -24,6 +24,23 @@ export default defineConfig(({ mode }) => {
           {
             'element-plus': ['ElMessage', 'ElMessageBox', 'ElNotification', 'ElLoadingDirective'],
           },
+          // VueFlow 核心
+          {
+            '@vue-flow/core': [
+              'useVueFlow',
+              'MarkerType',
+              'SelectionMode',
+              'VueFlow',
+              'Handle',
+              'Position',
+            ],
+          },
+          {
+            '@vue-flow/controls': ['Controls'],
+          },
+          {
+            '@vue-flow/minimap': ['MiniMap'],
+          },
           // Pinia stores
           {
             '@/stores/ruleEngine': ['useRuleEngineStore'],
@@ -40,11 +57,23 @@ export default defineConfig(({ mode }) => {
         dts: 'src/auto-imports.d.ts',
       }),
       Components({
-        // Element Plus 组件自动导入
+        // Element Plus + VueFlow 组件自动导入
         resolvers: [
           (name) => {
             if (name.startsWith('El')) {
               return { name, from: 'element-plus' }
+            }
+            // VueFlow 核心组件
+            if (['VueFlow', 'Handle'].includes(name)) {
+              return { name, from: '@vue-flow/core' }
+            }
+            // VueFlow 小地图
+            if (name === 'MiniMap') {
+              return { name, from: '@vue-flow/minimap' }
+            }
+            // VueFlow 控制按钮
+            if (name === 'Controls') {
+              return { name, from: '@vue-flow/controls' }
             }
           },
         ],

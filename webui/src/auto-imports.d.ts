@@ -6,11 +6,18 @@
 // biome-ignore lint: disable
 export {}
 declare global {
+  const Controls: typeof import('@vue-flow/controls').Controls
   const EffectScope: typeof import('vue').EffectScope
   const ElLoadingDirective: typeof import('element-plus').ElLoadingDirective
   const ElMessage: typeof import('element-plus').ElMessage
   const ElMessageBox: typeof import('element-plus').ElMessageBox
   const ElNotification: typeof import('element-plus').ElNotification
+  const Handle: typeof import('@vue-flow/core').Handle
+  const MarkerType: typeof import('@vue-flow/core').MarkerType
+  const MiniMap: typeof import('@vue-flow/minimap').MiniMap
+  const Position: typeof import('@vue-flow/core').Position
+  const SelectionMode: typeof import('@vue-flow/core').SelectionMode
+  const VueFlow: typeof import('@vue-flow/core').VueFlow
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const computed: typeof import('vue').computed
   const createApp: typeof import('vue').createApp
@@ -83,6 +90,7 @@ declare global {
   const useRuleEngineStore: typeof import('@/stores/ruleEngine').useRuleEngineStore
   const useSlots: typeof import('vue').useSlots
   const useTemplateRef: typeof import('vue').useTemplateRef
+  const useVueFlow: typeof import('@vue-flow/core').useVueFlow
   const watch: typeof import('vue').watch
   const watchEffect: typeof import('vue').watchEffect
   const watchPostEffect: typeof import('vue').watchPostEffect

@@ -17,13 +17,11 @@
 
     <!-- 规则列表 -->
     <div class="rules-container">
-      <div
+      <LoadingSpinner
         v-if="loading"
-        class="loading-state"
-      >
-        <div class="spinner" />
-        <span>加载中...</span>
-      </div>
+        overlay
+        text="加载中..."
+      />
 
       <div
         v-else-if="graphs.length === 0"
@@ -215,10 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ruleEngineApi } from '@/api'
-import { ElMessage, ElMessageBox } from 'element-plus'
 
 /** 规则图列表项 */
 interface GraphItem {
@@ -373,7 +368,6 @@ function formatDate(dateStr: string) {
   overflow-y: auto;
 }
 
-.loading-state,
 .empty-state {
   display: flex;
   flex-direction: column;

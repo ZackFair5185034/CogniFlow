@@ -4,8 +4,6 @@
  *
  * 提供变量的 CRUD 操作界面，支持添加、删除、编辑变量。
  */
-import { ref } from 'vue'
-import SvgIcon from '@/components/SvgIcon.vue'
 
 // ============ 类型定义 ============
 

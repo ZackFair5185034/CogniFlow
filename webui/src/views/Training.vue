@@ -282,10 +282,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
 import { trainingApi, modelApi, atlasApi } from '@/api'
-import SvgIcon from '@/components/SvgIcon.vue'
 import type { TrainingJobResponse, ModelResponse, AtlasResponse } from '@/types/api'
 
 const jobs = ref<TrainingJobResponse[]>([])

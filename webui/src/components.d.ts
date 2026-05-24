@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    Controls: typeof import('@vue-flow/controls')['Controls']
     ElButton: typeof import('element-plus')['ElButton']
     ElCheckbox: typeof import('element-plus')['ElCheckbox']
     ElDropdown: typeof import('element-plus')['ElDropdown']
@@ -23,10 +24,14 @@ declare module 'vue' {
     ElSlider: typeof import('element-plus')['ElSlider']
     ElTable: typeof import('element-plus')['ElTable']
     ElTableColumn: typeof import('element-plus')['ElTableColumn']
+    Handle: typeof import('@vue-flow/core')['Handle']
+    LoadingSpinner: typeof import('./components/LoadingSpinner.vue')['default']
+    MiniMap: typeof import('@vue-flow/minimap')['MiniMap']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     RuleNode: typeof import('./components/rule-engine/RuleNode.vue')['default']
     SvgIcon: typeof import('./components/SvgIcon.vue')['default']
     VariablePanel: typeof import('./components/rule-engine/VariablePanel.vue')['default']
+    VueFlow: typeof import('@vue-flow/core')['VueFlow']
   }
 }

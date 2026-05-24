@@ -496,13 +496,11 @@
           </div>
 
           <!-- 加载状态（图片检测用） -->
-          <div
+          <LoadingSpinner
             v-else-if="detecting"
-            class="result-loading"
-          >
-            <div class="loading-spinner" />
-            <span>图片检测中...</span>
-          </div>
+            overlay
+            text="图片检测中..."
+          />
 
           <!-- 空状态 -->
           <div
@@ -617,11 +615,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { inferenceApi, trainingApi } from '@/api'
 import { StreamClient, type StreamFrame, type StreamStats } from '@/utils/streamClient'
-import SvgIcon from '@/components/SvgIcon.vue'
+import { inferenceApi, trainingApi } from '@/api'
 import type { ModelResponse } from '@/types/api'
 
 // 状态
@@ -1705,17 +1700,6 @@ onUnmounted(() => {
   @apply font-mono text-xs text-[var(--text-secondary)] min-w-[3.5rem] text-center;
 }
 
-.result-loading {
-  @apply flex-1 flex flex-col items-center justify-center gap-4;
-
-  .loading-spinner {
-    @apply w-10 h-10 border-3 border-[var(--border-color)] border-t-[var(--accent-blue)] rounded-full animate-spin;
-  }
-
-  span {
-    @apply text-sm text-[var(--text-muted)];
-  }
-}
 
 /* 视频检测样式 */
 .empty-result {

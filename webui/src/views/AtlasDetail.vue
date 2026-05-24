@@ -246,7 +246,7 @@
           class="images-content"
         >
           <div
-            v-loading="loadingImages"
+            v-loading="loading"
             class="images-grid-wrapper"
           >
             <div class="images-grid">
@@ -323,7 +323,7 @@
               </div>
             </div>
             <div
-              v-if="!loadingImages && images.length === 0"
+              v-if="!loading && images.length === 0"
               class="empty-state"
             >
               <div class="empty-icon">
@@ -724,9 +724,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi, imageApi } from '@/api'
 import type { AtlasResponse, ImageResponse } from '@/types/api'
 
@@ -739,7 +736,7 @@ const videoInputRef = ref<HTMLInputElement | null>(null)
 const atlas = ref<AtlasResponse | null>(null)
 const images = ref<ImageResponse[]>([])
 const directories = ref<string[]>([])
-const loadingImages = ref(false)
+const loading = ref(false)
 const activeTab = ref('images')
 const selectedDirectory = ref('')
 const sortConfig = ref<{ by: string; order: 'asc' | 'desc' }>({ by: 'created_at', order: 'desc' })
@@ -835,7 +832,7 @@ const loadAtlas = async () => {
 }
 
 const loadImages = async () => {
-  loadingImages.value = true
+  loading.value = true
   try {
     const directory = selectedDirectory.value || undefined
     const res = await atlasApi.getImages(id, directory, pagination.value.page, pagination.value.page_size, sortConfig.value.by, sortConfig.value.order)
@@ -846,7 +843,7 @@ const loadImages = async () => {
     ElMessage.error('加载图片失败')
     console.error('[DEBUG] loadImages error:', error)
   } finally {
-    loadingImages.value = false
+    loading.value = false
   }
 }
 
