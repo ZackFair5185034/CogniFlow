@@ -183,7 +183,7 @@
             </div>
             <div
               class="sort-wrapper"
-              @click="showSortMenu = !showSortMenu"
+              @click.stop="showSortMenu = !showSortMenu"
             >
               <span class="sort-label">
                 {{ sortConfig.by === 'created_at' ? '创建时间' : '名称' }}
@@ -724,7 +724,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi, imageApi } from '@/api'
@@ -1178,15 +1178,27 @@ const getFileName = (filePath: string) => {
   return filePath.split(/[\\/]/).pop() || ''
 }
 
+// 点击外部关闭排序下拉菜单
+const handleClickOutside = () => {
+  if (showSortMenu.value) {
+    showSortMenu.value = false
+  }
+}
+
 onMounted(() => {
   // 从 URL 查询参数恢复目录筛选状态
   const dirFromQuery = route.query.directory as string | undefined
   if (dirFromQuery) {
     selectedDirectory.value = dirFromQuery
   }
+  document.addEventListener('click', handleClickOutside)
   loadAtlas()
   loadImages()
   loadDirectories()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
