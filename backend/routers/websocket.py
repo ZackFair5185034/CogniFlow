@@ -75,6 +75,20 @@ async def websocket_system(websocket: WebSocket):
         ws_manager.disconnect_system(websocket)
 
 
+@router.websocket("/export/{export_id}")
+async def websocket_export(websocket: WebSocket, export_id: str):
+    """导出进度 WebSocket 连接。
+
+    客户端连接后接收模型导出任务的实时进度更新。
+    """
+    await ws_manager.connect_export(websocket, export_id)
+    try:
+        while True:
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect_export(websocket, export_id)
+
+
 @router.websocket("/rule-execution")
 async def websocket_rule_execution(websocket: WebSocket):
     """规则执行状态 WebSocket 连接。
