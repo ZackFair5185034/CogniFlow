@@ -125,13 +125,6 @@ export class StreamClient {
     if (streamUrl.startsWith('ws') || streamUrl.startsWith('http')) {
       return streamUrl.replace('http', 'ws')
     }
-    // 优先使用环境变量配置的 WS 地址（直接连后端），避免走 Vite 代理
-    const wsBase = import.meta.env.VITE_WS_BASE_URL as string | undefined
-    if (wsBase) {
-      const base = wsBase.replace(/\/+$/, '')
-      return `${base}${streamUrl}`
-    }
-    // 回退：使用当前页面地址（走 Vite 代理）
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     return `${protocol}//${host}${streamUrl}`

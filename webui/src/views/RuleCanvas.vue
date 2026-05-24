@@ -825,10 +825,6 @@ let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
 const wsConnected = ref(false)
 
 function getWsUrl() {
-  const wsBase = import.meta.env.VITE_WS_BASE_URL as string | undefined
-  if (wsBase) {
-    return `${wsBase.replace(/\/+$/, '')}/ws/rule-execution`
-  }
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${proto}//${window.location.host}/ws/rule-execution`
 }
