@@ -256,9 +256,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onBeforeUnmount, ref } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
-import SvgIcon from '@/components/SvgIcon.vue'
+import { Position } from '@vue-flow/core'
 
 /** 节点配置值类型（排除 boolean/null，文本输入无法处理） */
 type NodeConfigValue = string | number | boolean | null
@@ -500,8 +498,7 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, #2d2d30 0%, #252528 100%);
   border: 1px solid #404044;
   border-radius: 6px;
-  min-width: 200px;
-  max-width: 280px;
+  width: 280px;
   font-size: 12px;
   color: #e0e0e0;
   position: relative;

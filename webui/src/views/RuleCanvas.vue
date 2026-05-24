@@ -326,6 +326,7 @@
         <div
           ref="flowContainer"
           class="flow-container"
+          :class="{ panning: isPanning }"
           @drop="handleDrop"
           @dragover.prevent
           @dragenter.prevent
@@ -389,7 +390,7 @@
           
           <!-- 空画布提示 -->
           <div
-            v-if="nodes.length === 0 && !isLoading"
+            v-if="nodes.length === 0 && !loading"
             class="empty-state"
           >
             <div class="empty-icon">
@@ -416,13 +417,11 @@
           </div>
 
           <!-- 加载状态 -->
-          <div
-            v-if="isLoading"
-            class="loading-state"
-          >
-            <div class="spinner" />
-            <span>加载规则图...</span>
-          </div>
+          <LoadingSpinner
+            v-if="loading"
+            overlay
+            text="加载规则图..."
+          />
         </div>
       </div>
     </div>
@@ -610,25 +609,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, shallowRef, markRaw, provide, onMounted, onBeforeUnmount } from 'vue'
 import { throttle, debounce } from 'lodash-es'
-import { useRouter, useRoute } from 'vue-router'
-import { VueFlow, useVueFlow, MarkerType, SelectionMode, type Node, type Edge, type NodeMouseEvent, type EdgeMouseEvent } from '@vue-flow/core'
-import { Controls } from '@vue-flow/controls'
-import { MiniMap } from '@vue-flow/minimap'
-import { ElMessage } from 'element-plus'
 import { type NodeDefinition, type RuleNodeData } from '@/stores/ruleEngine'
 import { ruleEngineApi, modelApi } from '@/api'
+import type { Node, Edge, NodeMouseEvent, EdgeMouseEvent } from '@vue-flow/core'
+import { SelectionMode } from '@vue-flow/core'
+import RuleNode from '@/components/rule-engine/RuleNode.vue'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 
-import RuleNode from '@/components/rule-engine/RuleNode.vue'
-
 const router = useRouter()
 const route = useRoute()
-const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate, userSelectionRect } = useVueFlow()
+const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate, userSelectionRect, setViewport, getViewport } = useVueFlow()
 
 // 常量
 const gridSize = 30
@@ -648,7 +642,7 @@ const nodeConfig = ref<any>({})
 // 变量列表 - 支持的类型：STRING/NUMBER/BOOLEAN/IMAGE/BBOX
 const variables = ref<Array<{ name: string; type: string; defaultValue: any; description: string }>>([])
 const showVariables = ref(true)
-const isLoading = ref(false)
+const loading = ref(false)
 const saving = ref(false)
 const executing = ref(false)
 const showPalette = ref(true)
@@ -1303,7 +1297,7 @@ onBeforeUnmount(() => {
 
 // 加载规则图
 async function loadGraph() {
-  isLoading.value = true
+  loading.value = true
   // 重置选中状态，避免切换规则图时状态残留
   selectedNode.value = null
   try {
@@ -1353,7 +1347,7 @@ async function loadGraph() {
     console.error('加载规则图失败:', err)
     ElMessage.error('加载规则图失败')
   } finally {
-    isLoading.value = false
+    loading.value = false
   }
 }
 
@@ -1653,8 +1647,12 @@ function handleCanvasMouseMove(event: MouseEvent) {
   if (isPanning.value) {
     const dx = event.clientX - lastMousePos.value.x
     const dy = event.clientY - lastMousePos.value.y
-    panX.value += dx
-    panY.value += dy
+    const viewport = getViewport()
+    setViewport({
+      x: viewport.x + dx,
+      y: viewport.y + dy,
+      zoom: viewport.zoom,
+    })
     lastMousePos.value = { x: event.clientX, y: event.clientY }
   }
 }
@@ -2718,6 +2716,12 @@ $panel-header-height: 44px;
   height: 100%;
   position: relative;
 
+  &.panning {
+    :deep(.vue-flow__pane) {
+      cursor: grabbing !important;
+    }
+  }
+
   :deep(.vue-flow) {
     width: 100%;
     height: 100%;
@@ -2746,6 +2750,11 @@ $panel-header-height: 44px;
   /* 只有 selection 模式（框选）才显示十字光标 */
   :deep(.vue-flow__pane.selection) {
     cursor: crosshair;
+  }
+
+  /* 隐藏选中后的包裹矩形框 */
+  :deep(.vue-flow__nodesselection-rect) {
+    display: none;
   }
 
   :deep(.vue-flow__edge-path) {
@@ -2996,36 +3005,6 @@ $panel-header-height: 44px;
       transform: translateY(0);
     }
   }
-}
-
-.loading-state {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(8, 8, 12, 0.9);
-  z-index: 10;
-
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid #1e1e2e;
-    border-top-color: var(--accent-blue);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 16px;
-  }
-
-  span {
-    color: #666;
-    font-size: 13px;
-  }
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 // 右侧属性面板
