@@ -180,6 +180,15 @@ names: {json.dumps([c['name'] for c in export_result['classes']])}
         batch_size = config.get('batch_size', 16)
         imgsz = config.get('imgsz', 640)
         device = config.get('device', 'cpu')
+        # 验证设备可用性：非 CPU 设备要求 PyTorch CUDA 可用
+        if device != 'cpu':
+            try:
+                import torch
+                if not torch.cuda.is_available():
+                    print(f"[YOLO训练] 设备 {device} 不可用（torch.cuda.is_available=False），降级到 CPU")
+                    device = 'cpu'
+            except Exception:
+                device = 'cpu'
         pretrained_model = config.get('pretrained_model', 'yolov8n.pt')
 
         # 获取模型的预训练模型配置（如果config中没有）

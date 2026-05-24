@@ -93,13 +93,13 @@
                 label="CPU"
               />
               <el-option
-                v-if="deviceInfo.available"
+                v-if="deviceInfo.available && deviceInfo.device === 'cuda'"
                 value="cuda"
                 :label="`GPU (${deviceInfo.device_name})`"
               />
             </el-select>
             <span
-              v-if="deviceInfo.available"
+              v-if="deviceInfo.available && deviceInfo.device === 'cuda'"
               class="device-hint"
             >
               推荐使用 GPU
@@ -108,7 +108,7 @@
               v-else
               class="device-hint"
             >
-              将使用 CPU 训练
+              将使用 CPU 训练（未检测到 NVIDIA GPU，PyTorch 训练不支持 DirectML）
             </span>
           </div>
 
