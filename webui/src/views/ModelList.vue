@@ -971,7 +971,7 @@ onMounted(() => {
 
 .header-info h2 {
   @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+  background: linear-gradient(90deg, var(--text-primary), var(--accent-blue));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1025,7 +1025,7 @@ onMounted(() => {
 }
 
 .id-badge {
-  @apply font-mono text-xs text-[var(--accent-cyan)] px-2 py-1 bg-[rgba(0,240,255,0.1)] rounded;
+  @apply font-mono text-xs text-[var(--accent-blue)] px-2 py-1 bg-[rgba(88,152,255,0.1)] rounded;
 }
 
 .name-cell {
@@ -1033,15 +1033,15 @@ onMounted(() => {
 }
 
 .model-icon {
-  @apply w-5 h-5 text-[var(--accent-magenta)];
+  @apply w-5 h-5 text-[var(--accent-blue)];
 }
 
 .version-badge {
-  @apply font-mono text-xs px-2 py-1 bg-[rgba(255,221,0,0.1)] text-[var(--accent-yellow)] border border-[rgba(255,221,0,0.3)] rounded;
+  @apply font-mono text-xs px-2 py-1 bg-[rgba(234,179,8,0.1)] text-[var(--color-warning)] border border-[rgba(234,179,8,0.3)] rounded;
 }
 
 .best-badge {
-  @apply inline-flex items-center gap-1 text-xs px-2 py-1 bg-[rgba(0,255,136,0.1)] text-[var(--accent-green)] border border-[rgba(0,255,136,0.3)] rounded;
+  @apply inline-flex items-center gap-1 text-xs px-2 py-1 bg-[rgba(0,255,136,0.1)] text-[var(--color-success)] border border-[rgba(0,255,136,0.3)] rounded;
 
   svg {
     @apply w-3 h-3;
@@ -1053,11 +1053,11 @@ onMounted(() => {
   white-space: nowrap;
 
   &.trained {
-    @apply bg-[rgba(0,255,136,0.1)] text-[var(--accent-green)] border border-[rgba(0,255,136,0.3)];
+    @apply bg-[rgba(0,255,136,0.1)] text-[var(--color-success)] border border-[rgba(0,255,136,0.3)];
   }
 
   &.untrained {
-    @apply bg-[rgba(255,136,102,0.1)] text-[#ff4466] border border-[rgba(255,136,102,0.3)];
+    @apply bg-[rgba(239,68,68,0.1)] text-[var(--color-danger)] border border-[rgba(239,68,68,0.3)];
   }
 }
 
@@ -1074,11 +1074,11 @@ onMounted(() => {
 }
 
 .metric-value {
-  @apply font-mono text-xs text-[var(--accent-cyan)];
+  @apply font-mono text-xs text-[var(--accent-blue)];
 }
 
 .metric-value {
-  @apply font-mono text-sm text-[var(--accent-cyan)];
+  @apply font-mono text-sm text-[var(--accent-blue)];
 }
 
 .time-badge {
@@ -1099,7 +1099,7 @@ onMounted(() => {
 }
 
 .action-text {
-  @apply flex items-center gap-1 text-[var(--accent-cyan)] text-xs font-medium bg-transparent border-none cursor-pointer p-0 transition-all;
+  @apply flex items-center gap-1 text-[var(--accent-blue)] text-xs font-medium bg-transparent border-none cursor-pointer p-0 transition-all;
 
   &:hover {
     opacity: 0.75;
@@ -1199,7 +1199,7 @@ onMounted(() => {
 
   input:focus,
   select:focus {
-    @apply outline-none border-[var(--accent-cyan)];
+    @apply outline-none border-[var(--accent-blue)];
     box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
   }
 
@@ -1235,7 +1235,7 @@ onMounted(() => {
   @apply inline-flex items-center gap-2.5 px-6 py-4 bg-[var(--bg-secondary)] border-2 border-dashed border-[var(--border-color)] rounded-xl text-[var(--text-secondary)] text-sm cursor-pointer transition-all;
 
   &:hover {
-    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+    @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
   }
 
   svg {
@@ -1260,7 +1260,7 @@ onMounted(() => {
   }
 
   &.is-default {
-    @apply text-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)] border border-[rgba(0,240,255,0.3)];
+    @apply text-[var(--accent-blue)] bg-[rgba(88,152,255,0.1)] border border-[rgba(88,152,255,0.3)];
   }
 }
 
@@ -1282,9 +1282,9 @@ onMounted(() => {
   @apply text-sm font-medium;
 
   &.idle { @apply text-[var(--text-muted)]; }
-  &.starting, &.loading { @apply text-[var(--accent-cyan)]; }
-  &.saving { @apply text-[var(--accent-yellow)]; }
-  &.completed { @apply text-[var(--accent-green)]; }
+  &.starting, &.loading { @apply text-[var(--accent-blue)]; }
+  &.saving { @apply text-[var(--color-warning)]; }
+  &.completed { @apply text-[var(--color-success)]; }
   &.error { @apply text-red-400; }
 }
 
@@ -1300,9 +1300,9 @@ onMounted(() => {
   @apply h-full rounded-full transition-all duration-300;
 
   &.idle { @apply bg-[var(--bg-secondary)]; }
-  &.starting, &.loading { @apply bg-[var(--accent-cyan)]; }
-  &.saving { @apply bg-[var(--accent-yellow)]; }
-  &.completed { @apply bg-[var(--accent-green)]; }
+  &.starting, &.loading { @apply bg-[var(--accent-blue)]; }
+  &.saving { @apply bg-[var(--color-warning)]; }
+  &.completed { @apply bg-[var(--color-success)]; }
   &.error { @apply bg-red-400; }
 }
 
@@ -1319,11 +1319,11 @@ onMounted(() => {
   @apply inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-[var(--bg-secondary)] text-[var(--text-secondary)];
 
   &.is-default {
-    @apply text-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)] border border-[rgba(0,240,255,0.25)];
+    @apply text-[var(--accent-blue)] bg-[rgba(88,152,255,0.1)] border border-[rgba(88,152,255,0.25)];
   }
 
   .default-tag {
-    @apply text-[10px] px-1 py-0 rounded bg-[var(--accent-cyan)] text-black;
+    @apply text-[10px] px-1 py-0 rounded bg-[var(--accent-blue)] text-black;
   }
 }
 

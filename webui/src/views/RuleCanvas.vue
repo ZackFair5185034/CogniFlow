@@ -789,12 +789,12 @@ const defaultEdgeOptions = {
   type: 'default',
   animated: false,
   markerEnd: MarkerType.ArrowClosed,
-  style: { stroke: '#00f0ff', strokeWidth: 2 }
+  style: { stroke: 'var(--accent-blue)', strokeWidth: 2 }
 }
 
 // 连接线样式
 const connectionLineStyle = {
-  stroke: '#00f0ff',
+  stroke: 'var(--accent-blue)',
   strokeWidth: 2,
   markerEnd: MarkerType.ArrowClosed
 }
@@ -1746,7 +1746,7 @@ async function captureAndSaveThumbnail() {
     ctx.scale(scale, scale)
 
     // 绘制连线
-    ctx.strokeStyle = '#00f0ff'
+    ctx.strokeStyle = '#5898ff'
     ctx.lineWidth = 2 / scale
     for (const edge of flowExport.edges || []) {
       const sourceNode = flowExport.nodes.find((n: any) => n.id === edge.source)
@@ -1772,16 +1772,16 @@ async function captureAndSaveThumbnail() {
 
       // 根据节点类型设置颜色
       let bgColor = '#2d2d4a'
-      let borderColor = '#00f0ff'
+      let borderColor = '#5898ff'
       if (node.type?.includes('trigger')) {
         bgColor = '#1a3a4a'
-        borderColor = '#00f0ff'
+        borderColor = '#5898ff'
       } else if (node.type?.includes('condition') || node.type?.includes('logic')) {
         bgColor = '#3a2d4a'
         borderColor = '#aa66ff'
       } else if (node.type?.includes('action') || node.type?.includes('yolo')) {
         bgColor = '#2d4a3a'
-        borderColor = '#00ff88'
+        borderColor = '#22c55e'
       }
 
       ctx.fillStyle = bgColor
@@ -1953,7 +1953,7 @@ $panel-header-height: 44px;
 
   &:focus {
     outline: none;
-    border-color: #00f0ff;
+    border-color: var(--accent-blue);
     background: rgba(0, 240, 255, 0.04);
   }
 }
@@ -1973,7 +1973,7 @@ $panel-header-height: 44px;
   &.active {
     background: rgba(0, 255, 136, 0.06);
     border-color: rgba(0, 255, 136, 0.2);
-    color: #00ff88;
+    color: var(--color-success);
   }
 }
 
@@ -2026,9 +2026,9 @@ $panel-header-height: 44px;
   }
 
   &.connected {
-    color: #00ff88;
+    color: var(--color-success);
     .ws-dot {
-      background: #00ff88;
+      background: var(--color-success);
       box-shadow: 0 0 6px rgba(0, 255, 136, 0.6);
     }
   }
@@ -2083,7 +2083,7 @@ $panel-header-height: 44px;
 
   &.active {
     background: rgba(0, 240, 255, 0.1);
-    color: #00f0ff;
+    color: var(--accent-blue);
   }
 
   &.small {
@@ -2110,7 +2110,7 @@ $panel-header-height: 44px;
   &:hover {
     background: rgba(0, 240, 255, 0.06);
     border-color: rgba(0, 240, 255, 0.2);
-    color: #00f0ff;
+    color: var(--accent-blue);
   }
 }
 
@@ -2177,7 +2177,7 @@ $panel-header-height: 44px;
   }
 
   &.primary {
-    background: #00f0ff;
+    background: var(--accent-blue);
     color: #060610;
     font-weight: 600;
     border: 1px solid rgba(0, 240, 255, 0.3);
@@ -2276,8 +2276,8 @@ $panel-header-height: 44px;
   }
 
   &:hover {
-    color: #00f0ff;
-    border-color: #00f0ff;
+    color: var(--accent-blue);
+    border-color: var(--accent-blue);
     border-left: none;
   }
 
@@ -2313,7 +2313,7 @@ $panel-header-height: 44px;
     }
 
     &:focus {
-      border-color: #00f0ff;
+      border-color: var(--accent-blue);
       background: rgba(0, 240, 255, 0.04);
     }
   }
@@ -2349,7 +2349,7 @@ $panel-header-height: 44px;
     &:hover {
       background: rgba(0, 240, 255, 0.08);
       border-color: rgba(0, 240, 255, 0.2);
-      color: #00f0ff;
+      color: var(--accent-blue);
     }
   }
 }
@@ -2382,7 +2382,7 @@ $panel-header-height: 44px;
     .section-title {
       font-size: 13px;
       font-weight: 500;
-      color: #00f0ff;
+      color: var(--accent-blue);
     }
 
     .section-count {
@@ -2427,7 +2427,7 @@ $panel-header-height: 44px;
 
       &:focus {
         outline: none;
-        border-color: #00f0ff;
+        border-color: var(--accent-blue);
       }
     }
 
@@ -2442,7 +2442,7 @@ $panel-header-height: 44px;
 
       &:focus {
         outline: none;
-        border-color: #00f0ff;
+        border-color: var(--accent-blue);
       }
     }
 
@@ -2502,8 +2502,8 @@ $panel-header-height: 44px;
     }
 
     &:hover {
-      border-color: #00f0ff;
-      color: #00f0ff;
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
       background: rgba(0, 240, 255, 0.05);
     }
 
@@ -2684,7 +2684,7 @@ $panel-header-height: 44px;
   }
 
   :deep(.vue-flow__edge-path) {
-    stroke: #00f0ff;
+    stroke: var(--accent-blue);
     stroke-width: 2;
   }
 
@@ -2797,7 +2797,7 @@ $panel-header-height: 44px;
     svg {
       width: 100%;
       height: 100%;
-      stroke: #00f0ff;
+      stroke: var(--accent-blue);
     }
   }
 
@@ -2862,7 +2862,7 @@ $panel-header-height: 44px;
     }
 
     &:hover {
-      border-color: #00f0ff;
+      border-color: var(--accent-blue);
       color: #fff;
     }
   }
@@ -2921,7 +2921,7 @@ $panel-header-height: 44px;
     }
 
     &:hover {
-      border-color: #00f0ff;
+      border-color: var(--accent-blue);
       background: #22222e;
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0, 240, 255, 0.15);
@@ -2947,7 +2947,7 @@ $panel-header-height: 44px;
     width: 40px;
     height: 40px;
     border: 3px solid #1e1e2e;
-    border-top-color: #00f0ff;
+    border-top-color: var(--accent-blue);
     border-radius: 50%;
     animation: spin 1s linear infinite;
     margin-bottom: 16px;
@@ -3104,7 +3104,7 @@ $panel-header-height: 44px;
 
     &:focus {
       outline: none;
-      border-color: #00f0ff;
+      border-color: var(--accent-blue);
       background: rgba(0, 240, 255, 0.03);
     }
 
@@ -3153,8 +3153,8 @@ $panel-header-height: 44px;
       svg { width: 14px; height: 14px; }
 
       &:hover {
-        border-color: #ff4466;
-        color: #ff4466;
+        border-color: var(--color-danger);
+        color: var(--color-danger);
       }
     }
   }
@@ -3176,8 +3176,8 @@ $panel-header-height: 44px;
     svg { width: 14px; height: 14px; }
 
     &:hover {
-      border-color: #00f0ff;
-      color: #00f0ff;
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
     }
   }
 }
@@ -3223,13 +3223,13 @@ $panel-header-height: 44px;
 
     &.input {
       background: rgba(0, 240, 255, 0.1);
-      color: #00f0ff;
+      color: var(--accent-blue);
       border: 1px solid rgba(0, 240, 255, 0.2);
     }
 
     &.output {
       background: rgba(0, 255, 136, 0.1);
-      color: #00ff88;
+      color: var(--color-success);
       border: 1px solid rgba(0, 255, 136, 0.2);
     }
   }
@@ -3248,7 +3248,7 @@ $panel-header-height: 44px;
 
   .port-outgoing {
     font-size: 11px;
-    color: #00ff88;
+    color: var(--color-success);
   }
 
   .port-disconnect {
@@ -3359,9 +3359,9 @@ $panel-header-height: 44px;
     font-weight: 600;
 
     &.idle { background: #1e1e2e; color: #666; }
-    &.running { background: rgba(0, 240, 255, 0.15); color: #00f0ff; }
-    &.success { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
-    &.failed { background: rgba(255, 0, 170, 0.15); color: #ff00aa; }
+    &.running { background: rgba(0, 240, 255, 0.15); color: var(--accent-blue); }
+    &.success { background: rgba(0, 255, 136, 0.15); color: var(--color-success); }
+    &.failed { background: rgba(255, 0, 170, 0.15); color: var(--accent-blue); }
   }
 }
 
@@ -3405,14 +3405,14 @@ $panel-header-height: 44px;
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #00f0ff, #00ff88);
+  background: linear-gradient(90deg, var(--accent-blue), var(--color-success));
   border-radius: 2px;
   transition: width 0.3s ease;
 }
 
 .progress-text {
   font-size: 11px;
-  color: #00f0ff;
+  color: var(--accent-blue);
   min-width: 32px;
   text-align: right;
 }
@@ -3447,17 +3447,17 @@ $panel-header-height: 44px;
 
   &.info .log-level-badge {
     background: rgba(0, 240, 255, 0.15);
-    color: #00f0ff;
+    color: var(--accent-blue);
   }
 
   &.warning .log-level-badge {
     background: rgba(255, 221, 0, 0.15);
-    color: #ffdd00;
+    color: var(--color-warning);
   }
 
   &.error .log-level-badge {
     background: rgba(255, 0, 170, 0.15);
-    color: #ff00aa;
+    color: var(--accent-blue);
   }
 
   .log-node {
@@ -3563,14 +3563,14 @@ $panel-header-height: 44px;
 
     &:hover {
       background: var(--hover-bg, #2a2a4a);
-      color: var(--accent, #00f0ff);
+      color: var(--accent, var(--accent-blue));
     }
 
     .var-type-tag {
       font-size: 10px;
       padding: 1px 5px;
       background: rgba(0, 240, 255, 0.15);
-      color: #00f0ff;
+      color: var(--accent-blue);
       border-radius: 3px;
       margin-left: 6px;
     }
@@ -3612,8 +3612,8 @@ $panel-header-height: 44px;
 
     &:hover {
       background: var(--hover-bg, #2a2a4a);
-      color: var(--accent, #00f0ff);
-      border-color: var(--accent, #00f0ff);
+      color: var(--accent, var(--accent-blue));
+      border-color: var(--accent, var(--accent-blue));
     }
   }
 }

@@ -1251,7 +1251,7 @@ onUnmounted(() => {
 
 .nav-info {
   font-family: 'JetBrains Mono', monospace;
-  @apply text-sm text-[var(--accent-cyan)] px-3 py-1 rounded;
+  @apply text-sm text-[var(--accent-blue)] px-3 py-1 rounded;
   background: rgba(0, 240, 255, 0.1);
 }
 
@@ -1279,7 +1279,7 @@ onUnmounted(() => {
 }
 
 .stat-value.done {
-  @apply text-[var(--accent-green)];
+  @apply text-[var(--color-success)];
 }
 
 .stat-sep {
@@ -1293,17 +1293,17 @@ onUnmounted(() => {
 
 .stat-fill {
   @apply h-full rounded-full transition-all duration-500;
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-blue));
 }
 
 .stat-pct {
   @apply text-xs font-mono font-semibold min-w-[2.5em] text-right;
-  @apply text-[var(--accent-cyan)];
+  @apply text-[var(--accent-blue)];
   transition: color 0.3s;
 }
 
 .stat-pct.done {
-  @apply text-[var(--accent-green)];
+  @apply text-[var(--color-success)];
 }
 
 .hint {
@@ -1354,7 +1354,7 @@ onUnmounted(() => {
 
 .category-item.active {
   background: rgba(0, 240, 255, 0.1);
-  @apply border-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)];
 }
 
 .cat-color {
@@ -1380,7 +1380,7 @@ onUnmounted(() => {
 
 .breadcrumb-item {
   @apply text-[var(--text-secondary)] cursor-pointer;
-  @apply hover:text-[var(--accent-cyan)];
+  @apply hover:text-[var(--accent-blue)];
 }
 
 .breadcrumb-item.active {
@@ -1403,7 +1403,7 @@ onUnmounted(() => {
 
 .dir-item {
   @apply flex items-center gap-2 p-1.5 rounded-md cursor-pointer;
-  @apply text-sm text-[var(--accent-yellow)];
+  @apply text-sm text-[var(--color-warning)];
 }
 
 .dir-item:hover {
@@ -1463,7 +1463,7 @@ onUnmounted(() => {
 
 .tag-item.active {
   background: rgba(0, 240, 255, 0.1);
-  @apply border-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)];
 }
 
 .tag-color {
@@ -1501,7 +1501,7 @@ onUnmounted(() => {
 .loading-spinner {
   @apply w-10 h-10 rounded-full;
   border: 3px solid var(--border-color);
-  border-top-color: var(--accent-cyan);
+  border-top-color: var(--accent-blue);
   animation: spin 1s linear infinite;
 }
 
@@ -1585,7 +1585,7 @@ onUnmounted(() => {
 
   &:hover {
     background: rgba(255, 68, 102, 0.15);
-    color: #ff4466;
+    color: var(--color-danger);
   }
 
   svg {
@@ -1661,7 +1661,7 @@ onUnmounted(() => {
   }
 
   input:focus {
-    @apply outline-none border-[var(--accent-cyan)];
+    @apply outline-none border-[var(--accent-blue)];
   }
 }
 
@@ -1691,11 +1691,11 @@ onUnmounted(() => {
 }
 
 .toggle-btn:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--text-primary)];
+  @apply border-[var(--accent-blue)] text-[var(--text-primary)];
 }
 
 .toggle-btn.active {
-  @apply border-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)] text-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)] bg-[rgba(88,152,255,0.1)] text-[var(--accent-blue)];
 }
 
 .parent-path {
@@ -1756,7 +1756,7 @@ onUnmounted(() => {
 }
 
 .import-dropzone:hover {
-  border-color: var(--accent-cyan);
+  border-color: var(--accent-blue);
   background: rgba(0, 240, 255, 0.05);
 }
 
@@ -1784,7 +1784,7 @@ onUnmounted(() => {
 
 .preview-stat .stat-count {
   @apply text-xl font-bold font-mono;
-  color: var(--accent-cyan);
+  color: var(--accent-blue);
 }
 
 .preview-stat .stat-label {
@@ -1810,7 +1810,7 @@ onUnmounted(() => {
 
 .import-error {
   @apply text-sm p-2 rounded;
-  color: #ff4466;
+  color: var(--color-danger);
   background: rgba(255, 68, 102, 0.1);
 }
 

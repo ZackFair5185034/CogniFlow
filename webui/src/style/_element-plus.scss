@@ -5,18 +5,18 @@
  * el-select / el-dropdown 等下拉组件使用 <Teleport to="body"> 渲染到 DOM 末尾，
  * scoped :deep() 无法穿透，必须使用全局样式。
  *
- * 背景色和边框使用 CogniFlow 设计令牌变量。
+ * 所有颜色引用 CogniFlow 设计令牌。
  */
 
 // el-loading 加载状态
 .el-loading-mask {
-  background-color: rgba(10, 10, 15, 0.75) !important;
+  background-color: rgba(13, 13, 20, 0.8) !important;
 }
 .el-loading-spinner .el-loading-text {
   color: var(--text-secondary) !important;
 }
 .el-loading-spinner .circular {
-  color: var(--accent-cyan) !important;
+  color: var(--accent-blue) !important;
 }
 
 // el-message-box 对话框
@@ -34,38 +34,16 @@
 .el-message-box__message {
   color: var(--text-secondary) !important;
 }
-.el-message-box .el-button {
-  border-radius: 50px !important;
-}
-.el-message-box .el-button--primary {
-  background: rgba(255, 68, 102, 0.1) !important;
-  border-color: rgba(255, 68, 102, 0.3) !important;
-  color: #ff4466 !important;
-}
-.el-message-box .el-button--primary:hover {
-  background: rgba(255, 68, 102, 0.2) !important;
-  border-color: #ff4466 !important;
-}
-.el-message-box .el-button--default {
-  background: var(--bg-secondary) !important;
-  border-color: var(--border-color) !important;
-  color: var(--text-secondary) !important;
-}
-.el-message-box .el-button--default:hover {
-  border-color: var(--accent-cyan) !important;
-  color: var(--accent-cyan) !important;
-}
 
 // el-button--text 文字按钮
 .el-button--text {
   border: none !important;
   background: transparent !important;
-  color: var(--accent-cyan) !important;
+  color: var(--accent-blue) !important;
   font-size: 13px !important;
   padding: 4px 8px !important;
 
   &:hover {
-    color: var(--accent-cyan) !important;
     opacity: 0.8;
   }
 
@@ -80,7 +58,7 @@
 .el-dropdown__popper {
   background: var(--bg-card) !important;
   border: 1px solid var(--border-color) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
 
   .el-dropdown-menu {
     background: var(--bg-card) !important;
@@ -98,12 +76,12 @@
     &:not(.is-disabled):focus,
     &.is-active {
       background: var(--bg-hover) !important;
-      color: var(--accent-cyan) !important;
+      color: var(--accent-blue) !important;
     }
 
     &.delete-item:hover {
-      background: rgba(239, 68, 68, 0.1) !important;
-      color: #ef4444 !important;
+      background: var(--color-danger-bg) !important;
+      color: var(--color-danger) !important;
     }
 
     &.is-divided {
@@ -120,14 +98,14 @@
   box-shadow: none !important;
   border: 1px solid var(--border-color) !important;
   border-radius: 6px !important;
-  transition: border-color 0.2s ease !important;
+  transition: border-color 0.15s ease !important;
 }
 .el-input__wrapper:hover {
-  border-color: var(--accent-cyan) !important;
+  border-color: var(--accent-blue) !important;
 }
 .el-input__wrapper.is-focus {
-  border-color: var(--accent-cyan) !important;
-  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
+  border-color: var(--accent-blue) !important;
+  box-shadow: 0 0 0 1px var(--accent-blue) inset !important;
 }
 .el-input__inner {
   color: var(--text-primary) !important;
@@ -141,8 +119,8 @@
   --el-input-bg-color: var(--bg-primary);
   --el-input-border-color: var(--border-color);
   --el-input-text-color: var(--text-primary);
-  --el-input-hover-border-color: var(--accent-cyan);
-  --el-input-focus-border-color: var(--accent-cyan);
+  --el-input-hover-border-color: var(--accent-blue);
+  --el-input-focus-border-color: var(--accent-blue);
 }
 .el-input-number .el-input__wrapper {
   background: var(--bg-primary) !important;
@@ -158,12 +136,10 @@
 }
 .el-input-number__decrease:hover,
 .el-input-number__increase:hover {
-  color: var(--accent-cyan) !important;
+  color: var(--accent-blue) !important;
 }
 
-// AtlasDetail.vue 目录选择器（撑满容器，显示完整路径）
-// 注意：el-select 组件有 inline style 强制宽度，CSS 无法通过 !important 覆盖，
-// 需要通过 computed 宽度或 JS 设置。min-width 确保最小可见宽度。
+// AtlasDetail.vue 目录选择器
 .select-wrapper.dir-wrapper {
   display: flex !important;
   flex: 1;
@@ -180,15 +156,15 @@
   border: 1px solid var(--border-color) !important;
   border-radius: 6px !important;
   min-height: 32px !important;
-  transition: border-color 0.2s ease !important;
+  transition: border-color 0.15s ease !important;
 }
 .el-select__wrapper:hover {
-  border-color: var(--accent-cyan) !important;
+  border-color: var(--accent-blue) !important;
 }
 .el-select__wrapper.is-focus,
 .el-select__wrapper.is-focused {
-  border-color: var(--accent-cyan) !important;
-  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
+  border-color: var(--accent-blue) !important;
+  box-shadow: 0 0 0 1px var(--accent-blue) inset !important;
 }
 .el-select__placeholder {
   color: var(--text-muted) !important;
@@ -197,23 +173,23 @@
   background: transparent !important;
 }
 
-// el-popper 通用下拉容器（el-select / el-dropdown 共享）
+// el-popper 通用下拉容器
 .el-popper.is-light {
   background: var(--bg-card) !important;
   border: 1px solid var(--border-color) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
 }
 .el-popper .el-popper__arrow::before {
   background: var(--bg-card) !important;
   border-color: var(--border-color) !important;
 }
 
-// el-select 下拉面板（Teleport 到 body）
+// el-select 下拉面板
 .el-select-dropdown {
   background: var(--bg-card) !important;
   border: 1px solid var(--border-color) !important;
-  border-radius: 8px !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
   padding: 4px !important;
 }
 .el-select-dropdown__item {
@@ -230,7 +206,7 @@
   background: var(--bg-hover) !important;
 }
 .el-select-dropdown__item.is-selected {
-  color: var(--accent-cyan) !important;
+  color: var(--accent-blue) !important;
   font-weight: 500 !important;
 }
 .el-select-dropdown__item.is-disabled {
@@ -244,14 +220,14 @@
   border: 1px solid var(--border-color) !important;
   border-radius: 6px !important;
   color: var(--text-primary) !important;
-  transition: border-color 0.2s ease !important;
+  transition: border-color 0.15s ease !important;
 }
 .el-textarea__inner:hover {
-  border-color: var(--accent-cyan) !important;
+  border-color: var(--accent-blue) !important;
 }
 .el-textarea__inner:focus {
-  border-color: var(--accent-cyan) !important;
-  box-shadow: 0 0 0 1px var(--accent-cyan) inset !important;
+  border-color: var(--accent-blue) !important;
+  box-shadow: 0 0 0 1px var(--accent-blue) inset !important;
 }
 
 // el-slider 滑块
@@ -259,19 +235,16 @@
   background: var(--border-color) !important;
 }
 .el-slider__bar {
-  background: var(--accent-cyan) !important;
+  background: var(--accent-blue) !important;
 }
 .el-slider__button {
-  border-color: var(--accent-cyan) !important;
+  border-color: var(--accent-blue) !important;
 }
 .el-slider__button:hover {
-  border-color: var(--accent-cyan) !important;
-  transform: scale(1.1) !important;
+  border-color: var(--accent-blue) !important;
 }
 
 // ============ 通用 el-button 样式重置 ============
-// RuleCanvas 等页面使用 action-btn / icon-btn 等自定义类控制样式，
-// 但 el-button 自带 background-color 优先级更高，需要全局覆盖。
 .el-button {
   --el-button-bg-color: transparent;
   --el-button-border-color: transparent;
@@ -295,36 +268,31 @@
   }
 }
 
-// ============ el-button link 类型（AtlasList 等列表页的操作按钮）
-// Element Plus link 属性渲染为 .is-link 类修饰符
+// el-button link 类型
 .el-button.is-link {
-  color: var(--accent-cyan) !important;
+  color: var(--accent-blue) !important;
   border: none !important;
   background: transparent !important;
   padding: 2px 8px !important;
   font-size: 14px !important;
 
   &:hover {
-    color: #00d4e0 !important;
-    background: rgba(0, 240, 255, 0.08) !important;
+    color: var(--accent-blue-hover) !important;
+    background: var(--accent-blue-muted) !important;
   }
 
   &:active {
-    color: #00b8cc !important;
+    color: #4a80e0 !important;
   }
 }
 
-// el-link 组件（CogniFlow 风格：青色链接）
+// el-link 组件
 .el-link {
-  --el-link-text-color: var(--accent-cyan) !important;
-  color: var(--accent-cyan) !important;
+  --el-link-text-color: var(--accent-blue) !important;
+  color: var(--accent-blue) !important;
 
   &:hover {
-    color: #00d4e0 !important;
-  }
-
-  &:active {
-    color: #00b8cc !important;
+    color: var(--accent-blue-hover) !important;
   }
 }
 
@@ -335,8 +303,8 @@
   border-radius: 4px !important;
 }
 .el-checkbox__input.is-checked .el-checkbox__inner {
-  background: var(--accent-cyan) !important;
-  border-color: var(--accent-cyan) !important;
+  background: var(--accent-blue) !important;
+  border-color: var(--accent-blue) !important;
 }
 .el-checkbox__label {
   color: var(--text-primary) !important;

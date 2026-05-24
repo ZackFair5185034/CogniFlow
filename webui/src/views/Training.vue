@@ -497,7 +497,7 @@ onUnmounted(() => {
 
 .header-info h2 {
   @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+  background: linear-gradient(90deg, var(--text-primary), var(--accent-blue));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -523,14 +523,14 @@ onUnmounted(() => {
   }
 
   &.running .dot {
-    @apply bg-[var(--accent-cyan)];
-    box-shadow: 0 0 8px var(--accent-cyan);
+    @apply bg-[var(--accent-blue)];
+    box-shadow: 0 0 8px var(--accent-blue);
     animation: pulse 2s infinite;
   }
 
   &.completed .dot {
-    @apply bg-[var(--accent-green)];
-    box-shadow: 0 0 8px var(--accent-green);
+    @apply bg-[var(--color-success)];
+    box-shadow: 0 0 8px var(--color-success);
   }
 }
 
@@ -587,7 +587,7 @@ onUnmounted(() => {
   @apply w-7 h-7 flex items-center justify-center bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-[var(--text-secondary)] cursor-pointer transition-all;
 
   &:hover {
-    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+    @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
   }
 
   svg {
@@ -603,11 +603,11 @@ onUnmounted(() => {
   @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-3 transition-all;
 
   &:hover {
-    @apply border-[var(--accent-cyan)];
+    @apply border-[var(--accent-blue)];
   }
 
   &.active {
-    @apply border-[var(--accent-cyan)];
+    @apply border-[var(--accent-blue)];
     box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
   }
 }
@@ -617,7 +617,7 @@ onUnmounted(() => {
 }
 
 .job-id {
-  @apply font-mono text-xs font-semibold text-[var(--accent-cyan)];
+  @apply font-mono text-xs font-semibold text-[var(--accent-blue)];
 }
 
 .job-status {
@@ -628,15 +628,15 @@ onUnmounted(() => {
   }
 
   &.running {
-    @apply bg-[rgba(0,240,255,0.2)] text-[var(--accent-cyan)];
+    @apply bg-[rgba(88,152,255,0.2)] text-[var(--accent-blue)];
   }
 
   &.completed {
-    @apply bg-[rgba(0,255,136,0.2)] text-[var(--accent-green)];
+    @apply bg-[rgba(0,255,136,0.2)] text-[var(--color-success)];
   }
 
   &.failed {
-    @apply bg-[rgba(255,68,102,0.2)] text-[#ff4466];
+    @apply bg-[rgba(255,68,102,0.2)] text-[var(--color-danger)];
   }
 }
 
@@ -657,16 +657,16 @@ onUnmounted(() => {
 
   &.pending { @apply bg-[var(--text-muted)]; }
   &.downloading {
-    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
-    box-shadow: 0 0 8px var(--accent-cyan);
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-blue));
+    box-shadow: 0 0 8px var(--accent-blue);
     animation: downloadPulse 1.5s ease-in-out infinite;
   }
   &.running {
-    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
-    box-shadow: 0 0 8px var(--accent-cyan);
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-blue));
+    box-shadow: 0 0 8px var(--accent-blue);
   }
-  &.completed { @apply bg-[var(--accent-green)]; }
-  &.failed { @apply bg-[#ff4466]; }
+  &.completed { @apply bg-[var(--color-success)]; }
+  &.failed { @apply bg-[var(--color-danger)]; }
 }
 
 @keyframes downloadPulse {
@@ -716,11 +716,11 @@ onUnmounted(() => {
 }
 
 .live-badge {
-  @apply flex items-center gap-1 font-mono text-[10px] text-[#ff4466] tracking-wider;
+  @apply flex items-center gap-1 font-mono text-[10px] text-[var(--color-danger)] tracking-wider;
 }
 
 .live-dot {
-  @apply w-1 h-1 rounded-full bg-[#ff4466];
+  @apply w-1 h-1 rounded-full bg-[var(--color-danger)];
   animation: livePulse 1s infinite;
 }
 
@@ -745,13 +745,13 @@ onUnmounted(() => {
   }
 
   .stat-value.status-running {
-    @apply text-[var(--accent-cyan)];
-    text-shadow: 0 0 8px var(--accent-cyan);
+    @apply text-[var(--accent-blue)];
+    text-shadow: 0 0 8px var(--accent-blue);
   }
 
   .stat-value.status-downloading {
-    @apply text-[var(--accent-orange)];
-    text-shadow: 0 0 8px var(--accent-orange);
+    @apply text-[var(--color-warning)];
+    text-shadow: 0 0 8px var(--color-warning);
   }
 }
 
@@ -760,7 +760,7 @@ onUnmounted(() => {
 }
 
 .progress-percent {
-  @apply font-mono text-lg font-bold text-[var(--accent-cyan)] min-w-12 text-right;
+  @apply font-mono text-lg font-bold text-[var(--accent-blue)] min-w-12 text-right;
 }
 
 .realtime-message {
@@ -785,7 +785,7 @@ onUnmounted(() => {
 }
 
 .panel-icon {
-  @apply w-4 h-4 text-[var(--accent-cyan)];
+  @apply w-4 h-4 text-[var(--accent-blue)];
 }
 
 </style>

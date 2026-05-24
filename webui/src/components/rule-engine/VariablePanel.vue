@@ -42,7 +42,7 @@ const expanded = ref(true)
 
 const VARIABLE_TYPES: Array<{ value: VariableType; label: string; color: string }> = [
   { value: 'STRING', label: '字符串', color: '#8888aa' },
-  { value: 'NUMBER', label: '数字', color: '#00f0ff' },
+  { value: 'NUMBER', label: '数字', color: '#5898ff' },
   { value: 'BOOLEAN', label: '布尔', color: '#DC4FDC' },
   { value: 'IMAGE', label: '图像', color: '#4CFF4C' },
   { value: 'BBOX', label: '边界框', color: '#FF7F4C' }
@@ -234,12 +234,12 @@ function handleUpdate(index: number, field: keyof Variable, value: VariableDefau
   }
 
   .el-input__wrapper:hover {
-    border-color: var(--accent-cyan, #00f0ff);
+    border-color: var(--accent-blue, #5898ff);
   }
 
   .el-input__wrapper.is-focus {
-    border-color: var(--accent-cyan, #00f0ff);
-    box-shadow: 0 0 0 1px var(--accent-cyan, #00f0ff) inset;
+    border-color: var(--accent-blue, #5898ff);
+    box-shadow: 0 0 0 1px var(--accent-blue, #5898ff) inset;
   }
 
   .el-input.is-disabled .el-input__wrapper {
@@ -268,12 +268,12 @@ function handleUpdate(index: number, field: keyof Variable, value: VariableDefau
   }
 
   .el-select__wrapper:hover {
-    border-color: var(--accent-cyan, #00f0ff);
+    border-color: var(--accent-blue, #5898ff);
   }
 
   .el-select__wrapper.is-focus {
-    border-color: var(--accent-cyan, #00f0ff);
-    box-shadow: 0 0 0 1px var(--accent-cyan, #00f0ff) inset;
+    border-color: var(--accent-blue, #5898ff);
+    box-shadow: 0 0 0 1px var(--accent-blue, #5898ff) inset;
   }
 
   .el-select__caret {
@@ -331,8 +331,8 @@ function handleUpdate(index: number, field: keyof Variable, value: VariableDefau
 }
 
 .add-var-btn:hover:not(:disabled) {
-  border-color: var(--accent-cyan, #00f0ff);
-  color: var(--accent-cyan, #00f0ff);
+  border-color: var(--accent-blue, #5898ff);
+  color: var(--accent-blue, #5898ff);
   background: rgba(0, 240, 255, 0.05);
 }
 

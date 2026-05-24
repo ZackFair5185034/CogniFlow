@@ -358,7 +358,7 @@ function formatDate(dateStr: string) {
 
 .header-info h2 {
   @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+  background: linear-gradient(90deg, var(--text-primary), var(--accent-blue));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -391,7 +391,7 @@ function formatDate(dateStr: string) {
     svg {
       width: 100%;
       height: 100%;
-      stroke: #00f0ff;
+      stroke: var(--accent-blue);
     }
   }
 
@@ -487,7 +487,7 @@ function formatDate(dateStr: string) {
     font-size: 10px;
     padding: 2px 8px;
     background: rgba(0, 240, 255, 0.2);
-    color: #00f0ff;
+    color: var(--accent-blue);
     border-radius: 4px;
     font-family: 'JetBrains Mono', monospace;
     flex-shrink: 0;
@@ -554,7 +554,7 @@ function formatDate(dateStr: string) {
 
     &.active {
       background: rgba(0, 255, 136, 0.15);
-      color: #00ff88;
+      color: var(--color-success);
       border: 1px solid rgba(0, 255, 136, 0.3);
     }
 
@@ -703,7 +703,7 @@ function formatDate(dateStr: string) {
 
     &:focus {
       outline: none;
-      border-color: var(--accent-cyan);
+      border-color: var(--accent-blue);
     }
 
     &::placeholder {
@@ -749,7 +749,7 @@ function formatDate(dateStr: string) {
   }
 
   &.primary {
-    background: linear-gradient(135deg, #00f0ff, #00aa88);
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-blue));
     border: none;
     color: #000;
 
@@ -770,12 +770,12 @@ function formatDate(dateStr: string) {
   z-index: 2000;
 
   &.success {
-    background: linear-gradient(135deg, #00ff88, #00aa66);
+    background: linear-gradient(135deg, var(--color-success), var(--color-success));
     color: #000;
   }
 
   &.error {
-    background: linear-gradient(135deg, #ff4466, #cc0033);
+    background: linear-gradient(135deg, var(--color-danger), var(--color-danger));
     color: #fff;
   }
 

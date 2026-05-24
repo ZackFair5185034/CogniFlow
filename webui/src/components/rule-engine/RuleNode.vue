@@ -473,10 +473,10 @@ onBeforeUnmount(() => {
 }
 
 .rule-node.selected {
-  border-color: #00f0ff;
+  border-color: #5898ff;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.08),
-    0 0 0 1px rgba(0,240,255,0.3),
+    0 0 0 1px rgba(88,152,255,0.3),
     0 4px 16px rgba(0,0,0,0.4);
 }
 
@@ -490,7 +490,7 @@ onBeforeUnmount(() => {
 }
 
 .category-input .node-header { background: linear-gradient(90deg, rgba(76,255,76,0.2), rgba(76,255,76,0.05)); }
-.category-detection .node-header { background: linear-gradient(90deg, rgba(0,240,255,0.2), rgba(0,240,255,0.05)); }
+.category-detection .node-header { background: linear-gradient(90deg, rgba(88,152,255,0.2), rgba(88,152,255,0.05)); }
 .category-processing .node-header { background: linear-gradient(90deg, rgba(255,255,76,0.2), rgba(255,255,76,0.05)); }
 .category-action .node-header { background: linear-gradient(90deg, rgba(255,127,76,0.2), rgba(255,127,76,0.05)); }
 .category-logic .node-header { background: linear-gradient(90deg, rgba(220,79,220,0.2), rgba(220,79,220,0.05)); }
@@ -589,7 +589,7 @@ onBeforeUnmount(() => {
 .number-input:focus,
 .select-input:focus {
   outline: none;
-  border-color: #00f0ff;
+  border-color: #5898ff;
 }
 
 .slider-input {
@@ -604,14 +604,14 @@ onBeforeUnmount(() => {
   -webkit-appearance: none;
   width: 12px;
   height: 12px;
-  background: #00f0ff;
+  background: #5898ff;
   border-radius: 50%;
   cursor: pointer;
 }
 
 .slider-value {
   font-size: 11px;
-  color: #00f0ff;
+  color: #5898ff;
   min-width: 32px;
   text-align: right;
   font-family: monospace;
@@ -645,7 +645,7 @@ onBeforeUnmount(() => {
 .textarea-input:focus,
 .code-input:focus {
   outline: none;
-  border-color: #00f0ff;
+  border-color: #5898ff;
 }
 
 
@@ -661,7 +661,7 @@ onBeforeUnmount(() => {
   width: 14px;
   height: 14px;
   cursor: pointer;
-  accent-color: #00f0ff;
+  accent-color: #5898ff;
 }
 
 .checkbox-label {
@@ -683,7 +683,7 @@ onBeforeUnmount(() => {
 
 .var-bind-btn:hover {
   background: #3a3a4a;
-  color: #00f0ff;
+  color: #5898ff;
 }
 
 /* 变量下拉菜单 */
@@ -705,7 +705,7 @@ onBeforeUnmount(() => {
   padding: 6px 10px;
   font-size: 11px;
   font-family: monospace;
-  color: #00f0ff;
+  color: #5898ff;
   cursor: pointer;
 }
 
@@ -796,7 +796,7 @@ onBeforeUnmount(() => {
 .node-handle:hover {
   width: 16px !important;
   height: 16px !important;
-  border-color: #00f0ff !important;
+  border-color: #5898ff !important;
   box-shadow: 0 0 12px rgba(0, 240, 255, 0.6) !important;
 }
 
@@ -818,7 +818,7 @@ onBeforeUnmount(() => {
 
 /* 已连接端口：类型色 + 绿色边框叠加，不覆盖类型色本身 */
 .node-handle.vue-flow-handle-connected {
-  border-color: #00ff88 !important;
+  border-color: #22c55e !important;
   background: #1e1e2e !important;
 }
 
@@ -843,7 +843,7 @@ onBeforeUnmount(() => {
 }
 
 .status-indicator.running {
-  background: #00f0ff;
+  background: #5898ff;
   animation: pulse 1s infinite;
 }
 

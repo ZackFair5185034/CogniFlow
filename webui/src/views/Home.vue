@@ -1,36 +1,18 @@
 <template>
-  <div class="flex flex-col gap-6">
+  <div class="flex flex-col gap-5">
     <!-- 统计卡片 -->
-    <div class="grid grid-cols-4 gap-5">
+    <div class="grid grid-cols-4 gap-4">
       <div
-        v-for="(stat, index) in stats"
+        v-for="stat in stats"
         :key="stat.label"
         class="stat-card"
-        :style="{ animationDelay: `${index * 0.1}s` }"
       >
-        <div
-          class="stat-glow"
-          :style="{ background: stat.gradient }"
-        />
-        <div
-          class="stat-icon"
-          :style="{ color: stat.color }"
-        >
+        <div class="stat-icon">
           <SvgIcon :name="stat.icon" />
         </div>
         <div class="stat-content">
-          <div
-            class="stat-value"
-            :style="{ color: stat.color }"
-          >
-            {{ stat.value }}
-          </div>
-          <div class="stat-label">
-            {{ stat.label }}
-          </div>
-        </div>
-        <div class="stat-decoration">
-          <div class="decoration-line" />
+          <div class="stat-value">{{ stat.value }}</div>
+          <div class="stat-label">{{ stat.label }}</div>
         </div>
       </div>
     </div>
@@ -38,86 +20,45 @@
     <!-- 主功能区 -->
     <div class="main-grid">
       <!-- 快速操作 -->
-      <div class="quick-actions ui-card">
-        <div class="card-header">
-          <span class="header-line" />
+      <div class="ui-card">
+        <div class="ui-card-header">
           <h3>快速操作</h3>
-          <span class="header-badge">QUICK ACTIONS</span>
         </div>
         <div class="action-grid">
           <button
             v-for="action in quickActions"
             :key="action.label"
             class="action-tile"
-            :style="{ '--accent': action.color }"
             @click="$router.push(action.path)"
           >
             <div class="action-icon">
               <SvgIcon :name="action.icon" />
             </div>
             <span class="action-label">{{ action.label }}</span>
-            <div class="action-hover-effect" />
           </button>
         </div>
       </div>
 
       <!-- 系统状态 -->
-      <div class="system-status ui-card">
-        <div class="card-header">
-          <span class="header-line" />
+      <div class="ui-card">
+        <div class="ui-card-header">
           <h3>系统状态</h3>
-          <span class="header-badge">SYSTEM STATUS</span>
         </div>
         <div class="status-content">
-          <!-- CPU -->
-          <div class="status-item">
+          <div
+            v-for="item in statusItems"
+            :key="item.label"
+            class="status-item"
+          >
             <div class="status-header">
-              <span class="status-label">CPU 使用率</span>
-              <span class="status-value">{{ systemStats.cpu.percent.toFixed(1) }}%</span>
+              <span class="status-label">{{ item.label }}</span>
+              <span class="status-value">{{ item.value }}</span>
             </div>
             <div class="status-bar">
               <div
                 class="status-fill"
-                :style="{ width: systemStats.cpu.percent + '%', background: systemStats.cpu.percent > 80 ? '#ff4466' : '#00f0ff' }"
-              />
-            </div>
-          </div>
-          <!-- 内存 -->
-          <div class="status-item">
-            <div class="status-header">
-              <span class="status-label">内存</span>
-              <span class="status-value">{{ formatBytes(systemStats.memory.used) }} / {{ formatBytes(systemStats.memory.total) }}</span>
-            </div>
-            <div class="status-bar">
-              <div
-                class="status-fill"
-                :style="{ width: systemStats.memory.percent + '%', background: systemStats.memory.percent > 80 ? '#ff4466' : '#ff00aa' }"
-              />
-            </div>
-          </div>
-          <!-- 磁盘 -->
-          <div class="status-item">
-            <div class="status-header">
-              <span class="status-label">存储空间</span>
-              <span class="status-value">{{ formatBytes(systemStats.disk.used) }} / {{ formatBytes(systemStats.disk.total) }}</span>
-            </div>
-            <div class="status-bar">
-              <div
-                class="status-fill"
-                :style="{ width: systemStats.disk.percent + '%', background: systemStats.disk.percent > 90 ? '#ff4466' : '#ffdd00' }"
-              />
-            </div>
-          </div>
-          <!-- GPU -->
-          <div class="status-item">
-            <div class="status-header">
-              <span class="status-label">{{ systemStats.gpu.name || 'GPU 使用率' }}</span>
-              <span class="status-value">{{ systemStats.gpu.memory_total > 0 ? formatBytes(systemStats.gpu.memory_used) + ' / ' + formatBytes(systemStats.gpu.memory_total) : systemStats.gpu.percent.toFixed(1) + '%' }}</span>
-            </div>
-            <div class="status-bar">
-              <div
-                class="status-fill"
-                :style="{ width: systemStats.gpu.percent + '%', background: systemStats.gpu.percent > 80 ? '#ff4466' : '#00ff88' }"
+                :class="item.status"
+                :style="{ width: item.percent + '%' }"
               />
             </div>
           </div>
@@ -126,13 +67,11 @@
     </div>
 
     <!-- 训练进度 -->
-    <div class="training-section ui-card">
-      <div class="card-header">
-        <span class="header-line" />
+    <div class="ui-card">
+      <div class="ui-card-header">
         <h3>训练进度</h3>
-        <span class="header-badge">TRAINING PROGRESS</span>
       </div>
-      <div class="training-content">
+      <div class="ui-card-content">
         <div
           v-if="recentJobs.length > 0"
           class="training-list"
@@ -148,7 +87,7 @@
                 class="training-status"
                 :class="job.status"
               >
-                {{ statusText[job.status] }}
+                {{ statusText[job.status] || job.status }}
               </span>
             </div>
             <div class="training-progress">
@@ -175,7 +114,7 @@
             <SvgIcon name="clock" />
           </div>
           <p>暂无训练任务</p>
-          <span>开始一个新训练来监控进度</span>
+          <span class="empty-hint">开始一个新训练来监控进度</span>
         </div>
       </div>
     </div>
@@ -183,15 +122,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { atlasApi, imageApi, modelApi, trainingApi } from '@/api'
 import type { TrainingJobResponse } from '@/types/api'
 
-const stats = ref<{ label: string; value: number; color: string; gradient: string; icon: string }[]>([
-  { label: '图集总数', value: 0, color: '#00f0ff', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 240, 255, 0.2), transparent 70%)', icon: 'folder' },
-  { label: '图片总数', value: 0, color: '#ff00aa', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 0, 170, 0.2), transparent 70%)', icon: 'image' },
-  { label: '模型数量', value: 0, color: '#00ff88', gradient: 'radial-gradient(circle at 30% 30%, rgba(0, 255, 136, 0.2), transparent 70%)', icon: 'box' },
-  { label: '训练任务', value: 0, color: '#ffdd00', gradient: 'radial-gradient(circle at 30% 30%, rgba(255, 221, 0, 0.2), transparent 70%)', icon: 'chart' },
+interface StatItem {
+  label: string
+  value: number
+  icon: string
+}
+
+const stats = ref<StatItem[]>([
+  { label: '图集总数', value: 0, icon: 'folder' },
+  { label: '图片总数', value: 0, icon: 'image' },
+  { label: '模型数量', value: 0, icon: 'box' },
+  { label: '训练任务', value: 0, icon: 'chart' },
 ])
 
 const recentJobs = ref<TrainingJobResponse[]>([])
@@ -203,31 +148,63 @@ const statusText: Record<string, string> = {
 }
 
 const quickActions = [
-  { label: '图集管理', path: '/atlas', icon: 'folder', color: '#00f0ff' },
-  { label: '模型管理', path: '/models', icon: 'box', color: '#ff00aa' },
-  { label: '模型训练', path: '/training', icon: 'play', color: '#ffdd00' },
-  { label: '模型测试', path: '/launch', icon: 'brain', color: '#00ff88' },
+  { label: '图集管理', path: '/atlas', icon: 'folder' },
+  { label: '模型管理', path: '/models', icon: 'box' },
+  { label: '模型训练', path: '/training', icon: 'play' },
+  { label: '模型测试', path: '/launch', icon: 'brain' },
 ]
 
 // 系统状态
 const systemStats = ref({
-  cpu: { percent: 0, status: 'normal' },
-  memory: { total: 0, used: 0, percent: 0, status: 'normal' },
-  disk: { total: 0, used: 0, percent: 0, status: 'normal' },
-  gpu: { percent: 0, memory_used: 0, memory_total: 0, name: null as string | null, status: 'normal' },
+  cpu: { percent: 0 },
+  memory: { total: 0, used: 0, percent: 0 },
+  disk: { total: 0, used: 0, percent: 0 },
+  gpu: { percent: 0, memory_used: 0, memory_total: 0, name: null as string | null },
 })
-
-// WebSocket
-let wsSystem: WebSocket | null = null
-let wsTraining: WebSocket | null = null
 
 const formatBytes = (bytes: number) => {
   if (bytes === 0) return '0 B'
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))  } ${  sizes[i]}`
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
+
+const statusItems = computed(() => {
+  const s = systemStats.value
+  return [
+    {
+      label: 'CPU 使用率',
+      value: `${s.cpu.percent.toFixed(1)}%`,
+      percent: s.cpu.percent,
+      status: s.cpu.percent > 80 ? 'danger' : 'normal',
+    },
+    {
+      label: '内存',
+      value: `${formatBytes(s.memory.used)} / ${formatBytes(s.memory.total)}`,
+      percent: s.memory.percent,
+      status: s.memory.percent > 80 ? 'danger' : 'normal',
+    },
+    {
+      label: '存储空间',
+      value: `${formatBytes(s.disk.used)} / ${formatBytes(s.disk.total)}`,
+      percent: s.disk.percent,
+      status: s.disk.percent > 90 ? 'danger' : 'normal',
+    },
+    {
+      label: s.gpu.name || 'GPU 使用率',
+      value: s.gpu.memory_total > 0
+        ? `${formatBytes(s.gpu.memory_used)} / ${formatBytes(s.gpu.memory_total)}`
+        : `${s.gpu.percent.toFixed(1)}%`,
+      percent: s.gpu.percent,
+      status: s.gpu.percent > 80 ? 'danger' : 'normal',
+    },
+  ]
+})
+
+// WebSocket
+let wsSystem: WebSocket | null = null
+let wsTraining: WebSocket | null = null
 
 const connectSystemWs = () => {
   wsSystem = new WebSocket('/ws/system')
@@ -261,7 +238,7 @@ const loadTrainingJobs = async () => {
     recentJobs.value = res.data.slice(0, 5)
     stats.value[3].value = res.data.length
   } catch (error) {
-    console.error('Failed to load training jobs:', error)
+    console.error('加载训练任务失败:', error)
   }
 }
 
@@ -275,7 +252,6 @@ const startTrainingProgressPolling = () => {
       const res = await trainingApi.getProgress()
       const progress = res.data
       if (progress.status === 'running' || progress.status === 'downloading') {
-        // 更新 running 任务的进度
         const runningJob = recentJobs.value.find(j => j.status === 'running')
         if (runningJob) {
           runningJob.current_step = progress.epoch
@@ -320,303 +296,279 @@ onMounted(async () => {
     stats.value[3].value = trainingRes.data.length
     recentJobs.value = trainingRes.data.slice(0, 5)
   } catch (error) {
-    console.error('Failed to load stats:', error)
+    console.error('加载统计数据失败:', error)
   }
-  // 连接系统状态 WebSocket
   connectSystemWs()
-  // 连接训练状态 WebSocket
   connectTrainingWs()
-  // 启动训练进度轮询
   startTrainingProgressPolling()
 })
 
 onUnmounted(() => {
-  if (wsSystem) {
-    wsSystem.close()
-  }
-  if (wsTraining) {
-    wsTraining.close()
-  }
+  if (wsSystem) wsSystem.close()
+  if (wsTraining) wsTraining.close()
   stopTrainingProgressPolling()
 })
 </script>
 
 <style lang="scss" scoped>
 .stat-card {
-  @apply relative overflow-hidden rounded-2xl p-6;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  animation: fadeInUp 0.6s ease forwards;
-  @apply opacity-0;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.stat-glow {
-  @apply absolute inset-0 pointer-events-none;
+  border-radius: 8px;
 }
 
 .stat-icon {
-  @apply relative z-10 w-12 h-12 mb-4;
-}
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-blue);
+  flex-shrink: 0;
 
-.stat-icon svg {
-  @apply w-full h-full;
-}
-
-.stat-content {
-  @apply relative z-10;
+  svg {
+    width: 24px;
+    height: 24px;
+  }
 }
 
 .stat-value {
-  font-size: 36px;
+  font-size: 28px;
   font-weight: 700;
-  font-family: 'JetBrains Mono', monospace;
-  @apply leading-none;
+  font-family: var(--font-family-mono);
+  line-height: 1.1;
+  color: var(--text-primary);
+  margin-bottom: 4px;
 }
 
 .stat-label {
-  @apply text-sm text-[var(--text-secondary)] mt-2 uppercase tracking-wider;
-}
-
-.stat-decoration {
-  @apply absolute bottom-0 right-0 overflow-hidden;
-  width: 80px;
-  height: 80px;
-}
-
-.decoration-line {
-  @apply absolute rounded-full;
-  bottom: -40px;
-  right: -40px;
-  width: 100px;
-  height: 100px;
-  border: 2px solid var(--border-color);
-  @apply opacity-30;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .main-grid {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
-  gap: 24px;
-}
-
-.card-header {
-  @apply flex items-center gap-3 p-5;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.header-line {
-  @apply w-1 h-5 rounded-sm;
-  background: linear-gradient(180deg, var(--accent-cyan), var(--accent-magenta));
-}
-
-.card-header h3 {
-  @apply text-base font-semibold flex-1;
-}
-
-.header-badge {
-  font-family: 'JetBrains Mono', monospace;
-  @apply text-[10px] text-[var(--text-muted)] tracking-wider px-2 py-1 bg-[var(--bg-secondary)] rounded border border-[var(--border-color)];
+  gap: 20px;
 }
 
 .action-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  @apply p-6;
+  gap: 12px;
+  padding: 20px;
 }
 
 .action-tile {
-  @apply flex flex-col items-center gap-3 p-6 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl cursor-pointer transition-all relative overflow-hidden;
-}
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--text-primary);
+  font-family: inherit;
 
-.action-tile:hover {
-  border-color: var(--accent);
-  @apply bg-[var(--bg-hover)] -translate-y-1;
-}
-
-.action-tile:hover .action-hover-effect {
-  @apply opacity-100;
-}
-
-.action-hover-effect {
-  @apply absolute inset-0 opacity-0 transition-opacity duration-300;
-  background: radial-gradient(circle at center, var(--accent), transparent 70%);
+  &:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-blue);
+  }
 }
 
 .action-icon {
-  @apply relative z-10 w-9 h-9;
-  color: var(--accent);
-}
+  width: 32px;
+  height: 32px;
+  color: var(--accent-blue);
 
-.action-icon svg {
-  @apply w-full h-full;
+  svg {
+    width: 100%;
+    height: 100%;
+  }
 }
 
 .action-label {
-  @apply relative z-10 text-sm font-medium text-[var(--text-primary)];
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .status-content {
-  @apply p-6 flex flex-col gap-5;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .status-item {
-  @apply flex flex-col gap-2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .status-header {
-  @apply flex justify-between items-center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .status-label {
-  @apply text-sm text-[var(--text-secondary)];
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .status-value {
-  font-family: 'JetBrains Mono', monospace;
-  @apply text-xs text-[var(--text-primary)];
-}
-
-.status-indicator {
-  @apply w-2 h-2 rounded-full;
-  background: var(--accent-green);
-  box-shadow: 0 0 10px var(--accent-green);
-}
-
-.status-indicator.warning {
-  background: var(--accent-yellow);
-  box-shadow: 0 0 10px var(--accent-yellow);
-}
-
-.status-indicator.danger {
-  background: #ff4466;
-  box-shadow: 0 0 10px #ff4466;
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  color: var(--text-primary);
 }
 
 .status-bar {
-  @apply h-1.5 rounded overflow-hidden;
+  height: 4px;
+  border-radius: 2px;
   background: var(--bg-secondary);
+  overflow: hidden;
 }
 
 .status-fill {
-  @apply h-full rounded transition-all duration-1000;
-  box-shadow: 0 0 10px currentColor;
-}
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
 
-.training-section {
-  animation: fadeInUp 0.6s ease forwards;
-  animation-delay: 0.4s;
-  @apply opacity-0;
-}
+  &.normal {
+    background: var(--accent-blue);
+  }
 
-.training-content {
-  @apply p-6;
+  &.danger {
+    background: var(--color-danger);
+  }
 }
 
 .training-list {
-  @apply flex flex-col gap-4;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .training-item {
-  @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl p-5 grid gap-5 items-center;
+  display: grid;
   grid-template-columns: 1fr 2fr 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
 }
 
 .training-info {
-  @apply flex flex-col gap-1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .training-id {
-  font-family: 'JetBrains Mono', monospace;
-  @apply text-sm font-semibold text-[var(--text-primary)];
+  font-family: var(--font-family-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .training-status {
-  @apply text-xs px-2 py-1 rounded w-fit;
-}
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  width: fit-content;
 
-.training-status.pending {
-  background: rgba(136, 136, 170, 0.2);
-  @apply text-[var(--text-secondary)];
-}
-
-.training-status.running {
-  background: rgba(0, 240, 255, 0.2);
-  @apply text-[var(--accent-cyan)];
-}
-
-.training-status.completed {
-  background: rgba(0, 255, 136, 0.2);
-  @apply text-[var(--accent-green)];
-}
-
-.training-status.failed {
-  background: rgba(255, 68, 102, 0.2);
-  @apply text-[#ff4466];
+  &.pending { background: var(--color-info-bg); color: var(--accent-blue); }
+  &.running { background: var(--color-info-bg); color: var(--accent-blue); }
+  &.completed { background: var(--color-success-bg); color: var(--color-success); }
+  &.failed { background: var(--color-danger-bg); color: var(--color-danger); }
 }
 
 .training-progress {
-  @apply flex items-center gap-3;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .progress-bar {
-  @apply flex-1 h-2 rounded overflow-hidden;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
   background: var(--bg-primary);
+  overflow: hidden;
 }
 
 .progress-fill {
-  @apply h-full rounded transition-all duration-500;
-}
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
 
-.progress-fill.pending { @apply bg-[var(--text-muted)]; }
-.progress-fill.running {
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
-  box-shadow: 0 0 10px var(--accent-cyan);
+  &.pending { background: var(--text-muted); }
+  &.running { background: var(--accent-blue); }
+  &.completed { background: var(--color-success); }
+  &.failed { background: var(--color-danger); }
 }
-.progress-fill.completed { @apply bg-[var(--accent-green)]; }
-.progress-fill.failed { @apply bg-[#ff4466]; }
 
 .progress-text {
-  font-family: 'JetBrains Mono', monospace;
-  @apply text-xs text-[var(--text-muted)] min-w-[100px] text-right;
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 90px;
+  text-align: right;
+  flex-shrink: 0;
 }
 
 .training-meta {
-  @apply flex gap-3;
+  display: flex;
+  gap: 8px;
 }
 
 .meta-item {
-  @apply text-xs text-[var(--text-muted)] px-2 py-1 bg-[var(--bg-primary)] rounded;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  background: var(--bg-primary);
+  border-radius: 4px;
 }
 
 .empty-state {
-  @apply flex flex-col items-center justify-center py-15 px-5 text-center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+  text-align: center;
 }
 
 .empty-icon {
-  @apply w-16 h-16 text-[var(--text-muted)] mb-5 opacity-50;
+  width: 48px;
+  height: 48px;
+  color: var(--text-muted);
+  opacity: 0.4;
+  margin-bottom: 16px;
 
   svg {
-    @apply w-full h-full;
+    width: 100%;
+    height: 100%;
   }
 }
 
 .empty-state p {
-  @apply text-base text-[var(--text-secondary)] mb-2;
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
 }
 
-.empty-state span {
-  @apply text-sm text-[var(--text-muted)];
+.empty-hint {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>

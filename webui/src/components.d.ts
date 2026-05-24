@@ -27,7 +27,6 @@ declare module 'vue' {
     RouterView: typeof import('vue-router')['RouterView']
     RuleNode: typeof import('./components/rule-engine/RuleNode.vue')['default']
     SvgIcon: typeof import('./components/SvgIcon.vue')['default']
-    Toast: typeof import('./components/common/Toast.vue')['default']
     VariablePanel: typeof import('./components/rule-engine/VariablePanel.vue')['default']
   }
 }

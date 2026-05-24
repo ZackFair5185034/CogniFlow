@@ -336,7 +336,7 @@ onMounted(loadAtlases)
 
 .header-info h2 {
   @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+  background: linear-gradient(90deg, var(--text-primary), var(--accent-blue));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -390,7 +390,7 @@ onMounted(loadAtlases)
 }
 
 .id-badge {
-  @apply font-mono text-xs text-[var(--accent-cyan)] px-2 py-1 bg-[rgba(0,240,255,0.1)] rounded;
+  @apply font-mono text-xs text-[var(--accent-blue)] px-2 py-1 bg-[rgba(88,152,255,0.1)] rounded;
 }
 
 .name-cell {
@@ -398,7 +398,7 @@ onMounted(loadAtlases)
 }
 
 .folder-icon {
-  @apply w-5 h-5 text-[var(--accent-yellow)];
+  @apply w-5 h-5 text-[var(--color-warning)];
 }
 
 .time-badge {
@@ -470,7 +470,7 @@ onMounted(loadAtlases)
 
   input:focus,
   textarea:focus {
-    @apply outline-none border-[var(--accent-cyan)];
+    @apply outline-none border-[var(--accent-blue)];
     box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
   }
 

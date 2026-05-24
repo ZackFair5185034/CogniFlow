@@ -1207,7 +1207,7 @@ onMounted(() => {
 }
 
 .back-btn:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
 }
 
 .back-btn svg {
@@ -1220,7 +1220,7 @@ onMounted(() => {
 
 .atlas-info h2 {
   @apply text-xl font-semibold truncate;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+  background: linear-gradient(90deg, var(--text-primary), var(--accent-blue));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1235,7 +1235,7 @@ onMounted(() => {
 }
 
 .selected-count {
-  @apply text-xs font-medium text-[var(--accent-cyan)] mr-1;
+  @apply text-xs font-medium text-[var(--accent-blue)] mr-1;
 }
 
 .batch-divider {
@@ -1257,11 +1257,11 @@ onMounted(() => {
 }
 
 .ui-btn.danger {
-  @apply text-[#ff4466];
+  @apply text-[var(--color-danger)];
 }
 
 .ui-btn.danger:hover {
-  @apply border-[#ff4466];
+  @apply border-[var(--color-danger)];
 }
 
 /* 内容网格 */
@@ -1305,7 +1305,7 @@ onMounted(() => {
 .tab-btn.active {
   background: rgba(0, 240, 255, 0.1);
   border-color: rgba(0, 240, 255, 0.3);
-  @apply text-[var(--accent-cyan)];
+  @apply text-[var(--accent-blue)];
 }
 
 .tab-btn .count {
@@ -1332,7 +1332,7 @@ onMounted(() => {
 }
 
 .sort-wrapper:hover {
-  @apply border-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)];
 }
 
 .sort-label {
@@ -1340,7 +1340,7 @@ onMounted(() => {
 }
 
 .sort-arrow {
-  @apply inline-flex items-center justify-center min-w-[1.2em] text-[var(--accent-cyan)] font-medium;
+  @apply inline-flex items-center justify-center min-w-[1.2em] text-[var(--accent-blue)] font-medium;
 }
 
 .sort-dropdown {
@@ -1352,11 +1352,11 @@ onMounted(() => {
 }
 
 .sort-option:hover {
-  @apply bg-[var(--bg-hover)] text-[var(--accent-cyan)];
+  @apply bg-[var(--bg-hover)] text-[var(--accent-blue)];
 }
 
 .sort-option.active {
-  @apply text-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)];
+  @apply text-[var(--accent-blue)] bg-[rgba(88,152,255,0.1)];
 }
 
 .sort-divider {
@@ -1368,7 +1368,7 @@ onMounted(() => {
 }
 
 .action-btn:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
 }
 
 .action-btn svg {
@@ -1376,7 +1376,7 @@ onMounted(() => {
 }
 
 .action-btn.danger:hover {
-  @apply border-[#ff4466] text-[#ff4466];
+  @apply border-[var(--color-danger)] text-[var(--color-danger)];
 }
 
 /* 图片网格 */
@@ -1418,7 +1418,7 @@ onMounted(() => {
 }
 
 .page-btn:hover:not(:disabled) {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
 }
 
 .page-btn:disabled {
@@ -1426,7 +1426,7 @@ onMounted(() => {
 }
 
 .page-current {
-  @apply px-3 py-1.5 font-mono text-sm text-[var(--accent-cyan)];
+  @apply px-3 py-1.5 font-mono text-sm text-[var(--accent-blue)];
 }
 
 .image-card {
@@ -1434,7 +1434,7 @@ onMounted(() => {
 }
 
 .image-card:hover {
-  @apply border-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)];
   box-shadow: 0 2px 8px rgba(0, 240, 255, 0.12);
 }
 
@@ -1451,7 +1451,7 @@ onMounted(() => {
 
 /* 选中状态 */
 .image-wrapper.selected {
-  @apply ring-2 ring-[var(--accent-cyan)] ring-offset-2 ring-offset-[var(--bg-card)];
+  @apply ring-2 ring-[var(--accent-blue)] ring-offset-2 ring-offset-[var(--bg-card)];
 }
 
 /* 复选框层 - 绝对定位覆盖在图片左上角 */
@@ -1476,7 +1476,7 @@ onMounted(() => {
 }
 
 .annotated-badge {
-  @apply absolute bottom-2 left-2 w-2 h-2 rounded-full bg-[var(--accent-green)] shadow-[0_0_6px_var(--accent-green)];
+  @apply absolute bottom-2 left-2 w-2 h-2 rounded-full bg-[var(--color-success)] shadow-[0_0_6px_var(--color-success)];
 }
 
 .image-info {
@@ -1509,11 +1509,11 @@ onMounted(() => {
 }
 
 .img-action-btn:hover {
-  @apply text-[var(--accent-cyan)] bg-[var(--bg-hover)];
+  @apply text-[var(--accent-blue)] bg-[var(--bg-hover)];
 }
 
 .img-action-btn.danger:hover {
-  @apply text-[#ff4466];
+  @apply text-[var(--color-danger)];
 }
 
 /* 目录管理 */
@@ -1556,11 +1556,11 @@ onMounted(() => {
 }
 
 .dir-item:hover {
-  @apply border-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)];
 }
 
 .dir-item.active {
-  @apply border-[var(--accent-cyan)] bg-[var(--bg-hover)];
+  @apply border-[var(--accent-blue)] bg-[var(--bg-hover)];
 }
 
 .dir-info {
@@ -1568,7 +1568,7 @@ onMounted(() => {
 }
 
 .dir-icon {
-  @apply w-5.5 h-5.5 text-[var(--accent-yellow)];
+  @apply w-5.5 h-5.5 text-[var(--color-warning)];
 }
 
 .dir-name {
@@ -1622,11 +1622,11 @@ onMounted(() => {
 
 .info-value.id {
   font-family: 'JetBrains Mono', monospace;
-  @apply text-[var(--accent-cyan)];
+  @apply text-[var(--accent-blue)];
 }
 
 .info-value.success {
-  @apply text-[var(--accent-green)];
+  @apply text-[var(--color-success)];
 }
 
 /* 上传提示 */
@@ -1635,7 +1635,7 @@ onMounted(() => {
 }
 
 .tip-header {
-  @apply flex items-center gap-2.5 p-4 text-sm font-semibold text-[var(--accent-yellow)];
+  @apply flex items-center gap-2.5 p-4 text-sm font-semibold text-[var(--color-warning)];
   border-bottom: 1px solid var(--border-color);
 
   svg {
@@ -1653,7 +1653,7 @@ onMounted(() => {
 
 .tip-list li::before {
   content: '›';
-  @apply absolute left-0 text-[var(--accent-cyan)];
+  @apply absolute left-0 text-[var(--accent-blue)];
 }
 
 /* 空状态 */
@@ -1767,7 +1767,7 @@ onMounted(() => {
 
 .status-tag.annotated {
   background: rgba(0, 255, 136, 0.15);
-  @apply text-[var(--accent-green)];
+  @apply text-[var(--color-success)];
 }
 
 .status-tag.pending {
@@ -1789,7 +1789,7 @@ onMounted(() => {
 }
 
 .save-btn {
-  @apply px-4 py-1.5 bg-[var(--accent-cyan)] border-none rounded-md text-black text-xs font-semibold cursor-pointer transition-all;
+  @apply px-4 py-1.5 bg-[var(--accent-blue)] border-none rounded-md text-black text-xs font-semibold cursor-pointer transition-all;
 }
 
 .save-btn:hover {
@@ -1805,7 +1805,7 @@ onMounted(() => {
 }
 
 .cancel-btn:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
 }
 
 .edit-dir-btn {
@@ -1813,7 +1813,7 @@ onMounted(() => {
 }
 
 .edit-dir-btn:hover {
-  @apply text-[var(--accent-cyan)] bg-[var(--bg-hover)];
+  @apply text-[var(--accent-blue)] bg-[var(--bg-hover)];
 }
 
 .edit-dir-btn svg {
@@ -1834,7 +1834,7 @@ onMounted(() => {
 }
 
 .video-meta .meta-value {
-  @apply text-sm font-medium font-mono text-[var(--accent-cyan)];
+  @apply text-sm font-medium font-mono text-[var(--accent-blue)];
 }
 
 .extract-config {
@@ -1858,7 +1858,7 @@ onMounted(() => {
 }
 
 .ui-btn-secondary:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
 }
 
 /* 提取进度对话框 */
@@ -1875,9 +1875,9 @@ onMounted(() => {
 }
 
 .progress-status.pending { @apply text-[var(--text-muted)]; }
-.progress-status.processing { @apply text-[var(--accent-cyan)]; }
-.progress-status.completed { @apply text-[var(--accent-green)]; }
-.progress-status.failed { @apply text-[#ff4466]; }
+.progress-status.processing { @apply text-[var(--accent-blue)]; }
+.progress-status.completed { @apply text-[var(--color-success)]; }
+.progress-status.failed { @apply text-[var(--color-danger)]; }
 
 .progress-count {
   @apply text-sm font-mono text-[var(--text-secondary)];
@@ -1892,7 +1892,7 @@ onMounted(() => {
 }
 
 .progress-fill {
-  @apply h-full bg-gradient-to-r from-[var(--accent-cyan)] to-[var(--accent-magenta)] rounded-full transition-all duration-300 ease-out;
+  @apply h-full bg-gradient-to-r from-[var(--accent-blue)] to-[var(--accent-blue)] rounded-full transition-all duration-300 ease-out;
 }
 
 .progress-hint {
@@ -1900,7 +1900,7 @@ onMounted(() => {
 }
 
 .progress-error {
-  @apply text-xs text-[#ff4466] text-center;
+  @apply text-xs text-[var(--color-danger)] text-center;
 }
 
 </style>
