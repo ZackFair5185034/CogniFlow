@@ -64,7 +64,7 @@ async def websocket_launch(websocket: WebSocket):
 async def websocket_system(websocket: WebSocket):
     """系统状态 WebSocket 连接。
 
-    客户端连接后接收系统状态的实时更新（CPU、内存、磁盘）。
+    客户端连接后接收系统状态的实时更新（CPU、内存、磁盘、GPU）。
     """
     await ws_manager.connect_system(websocket)
     try:

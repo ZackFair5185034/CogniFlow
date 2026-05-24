@@ -466,10 +466,15 @@ def load_yolo_model(model_path: str, device: str = "cpu", class_names: dict = No
     Returns:
         YOLO 模型实例（向后兼容），或 handler 本身（如果是 ONNX 等格式）
     """
+    import logging
+    _log = logging.getLogger("cogniflow")
+
     from backend.core.model_registry import ModelHandlerRegistry, init_model_handlers
 
     # 初始化内置处理器
     init_model_handlers()
+
+    _log.info("load_yolo_model: 路径=%s, 设备=%s, 精度=%s", model_path, device, precision)
 
     # 如果是 ONNX 或 OpenVINO 格式，尝试从对应 PT 文件提取类别名称
     extra_kwargs = {}
@@ -478,6 +483,7 @@ def load_yolo_model(model_path: str, device: str = "cpu", class_names: dict = No
         os.path.isdir(model_path) and any(f.endswith(".xml") for f in (os.listdir(model_path) if os.path.isdir(model_path) else []))
     )
     if _is_onnx_ov:
+        _log.info("load_yolo_model: 检测到 ONNX/OpenVINO 格式，文件=%s", model_path)
         pt_path = _find_pt_model(model_path)
         if pt_path:
             names = _extract_class_names(pt_path)
@@ -487,14 +493,19 @@ def load_yolo_model(model_path: str, device: str = "cpu", class_names: dict = No
         # fallback：从 DB 传入的类别名称（PT 文件找不到时使用）
         if not extra_kwargs.get("class_names") and class_names:
             extra_kwargs["class_names"] = class_names
+    else:
+        _log.info("load_yolo_model: YOLO PT 格式，文件=%s", model_path)
 
     # 通过注册表创建处理器
     handler = ModelHandlerRegistry().from_path(model_path, device=device, **extra_kwargs)
+    _log.info("load_yolo_model: 处理器类型=%s, 有_model=%s", type(handler).__name__, hasattr(handler, "_model") and handler._model is not None)
 
     # 返回原始 YOLO 实例供现有代码使用（向后兼容）
     if hasattr(handler, "_model") and handler._model is not None:
+        _log.info("load_yolo_model: 返回 YOLO 模型实例")
         return handler._model
     # ONNX 等格式没有 _model，返回 handler 本身
+    _log.info("load_yolo_model: 返回 handler 本身 (ONNX/OpenVINO)")
     return handler
 
 

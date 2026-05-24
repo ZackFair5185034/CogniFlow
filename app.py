@@ -48,6 +48,13 @@ def _setup_logging():
     file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 
     logger.addHandler(file_handler)
+
+    # 控制台输出
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+    logger.addHandler(console_handler)
+
     return logger
 
 
@@ -172,6 +179,9 @@ async def health_check():
     return {"status": "ok"}
 
 
+# 端口配置（由环境变量控制，默认 18080）
+BACKEND_PORT = int(os.environ.get("COGNIFLOW_PORT", 18080))
+
 def start_with_tray(browser: bool = False) -> None:
     """启动应用并集成系统托盘（仅 Windows）。"""
     import uvicorn
@@ -186,7 +196,7 @@ def start_with_tray(browser: bool = False) -> None:
 
     # 配置日志（写入 data/logs/cogniflow.log）
     logger = _setup_logging()
-    logger.info("CogniFlow 启动中...")
+    logger.info(f"CogniFlow 启动中... 后端端口: {BACKEND_PORT}")
 
     # 用于存储 uvicorn 服务器实例
     server_config = {"server": None}
@@ -213,11 +223,11 @@ def start_with_tray(browser: bool = False) -> None:
             # 自动打开浏览器
             logger.info("正在打开浏览器...")
             open_browser()
-        logger.info("CogniFlow WebUI 已启动 http://localhost:8000")
+        logger.info("CogniFlow WebUI 已启动 http://localhost:{BACKEND_PORT}")
 
         try:
             # 启动 FastAPI 应用（阻塞）
-            config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
+            config = uvicorn.Config(app, host="0.0.0.0", port=BACKEND_PORT, log_level="warning")
             server_config["server"] = uvicorn.Server(config)
             server_config["server"].run()
         except KeyboardInterrupt:
@@ -227,8 +237,8 @@ def start_with_tray(browser: bool = False) -> None:
         # 非 Windows 平台：直接启动
         if browser:
             open_browser()
-        logger.info("CogniFlow WebUI 已启动 http://localhost:8000")
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        logger.info("CogniFlow WebUI 已启动 http://localhost:{BACKEND_PORT}")
+        uvicorn.run(app, host="0.0.0.0", port=BACKEND_PORT)
 
 
 if __name__ == "__main__":

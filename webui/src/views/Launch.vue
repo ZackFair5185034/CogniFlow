@@ -242,8 +242,7 @@
             </el-button>
             <el-button
               v-else
-              class="detect-btn"
-              type="danger"
+              class="detect-btn stop-btn"
               @click="stopVideoDetection"
             >
               停止检测
@@ -694,15 +693,21 @@ const availableDevices = computed(() => {
   }))
 })
 
-// 可用格式列表（从选中的模型获取）
+// 可用格式列表（从选中的模型获取，按设备兼容性过滤可选项）
 const availableFormats = computed(() => {
   const model = selectedModel.value
   if (!model?.files?.length) return []
-  return model.files.map((f: unknown) => ({
+
+  const currentDevice = device.value
+  const compatibleFormats: string[] | null = currentDevice !== 'auto' && currentDevice !== 'cpu'
+    ? (DEVICE_FORMAT_MAP[currentDevice] ?? null)
+    : null
+
+  return model.files.map((f: any) => ({
     value: f.format,
     label: f.format.toUpperCase(),
     is_default: f.is_default,
-    disabled: false
+    disabled: compatibleFormats !== null && !compatibleFormats.includes(f.format),
   }))
 })
 
@@ -874,6 +879,36 @@ const canStreamDetect = computed(() => {
 
 const selectedModel = computed(() => {
   return trainedModels.value.find(m => m.id === selectedModelId.value)
+})
+
+// 设备切换时自动调整格式选择
+watch(device, (newDevice) => {
+  if (newDevice === 'auto' || newDevice === 'cpu') return
+  const model = selectedModel.value
+  if (!model?.files?.length) return
+  const compatibleFormats = DEVICE_FORMAT_MAP[newDevice]
+  if (!compatibleFormats) return
+  const available = model.files.filter((f: any) => compatibleFormats.includes(f.format))
+  if (available.length === 1) {
+    modelFormat.value = available[0].format
+  } else if (available.length === 0) {
+    modelFormat.value = 'auto'
+  }
+})
+
+// 模型切换时重置格式选择，并考虑当前设备的兼容性
+watch(selectedModel, () => {
+  modelFormat.value = 'auto'
+  const curDevice = device.value
+  if (curDevice === 'auto' || curDevice === 'cpu') return
+  const model = selectedModel.value
+  if (!model?.files?.length) return
+  const compatibleFormats = DEVICE_FORMAT_MAP[curDevice]
+  if (!compatibleFormats) return
+  const available = model.files.filter((f: any) => compatibleFormats.includes(f.format))
+  if (available.length === 1) {
+    modelFormat.value = available[0].format
+  }
 })
 
 const canDetect = computed(() => {
@@ -1577,7 +1612,8 @@ onUnmounted(() => {
 }
 
 :deep(.detect-btn) {
-  @apply w-full py-2.5 text-sm font-medium rounded-lg mt-2;
+  @apply w-full text-sm font-medium rounded-lg mt-2;
+  min-height: 42px;
   background: var(--accent-cyan) !important;
   border-color: var(--accent-cyan) !important;
   color: black !important;
@@ -1588,6 +1624,16 @@ onUnmounted(() => {
 
   &:disabled {
     @apply opacity-50 cursor-not-allowed;
+  }
+}
+
+:deep(.detect-btn.stop-btn) {
+  background: #dc3545 !important;
+  border-color: #dc3545 !important;
+  color: white !important;
+
+  &:hover:not(:disabled) {
+    background: #c82333 !important;
   }
 }
 

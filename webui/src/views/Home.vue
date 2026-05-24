@@ -108,6 +108,19 @@
               />
             </div>
           </div>
+          <!-- GPU -->
+          <div class="status-item">
+            <div class="status-header">
+              <span class="status-label">{{ systemStats.gpu.name || 'GPU 使用率' }}</span>
+              <span class="status-value">{{ systemStats.gpu.memory_total > 0 ? formatBytes(systemStats.gpu.memory_used) + ' / ' + formatBytes(systemStats.gpu.memory_total) : systemStats.gpu.percent.toFixed(1) + '%' }}</span>
+            </div>
+            <div class="status-bar">
+              <div
+                class="status-fill"
+                :style="{ width: systemStats.gpu.percent + '%', background: systemStats.gpu.percent > 80 ? '#ff4466' : '#00ff88' }"
+              />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -201,6 +214,7 @@ const systemStats = ref({
   cpu: { percent: 0, status: 'normal' },
   memory: { total: 0, used: 0, percent: 0, status: 'normal' },
   disk: { total: 0, used: 0, percent: 0, status: 'normal' },
+  gpu: { percent: 0, memory_used: 0, memory_total: 0, name: null as string | null, status: 'normal' },
 })
 
 // WebSocket

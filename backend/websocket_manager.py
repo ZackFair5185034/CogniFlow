@@ -4,9 +4,14 @@
 支持训练状态、模型执行状态和系统状态的实时推送。
 """
 import asyncio
+import logging
+import subprocess
+import sys
 import psutil
 from typing import Dict, Set
 from fastapi import WebSocket
+
+logger = logging.getLogger("cogniflow")
 
 
 class WebSocketManager:
@@ -168,6 +173,132 @@ class WebSocketManager:
         disk_used = disk.used
         disk_percent = disk.percent
 
+        # GPU 使用率（支持 NVIDIA/AMD/Intel 全系显卡）
+        gpu_percent = 0
+        gpu_memory_used = 0
+        gpu_memory_total = 0
+        gpu_available = False
+        gpu_name = None
+
+        try:
+            # 方法1: nvidia-smi（NVIDIA 显卡）
+            nvidia_result = subprocess.run(
+                ['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total,name', '--format=csv,noheader,nounits'],
+                capture_output=True, text=True, timeout=5
+            )
+            if nvidia_result.returncode == 0:
+                parts = nvidia_result.stdout.strip().split(',')
+                if len(parts) >= 4:
+                    gpu_percent = float(parts[0].strip())
+                    gpu_memory_used = int(parts[1].strip()) * 1024 * 1024
+                    gpu_memory_total = int(parts[2].strip()) * 1024 * 1024
+                    gpu_name = parts[3].strip()
+                    gpu_available = True
+                    logger.info(f"GPU 检测(nvidia-smi): {gpu_name}, 使用率 {gpu_percent}%")
+            else:
+                logger.warning(f"nvidia-smi 返回非零: {nvidia_result.stderr.strip()}")
+        except FileNotFoundError:
+            logger.warning("nvidia-smi 不可用（未安装 NVIDIA 驱动或不在 PATH 中）")
+        except Exception as e:
+            logger.warning(f"nvidia-smi 执行异常: {e}")
+
+        # 方法2: Windows PowerShell 性能计数器（通用，任务管理器数据源）
+        if not gpu_available:
+            try:
+                # 先列出可用的 GPU 计数器集
+                list_cmd = '(Get-Counter -ListSet "GPU *" -ErrorAction SilentlyContinue).Counter | Out-String'
+                try:
+                    result = subprocess.run(
+                        ['powershell', '-NoProfile', '-Command', list_cmd],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        logger.info(f"PowerShell GPU 计数器列表: {result.stdout.strip()[:200]}")
+                except Exception as e:
+                    logger.debug(f"列出 GPU 计数器失败: {e}")
+
+                ps_commands = [
+                    # 方案A: % GPU Usage (Windows 10 17063+, 任务管理器数据源)
+                    # 使用 -Maximum 而非 -Average，与任务管理器计算方式一致
+                    ('$c = (Get-Counter "\\GPU(*)\\% GPU Usage" -ErrorAction SilentlyContinue).CounterSamples; '
+                     'if ($c) { $u = ($c | Measure-Object -Property CookedValue -Maximum).Maximum } else { '
+                     '$c = (Get-Counter "\\GPU Engine(*)\\Utilization Percentage" -ErrorAction SilentlyContinue).CounterSamples; '
+                     'if (-not $c) { exit 1 }; '
+                     '$u = ($c | Measure-Object -Property CookedValue -Maximum).Maximum }; '
+                     '$m = (Get-Counter "\\GPU(*)\\Dedicated Memory Used" -ErrorAction SilentlyContinue).CounterSamples; '
+                     '$mu = 0; if ($m) { $mu = ($m | Measure-Object -Property CookedValue -Sum).Sum * 1024 * 1024 }; '
+                     '$ml = (Get-Counter "\\GPU(*)\\Dedicated Memory Limit" -ErrorAction SilentlyContinue).CounterSamples; '
+                     '$mt = 0; if ($ml) { $mt = ($ml | Measure-Object -Property CookedValue -Maximum).Maximum * 1024 * 1024 }; '
+                     'Write-Output "$u,$mu,$mt"'),
+                ]
+
+                for exe_name in ['powershell', 'pwsh']:
+                    for ps_cmd in ps_commands:
+                        try:
+                            result = subprocess.run(
+                                [exe_name, '-NoProfile', '-Command', ps_cmd],
+                                capture_output=True, text=True, timeout=5
+                            )
+                            if result.returncode == 0:
+                                out = result.stdout.strip()
+                                if out and out not in ('', '0', '0,0,0', '0,0'):
+                                    parts = out.split(',')
+                                    if len(parts) >= 3:
+                                        gpu_percent = float(parts[0].strip())
+                                        gpu_memory_used = int(parts[1].strip())
+                                        gpu_memory_total = int(parts[2].strip())
+                                        if gpu_percent > 0 or gpu_memory_total > 0:
+                                            gpu_available = True
+                                            logger.info(f"GPU 检测(PowerShell): 使用率 {gpu_percent}%")
+                                            break
+                            else:
+                                logger.debug(f"PowerShell({exe_name}) 退出码 {result.returncode}")
+                        except FileNotFoundError:
+                            continue
+                        except Exception as e:
+                            logger.debug(f"PowerShell({exe_name}) 异常: {e}")
+                    if gpu_available:
+                        break
+
+                if not gpu_available:
+                    # 失败时打印原始输出以便诊断
+                    logger.warning("PowerShell GPU 计数器不可用，尝试诊断模式...")
+                    try:
+                        diag = subprocess.run(
+                            ['powershell', '-NoProfile', '-Command',
+                             'Get-Counter -ListSet "GPU*" -ErrorAction SilentlyContinue | Format-Table -AutoSize | Out-String'],
+                            capture_output=True, text=True, timeout=5
+                        )
+                        if diag.stdout.strip():
+                            logger.info(f"可用 GPU 计数器集: {diag.stdout.strip()[:300]}")
+                        else:
+                            logger.warning(f"无 GPU 计数器集，stderr: {diag.stderr.strip()[:200]}")
+                    except Exception as e:
+                        logger.debug(f"GPU 计数器诊断失败: {e}")
+            except Exception as e:
+                logger.warning(f"PowerShell GPU 检测异常: {e}")
+
+        # 方法3: torch.cuda（PyTorch 环境备选）
+        if not gpu_available:
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    device = torch.cuda.current_device()
+                    gpu_memory_used = torch.cuda.memory_allocated(device)
+                    gpu_memory_total = torch.cuda.get_device_properties(device).total_memory
+                    gpu_name = torch.cuda.get_device_name(device)
+                    if gpu_memory_total > 0:
+                        gpu_percent = (gpu_memory_used / gpu_memory_total) * 100
+                    gpu_available = True
+                    logger.info(f"GPU 检测(torch): {gpu_name}, 使用率 {gpu_percent}%")
+            except ImportError:
+                logger.warning("torch 不可用")
+            except Exception as e:
+                logger.warning(f"torch GPU 检测异常: {e}")
+
+        if not gpu_available:
+            logger.info("GPU 检测: 所有方法均未检测到 GPU")
+
         return {
             "cpu": {
                 "percent": cpu_percent,
@@ -184,6 +315,13 @@ class WebSocketManager:
                 "used": disk_used,
                 "percent": disk_percent,
                 "status": "warning" if disk_percent > 90 else "normal"
+            },
+            "gpu": {
+                "percent": gpu_percent,
+                "memory_used": gpu_memory_used,
+                "memory_total": gpu_memory_total,
+                "name": gpu_name,
+                "status": "warning" if gpu_percent > 80 else "normal"
             }
         }
 

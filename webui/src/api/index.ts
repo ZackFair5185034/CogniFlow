@@ -116,6 +116,7 @@ export const modelApi = {
     })
   },
   getTrainingHistory: (id: number) => api.get(`/models/${id}/training-history`),
+  exportAsync: (id: number, data: { target_format: string; half: boolean }) => api.post(`/models/${id}/export`, data),
 }
 
 // Training API
@@ -141,19 +142,27 @@ export const launchApi = {
 
 // Inference API
 export const inferenceApi = {
-  detectImage: (file: File, modelId: number, confThreshold: number = 0.25) => {
+  detectImage: (file: File, modelId: number, confThreshold: number = 0.25, device?: string, precision?: string, format?: string) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post(`/inference/detect/image?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
+    let url = `/inference/detect/image?model_id=${modelId}&conf_threshold=${confThreshold}`
+    if (device) url += `&device=${device}`
+    if (precision) url += `&precision=${precision}`
+    if (format) url += `&format=${format}`
+    return api.post(url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000,
     })
   },
   // 流式视频检测
-  detectVideoStream: (file: File, modelId: number, confThreshold: number = 0.25) => {
+  detectVideoStream: (file: File, modelId: number, confThreshold: number = 0.25, device?: string, precision?: string, format?: string) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post(`/inference/detect/video/stream?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
+    let url = `/inference/detect/video/stream?model_id=${modelId}&conf_threshold=${confThreshold}`
+    if (device) url += `&device=${device}`
+    if (precision) url += `&precision=${precision}`
+    if (format) url += `&format=${format}`
+    return api.post(url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000, // 上传视频需要更长超时
     })
@@ -162,8 +171,13 @@ export const inferenceApi = {
   stopVideoStream: (jobId: string) => api.post(`/inference/detect/stop/${jobId}`),
   listTrainedModels: () => api.get('/inference/models'),
   listInferenceJobs: () => api.get('/inference/jobs'),
-  rerunInferenceJob: (jobId: string, modelId: number, confThreshold: number = 0.25) =>
-    api.post(`/inference/jobs/${jobId}/rerun?model_id=${modelId}&conf_threshold=${confThreshold}`),
+  rerunInferenceJob: (jobId: string, modelId: number, confThreshold: number = 0.25, device?: string, format?: string, precision?: string) => {
+    let url = `/inference/jobs/${jobId}/rerun?model_id=${modelId}&conf_threshold=${confThreshold}`
+    if (device) url += `&device=${device}`
+    if (format) url += `&format=${format}`
+    if (precision) url += `&precision=${precision}`
+    return api.post(url)
+  },
   clearInferenceJobs: () => api.delete('/inference/jobs'),
 }
 

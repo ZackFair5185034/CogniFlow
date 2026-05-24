@@ -64,22 +64,22 @@ export default defineConfig(({ mode }) => {
 
     server: {
       host: '0.0.0.0',
-      port: Number(env.VITE_PORT) || 5173,
+      port: Number(env.VITE_PORT),
       proxy: {
         '/api': {
-          target: env.VITE_API_TARGET || 'http://localhost:8000',
+          target: env.VITE_API_TARGET,
           changeOrigin: true,
         },
         '/uploads': {
-          target: env.VITE_API_TARGET || 'http://localhost:8000',
+          target: env.VITE_API_TARGET,
           changeOrigin: true,
         },
         '/inference_output': {
-          target: env.VITE_API_TARGET || 'http://localhost:8000',
+          target: env.VITE_API_TARGET,
           changeOrigin: true,
         },
         '/ws': {
-          target: env.VITE_API_TARGET?.replace('http://', 'ws://') || 'ws://localhost:8000',
+          target: env.VITE_API_TARGET,
           ws: true,
         },
       },
