@@ -89,6 +89,32 @@
             </el-select>
           </template>
 
+          <!-- File Picker -->
+          <template v-else-if="schema.widget === 'file-picker'">
+            <div class="file-picker-wrapper">
+              <el-input
+                :model-value="String(getNodeValue(key) ?? '')"
+                :placeholder="schema.description || '选择或输入文件路径'"
+                class="file-picker-input"
+                @update:model-value="updateConfig(key, $event)"
+              />
+              <button
+                class="file-picker-btn"
+                title="选择文件"
+                @click.stop="openFilePicker(key)"
+              >
+                <SvgIcon name="file" />
+              </button>
+            </div>
+            <input
+              :ref="el => setFileInputRef(key, el)"
+              type="file"
+              accept="image/*,video/*"
+              class="file-input-hidden"
+              @change="handleFileSelected(key, $event)"
+            />
+          </template>
+
           <!-- Textarea -->
           <template v-else-if="schema.widget === 'textarea'">
             <el-input
@@ -329,6 +355,9 @@ const activeVarMenu = ref<string | null>(null)
 // 输入框引用字典（用于获取光标位置）
 const inputRefs = ref<Record<string, HTMLInputElement | HTMLTextAreaElement>>({})
 
+// 文件输入引用字典（file-picker widget 使用）
+const fileInputRefs = ref<Record<string, HTMLInputElement>>({})
+
 // 设置输入框引用（el-input 内部有 .input 或 .textarea 属性指向原生元素）
 function setInputRef(key: string, el: any) {
   if (!el) {
@@ -342,6 +371,35 @@ function setInputRef(key: string, el: any) {
     inputRefs.value[key] = el.textarea
   } else if (el.$el && (el.$el.tagName === 'INPUT' || el.$el.tagName === 'TEXTAREA')) {
     inputRefs.value[key] = el.$el
+  }
+}
+
+// 设置文件输入引用（file-picker widget 使用）
+function setFileInputRef(key: string, el: any) {
+  if (!el) {
+    delete fileInputRefs.value[key]
+    return
+  }
+  if (el.tagName === 'INPUT' && el.type === 'file') {
+    fileInputRefs.value[key] = el as HTMLInputElement
+  }
+}
+
+// 打开文件选择器
+function openFilePicker(key: string) {
+  const input = fileInputRefs.value[key]
+  if (input) {
+    input.value = ''  // 重置以便重复选择同一文件
+    input.click()
+  }
+}
+
+// 处理文件选择
+function handleFileSelected(key: string, event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (file) {
+    updateConfig(key, file.name)
   }
 }
 
@@ -892,6 +950,41 @@ onBeforeUnmount(() => {
     opacity: 1;
     pointer-events: auto;
   }
+}
+
+/* File Picker 控件 */
+.file-picker-wrapper {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+}
+
+.file-picker-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-picker-btn {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  background: #3a3a4a;
+  border: 1px solid #5a5a6a;
+  border-radius: 4px;
+  color: #aaa;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-picker-btn:hover {
+  background: #4a4a5a;
+  color: #5898ff;
+}
+
+.file-input-hidden {
+  display: none;
 }
 
 </style>

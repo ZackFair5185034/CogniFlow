@@ -501,6 +501,10 @@
               class="log-node"
             >{{ log.node_type }}</span>
             <span class="log-message">{{ log.message }}</span>
+            <span
+              v-if="log.duration_ms != null"
+              class="log-duration"
+            >{{ formatDuration(log.duration_ms) }}</span>
           </div>
           <div
             v-if="executionLogs.length === 0"
@@ -606,7 +610,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, shallowRef, markRaw, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, shallowRef, markRaw, provide, onMounted, onBeforeUnmount } from 'vue'
 import { throttle, debounce } from 'lodash-es'
 import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow, MarkerType, SelectionMode, type Node, type Edge, type NodeMouseEvent, type EdgeMouseEvent } from '@vue-flow/core'
@@ -614,7 +618,7 @@ import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { ElMessage } from 'element-plus'
 import { type NodeDefinition, type RuleNodeData } from '@/stores/ruleEngine'
-import { ruleEngineApi } from '@/api'
+import { ruleEngineApi, modelApi } from '@/api'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -667,6 +671,13 @@ const lastMousePos = ref({ x: 0, y: 0 })
 
 // 节点执行状态: nodeId -> 'pending' | 'running' | 'success' | 'failed'
 const nodeStates = ref<Record<string, string>>({})
+
+// 可用模型列表（model-select widget 使用）
+const availableModels = ref<Array<{ id: number; name: string }>>([])
+
+// 向下注入变量和模型列表供 RuleNode 组件使用
+provide('variables', variables)
+provide('availableModels', availableModels)
 
 // 复制粘贴
 const clipboard = ref<Node<RuleNodeData>[]>([])
@@ -888,12 +899,31 @@ function handleWsMessage(msg: any) {
   switch (msg.type) {
     case 'node_started':
       nodeStates.value[msg.node_id] = 'running'
+      executionLogs.value.push({
+        level: 'info',
+        timestamp: formatTime(msg.timestamp),
+        node_type: msg.node_type,
+        message: `开始执行: ${msg.node_type}`
+      })
       break
     case 'node_executed':
       nodeStates.value[msg.node_id] = 'success'
+      executionLogs.value.push({
+        level: 'success',
+        timestamp: formatTime(msg.timestamp),
+        node_type: msg.node_type,
+        message: `${msg.node_type} 执行成功`,
+        duration_ms: msg.duration_ms
+      })
       break
     case 'node_failed':
       nodeStates.value[msg.node_id] = 'failed'
+      executionLogs.value.push({
+        level: 'error',
+        timestamp: formatTime(msg.timestamp),
+        node_type: msg.node_type,
+        message: msg.error || '执行失败'
+      })
       ElMessage.error(`节点执行失败: ${msg.error}`)
       break
     case 'execution_progress':
@@ -903,6 +933,12 @@ function handleWsMessage(msg: any) {
     case 'execution_complete':
       executionStatus.value = msg.status === 'completed' ? 'success' : 'failed'
       executionProgress.value = 100
+      executionLogs.value.push({
+        level: msg.status === 'completed' ? 'success' : 'error',
+        timestamp: formatTime(msg.timestamp),
+        node_type: '',
+        message: msg.status === 'completed' ? '执行完成' : `执行失败: ${msg.error || ''}`
+      })
       if (msg.status === 'completed') {
         ElMessage.success('执行成功')
       } else {
@@ -913,6 +949,24 @@ function handleWsMessage(msg: any) {
       disconnectWebSocket()
       break
   }
+}
+
+/** 格式化时间戳为 HH:mm:ss */
+function formatTime(isoStr?: string) {
+  if (!isoStr) return ''
+  try {
+    const d = new Date(isoStr)
+    return d.toLocaleTimeString('zh-CN', { hour12: false })
+  } catch {
+    return ''
+  }
+}
+
+/** 格式化毫秒为可读耗时 */
+function formatDuration(ms: number) {
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+  return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`
 }
 
 // 节流进度更新函数，限制为每秒2次更新（500ms间隔）
@@ -1234,6 +1288,7 @@ onMounted(async () => {
   await loadGraph()
   await loadNodeDefinitions()
   saveHistory()
+  await loadModels()
   // 键盘事件
   window.addEventListener('keydown', handleKeyDown)
 })
@@ -1309,6 +1364,16 @@ async function loadNodeDefinitions() {
     nodeDefinitions.value = res.data
   } catch (err) {
     console.error('加载节点定义失败:', err)
+  }
+}
+
+// 加载可用模型列表（供 model-select widget 使用）
+async function loadModels() {
+  try {
+    const res = await modelApi.list()
+    availableModels.value = (res.data as Array<{ id: number; name: string }>)
+  } catch (err) {
+    console.error('加载模型列表失败:', err)
   }
 }
 

@@ -64,7 +64,7 @@ class ImageCaptureNode(BaseExecutor):
                 title="图片路径",
                 description="本地文件路径或 HTTP/HTTPS URL",
                 default="",
-                widget="text",
+                widget="file-picker",
             ),
         }
 

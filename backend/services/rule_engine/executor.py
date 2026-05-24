@@ -5,6 +5,7 @@
 import asyncio
 import json
 import re
+import time
 from collections import defaultdict
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -527,10 +528,25 @@ class RuleGraphExecutor:
     async def _execute_node(
         self,
         node_id: str,
-        context: ExecutionContext
+        context: ExecutionContext,
+        timeout: int = None
     ):
-        """执行单个节点。"""
-        # 检查是否取消
+        """执行单个节点。
+
+        使用 asyncio.wait_for 提供超时保护，
+        超时后标记节点为 failed 并继续执行下游。
+
+        Args:
+            node_id: 节点 ID
+            context: 执行上下文
+            timeout: 节点执行超时时间（秒），默认从上下文配置读取或 300s
+        """
+        start_time = time.monotonic()
+        execution_start = datetime.now()
+
+        # 从上下文读取超时配置（可在规则图级别覆盖）
+        if timeout is None:
+            timeout = context.config.get('node_timeout', 300)
         if context.is_cancelled():
             context.set_node_status(node_id, "cancelled")
             return
@@ -548,6 +564,10 @@ class RuleGraphExecutor:
         # 更新状态为 running
         context.set_node_status(node_id, "running")
         await self._broadcast_node_started(context.execution_id, node_id, node_type)
+
+        status = "failed"
+        error_msg = None
+        outputs = None
 
         try:
             # 解析输入数据
@@ -572,24 +592,45 @@ class RuleGraphExecutor:
                     node_type=node_type
                 )
 
-            # 执行（所有 BaseExecutor.execute 必须是 async）
-            outputs = await executor.execute(merged_inputs, context)
+            # 执行（带超时保护）
+            outputs = await asyncio.wait_for(
+                executor.execute(merged_inputs, context),
+                timeout=timeout
+            )
+
+            # 计算执行耗时
+            node_duration_ms = int((time.monotonic() - start_time) * 1000)
 
             # 保存结果
             context.set_node_result(node_id, outputs)
             context.set_node_status(node_id, "completed")
+            status = "completed"
 
-            # 推送节点完成
+            # 推送节点完成（含耗时）
             await self._broadcast_node_executed(
                 context.execution_id,
                 node_id,
                 "success",
-                outputs
+                outputs,
+                duration_ms=node_duration_ms
+            )
+
+        except asyncio.TimeoutError:
+            status = "failed"
+            error_msg = f"执行超时（{timeout}s）"
+            # 超时：标记为 failed，不抛异常继续执行下游
+            context.set_node_status(node_id, "failed")
+            await self._broadcast_node_failed(
+                context.execution_id,
+                node_id,
+                error_msg
             )
 
         except Exception as e:
+            error_msg = str(e)
+            status = "failed"
             context.set_node_status(node_id, "failed")
-            await self._broadcast_node_failed(context.execution_id, node_id, str(e))
+            await self._broadcast_node_failed(context.execution_id, node_id, error_msg)
 
             if isinstance(e, ExecutorError):
                 raise
@@ -599,6 +640,20 @@ class RuleGraphExecutor:
                 node_id=node_id,
                 node_type=node_type
             ) from e
+
+        finally:
+            # 计算耗时并保存执行日志
+            elapsed_ms = int((time.monotonic() - start_time) * 1000)
+            metrics = self._compute_metrics(outputs or {})
+            await self._save_node_log(
+                execution_id=context.execution_id,
+                node_id=node_id,
+                node_type=node_type,
+                status=status,
+                duration_ms=elapsed_ms,
+                error_message=error_msg,
+                metrics=metrics
+            )
 
     def _resolve_inputs(
         self,
@@ -700,6 +755,79 @@ class RuleGraphExecutor:
         return value
 
     # ============================================================
+    # 指标采集 & 日志
+    # ============================================================
+
+    def _compute_metrics(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
+        """计算节点输出数据的统计指标。
+
+        Args:
+            outputs: 节点输出数据字典
+
+        Returns:
+            指标字典，包含各输出的数据量估计
+        """
+        metrics = {}
+        for key, value in outputs.items():
+            if isinstance(value, list):
+                metrics[key] = len(value)
+            elif isinstance(value, dict):
+                metrics[key] = len(value)
+            elif isinstance(value, str):
+                metrics[key] = len(value)
+            elif isinstance(value, (int, float)):
+                metrics[key] = 1
+            elif value is None:
+                metrics[key] = 0
+            else:
+                metrics[key] = 1  # 其他类型记为 1
+        return metrics
+
+    async def _save_node_log(
+        self,
+        execution_id: int,
+        node_id: str,
+        node_type: str,
+        status: str,
+        duration_ms: int,
+        error_message: str = None,
+        metrics: Dict[str, Any] = None
+    ):
+        """保存节点执行日志到数据库。
+
+        Args:
+            execution_id: 执行记录 ID
+            node_id: 节点 ID
+            node_type: 节点类型
+            status: 执行状态
+            duration_ms: 执行耗时（毫秒）
+            error_message: 错误信息
+            metrics: 输出指标数据
+        """
+        if not self.db:
+            return
+
+        try:
+            from backend.database import NodeExecutionLog
+
+            log = NodeExecutionLog(
+                execution_id=execution_id,
+                node_id=node_id,
+                node_type=node_type,
+                status=status,
+                duration_ms=duration_ms,
+                start_time=datetime.now(),
+                end_time=datetime.now(),
+                error_message=error_message,
+                metrics_json=json.dumps(metrics, default=str) if metrics else None
+            )
+            self.db.add(log)
+            self.db.commit()
+        except Exception:
+            # 日志保存失败不影响主流程
+            pass
+
+    # ============================================================
     # WebSocket 广播
     # ============================================================
 
@@ -724,7 +852,8 @@ class RuleGraphExecutor:
         execution_id: int,
         node_id: str,
         status: str,
-        outputs: Dict[str, Any]
+        outputs: Dict[str, Any],
+        duration_ms: int = None
     ):
         """广播节点执行完成。"""
         if self.ws_manager:
@@ -734,6 +863,7 @@ class RuleGraphExecutor:
                 "node_id": node_id,
                 "status": status,
                 "outputs": outputs,
+                "duration_ms": duration_ms,
                 "timestamp": datetime.now().isoformat()
             })
 

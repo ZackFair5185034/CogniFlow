@@ -212,6 +212,8 @@ class NodeExecutionLog(Base):
     error_message = Column(Text, nullable=True)
     start_time = Column(DateTime, default=datetime.utcnow)
     end_time = Column(DateTime, nullable=True)
+    duration_ms = Column(Integer, nullable=True)  # 执行耗时（毫秒）
+    metrics_json = Column(Text, nullable=True)  # 指标数据（如检测数、数据量等）
 
     execution = relationship("ExecutionHistory", back_populates="node_logs")
 
