@@ -63,8 +63,9 @@ class ClassName:
 
 ```
 CogniFlow/
+├── app.py                       # 应用入口
 ├── backend/                      # FastAPI 后端
-│   ├── app.py                   # 应用入口
+│   ├── __init__.py
 │   ├── database.py              # SQLAlchemy ORM + SQLite
 │   ├── schemas.py               # Pydantic 模型
 │   ├── websocket_manager.py     # WebSocket 管理
@@ -87,21 +88,35 @@ CogniFlow/
 │   │   ├── websocket.py        # 通用 WebSocket
 │   │   ├── simple_detector.py  # 简单检测器
 │   │   └── detection_dataset.py # 检测数据集
-│   └── services/
-│       └── rule_engine/         # 规则引擎核心
-│           ├── executor.py      # Kahn 拓扑排序 + 层内并行
-│           ├── graph_manager.py # 图 CRUD + 验证
-│           ├── registry.py      # 节点注册表
-│           ├── scheduler.py     # Cron 定时调度
-│           ├── websocket_manager.py # 规则 WS 推送
-│           └── nodes/          # 节点实现
-│               ├── triggers.py    # 触发器
-│               ├── conditions.py  # 条件
-│               ├── actions.py     # 动作
-│               ├── logic.py      # 逻辑
-│               └── ...
+│   ├── services/
+│   │   └── rule_engine/         # 规则引擎核心
+│   │       ├── executor.py      # Kahn 拓扑排序 + 层内并行
+│   │       ├── graph_manager.py # 图 CRUD + 验证
+│   │       ├── models.py        # 数据模型定义
+│   │       ├── exceptions.py    # 异常定义
+│   │       ├── registry.py      # 节点注册表
+│   │       ├── scheduler.py     # Cron 定时调度
+│   │       ├── websocket_manager.py # 规则 WS 推送
+│   │       └── nodes/          # 节点实现
+│   │           ├── base.py            # 节点基类
+│   │           ├── triggers.py        # 触发器
+│   │           ├── conditions.py      # 条件
+│   │           ├── actions.py         # 动作
+│   │           ├── logic.py           # 逻辑
+│   │           ├── detection_nodes.py # 检测节点
+│   │           ├── input_nodes.py     # 输入节点
+│   │           ├── output_nodes.py    # 输出节点
+│   │           └── processing_nodes.py # 处理节点
+│   ├── utils/                  # 工具模块
+│   │   ├── frame_buffer.py     # 帧缓冲区
+│   │   └── frame_extract_manager.py # 帧提取管理
+│   ├── test_export/            # 导出测试数据
+│   │   ├── images/
+│   │   └── labels/
+│   └── tests/                  # 单元测试
+│       └── test_rule_engine/
 ├── engine/                     # 核心视觉感知包
-│   ├── __init__.py            # 包初始化，27 个公开接口
+│   ├── __init__.py            # 包初始化
 │   ├── config/                 # 配置模块
 │   │   ├── schema.py          # 配置数据类
 │   │   └── default.yaml       # 默认配置
@@ -119,13 +134,19 @@ CogniFlow/
 │   │   │   └── trainer/       # 训练器
 │   │   └── control/           # 控制接口
 │   │       └── input_emulator/ # 输入模拟
+│   ├── models/                 # 模型定义
+│   │   ├── encoder/
+│   │   └── heads/
+│   ├── utils/                  # 工具函数
 │   └── annotation/             # 标注工具
 ├── webui/                      # Vue3 前端
 │   ├── src/
 │   │   ├── api/              # API 调用封装
 │   │   ├── components/       # 公共组件
+│   │   ├── icons/            # SVG 图标集
 │   │   ├── router/           # 路由配置（9 条路由）
 │   │   ├── stores/           # Pinia 状态管理
+│   │   ├── types/            # TypeScript 类型定义
 │   │   ├── utils/            # 工具函数
 │   │   ├── views/            # 页面组件（9 个页面）
 │   │   ├── style/            # 深色主题设计系统
@@ -233,15 +254,17 @@ webui/
 ├── src/
 │   ├── api/               # API 调用封装
 │   ├── components/        # 公共组件
+│   ├── icons/             # SVG 图标集
 │   ├── router/            # 路由配置
 │   ├── stores/            # Pinia 状态管理
+│   ├── types/             # TypeScript 类型定义
 │   ├── utils/             # 工具函数
 │   ├── views/             # 页面组件
 │   ├── App.vue            # 根组件
 │   └── main.ts            # 入口文件
 ├── public/                # 静态资源
 ├── uno.config.ts          # UnoCSS 配置
-├── eslint.config.mjs      # ESLint 9 配置
+├── eslint.config.ts       # ESLint 9 配置（Flat Config）
 ├── vite.config.ts         # Vite 配置
 ├── tsconfig.json          # TypeScript 配置
 └── package.json
@@ -589,7 +612,7 @@ const jobs = res.data as TrainingJobResponse[]
 ### 7.6 ESLint 规则
 
 ```javascript
-// eslint.config.mjs 核心规则
+// eslint.config.ts 核心规则
 {
   '@typescript-eslint/no-explicit-any': 'warn',
   '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
@@ -629,7 +652,7 @@ pnpm lint:fix       # ESLint 自动修复
 |------|------|------|------|
 | **用户文档** | `docs/guides/` | 面向最终用户的操作手册 | 功能使用、配置说明 |
 | **开发文档** | `docs/dev/` | 面向开发者的技术参考 | API 文档、架构说明 |
-| **设计文档** | `docs/design/` | 面向设计师的规范说明 | UI 规范、交互流程 |
+| **计划文档** | `docs/plans/` | 迭代计划和待办清单 | 规则引擎迭代计划、待办清单 |
 | **研究文档** | `docs/research/` | 探索性文档 | 技术调研、方案对比 |
 | **归档文档** | `docs/archives/` | 历史版本保留 | 旧版本说明 |
 
@@ -646,10 +669,10 @@ docs/
 │   └── main.css          # 文档全局样式（必须）
 ├── guides/               # 用户文档
 ├── dev/                  # 开发文档
-├── design/               # 设计文档
+├── plans/                # 计划文档
 ├── research/             # 研究文档
 ├── archives/            # 归档文档
-└── index.html           # 文档首页入口
+└── 文档中心.html        # 文档首页入口
 ```
 
 **文件命名：**
@@ -743,7 +766,7 @@ docs/
 
 提交文档前逐项检查：
 
-- [ ] 文件放在正确目录（guides/dev/design/research/archives）
+- [ ] 文件放在正确目录（guides/dev/plans/research/archives）
 - [ ] 使用 `.html` 扩展名，非 `.md`
 - [ ] 头部包含中文注释说明文档用途
 - [ ] 引用了 `docs/css/main.css`
