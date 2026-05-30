@@ -622,7 +622,7 @@ import '@vue-flow/minimap/dist/style.css'
 
 const router = useRouter()
 const route = useRoute()
-const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate, userSelectionRect, setViewport, getViewport } = useVueFlow()
+const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate, userSelectionRect, setViewport, getViewport, addSelectedNodes, removeSelectedNodes } = useVueFlow()
 
 // 常量
 const gridSize = 30
@@ -1050,8 +1050,7 @@ function handleCopy() {
     ElMessage.warning('请先选择要复制的节点')
     return
   }
-  clipboard.value = selected.map((n) => JSON.parse(JSON.stringify(n)))
-  clipboardMode.value = 'copy'
+  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
   ElMessage.success(`已复制 ${selected.length} 个节点`)
 }
 
@@ -1214,7 +1213,7 @@ function handleContextAction(action: string) {
     case 'copy':
       if (contextMenu.targetType === 'node' && contextMenu.target) {
         const targetNode = contextMenu.target as Node<RuleNodeData>
-        nodes.value.forEach((n) => { n.selected = n.id === targetNode.id })
+        addSelectedNodes([targetNode.id])
         handleCopy()
       }
       hideContextMenu()
@@ -1226,17 +1225,16 @@ function handleContextAction(action: string) {
     case 'delete':
       if (contextMenu.targetType === 'node' && contextMenu.target) {
         const targetNode = contextMenu.target as Node<RuleNodeData>
-        nodes.value.forEach((n) => { n.selected = n.id === targetNode.id })
+        addSelectedNodes([targetNode.id])
       } else if (contextMenu.targetType === 'edge' && contextMenu.target) {
         const targetEdge = contextMenu.target as Edge
-        edges.value.forEach((e) => { e.selected = e.id === targetEdge.id })
+        edges.value = edges.value.map((e: Edge) => ({ ...e, selected: e.id === targetEdge.id }))
       }
       handleDelete()
       hideContextMenu()
       break
     case 'selectAll':
-      nodes.value.forEach((n) => { n.selected = true })
-      edges.value.forEach((e) => { e.selected = true })
+      nodes.value.forEach((n: Node) => addSelectedNodes([n.id]))
       hideContextMenu()
       break
   }
@@ -1305,7 +1303,7 @@ async function loadGraph() {
     graph.value = res.data
     graphName.value = graph.value.name
 
-    nodes.value = (graph.value.nodes || []).map((n) => ({
+    nodes.value = (graph.value.nodes || []).map((n: any) => ({
       id: n.id,
       type: n.type,
       position: n.position || { x: 0, y: 0 },
@@ -1315,12 +1313,12 @@ async function loadGraph() {
 
     // 同步节点执行状态
     for (const n of nodes.value) {
-      if (n.data.status) {
+      if (n.data?.status) {
         nodeStates.value[n.id] = n.data.status
       }
     }
 
-    edges.value = (graph.value.edges || []).map((e) => ({
+    edges.value = (graph.value.edges || []).map((e: any) => ({
       id: e.id,
       source: e.source,
       target: e.target,
@@ -1687,9 +1685,11 @@ function startPanelResize(e: MouseEvent) {
 // 更新配置
 function updateConfig(key: string, value: any) {
   nodeConfig.value[key] = value
-  const node = nodes.value.find(n => n.id === selectedNode.value?.id)
+  const node = nodes.value.find((n: Node) => n.id === selectedNode.value?.id)
   if (node) {
-    node.data = node.data || {}
+    if (!node.data) {
+      node.data = {} as RuleNodeData
+    }
     node.data.config = { ...nodeConfig.value }
   }
 }

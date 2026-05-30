@@ -576,9 +576,9 @@ class RuleGraphExecutor:
             # 合并默认参数
             merged_inputs = {**inputs, **params}
 
-            # 获取执行器
+            # 获取执行器实例
             registry = get_registry()
-            executor = registry.get(node_type)
+            executor = registry.create_node(node_type, node_id=node_id, config=node_data)
 
             if not executor:
                 raise ExecutorError(f"未知的节点类型: {node_type}", node_id=node_id, node_type=node_type)

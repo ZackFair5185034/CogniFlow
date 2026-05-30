@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 /// <reference types="vitest" />
 import vue from '@vitejs/plugin-vue'
+import VueDevTools from 'vite-plugin-vue-devtools'
 import UnoCSS from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
@@ -13,6 +14,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       vue(),
+      VueDevTools(),
       UnoCSS(),
       AutoImport({
         imports: [

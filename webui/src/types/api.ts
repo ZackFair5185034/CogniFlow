@@ -228,8 +228,11 @@ export interface NodeDefinition {
   icon?: string
   inputs: NodePort[]
   outputs: NodePort[]
-  config_schema: Record<string, unknown>
+  config_schema: Record<string, ConfigSchemaProperty>
 }
+
+/** 变量类型 */
+export type VariableType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'IMAGE' | 'BBOX'
 
 /** 变量默认值类型 */
 export type VariableDefaultValue = string | number | boolean | null
