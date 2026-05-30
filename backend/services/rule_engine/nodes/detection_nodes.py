@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from backend.services.rule_engine.models import (
     NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
 )
+from backend.services.rule_engine.model_cache import ModelCache
 from .base import BaseExecutor
 
 logger = logging.getLogger(__name__)
@@ -149,15 +150,16 @@ class YOLOModelNode(BaseExecutor):
         model_id = params.get("model_id")
         model_path = params.get("model_path")
         confidence = params.get("confidence", 0.5)
+        iou_threshold = params.get("iou_threshold", 0.45)
+        max_detections = params.get("max_detections", 300)
 
         if not model_id and not model_path:
             return {"error": "必须提供 model_id 或 model_path"}
 
         try:
-            # 加载模型并执行推理
             image_input = inputs.get("image")
 
-            # 获取图片路径
+            # 解析图片路径
             if isinstance(image_input, dict):
                 image_path = image_input.get("path", "")
             elif isinstance(image_input, str):
@@ -168,12 +170,8 @@ class YOLOModelNode(BaseExecutor):
             if not image_path:
                 return {"error": "图片路径为空"}
 
-            # 导入推理函数
-            from backend.routers.yolo_training import load_yolo_model, inference_yolo
-
-            # 加载模型
-            if model_id:
-                # 从数据库获取模型路径
+            # 获取模型路径（通过 model_id 查数据库）
+            if model_id and not model_path:
                 from backend.database import SessionLocal
                 from backend.database import Model
                 db = SessionLocal()
@@ -187,13 +185,18 @@ class YOLOModelNode(BaseExecutor):
             if not model_path:
                 return {"error": f"模型 {model_id} 未找到或无模型文件"}
 
-            # 加载并推理
-            model = load_yolo_model(model_path)
+            # 通过缓存加载模型
+            from backend.routers.yolo_training import load_yolo_model, inference_yolo
+
+            cache_key = f"yolo:{model_path}"
+            cache = ModelCache.get_instance()
+            model = cache.get_or_load(cache_key, lambda: load_yolo_model(model_path))
+
+            # 执行推理
             result = inference_yolo(model, image_path, conf_threshold=confidence)
 
             detections = result.get("detections", [])
 
-            # 解析检测结果
             bboxes = [d.get("bbox", []) for d in detections]
             scores = [d.get("confidence", 0) for d in detections]
             class_ids = [d.get("class_id", 0) for d in detections]
@@ -353,7 +356,7 @@ class YOLOTriggerNode(BaseExecutor):
                         }
 
                     if image_path:
-                        # 执行 YOLO 检测
+                        # 通过缓存加载模型并执行检测
                         from backend.routers.yolo_training import load_yolo_model, inference_yolo
 
                         # 获取模型路径
@@ -369,7 +372,9 @@ class YOLOTriggerNode(BaseExecutor):
                                 db.close()
 
                         if model_path:
-                            model = load_yolo_model(model_path)
+                            cache_key = f"yolo:{model_path}"
+                            cache = ModelCache.get_instance()
+                            model = cache.get_or_load(cache_key, lambda: load_yolo_model(model_path))
                             result = inference_yolo(model, image_path, conf_threshold=min_confidence)
                             detections = result.get("detections", [])
                         else:
@@ -491,9 +496,44 @@ class ObjectDetectorNode(BaseExecutor):
         inputs: Dict[str, Any],
         context
     ) -> Dict[str, Any]:
-        # 目前为占位实现，实际应对接各种检测模型
-        return {
-            "detections": [],
-            "count": 0,
-            "error": "通用检测器待实现"
-        }
+        params = self.config.get("params", {})
+        model_type = params.get("model_type", "yolo")
+        model_path = params.get("model_path")
+        confidence = params.get("confidence", 0.5)
+
+        if model_type != "yolo":
+            return {"error": f"模型类型 '{model_type}' 暂未实现，当前仅支持 yolo"}
+
+        if not model_path:
+            return {"error": "必须提供 model_path"}
+
+        try:
+            image_input = inputs.get("image")
+
+            if isinstance(image_input, dict):
+                image_path = image_input.get("path", "")
+            elif isinstance(image_input, str):
+                image_path = image_input
+            else:
+                return {"error": "无法解析图片输入"}
+
+            if not image_path:
+                return {"error": "图片路径为空"}
+
+            from backend.routers.yolo_training import load_yolo_model, inference_yolo
+
+            cache_key = f"yolo:{model_path}"
+            cache = ModelCache.get_instance()
+            model = cache.get_or_load(cache_key, lambda: load_yolo_model(model_path))
+
+            result = inference_yolo(model, image_path, conf_threshold=confidence)
+            detections = result.get("detections", [])
+
+            return {
+                "detections": detections,
+                "count": len(detections),
+            }
+
+        except Exception as e:
+            logger.error(f"目标检测失败: {e}")
+            return {"error": f"目标检测失败: {str(e)}"}

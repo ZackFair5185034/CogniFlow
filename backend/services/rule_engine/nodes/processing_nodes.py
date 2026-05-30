@@ -6,11 +6,18 @@ docs/research/rule-engine-phase1-node-registry.md
 
 节点分类: processing (#FFFF4C)
 """
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+from backend.services.rule_engine.tracker import SortTracker
 from typing import Dict
 from .base import BaseExecutor
+
+logger = logging.getLogger(__name__)
+
+# 跨执行调用的跟踪器状态（key: node_id -> SortTracker）
+_tracker_states: Dict[str, SortTracker] = {}
 
 
 class CategoryEncodeNode(BaseExecutor):
@@ -227,15 +234,20 @@ class FilterNode(BaseExecutor):
 class TrackerNode(BaseExecutor):
     """目标跟踪节点 - 对检测到的目标进行跟踪。
 
+    使用 SORT 算法（卡尔曼滤波 + IoU 贪心匹配）。
+    跟踪器状态在节点实例间共享（按 node_id 隔离），
+    同一节点连续调用可保持目标 ID 稳定。
+
     配置项:
-        tracker_type: str - 跟踪算法 (sort/deepsort/bytetrack)
-        max_age: int - 最大丢失帧数
+        max_age: int - 最大丢失帧数 (1-100)
+        min_hits: int - 最少命中次数才输出 (1-10)
+        iou_threshold: float - IoU 关联阈值 (0.1-0.9)
     """
 
     node_type = "tracker"
     category = NodeCategory.PROCESSING
     display_name = "目标跟踪"
-    description = "对检测到的目标进行跟踪"
+    description = "对检测到的目标进行跟踪（SORT 算法）"
     icon = "route"
     color = "#FFFF4C"
 
@@ -252,19 +264,24 @@ class TrackerNode(BaseExecutor):
                     name="检测结果",
                     type="ARRAY",
                     required=True,
-                    description="当前帧检测结果"
+                    description="当前帧检测结果（含 bbox 字段）"
                 ),
             },
             outputs={
                 "tracked": PortDefinition(
                     name="跟踪结果",
                     type="ARRAY",
-                    description="带跟踪 ID 的结果"
+                    description="带 track_id 的跟踪结果列表"
                 ),
                 "track_ids": PortDefinition(
                     name="跟踪ID",
                     type="ARRAY",
                     description="跟踪 ID 列表"
+                ),
+                "count": PortDefinition(
+                    name="跟踪数量",
+                    type="INT",
+                    description="当前跟踪目标数量"
                 ),
             },
             config_schema=self.get_config_schema(),
@@ -272,27 +289,41 @@ class TrackerNode(BaseExecutor):
 
     def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
         return {
-            "tracker_type": ConfigSchemaProperty(
-                type="string",
-                title="跟踪算法",
-                description="目标跟踪算法",
-                default="sort",
-                widget="dropdown",
-                enum=["sort", "deepsort", "bytetrack"],
-            ),
             "max_age": ConfigSchemaProperty(
                 type="integer",
                 title="最大丢失帧数",
-                description="目标丢失多少帧后删除",
+                description="目标丢失多少帧后删除轨迹",
                 default=30,
                 minimum=1,
                 maximum=100,
                 step=1,
-                widget="number",
+                widget="slider",
+            ),
+            "min_hits": ConfigSchemaProperty(
+                type="integer",
+                title="最少命中次数",
+                description="目标连续命中多少次后才输出",
+                default=3,
+                minimum=1,
+                maximum=10,
+                step=1,
+                widget="slider",
+            ),
+            "iou_threshold": ConfigSchemaProperty(
+                type="number",
+                title="IoU 关联阈值",
+                description="检测与轨迹匹配的最小 IoU",
+                default=0.3,
+                minimum=0.1,
+                maximum=0.9,
+                step=0.05,
+                widget="slider",
             ),
         }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        if "detections" not in inputs:
+            return False, "缺少检测结果输入"
         return True, None
 
     async def execute(
@@ -300,28 +331,57 @@ class TrackerNode(BaseExecutor):
         inputs: Dict[str, Any],
         context
     ) -> Dict[str, Any]:
-        # TODO: 实现实际跟踪算法
+        params = self.config.get("params", {})
+        max_age = params.get("max_age", 30)
+        min_hits = params.get("min_hits", 3)
+        iou_threshold = params.get("iou_threshold", 0.3)
+
         detections = inputs.get("detections", [])
 
-        return {
-            "tracked": detections,
-            "track_ids": [d.get("track_id", i) for i, d in enumerate(detections)],
-        }
+        # 确保输入为列表
+        if not isinstance(detections, list):
+            return {"error": "检测结果必须是列表格式"}
+
+        # 获取或创建当前节点的跟踪器
+        tracker_key = f"{context.execution_id}:{self.node_id}"
+        if tracker_key not in _tracker_states:
+            _tracker_states[tracker_key] = SortTracker(
+                max_age=max_age,
+                min_hits=min_hits,
+                iou_threshold=iou_threshold,
+            )
+
+        tracker = _tracker_states[tracker_key]
+
+        try:
+            tracked = tracker.update(detections)
+            track_ids = [t.get("track_id", 0) for t in tracked]
+
+            return {
+                "tracked": tracked,
+                "track_ids": track_ids,
+                "count": len(tracked),
+            }
+        except Exception as e:
+            logger.error(f"目标跟踪失败: {e}")
+            return {"error": f"目标跟踪失败: {str(e)}"}
 
 
 class ImagePreprocessorNode(BaseExecutor):
     """图像预处理节点 - 对图像进行预处理。
 
-    配置项:
-        operation: str - 操作类型 (resize/crop/normalize/augment)
-        width: int - 目标宽度
-        height: int - 目标高度
+    支持的操作:
+        resize:   缩放到指定宽高
+        crop:     居中裁剪到指定宽高
+        normalize: 归一化像素值到 [0, 1]
+
+    依赖 opencv-python，未安装时返回原始图片。
     """
 
     node_type = "image_preprocessor"
     category = NodeCategory.PROCESSING
     display_name = "图像预处理"
-    description = "对图像进行预处理"
+    description = "对图像进行缩放/裁剪/归一化等预处理"
     icon = "image-edit"
     color = "#FFFF4C"
 
@@ -338,14 +398,24 @@ class ImagePreprocessorNode(BaseExecutor):
                     name="图片",
                     type=PortType.IMAGE.value,
                     required=True,
-                    description="待处理的图片"
+                    description="待处理的图片路径"
                 ),
             },
             outputs={
                 "image": PortDefinition(
                     name="处理后图片",
                     type=PortType.IMAGE.value,
-                    description="处理后的图片"
+                    description="处理后图片路径"
+                ),
+                "width": PortDefinition(
+                    name="宽度",
+                    type="INT",
+                    description="处理后图片宽度"
+                ),
+                "height": PortDefinition(
+                    name="高度",
+                    type="INT",
+                    description="处理后图片高度"
                 ),
             },
             config_schema=self.get_config_schema(),
@@ -359,7 +429,7 @@ class ImagePreprocessorNode(BaseExecutor):
                 description="图像预处理操作",
                 default="resize",
                 widget="dropdown",
-                enum=["resize", "crop", "normalize", "augment"],
+                enum=["resize", "crop", "normalize"],
             ),
             "width": ConfigSchemaProperty(
                 type="integer",
@@ -384,6 +454,8 @@ class ImagePreprocessorNode(BaseExecutor):
         }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        if "image" not in inputs or inputs["image"] is None:
+            return False, "缺少图片输入"
         return True, None
 
     async def execute(
@@ -393,18 +465,81 @@ class ImagePreprocessorNode(BaseExecutor):
     ) -> Dict[str, Any]:
         params = self.config.get("params", {})
         operation = params.get("operation", "resize")
-        width = params.get("width", 640)
-        height = params.get("height", 640)
+        target_w = params.get("width", 640)
+        target_h = params.get("height", 640)
 
-        image = inputs.get("image")
+        image_input = inputs.get("image")
 
-        if image is None:
-            return {"error": "图片为空"}
+        # 解析图片路径
+        if isinstance(image_input, dict):
+            image_path = image_input.get("path", "")
+        elif isinstance(image_input, str):
+            image_path = image_input
+        else:
+            return {"error": "无法解析图片输入"}
 
-        # TODO: 实现实际预处理
-        return {
-            "image": image,
-            "operation": operation,
-            "width": width,
-            "height": height,
-        }
+        if not image_path:
+            return {"error": "图片路径为空"}
+
+        # 尝试用 OpenCV 处理
+        try:
+            import cv2
+            import os
+
+            img = cv2.imread(image_path)
+            if img is None:
+                return {"error": f"无法读取图片: {image_path}"}
+
+            orig_h, orig_w = img.shape[:2]
+
+            if operation == "resize":
+                processed = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+
+            elif operation == "crop":
+                # 居中裁剪
+                center_x, center_y = orig_w // 2, orig_h // 2
+                crop_w = min(target_w, orig_w)
+                crop_h = min(target_h, orig_h)
+                x1 = max(0, center_x - crop_w // 2)
+                y1 = max(0, center_y - crop_h // 2)
+                processed = img[y1:y1 + crop_h, x1:x1 + crop_w]
+                # 如裁剪后尺寸与目标不一致则缩放
+                if processed.shape[1] != target_w or processed.shape[0] != target_h:
+                    processed = cv2.resize(processed, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+
+            elif operation == "normalize":
+                # 归一化到 [0, 1]
+                processed = img.astype("float32") / 255.0
+                # 转回 8bit 保存（乘以 255）
+                processed = (processed * 255).astype("uint8")
+                if target_w != orig_w or target_h != orig_h:
+                    processed = cv2.resize(processed, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
+
+            else:
+                return {"error": f"不支持的操作类型: {operation}"}
+
+            # 保存处理结果到临时文件
+            from backend.services.rule_engine.utils import get_temp_image_path
+            output_path = get_temp_image_path(self.node_id, image_path)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            cv2.imwrite(output_path, processed)
+
+            out_h, out_w = processed.shape[:2]
+
+            return {
+                "image": {"path": output_path},
+                "width": out_w,
+                "height": out_h,
+            }
+
+        except ImportError:
+            logger.warning("OpenCV (cv2) 未安装，返回原始图片")
+            return {
+                "image": {"path": image_path},
+                "width": 0,
+                "height": 0,
+                "warning": "OpenCV 未安装，图片未处理",
+            }
+        except Exception as e:
+            logger.error(f"图像预处理失败: {e}")
+            return {"error": f"图像预处理失败: {str(e)}"}
