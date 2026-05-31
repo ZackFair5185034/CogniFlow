@@ -72,6 +72,26 @@
             </el-select>
           </template>
 
+          <!-- MultiSelect -->
+          <template v-else-if="schema.widget === 'multiselect'">
+            <el-select
+              :model-value="getNodeValue(key) as (string | number)[] || []"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              class="select-input"
+              placeholder="请选择..."
+              @update:model-value="updateConfig(key, $event)"
+            >
+              <el-option
+                v-for="opt in schema.enum"
+                :key="opt"
+                :value="opt"
+                :label="String(opt)"
+              />
+            </el-select>
+          </template>
+
           <!-- Model Select -->
           <template v-else-if="schema.widget === 'model-select'">
             <el-select
@@ -141,6 +161,16 @@
             />
           </template>
 
+          <!-- Toggle -->
+          <template v-else-if="schema.widget === 'toggle'">
+            <el-switch
+              :model-value="!!getNodeValue(key)"
+              active-text="开启"
+              inactive-text="关闭"
+              @update:model-value="(v: unknown) => updateConfig(key, !!v)"
+            />
+          </template>
+
           <!-- Checkbox -->
           <template v-else-if="schema.widget === 'checkbox'">
             <el-checkbox
@@ -164,7 +194,7 @@
 
           <!-- 变量绑定按钮 -->
           <button
-            v-if="schema.widget !== 'checkbox'"
+            v-if="schema.widget !== 'checkbox' && schema.widget !== 'toggle' && schema.widget !== 'multiselect'"
             class="var-bind-btn"
             title="绑定变量"
             @click.stop="toggleVarMenu(key)"
@@ -258,8 +288,8 @@
 <script setup lang="ts">
 import { Position } from '@vue-flow/core'
 
-/** 节点配置值类型（排除 boolean/null，文本输入无法处理） */
-type NodeConfigValue = string | number | boolean | null
+/** 节点配置值类型 */
+type NodeConfigValue = string | number | boolean | (string | number)[] | null
 
 interface ConfigSchemaProperty {
   type: string
@@ -300,7 +330,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:config', key: string, value: string | number | boolean | null): void
+  (e: 'update:config', key: string, value: NodeConfigValue): void
   (e: 'delete', nodeId: string): void
   (e: 'contextmenu', event: MouseEvent): void
 }>()
@@ -333,8 +363,8 @@ const nodeConfig = computed((): Record<string, NodeConfigValue> => {
 })
 
 /** 获取节点配置值（辅助方法，解决动态索引类型推断问题） */
-function getNodeValue(key: string): string | number | boolean | null {
-  return (nodeConfig.value as Record<string, string | number | boolean | null>)[key] ?? null
+function getNodeValue(key: string): NodeConfigValue {
+  return (nodeConfig.value as Record<string, NodeConfigValue>)[key] ?? null
 }
 
 // 可用模型（model-select用）

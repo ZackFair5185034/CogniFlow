@@ -87,7 +87,19 @@ class CategoryEncodeNode(BaseExecutor):
         context
     ) -> Dict[str, Any]:
         params = self.config.get("params", {})
-        class_mapping = params.get("class_mapping", {})
+        raw_mapping = params.get("class_mapping", {})
+        # 兼容字符串格式 "person:0,car:1" 和字典格式 {"person": 0, "car": 1}
+        if isinstance(raw_mapping, str):
+            class_mapping = {}
+            for part in raw_mapping.split(","):
+                part = part.strip()
+                if ":" in part:
+                    k, v = part.split(":", 1)
+                    class_mapping[k.strip()] = int(v.strip())
+                elif part:
+                    class_mapping[part] = -1
+        else:
+            class_mapping = raw_mapping or {}
 
         class_names = inputs.get("class_names", [])
 
@@ -159,6 +171,13 @@ class FilterNode(BaseExecutor):
                 widget="dropdown",
                 enum=["class", "confidence", "count"],
             ),
+            "class_names": ConfigSchemaProperty(
+                type="string",
+                title="类别名称",
+                description="要保留的类别，多个用逗号分隔，如 person,car,dog",
+                default="",
+                widget="text",
+            ),
             "min_confidence": ConfigSchemaProperty(
                 type="number",
                 title="最小置信度",
@@ -201,7 +220,9 @@ class FilterNode(BaseExecutor):
     ) -> Dict[str, Any]:
         params = self.config.get("params", {})
         filter_by = params.get("filter_by", "confidence")
-        class_names = params.get("class_names", [])
+        raw_class_names = params.get("class_names", [])
+        # 兼容字符串（逗号分隔，前端 text widget）和列表格式
+        class_names = [n.strip() for n in raw_class_names.split(",") if n.strip()] if isinstance(raw_class_names, str) else (raw_class_names or [])
         min_confidence = params.get("min_confidence", 0.0)
         min_count = params.get("min_count", 0)
         max_count = params.get("max_count", 999)

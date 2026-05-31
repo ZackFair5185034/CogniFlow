@@ -235,7 +235,7 @@ export interface NodeDefinition {
 export type VariableType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'IMAGE' | 'BBOX'
 
 /** 变量默认值类型 */
-export type VariableDefaultValue = string | number | boolean | null
+export type VariableDefaultValue = string | number | boolean | (string | number)[] | null
 
 /** 节点配置 Schema 属性 */
 export interface ConfigSchemaProperty {

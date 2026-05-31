@@ -114,10 +114,10 @@ class TimerTriggerNode(BaseExecutor):
                 widget="slider",
             ),
             "enabled": ConfigSchemaProperty(
-                type="boolean",
+                type="string",
                 title="启用状态",
                 description="是否启用定时器",
-                default=True,
+                default="true",
                 widget="dropdown",
                 enum=["true", "false"],
             ),

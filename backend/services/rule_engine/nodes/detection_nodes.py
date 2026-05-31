@@ -474,6 +474,13 @@ class ObjectDetectorNode(BaseExecutor):
                 widget="dropdown",
                 enum=["yolo", "ssd", "mtcnn"],
             ),
+            "model_path": ConfigSchemaProperty(
+                type="string",
+                title="模型路径",
+                description="模型文件的完整路径（仅 yolo 类型需要）",
+                default="",
+                widget="text",
+            ),
             "confidence": ConfigSchemaProperty(
                 type="number",
                 title="置信度阈值",

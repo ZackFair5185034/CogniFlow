@@ -119,8 +119,23 @@ class ParallelBranchNode(BaseExecutor):
                     type=PortType.CONTROL.value,
                     description="分支3输出"
                 ),
-            }
+            },
+            config_schema=self.get_config_schema(),
         )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "max_concurrent": ConfigSchemaProperty(
+                type="integer",
+                title="最大并发数",
+                description="最多同时执行多少个分支",
+                default=3,
+                minimum=1,
+                maximum=10,
+                step=1,
+                widget="number",
+            ),
+        }
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return True, None

@@ -35,12 +35,12 @@ class RuleGraphExecutor:
         "BBOX": ["ANY", "BBOX"],
         "MASK": ["ANY", "MASK"],
         "SCORES": ["ANY", "SCORES"],
-        "TRIGGER": ["ANY", "TRIGGER", "CONTROL"],
-        "CONTROL": ["ANY", "CONTROL"],
+        "TRIGGER": ["ANY", "TRIGGER", "CONTROL", "BOOLEAN"],
+        "CONTROL": ["ANY", "CONTROL", "BOOLEAN"],
         "MODEL": ["ANY", "MODEL"],
         "INT": ["ANY", "INT"],
         "FLOAT": ["ANY", "FLOAT"],
-        "BOOLEAN": ["ANY", "BOOLEAN"],
+        "BOOLEAN": ["ANY", "BOOLEAN", "TRIGGER", "CONTROL"],
         "STRING": ["ANY", "STRING"],
         "ARRAY": ["ANY", "ARRAY"],
         "OBJECT": ["ANY", "OBJECT"],
@@ -128,10 +128,10 @@ class RuleGraphExecutor:
                 continue  # 跳过无法识别的节点
 
             # 获取源节点输出端口类型
-            source_executor = registry.get(source_type)
-            if not source_executor:
+            source_executor_cls = registry.get(source_type)
+            if not source_executor_cls:
                 continue
-            source_def = source_executor.get_definition()
+            source_def = source_executor_cls().get_definition()
             source_port_type = None
             if source_handle and source_handle in source_def.outputs:
                 source_port_type = source_def.outputs[source_handle].type
@@ -141,10 +141,10 @@ class RuleGraphExecutor:
                 source_port_type = first_output.type
 
             # 获取目标节点输入端口类型
-            target_executor = registry.get(target_type)
-            if not target_executor:
+            target_executor_cls = registry.get(target_type)
+            if not target_executor_cls:
                 continue
-            target_def = target_executor.get_definition()
+            target_def = target_executor_cls().get_definition()
             target_port_type = None
             if target_handle and target_handle in target_def.inputs:
                 target_port_type = target_def.inputs[target_handle].type
@@ -413,16 +413,24 @@ class RuleGraphExecutor:
         trigger_data = trigger_data or {}
 
         # 解析图数据
-        nodes = graph_data.get("nodes", {})
+        raw_nodes = graph_data.get("nodes", {})
         edges = graph_data.get("edges", [])
         variables = graph_data.get("variables", {})
+
+        # 统一节点格式：前端保存为 list [{id, type, data}],
+        # 执行器内部使用 dict {node_id: node}
+        if isinstance(raw_nodes, list):
+            nodes = {n["id"]: n for n in raw_nodes if "id" in n}
+        elif isinstance(raw_nodes, dict):
+            nodes = dict(raw_nodes)
+        else:
+            nodes = {}
 
         if not nodes:
             raise ValidationError("规则图为空")
 
         # 校验图连接（端口类型兼容性）
-        # _validate_graph_connections 期望 List[Dict]，但 nodes 是 Dict[str, Dict] 结构
-        nodes_list = [node for node in nodes.values()] if isinstance(nodes, dict) else nodes
+        nodes_list = list(nodes.values())
         self._validate_graph_connections(nodes_list, edges)
 
         # 拓扑排序
@@ -556,9 +564,13 @@ class RuleGraphExecutor:
         if not node:
             raise ExecutorError(f"节点 {node_id} 不存在", node_id=node_id)
 
-        node_type = node.get("type")
         node_data = node.get("data", {})
-        params = node_data.get("params", {})
+        # 节点类型：优先读 data.type（前端格式），兼容 node.type（测试格式）
+        node_type = node_data.get("type") or node.get("type")
+        # 配置参数：兼容前端格式 data.config（扁平）和测试格式 data.params（嵌套）
+        flat_config = node_data.get("config") or node_data.get("params", {})
+        params = flat_config if isinstance(flat_config, dict) else {}
+        # 输入端口连接信息
         inputs_config = node_data.get("inputs", {})
 
         # 更新状态为 running
@@ -576,9 +588,13 @@ class RuleGraphExecutor:
             # 合并默认参数
             merged_inputs = {**inputs, **params}
 
-            # 获取执行器实例
+            # 获取执行器实例（包装配置为 {params: ...} 格式，兼容各节点 executor 的读取方式）
             registry = get_registry()
-            executor = registry.create_node(node_type, node_id=node_id, config=node_data)
+            executor = registry.create_node(
+                node_type,
+                node_id=node_id,
+                config={"params": params}
+            )
 
             if not executor:
                 raise ExecutorError(f"未知的节点类型: {node_type}", node_id=node_id, node_type=node_type)

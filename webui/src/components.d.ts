@@ -22,6 +22,7 @@ declare module 'vue' {
     ElOption: typeof import('element-plus')['ElOption']
     ElSelect: typeof import('element-plus')['ElSelect']
     ElSlider: typeof import('element-plus')['ElSlider']
+    ElSwitch: typeof import('element-plus')['ElSwitch']
     ElTable: typeof import('element-plus')['ElTable']
     ElTableColumn: typeof import('element-plus')['ElTableColumn']
     Handle: typeof import('@vue-flow/core')['Handle']
