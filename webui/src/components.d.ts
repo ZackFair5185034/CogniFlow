@@ -25,6 +25,7 @@ declare module 'vue' {
     ElSwitch: typeof import('element-plus')['ElSwitch']
     ElTable: typeof import('element-plus')['ElTable']
     ElTableColumn: typeof import('element-plus')['ElTableColumn']
+    ElTooltip: typeof import('element-plus')['ElTooltip']
     Handle: typeof import('@vue-flow/core')['Handle']
     LoadingSpinner: typeof import('./components/LoadingSpinner.vue')['default']
     MiniMap: typeof import('@vue-flow/minimap')['MiniMap']

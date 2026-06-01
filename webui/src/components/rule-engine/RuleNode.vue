@@ -3,7 +3,6 @@
     class="rule-node"
     :class="[`category-${data.category}`, { selected }]"
     @contextmenu.prevent="handleContextMenu"
-    v-memo="[data.category, data.status, data.label, configSummary, selected]"
   >
     <!-- 标题栏 -->
     <div class="node-header">
@@ -33,13 +32,15 @@
         <div class="field-control">
           <!-- Slider -->
           <template v-if="schema.widget === 'slider'">
-            <el-slider
-              :model-value="getNodeValue(key) as number"
-              :min="schema.minimum"
-              :max="schema.maximum"
-              :step="schema.step"
-              @update:model-value="(v: number | number[]) => updateConfig(key, Array.isArray(v) ? v[0] : v)"
-            />
+            <div style="flex:1; min-width:0;" @mousedown.stop>
+              <el-slider
+                :model-value="getNodeValue(key) as number"
+                :min="schema.minimum"
+                :max="schema.maximum"
+                :step="schema.step"
+                @update:model-value="(v: number | number[]) => updateConfig(key, Array.isArray(v) ? v[0] : v)"
+              />
+            </div>
             <span class="slider-value">{{ getNodeValue(key) }}</span>
           </template>
 
@@ -52,6 +53,7 @@
               :step="schema.step"
               :controls="false"
               class="number-input"
+              @mousedown.stop
               @update:model-value="(v: number | undefined) => updateConfig(key, v ?? null)"
             />
           </template>
@@ -61,6 +63,7 @@
             <el-select
               :model-value="getNodeValue(key)"
               class="select-input"
+              @mousedown.stop
               @update:model-value="updateConfig(key, $event)"
             >
               <el-option
@@ -81,6 +84,7 @@
               collapse-tags-tooltip
               class="select-input"
               placeholder="请选择..."
+              @mousedown.stop
               @update:model-value="updateConfig(key, $event)"
             >
               <el-option
@@ -95,11 +99,19 @@
           <!-- Model Select -->
           <template v-else-if="schema.widget === 'model-select'">
             <el-select
+              :key="'ms-' + availableModels.length"
               :model-value="getNodeValue(key)"
               class="select-input model-select"
-              placeholder="选择模型..."
+              :placeholder="availableModels.length === 0 ? '暂无可用模型（请先训练模型）' : '选择模型...'"
+              @mousedown.stop
               @update:model-value="updateConfig(key, $event)"
             >
+              <el-option
+                v-if="availableModels.length === 0"
+                :value="''"
+                label="暂无可用模型"
+                disabled
+              />
               <el-option
                 v-for="model in availableModels"
                 :key="model.id"
@@ -167,6 +179,7 @@
               :model-value="!!getNodeValue(key)"
               active-text="开启"
               inactive-text="关闭"
+              @mousedown.stop
               @update:model-value="(v: unknown) => updateConfig(key, !!v)"
             />
           </template>
@@ -192,15 +205,21 @@
             />
           </template>
 
-          <!-- 变量绑定按钮 -->
-          <button
+          <!-- 变量绑定按钮：引用上游节点的输出值作为当前字段的变量 -->
+          <el-tooltip
             v-if="schema.widget !== 'checkbox' && schema.widget !== 'toggle' && schema.widget !== 'multiselect'"
-            class="var-bind-btn"
-            title="绑定变量"
-            @click.stop="toggleVarMenu(key)"
+            content="绑定变量 — 引用上游节点输出的值作为动态输入（格式：{{变量名}}）"
+            placement="top"
+            :show-after="300"
           >
-            📎
-          </button>
+            <button
+              class="var-bind-btn"
+              title="绑定变量 — 引用上游节点的输出"
+              @click.stop="toggleVarMenu(key)"
+            >
+              <SvgIcon name="tag" />
+            </button>
+          </el-tooltip>
 
           <!-- 变量下拉菜单 -->
           <div
@@ -218,14 +237,6 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- 底部配置摘要 -->
-    <div
-      v-if="configSummary"
-      class="node-footer"
-    >
-      <span class="summary-text">{{ configSummary }}</span>
     </div>
 
     <!-- 端口区域 - 左进右出（自然连接流） -->
@@ -278,7 +289,7 @@
     <button
       class="node-delete-btn"
       title="删除节点"
-      @click.stop="data.onDelete?.(data.id)"
+      @click.stop="handleDelete"
     >
       ×
     </button>
@@ -287,6 +298,7 @@
 
 <script setup lang="ts">
 import { Position } from '@vue-flow/core'
+import { useRuleEngineStore } from '@/stores/ruleEngine'
 
 /** 节点配置值类型 */
 type NodeConfigValue = string | number | boolean | (string | number)[] | null
@@ -320,20 +332,22 @@ interface NodeData {
   configSchema?: Record<string, ConfigSchemaProperty>
   config?: Record<string, NodeConfigValue>
   status?: string
-  onDelete?: (nodeId: string) => void
 }
 
-// 删除按钮点击回调 - 通过 props 传入
 const props = defineProps<{
   data: NodeData
   selected?: boolean
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:config', key: string, value: NodeConfigValue): void
-  (e: 'delete', nodeId: string): void
   (e: 'contextmenu', event: MouseEvent): void
 }>()
+
+const store = useRuleEngineStore()
+
+function handleDelete() {
+  store.removeNode(props.data.id)
+}
 
 function handleContextMenu(event: MouseEvent) {
   event.preventDefault()
@@ -367,8 +381,8 @@ function getNodeValue(key: string): NodeConfigValue {
   return (nodeConfig.value as Record<string, NodeConfigValue>)[key] ?? null
 }
 
-// 可用模型（model-select用）
-const availableModels = inject<Array<{ id: number; name: string }>>('availableModels', [])
+// 可用模型（model-select用，从 Pinia store 读取）
+const availableModels = computed(() => store.availableModels)
 
 // 可用变量列表（从父组件注入）
 interface Variable {
@@ -480,36 +494,9 @@ function formatVarRef(name: string) {
   return `{{${name}}}`
 }
 
-// 底部配置摘要
-const configSummary = computed(() => {
-  const parts: string[] = []
-  const schema = props.data.configSchema || {}
-  const config = nodeConfig.value
-
-  // 关键配置项：model_id, confidence, threshold 等
-  const summaryKeys = ['model_id', 'confidence', 'iou_threshold', 'max_detections', 'device',
-                        'interval_ms', 'delay_ms', 'expression', 'method', 'url']
-
-  for (const key of summaryKeys) {
-    if (schema[key] && config[key] !== undefined) {
-      const val = config[key]
-      const label = schema[key]?.title || key
-      if (val !== '' && val !== null && val !== undefined) {
-        // 截断过长值
-        const displayVal = String(val).length > 12
-          ? `${String(val).slice(0, 10)}...`
-          : String(val)
-        parts.push(`${label}: ${displayVal}`)
-      }
-    }
-  }
-
-  return parts.slice(0, 3).join(' | ') // 最多显示3项
-})
-
-// 更新配置
+// 更新配置 - 直连 Pinia Store（绕过事件转发）
 function updateConfig(key: string, value: string | number | boolean | null) {
-  emit('update:config', key, value)
+  store.updateNodeConfig(props.data.id, key, value)
 }
 
 // 清理 inputRefs 避免内存泄漏
@@ -759,11 +746,19 @@ onBeforeUnmount(() => {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 11px;
-  padding: 2px 4px;
+  padding: 3px 4px;
   border-radius: 3px;
-  color: #888;
+  color: #777;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.var-bind-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .var-bind-btn:hover {
@@ -801,24 +796,6 @@ onBeforeUnmount(() => {
 .field-control {
   position: relative;
   flex-wrap: wrap;
-}
-
-/* 底部配置摘要 */
-.node-footer {
-  padding: 4px 12px;
-  background: #16161e;
-  border-top: 1px solid #2a2a3a;
-  border-radius: 0 0 8px 8px;
-}
-
-.summary-text {
-  font-size: 10px;
-  color: #777;
-  font-family: monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: block;
 }
 
 /* 端口区域 - 左进右出自然连接流 */

@@ -131,7 +131,7 @@
             <el-input
               v-model="createForm.description"
               type="textarea"
-              rows="3"
+              :rows="3"
               placeholder="输入描述（可选）"
             />
           </div>
@@ -183,7 +183,7 @@
             <el-input
               v-model="renameForm.description"
               type="textarea"
-              rows="3"
+              :rows="3"
               placeholder="输入描述（可选）"
             />
           </div>

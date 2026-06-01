@@ -83,15 +83,17 @@
       <h2 class="doc-section-title">Phase 10: 端到端可用性 — P0 阻断项</h2>
 
       <div class="priority-p0">
-        <h3>10.1 model-select widget 对接模型管理 API</h3>
+        <h3>10.1 model-select widget 对接模型管理 API <span style="color:var(--accent-green);">✅ 已完成</span></h3>
         <p><strong>问题：</strong>yolo_model / yolo_trigger 节点的 configSchema 中定义了 <code>widget: "model-select"</code>，但前端渲染时仅显示空下拉，未从后端获取模型列表。用户无法选择模型。</p>
+        <p><strong>解决方案：</strong>前端架构重构为 Pinia Store 单源模式，Store 新增 <code>availableModels</code> + <code>fetchModels()</code>，<code>onMounted</code> 独立 try-catch 确保模型列表加载不受前置 API 失败影响。RuleNode 通过 <code>computed(() =&gt; store.availableModels)</code> 读取，空列表时显示提示。</p>
         <p><strong>涉及文件：</strong></p>
         <ul class="doc-list" style="margin: 8px 0 12px;">
-          <li><code>webui/src/components/rule-engine/RuleNode.vue</code> — 需要新增 model-select widget 渲染逻辑（调用模型 API）</li>
-          <li><code>backend/routers/model.py</code> — 确认已有模型列表 API</li>
-          <li><code>webui/src/api/</code> — 可能需新增模型查询接口封装</li>
+          <li><code>webui/src/stores/ruleEngine.ts</code> — 新增 <code>availableModels</code> 状态和 <code>fetchModels()</code> 方法</li>
+          <li><code>webui/src/components/rule-engine/RuleNode.vue</code> — model-select widget 渲染逻辑，从 Store 读取模型列表</li>
+          <li><code>webui/src/views/RuleCanvas.vue</code> — <code>onMounted</code> 独立 try-catch 调用 <code>fetchModels()</code></li>
+          <li><code>webui/src/api/</code> — 使用已有的 <code>modelApi.list()</code></li>
         </ul>
-        <p><strong>验收标准：</strong>yolo_model 节点配置下拉能展示已训练的模型列表，选中后保存时可提交 model_id。</p>
+        <p><span style="color:var(--accent-green);">✅ 验收通过：</span>yolo_model 节点配置下拉展示已训练模型列表，空列表时显示"暂无可用模型"。</p>
       </div>
 
       <div class="priority-p0">

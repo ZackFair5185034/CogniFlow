@@ -34,7 +34,7 @@
             class="icon-btn"
             :disabled="!canUndo"
             title="撤销 (Ctrl+Z)"
-            @click="handleUndo"
+            @click="store.undo()"
           >
             <SvgIcon name="undo" />
           </el-button>
@@ -42,7 +42,7 @@
             class="icon-btn"
             :disabled="!canRedo"
             title="重做 (Ctrl+Y)"
-            @click="handleRedo"
+            @click="store.redo()"
           >
             <SvgIcon name="redo" />
           </el-button>
@@ -609,9 +609,10 @@
 </template>
 
 <script setup lang="ts">
-import { throttle, debounce } from 'lodash-es'
-import { type NodeDefinition, type RuleNodeData } from '@/stores/ruleEngine'
-import { ruleEngineApi, modelApi } from '@/api'
+import { throttle } from 'lodash-es'
+import { useRuleEngineStore, type RuleNodeData, type NodeDefinition } from '@/stores/ruleEngine'
+import { storeToRefs } from 'pinia'
+import { ruleEngineApi } from '@/api'
 import type { Node, Edge, NodeMouseEvent, EdgeMouseEvent } from '@vue-flow/core'
 import { SelectionMode } from '@vue-flow/core'
 import RuleNode from '@/components/rule-engine/RuleNode.vue'
@@ -622,25 +623,50 @@ import '@vue-flow/minimap/dist/style.css'
 
 const router = useRouter()
 const route = useRoute()
-const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate, userSelectionRect, setViewport, getViewport, addSelectedNodes, removeSelectedNodes } = useVueFlow()
+const { fitView, setCenter, screenToFlowCoordinate, userSelectionRect, setViewport, getViewport, addSelectedNodes, getNodes } = useVueFlow()
+
+// ============ Store 绑定（唯一数据源）============
+const store = useRuleEngineStore()
+const {
+  nodes,
+  edges,
+  canUndo,
+  canRedo,
+  hasNodes,
+  variables,
+  nodeDefinitions,
+  graphMeta: graph,
+} = storeToRefs(store)
+
+// 执行状态（computed 包装，保持模板兼容）
+const executionStatus = computed(() => store.executionState.status)
+const executionProgress = computed(() => store.executionState.progress)
+const executionLogs = computed(() => store.executionState.logs)
+const executionId = computed(() => store.executionState.executionId)
+
+// ---- 模板兼容函数（委托给 Store）----
+
+// 变量管理（模板使用 index，store 使用 name）
+function addVariable() {
+  store.addVariable()
+}
+
+function removeVariable(index: number) {
+  const name = variables.value[index]?.name
+  if (name) store.removeVariable(name)
+}
+
+function updateVariable(index: number, field: string, value: string) {
+  const name = variables.value[index]?.name
+  if (name) store.updateVariable(name, { [field]: value })
+}
 
 // 常量
 const gridSize = 30
 
-// 状态
+// 本地 UI 状态
 const graphId = computed(() => Number(route.params.id))
-const graph = ref<any>(null)
 const graphName = ref('')
-// 使用 shallowRef 减少大量节点的响应式开销
-// shallowRef 只追踪 .value 的替换，不深度追踪数组内部变化
-// VueFlow 内部已维护节点状态，我们只需要在必要时同步本地副本
-const nodes = shallowRef<Node<RuleNodeData>[]>([])
-const edges = shallowRef<Edge[]>([])
-const nodeDefinitions = ref<NodeDefinition[]>([])
-const selectedNode = ref<any>(null)
-const nodeConfig = ref<any>({})
-// 变量列表 - 支持的类型：STRING/NUMBER/BOOLEAN/IMAGE/BBOX
-const variables = ref<Array<{ name: string; type: string; defaultValue: any; description: string }>>([])
 const showVariables = ref(true)
 const loading = ref(false)
 const saving = ref(false)
@@ -650,10 +676,6 @@ const showMiniMap = ref(true)
 const snapGrid = ref(true)
 const showGrid = ref(true)
 const showExecutionPanel = ref(false)
-const executionLogs = ref<any[]>([])
-const executionStatus = ref<'idle' | 'running' | 'success' | 'failed'>('idle')
-const executionProgress = ref(0)
-const executionId = ref<number | null>(null)
 const flowContainer = ref<HTMLElement | null>(null)
 const vueFlowRef = ref<any>(null)
 const canvasWrapper = ref<HTMLElement | null>(null)
@@ -662,16 +684,6 @@ const panY = ref(0)
 const zoomLevel = ref(1)
 const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
-
-// 节点执行状态: nodeId -> 'pending' | 'running' | 'success' | 'failed'
-const nodeStates = ref<Record<string, string>>({})
-
-// 可用模型列表（model-select widget 使用）
-const availableModels = ref<Array<{ id: number; name: string }>>([])
-
-// 向下注入变量和模型列表供 RuleNode 组件使用
-provide('variables', variables)
-provide('availableModels', availableModels)
 
 // 复制粘贴
 const clipboard = ref<Node<RuleNodeData>[]>([])
@@ -691,7 +703,7 @@ const panelHeight = ref(200)
 const isResizingPanel = ref(false)
 const panelResizeCleanup = ref<(() => void) | null>(null)
 
-// palette 折叠后的宽度（配合 execution-panel left 动态响应）
+// palette 折叠后的宽度
 const COLLAPSED_WIDTH = 48
 const EXPANDED_WIDTH = 280
 
@@ -702,24 +714,6 @@ const varMenu = reactive({
   y: 0,
   fieldKey: '' as string
 })
-
-// 撤销/重做（使用 pause/unpause 机制优化拖拽时的历史记录）
-const historyStack = ref<{ nodes: Node<RuleNodeData>[]; edges: Edge[] }[]>([])
-const historyIndex = ref(-1)
-const isHistoryPaused = ref(false)  // 暂停历史记录（用于拖拽等批量操作）
-const canUndo = computed(() => historyIndex.value > 0)
-const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
-
-// 暂停历史记录（拖拽开始时调用）
-function pauseHistory() {
-  isHistoryPaused.value = true
-}
-
-// 恢复历史记录并保存快照（拖拽结束时调用）
-function unpauseHistory() {
-  isHistoryPaused.value = false
-  saveHistory()
-}
 
 // 节点分类展开状态（reactive，分离避免循环引用）
 const categoryExpanded = reactive({
@@ -746,11 +740,8 @@ const nodeSearchQuery = ref('')
 const filteredCategories = computed(() => {
   const query = nodeSearchQuery.value.trim().toLowerCase()
   if (!query) {
-    // 无搜索词：直接返回 nodeCategories，避免重复创建数组
     return nodeCategories.value
   }
-  // 搜索模式：展开所有有匹配节点的分类
-  // 使用 filter + map 顺序优化，先过滤再映射减少对象创建
   return nodeCategories.value
     .map(cat => ({
       ...cat,
@@ -759,13 +750,12 @@ const filteredCategories = computed(() => {
         n.type?.toLowerCase().includes(query) ||
         n.description?.toLowerCase().includes(query)
       ),
-      expanded: true // 搜索时强制展开
+      expanded: true
     }))
-    .filter(cat => cat.nodes.length > 0) // 隐藏空分类
+    .filter(cat => cat.nodes.length > 0)
 })
 
 function handleSearchInput() {
-  // 搜索时自动展开所有分类
   if (nodeSearchQuery.value.trim()) {
     Object.keys(categoryExpanded).forEach(key => categoryExpanded[key as keyof typeof categoryExpanded] = true)
   }
@@ -777,9 +767,6 @@ function toggleCategory(name: string) {
 
 // 快速添加
 const quickAddNodes = computed(() => nodeDefinitions.value.slice(0, 4))
-
-// 是否有节点
-const hasNodes = computed(() => nodes.value.length > 0)
 
 // 执行状态文本
 const executionStatusText = computed(() => ({
@@ -809,18 +796,18 @@ const nodeTypes = {
   ruleNode: markRaw(RuleNode)
 } as unknown as Record<string, any>
 
-// 小地图颜色 - 提取为模块常量避免每次调用创建对象
+// 小地图颜色
 const NODE_CATEGORY_COLORS: Record<string, string> = {
-  input: '#4CFF4C',      // input (#4CFF4C)
-  detection: '#00f0FF',  // detection (#00f0FF)
-  processing: '#FFFF4C', // processing (#FFFF4C)
-  action: '#FF7F4C',     // action (#FF7F4C)
-  logic: '#DC4FDC',      // logic (#DC4FDC)
-  output: '#FF4C4C'       // output (#FF4C4C)
+  input: '#4CFF4C',
+  detection: '#00f0FF',
+  processing: '#FFFF4C',
+  action: '#FF7F4C',
+  logic: '#DC4FDC',
+  output: '#FF4C4C'
 }
 
-function miniMapNodeColor(node: { category?: string }) {
-  return NODE_CATEGORY_COLORS[node.category || ''] || '#888'
+function miniMapNodeColor(node: { data?: { category?: string } }) {
+  return NODE_CATEGORY_COLORS[node.data?.category || ''] || '#888'
 }
 
 
@@ -845,7 +832,6 @@ function connectWebSocket(execId: number) {
 
     ws.onopen = () => {
       wsConnected.value = true
-      // 订阅该 execution_id
       ws?.send(JSON.stringify({ action: 'subscribe', execution_id: execId }))
     }
 
@@ -860,7 +846,6 @@ function connectWebSocket(execId: number) {
 
     ws.onerror = () => {
       wsConnected.value = false
-      // 自动重连
       if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
       wsReconnectTimer = setTimeout(() => {
         if (executionStatus.value === 'running' && executionId.value) {
@@ -892,8 +877,8 @@ function disconnectWebSocket() {
 function handleWsMessage(msg: any) {
   switch (msg.type) {
     case 'node_started':
-      nodeStates.value[msg.node_id] = 'running'
-      executionLogs.value.push({
+      store.setNodeExecutionState(msg.node_id, 'running')
+      store.addExecutionLog({
         level: 'info',
         timestamp: formatTime(msg.timestamp),
         node_type: msg.node_type,
@@ -901,8 +886,8 @@ function handleWsMessage(msg: any) {
       })
       break
     case 'node_executed':
-      nodeStates.value[msg.node_id] = 'success'
-      executionLogs.value.push({
+      store.setNodeExecutionState(msg.node_id, 'success')
+      store.addExecutionLog({
         level: 'success',
         timestamp: formatTime(msg.timestamp),
         node_type: msg.node_type,
@@ -911,8 +896,8 @@ function handleWsMessage(msg: any) {
       })
       break
     case 'node_failed':
-      nodeStates.value[msg.node_id] = 'failed'
-      executionLogs.value.push({
+      store.setNodeExecutionState(msg.node_id, 'failed')
+      store.addExecutionLog({
         level: 'error',
         timestamp: formatTime(msg.timestamp),
         node_type: msg.node_type,
@@ -921,13 +906,12 @@ function handleWsMessage(msg: any) {
       ElMessage.error(`节点执行失败: ${msg.error}`)
       break
     case 'execution_progress':
-      // 节流进度更新，限制为每秒最多2次更新（500ms间隔）
       throttledUpdateProgress(msg.progress)
       break
     case 'execution_complete':
-      executionStatus.value = msg.status === 'completed' ? 'success' : 'failed'
-      executionProgress.value = 100
-      executionLogs.value.push({
+      store.setExecutionStatus(msg.status === 'completed' ? 'success' : 'failed')
+      store.setExecutionProgress(100)
+      store.addExecutionLog({
         level: msg.status === 'completed' ? 'success' : 'error',
         timestamp: formatTime(msg.timestamp),
         node_type: '',
@@ -938,8 +922,7 @@ function handleWsMessage(msg: any) {
       } else {
         ElMessage.error(`执行失败: ${msg.error || ''}`)
       }
-      // 重置节点状态
-      setTimeout(() => { nodeStates.value = {} }, 2000)
+      setTimeout(() => store.clearExecution(), 2000)
       disconnectWebSocket()
       break
   }
@@ -963,36 +946,13 @@ function formatDuration(ms: number) {
   return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`
 }
 
-// 节流进度更新函数，限制为每秒2次更新（500ms间隔）
+// 节流进度更新函数
 const throttledUpdateProgress = throttle((progress: number) => {
-  executionProgress.value = progress
+  store.setExecutionProgress(progress)
 }, 500)
-
-// 防抖历史记录保存 - 批量处理避免频繁深拷贝
-// 500ms 防抖延迟，组件卸载时取消
-const flushHistory = debounce(() => {
-  saveHistory()
-}, 500)
-
-// 右键菜单操作
-function saveHistory() {
-  // 暂停时不保存（等待 unpause 时统一保存）
-  if (isHistoryPaused.value) return
-  historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
-  historyStack.value.push({
-    nodes: JSON.parse(JSON.stringify(nodes.value.map((n) => ({ ...n, selected: false, dragging: false })))),
-    edges: JSON.parse(JSON.stringify(edges.value))
-  })
-  historyIndex.value = historyStack.value.length - 1
-  if (historyStack.value.length > 50) {
-    historyStack.value.shift()
-    historyIndex.value--
-  }
-}
 
 // 键盘事件处理
 function handleKeyDown(event: KeyboardEvent) {
-  // 忽略输入框内的按键
   const target = event.target as HTMLElement
   if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
     return
@@ -1000,42 +960,31 @@ function handleKeyDown(event: KeyboardEvent) {
 
   const isCtrl = event.ctrlKey || event.metaKey
 
-  // Ctrl+C: 复制
   if (isCtrl && event.key === 'c') {
     event.preventDefault()
     handleCopy()
     return
   }
-
-  // Ctrl+X: 剪切
   if (isCtrl && event.key === 'x') {
     event.preventDefault()
     handleCut()
     return
   }
-
-  // Ctrl+V: 粘贴
   if (isCtrl && event.key === 'v') {
     event.preventDefault()
     handlePaste()
     return
   }
-
-  // Ctrl+Z: 撤销
   if (isCtrl && event.key === 'z' && !event.shiftKey) {
     event.preventDefault()
-    handleUndo()
+    store.undo()
     return
   }
-
-  // Ctrl+Y / Ctrl+Shift+Z: 重做
   if (isCtrl && (event.key === 'y' || (event.key === 'z' && event.shiftKey))) {
     event.preventDefault()
-    handleRedo()
+    store.redo()
     return
   }
-
-  // Delete / Backspace: 删除选中
   if (event.key === 'Delete' || event.key === 'Backspace') {
     event.preventDefault()
     handleDelete()
@@ -1045,30 +994,30 @@ function handleKeyDown(event: KeyboardEvent) {
 
 // 复制
 function handleCopy() {
-  const selected = nodes.value.filter((n) => (n as any).selected)
+  const vfNodes = getNodes.value as any[]
+  const selected = vfNodes.filter((n) => n.selected)
   if (selected.length === 0) {
     ElMessage.warning('请先选择要复制的节点')
     return
   }
   clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
+  clipboardMode.value = 'copy'
   ElMessage.success(`已复制 ${selected.length} 个节点`)
 }
 
 // 剪切
 function handleCut() {
-  const selected = nodes.value.filter((n) => (n as any).selected)
+  const vfNodes = getNodes.value as any[]
+  const selected = vfNodes.filter((n) => n.selected)
   if (selected.length === 0) {
     ElMessage.warning('请先选择要剪切的节点')
     return
   }
-  clipboard.value = selected.map((n) => JSON.parse(JSON.stringify(n)))
+  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
   clipboardMode.value = 'cut'
-  // 立即删除
-  removeNodes(selected.map((n) => n.id))
-  // 清理与被删除节点关联的边
-  edges.value = edges.value.filter((e) =>
-    !selected.some((n) => n.id === e.source || n.id === e.target)
-  )
+  for (const n of selected) {
+    store.removeNode(n.id)
+  }
   ElMessage.success(`已剪切 ${selected.length} 个节点`)
 }
 
@@ -1079,19 +1028,16 @@ function handlePaste() {
     return
   }
 
-  const container = flowContainer.value
-  if (!container) return
-
   const offsetX = 50
   const offsetY = 50
 
-  const newNodes = clipboard.value.map((n) => {
+  for (const n of clipboard.value) {
     const cloned = JSON.parse(JSON.stringify(n))
     const newId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-    return {
+    const nodeData = {
       ...cloned,
       id: newId,
-      type: 'ruleNode',  // 确保使用自定义节点组件
+      type: 'ruleNode',
       position: {
         x: n.position.x + offsetX,
         y: n.position.y + offsetY
@@ -1100,65 +1046,53 @@ function handlePaste() {
       data: {
         ...(cloned.data || {}),
         id: newId,
-        selected: false,
-        onDelete: handleNodeDelete
+        selected: false
       }
     }
-  })
+    store.nodes.push(nodeData)
+  }
 
-  // 如果是剪切模式，清除原选中节点
   if (clipboardMode.value === 'cut') {
     clipboard.value = []
   }
 
-  addNodes(newNodes)
-  saveHistory()
-  ElMessage.success(`已粘贴 ${newNodes.length} 个节点`)
+  store.saveHistory()
+  ElMessage.success(`已粘贴 ${clipboard.value.length} 个节点`)
 }
 
-// 框选结束 - 同步 VueFlow 选中状态到本地 nodes 副本
+// 框选结束
 function handleSelectionDragStop({ nodes: selectedNodes }: { nodes: Node<RuleNodeData>[] }) {
   const selectedIds = new Set(selectedNodes.map((n) => n.id))
-  nodes.value = nodes.value.map((n) => ({
+  // store.nodes 通过 storeToRefs 绑定，直接替换以触发响应更新
+  const updated = store.nodes.map((n: any) => ({
     ...n,
     selected: selectedIds.has(n.id)
   }))
+  store.nodes = updated as any
   userSelectionRect.value = null
 }
 
 // 节点删除按钮点击
 function handleNodeDelete(nodeId: string) {
-  // 使用 VueFlow 的 removeNodes 方法删除节点
-  removeNodes(nodeId)
-  // 同时删除关联的边
-  edges.value = edges.value.filter((e) => e.source !== nodeId && e.target !== nodeId)
-  saveHistory()
+  store.removeNode(nodeId)
   ElMessage.info('节点已删除')
 }
 
 // 删除选中
 function handleDelete() {
-  const selectedNodes = nodes.value.filter((n) => (n as any).selected)
-  const selectedEdges = edges.value.filter((e) => (e as any).selected)
+  const vfNodes = getNodes.value as any[]
+  const selectedNodes = vfNodes.filter((n) => n.selected)
+  const selectedEdges = edges.value.filter((e: any) => e.selected)
 
-  if (selectedNodes.length === 0 && selectedEdges.length === 0) {
-    return
-  }
+  if (selectedNodes.length === 0 && selectedEdges.length === 0) return
 
-  // 删除节点时同步删除关联的边
   const nodeIds = selectedNodes.map((n) => n.id)
-  edges.value = edges.value.filter((e) =>
-    !nodeIds.includes(e.source) && !nodeIds.includes(e.target)
-  )
-
-  // 删除节点 - 使用 filter 保持响应式
-  nodes.value = nodes.value.filter((node) => !selectedNodes.some((n) => n.id === node.id))
-
-  // 删除边
-  edges.value = edges.value.filter((edge) => !selectedEdges.some((e) => e.id === edge.id))
-
-  selectedNode.value = null
-  saveHistory()
+  for (const id of nodeIds) {
+    store.removeNode(id)
+  }
+  for (const e of selectedEdges) {
+    store.removeEdge(e.id)
+  }
   ElMessage.success(`已删除 ${selectedNodes.length} 个节点`)
 }
 
@@ -1173,7 +1107,6 @@ function handleContextMenu(event: MouseEvent, target: Node | Edge | NodeDefiniti
   contextMenu.targetType = type
 }
 
-// 节点面板右键菜单
 function handlePaletteContextMenu(event: MouseEvent, node: NodeDefinition) {
   event.preventDefault()
   contextMenu.show = true
@@ -1183,12 +1116,10 @@ function handlePaletteContextMenu(event: MouseEvent, node: NodeDefinition) {
   contextMenu.targetType = 'pane'
 }
 
-// 隐藏右键菜单
 function hideContextMenu() {
   contextMenu.show = false
 }
 
-// 隐藏变量菜单
 function hideVariableMenu() {
   varMenu.show = false
 }
@@ -1196,14 +1127,16 @@ function hideVariableMenu() {
 // 插入变量到字段
 function insertVariable(varName: string) {
   if (!varMenu.fieldKey) return
-  const currentValue = nodeConfig.value[varMenu.fieldKey] || ''
-  // 如果当前值已包含 {{}}，则追加；否则添加 {{varName}}
-  if (currentValue.includes('{{') && currentValue.includes('}}')) {
-    nodeConfig.value[varMenu.fieldKey] = `${currentValue}{{${varName}}}`
-  } else {
-    nodeConfig.value[varMenu.fieldKey] = `{{${varName}}}`
+  const selNode = store.selectedNode
+  if (!selNode?.data?.config) return
+  const currentValue = String(selNode.data.config[varMenu.fieldKey] || '')
+  const varRef = `{{${varName}}}`
+  if (currentValue.includes(varRef)) {
+    hideVariableMenu()
+    return
   }
-  updateConfig(varMenu.fieldKey, nodeConfig.value[varMenu.fieldKey])
+  const newValue = currentValue ? `${currentValue} ${varRef}` : varRef
+  store.updateNodeConfig(selNode.id, varMenu.fieldKey, newValue)
   hideVariableMenu()
 }
 
@@ -1212,9 +1145,9 @@ function handleContextAction(action: string) {
   switch (action) {
     case 'copy':
       if (contextMenu.targetType === 'node' && contextMenu.target) {
-        const targetNode = contextMenu.target as Node<RuleNodeData>
-        addSelectedNodes([targetNode.id])
-        handleCopy()
+        clipboard.value = [JSON.parse(JSON.stringify(contextMenu.target))]
+        clipboardMode.value = 'copy'
+        ElMessage.success('已复制节点')
       }
       hideContextMenu()
       break
@@ -1224,39 +1157,20 @@ function handleContextAction(action: string) {
       break
     case 'delete':
       if (contextMenu.targetType === 'node' && contextMenu.target) {
-        const targetNode = contextMenu.target as Node<RuleNodeData>
-        addSelectedNodes([targetNode.id])
+        ;(addSelectedNodes as any)([(contextMenu.target as any).id])
       } else if (contextMenu.targetType === 'edge' && contextMenu.target) {
         const targetEdge = contextMenu.target as Edge
-        edges.value = edges.value.map((e: Edge) => ({ ...e, selected: e.id === targetEdge.id }))
+        store.edges = store.edges.map((e: Edge) => ({ ...e, selected: e.id === targetEdge.id })) as any
       }
       handleDelete()
       hideContextMenu()
       break
     case 'selectAll':
-      nodes.value.forEach((n: Node) => addSelectedNodes([n.id]))
+      for (const n of nodes.value) {
+        ;(addSelectedNodes as any)([n.id])
+      }
       hideContextMenu()
       break
-  }
-}
-
-// 撤销
-function handleUndo() {
-  if (canUndo.value) {
-    historyIndex.value--
-    const state = historyStack.value[historyIndex.value]
-    nodes.value = JSON.parse(JSON.stringify(state.nodes))
-    edges.value = JSON.parse(JSON.stringify(state.edges))
-  }
-}
-
-// 重做
-function handleRedo() {
-  if (canRedo.value) {
-    historyIndex.value++
-    const state = historyStack.value[historyIndex.value]
-    nodes.value = JSON.parse(JSON.stringify(state.nodes))
-    edges.value = JSON.parse(JSON.stringify(state.edges))
   }
 }
 
@@ -1277,103 +1191,37 @@ function zoomOut() {
 
 // 生命周期
 onMounted(async () => {
-  await loadGraph()
-  await loadNodeDefinitions()
-  saveHistory()
-  await loadModels()
+  loading.value = true
+  // 各 API 调用独立 try-catch，防止单点失败阻塞后续加载
+  try {
+    await store.loadGraph(graphId.value)
+    graphName.value = store.graphMeta?.name || ''
+  } catch (err) {
+    console.error('加载规则图失败:', err)
+    ElMessage.error('加载规则图失败')
+  }
+  try {
+    await store.fetchNodeDefinitions()
+    store.saveHistory()
+  } catch (err) {
+    console.error('加载节点定义失败:', err)
+  }
+  try {
+    await store.fetchModels()
+  } catch (err) {
+    console.error('加载模型列表失败:', err)
+  }
+  loading.value = false
+  // 注入变量供 RuleNode 使用
+  provide('variables', variables)
   // 键盘事件
   window.addEventListener('keydown', handleKeyDown)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
-  // 取消防抖历史记录的挂起调用
-  flushHistory.cancel()
-  // 清理面板 resize 事件监听
   panelResizeCleanup.value?.()
 })
-
-// 加载规则图
-async function loadGraph() {
-  loading.value = true
-  // 重置选中状态，避免切换规则图时状态残留
-  selectedNode.value = null
-  try {
-    const res = await ruleEngineApi.getGraphDetail(graphId.value)
-    graph.value = res.data
-    graphName.value = graph.value.name
-
-    nodes.value = (graph.value.nodes || []).map((n: any) => ({
-      id: n.id,
-      type: n.type,
-      position: n.position || { x: 0, y: 0 },
-      data: { ...n.data } as RuleNodeData,
-      category: getNodeCategory(n.type)
-    }))
-
-    // 同步节点执行状态
-    for (const n of nodes.value) {
-      if (n.data?.status) {
-        nodeStates.value[n.id] = n.data.status
-      }
-    }
-
-    edges.value = (graph.value.edges || []).map((e: any) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      sourceHandle: e.source_handle,
-      targetHandle: e.target_handle,
-      type: 'default',
-      animated: false,
-      markerEnd: MarkerType.ArrowClosed
-    }))
-
-    // 加载变量列表
-    try {
-      const vars = JSON.parse(graph.value.variables_json || '{}')
-      variables.value = Object.entries(vars).map(([name, config]: [string, any]) => ({
-        name,
-        type: config.type || 'STRING',
-        defaultValue: config.defaultValue || '',
-        description: config.description || ''
-      }))
-    } catch {
-      variables.value = []
-    }
-  } catch (err) {
-    console.error('加载规则图失败:', err)
-    ElMessage.error('加载规则图失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-// 加载节点定义
-async function loadNodeDefinitions() {
-  try {
-    const res = await ruleEngineApi.getNodeDefinitions()
-    nodeDefinitions.value = res.data
-  } catch (err) {
-    console.error('加载节点定义失败:', err)
-  }
-}
-
-// 加载可用模型列表（供 model-select widget 使用）
-async function loadModels() {
-  try {
-    const res = await modelApi.list()
-    availableModels.value = (res.data as Array<{ id: number; name: string }>)
-  } catch (err) {
-    console.error('加载模型列表失败:', err)
-  }
-}
-
-// 获取节点分类
-function getNodeCategory(type: string): string {
-  const def = nodeDefinitions.value.find((d) => d.type === type)
-  return def?.category || 'action'
-}
 
 // 返回
 function goBack() {
@@ -1382,10 +1230,14 @@ function goBack() {
 
 // 名称修改
 async function handleNameChange() {
-  if (graphName.value !== graph.value?.name) {
+  const meta = store.graphMeta
+  if (graphName.value !== meta?.name) {
     try {
-      await ruleEngineApi.updateGraph(graphId.value, { name: graphName.value })
-      graph.value.name = graphName.value
+      // 直接更新 graphMeta 的 name
+      if (store.graphMeta) {
+        store.graphMeta = { ...store.graphMeta, name: graphName.value }
+      }
+      await store.saveGraph()
       ElMessage.success('名称已更新')
     } catch {
       ElMessage.error('更新名称失败')
@@ -1412,33 +1264,12 @@ function handleDrop(event: DragEvent) {
     y: event.clientY - rect.top
   })
 
-  // 吸附到网格
   if (snapGrid.value) {
     position.x = Math.round(position.x / gridSize) * gridSize
     position.y = Math.round(position.y / gridSize) * gridSize
   }
 
-  const newNode = {
-    id: `node_${Date.now()}`,
-    type: 'ruleNode',
-    position,
-    data: {
-      id: `node_${Date.now()}`,
-      type: nodeDef.type,
-      category: nodeDef.category,
-      label: nodeDef.label,
-      description: nodeDef.description,
-      configSchema: nodeDef.config_schema,
-      inputs: nodeDef.inputs,
-      outputs: nodeDef.outputs,
-      config: {},
-      selected: false,
-      onDelete: handleNodeDelete
-    }
-  }
-
-  addNodes([newNode])
-  saveHistory()
+  store.createNode(nodeDef, position)
 }
 
 // 快速添加
@@ -1446,66 +1277,37 @@ function quickAddNode(nodeDef: NodeDefinition) {
   const centerX = (flowContainer.value?.clientWidth || 800) / 2 / zoomLevel.value
   const centerY = (flowContainer.value?.clientHeight || 600) / 2 / zoomLevel.value
 
-  const newNode = {
-    id: `node_${Date.now()}`,
-    type: 'ruleNode',
-    position: {
-      x: centerX + Math.random() * 100 - 50,
-      y: centerY + Math.random() * 100 - 50
-    },
-    data: {
-      id: `node_${Date.now()}`,
-      type: nodeDef.type,
-      category: nodeDef.category,
-      label: nodeDef.label,
-      description: nodeDef.description,
-      configSchema: nodeDef.config_schema,
-      inputs: nodeDef.inputs,
-      outputs: nodeDef.outputs,
-      config: {},
-      selected: false,
-      onDelete: handleNodeDelete
-    }
-  }
-
-  addNodes([newNode])
-  saveHistory()
+  store.createNode(nodeDef, {
+    x: centerX + Math.random() * 100 - 50,
+    y: centerY + Math.random() * 100 - 50
+  })
   ElMessage.success(`已添加 ${nodeDef.label}`)
 }
 
 // 节点点击
 function handleNodeClick(event: any) {
-  const nodeId = event.node.id
-  const node = nodes.value.find(n => n.id === nodeId)
-  if (node) {
-    selectedNode.value = node
-    nodeConfig.value = { ...node.data }
-  }
+  store.selectNode(event.node.id)
 }
 
 // 节点拖拽
 function handleNodeDragStart() {
-  pauseHistory()
+  store.pauseHistory()
 }
 
 function handleNodeDragStop() {
-  unpauseHistory()
+  store.unpauseHistory()
 }
 
 // 画布点击
 function handlePaneClick() {
-  selectedNode.value = null
+  store.selectNode(null)
 }
 
-// 端口类型兼容性检查（14种类型 + ANY通配）
+// 端口类型兼容性检查
 function isPortCompatible(sourceType: string, targetType: string): boolean {
-  // ANY 可以连接任何类型
   if (sourceType === 'ANY' || targetType === 'ANY') return true
-  // 相同类型可以连接
   if (sourceType === targetType) return true
-  // TRIGGER 可以连接到 TRIGGER 或 CONTROL
   if (sourceType === 'TRIGGER' && (targetType === 'TRIGGER' || targetType === 'CONTROL')) return true
-  // CONTROL 只能连接到 CONTROL
   if (sourceType === 'CONTROL' && targetType === 'CONTROL') return true
   return false
 }
@@ -1515,104 +1317,73 @@ function getNodePortType(nodeId: string, handleId: string | null, isSource: bool
   if (!node) return null
   const ports = isSource ? (node.data?.outputs || []) : (node.data?.inputs || [])
   if (!ports?.length) return null
-  // handleId 是端口名，需要用 find 匹配（ports 是数组，不是对象）
   if (handleId) {
     const port = ports.find((p: any) => p.name === handleId)
     return port?.type || 'ANY'
   }
-  // 如果没有指定handle，返回第一个端口的类型
   return ports[0]?.type || 'ANY'
 }
 
 function validateConnection(params: any): { valid: boolean; error?: string } {
   const { source, target, sourceHandle, targetHandle } = params
-  
-  // 获取源节点和目标节点
   const sourceNode = nodes.value.find(n => n.id === source)
   const targetNode = nodes.value.find(n => n.id === target)
-  
-  if (!sourceNode || !targetNode) {
-    return { valid: false, error: '节点不存在' }
-  }
-  
-  // 禁止自己连接自己
-  if (source === target) {
-    return { valid: false, error: '不能连接到自己' }
-  }
-  
-  // 获取端口类型
+
+  if (!sourceNode || !targetNode) return { valid: false, error: '节点不存在' }
+  if (source === target) return { valid: false, error: '不能连接到自己' }
+
   const sourceType = getNodePortType(source, sourceHandle, true)
   const targetType = getNodePortType(target, targetHandle, false)
-  
-  if (sourceType === null || targetType === null) {
-    return { valid: false, error: '端口定义缺失' }
-  }
-  
-  // 类型兼容性检查
-  if (!isPortCompatible(sourceType, targetType)) {
-    return { valid: false, error: `类型不兼容: ${sourceType} → ${targetType}` }
-  }
-  
+
+  if (sourceType === null || targetType === null) return { valid: false, error: '端口定义缺失' }
+  if (!isPortCompatible(sourceType, targetType)) return { valid: false, error: `类型不兼容: ${sourceType} → ${targetType}` }
+
   return { valid: true }
 }
 
-// VueFlow 专用连接验证（用于高亮和阻止连接）
+// VueFlow 专用连接验证
 function isValidConnection(connection: any): boolean {
   const { source, target, sourceHandle, targetHandle } = connection
-
-  // 不能连接自己
   if (source === target) return false
 
-  // 获取端口类型
   const sourceType = getNodePortType(source, sourceHandle, true)
   const targetType = getNodePortType(target, targetHandle, false)
 
-  if (sourceType === null || targetType === null) return true // 未知类型允许连接
+  if (sourceType === null || targetType === null) return true
 
-  // 类型兼容性检查
   return isPortCompatible(sourceType, targetType)
 }
 
 // 连接
 function handleConnect(params: any) {
-  // 验证连接类型兼容性
   const validation = validateConnection(params)
   if (!validation.valid) {
     ElMessage.error(validation.error || '连接失败')
     return
   }
-  
-  addEdges([{
-    ...params,
-    type: 'default',
-    animated: false,
-    markerEnd: MarkerType.ArrowClosed,
-    id: `e-${params.source}-${params.target}-${Date.now()}`
-  }])
-  flushHistory()
+
+  store.addEdge({
+    source: params.source,
+    target: params.target,
+    sourceHandle: params.sourceHandle,
+    targetHandle: params.targetHandle
+  })
 }
 
 // 节点/边变化
 function handleNodesChange(changes: Array<{ type: string; id?: string }>) {
-  // VueFlow 会自动更新 nodes.value，我们需要同步本地状态
-  // 只在外部变化时保存历史（使用防抖避免频繁深拷贝）
   const hasRemoval = changes.some(c => c.type === 'remove')
   if (hasRemoval) {
-    // 节点被删除，同步更新本地 edges
     const remainingNodeIds = nodes.value.map((n) => n.id)
-    edges.value = edges.value.filter((e) =>
+    store.edges = store.edges.filter((e: Edge) =>
       remainingNodeIds.includes(e.source) && remainingNodeIds.includes(e.target)
-    )
-    flushHistory()
+    ) as any
+    store.saveHistory()
   }
 }
 
-function handleEdgesChange(changes: Array<{ type: string; id?: string }>) {
-  // 边的增删操作时保存历史
-  const hasEdgeChange = changes.some(c => c.type === 'add' || c.type === 'remove')
-  if (hasEdgeChange) {
-    flushHistory()
-  }
+function handleEdgesChange(_changes: Array<{ type: string; id?: string }>) {
+  // 边变化由 store 的 addEdge/removeEdge 自动保存历史
 }
 
 // 画布平移
@@ -1621,19 +1392,14 @@ function handlePan(moveEvent: { event: unknown; flowTransform: { x: number; y: n
   panY.value = -moveEvent.flowTransform.y
 }
 
-// 缩放
 function handleZoom({ zoom }: { zoom: number; event: unknown }) {
   zoomLevel.value = zoom
 }
 
-// 鼠标滚轮缩放
 function handleWheel(event: WheelEvent) {
-  if (event.ctrlKey) {
-    event.preventDefault()
-  }
+  if (event.ctrlKey) event.preventDefault()
 }
 
-// 画布拖拽平移
 function handleCanvasMouseDown(event: MouseEvent) {
   if (event.button === 1 || (event.button === 0 && event.altKey)) {
     isPanning.value = true
@@ -1646,11 +1412,7 @@ function handleCanvasMouseMove(event: MouseEvent) {
     const dx = event.clientX - lastMousePos.value.x
     const dy = event.clientY - lastMousePos.value.y
     const viewport = getViewport()
-    setViewport({
-      x: viewport.x + dx,
-      y: viewport.y + dy,
-      zoom: viewport.zoom,
-    })
+    setViewport({ x: viewport.x + dx, y: viewport.y + dy, zoom: viewport.zoom })
     lastMousePos.value = { x: event.clientX, y: event.clientY }
   }
 }
@@ -1665,15 +1427,13 @@ function startPanelResize(e: MouseEvent) {
   const startY = e.clientY
   const startHeight = panelHeight.value
   const onMove = (ev: MouseEvent) => {
-    const newHeight = startHeight + (startY - ev.clientY)
-    panelHeight.value = Math.max(100, Math.min(500, newHeight))
+    panelHeight.value = Math.max(100, Math.min(500, startHeight + (startY - ev.clientY)))
   }
   const onUp = () => {
     isResizingPanel.value = false
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
   }
-  // 存储清理函数供卸载时调用
   panelResizeCleanup.value = () => {
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
@@ -1682,75 +1442,13 @@ function startPanelResize(e: MouseEvent) {
   document.addEventListener('mouseup', onUp)
 }
 
-// 更新配置
-function updateConfig(key: string, value: any) {
-  nodeConfig.value[key] = value
-  const node = nodes.value.find((n: Node) => n.id === selectedNode.value?.id)
-  if (node) {
-    if (!node.data) {
-      node.data = {} as RuleNodeData
-    }
-    node.data.config = { ...nodeConfig.value }
-  }
-}
-
-// ============ 变量管理 ============
-function addVariable() {
-  const newVar = {
-    name: `var_${variables.value.length + 1}`,
-    type: 'STRING',
-    defaultValue: '',
-    description: ''
-  }
-  variables.value.push(newVar)
-  saveHistory()
-}
-
-function removeVariable(index: number) {
-  variables.value.splice(index, 1)
-  saveHistory()
-}
-
-function updateVariable(index: number, field: string, value: any) {
-  if (variables.value[index]) {
-    ;(variables.value[index] as any)[field] = value
-  }
-}
-
 // 保存
 async function handleSave() {
   saving.value = true
   try {
-    // 构建变量 JSON
-    const varsObj: Record<string, any> = {}
-    for (const v of variables.value) {
-      varsObj[v.name] = {
-        type: v.type,
-        defaultValue: v.defaultValue,
-        description: v.description
-      }
-    }
-
-    await ruleEngineApi.updateGraph(graphId.value, {
-      nodes_json: JSON.stringify(nodes.value.map(n => ({
-        id: n.id,
-        type: n.type,
-        position: n.position,
-        data: n.data
-      }))),
-      edges_json: JSON.stringify(edges.value.map(e => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        source_handle: e.sourceHandle,
-        target_handle: e.targetHandle
-      }))),
-      variables_json: JSON.stringify(varsObj)
-    })
-    // 生成并保存缩略图
+    await store.saveGraph()
     await captureAndSaveThumbnail()
     ElMessage.success('保存成功')
-    saveHistory()
   } catch (err) {
     console.error('保存失败:', err)
     ElMessage.error('保存失败')
@@ -1765,24 +1463,18 @@ async function captureAndSaveThumbnail() {
     const vueFlow = vueFlowRef.value
     if (!vueFlow) return
 
-    // 调用 VueFlow 的 toObject 获取当前视图内容
     const flowExport = vueFlow.toObject?.()
     if (!flowExport || !flowExport.nodes?.length) return
 
-    // 创建一个离屏 canvas 来渲染缩略图
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // 缩略图尺寸 320x180 (16:9)
     canvas.width = 320
     canvas.height = 180
-
-    // 填充深色背景
     ctx.fillStyle = '#1a1a2e'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    // 获取所有节点的位置范围
     const xs = flowExport.nodes.map((n: any) => n.position?.x || 0)
     const ys = flowExport.nodes.map((n: any) => n.position?.y || 0)
     if (!xs.length) return
@@ -1793,14 +1485,8 @@ async function captureAndSaveThumbnail() {
     const maxY = Math.max(...ys) + 60
     const graphW = maxX - minX || 1
     const graphH = maxY - minY || 1
-
-    // 计算缩放比例，完整容纳所有节点
     const padding = 20
-    const availW = canvas.width - padding * 2
-    const availH = canvas.height - padding * 2
-    const scale = Math.min(availW / graphW, availH / graphH, 1)
-
-    // 居中偏移
+    const scale = Math.min((canvas.width - padding * 2) / graphW, (canvas.height - padding * 2) / graphH, 1)
     const offsetX = (canvas.width - graphW * scale) / 2 - minX * scale
     const offsetY = (canvas.height - graphH * scale) / 2 - minY * scale
 
@@ -1812,16 +1498,12 @@ async function captureAndSaveThumbnail() {
     ctx.strokeStyle = '#5898ff'
     ctx.lineWidth = 2 / scale
     for (const edge of flowExport.edges || []) {
-      const sourceNode = flowExport.nodes.find((n: any) => n.id === edge.source)
-      const targetNode = flowExport.nodes.find((n: any) => n.id === edge.target)
-      if (sourceNode && targetNode) {
-        const sx = (sourceNode.position?.x || 0) + 60
-        const sy = (sourceNode.position?.y || 0) + 20
-        const tx = (targetNode.position?.x || 0) + 60
-        const ty = (targetNode.position?.y || 0) + 20
+      const sn = flowExport.nodes.find((n: any) => n.id === edge.source)
+      const tn = flowExport.nodes.find((n: any) => n.id === edge.target)
+      if (sn && tn) {
         ctx.beginPath()
-        ctx.moveTo(sx, sy)
-        ctx.lineTo(tx, ty)
+        ctx.moveTo((sn.position?.x || 0) + 60, (sn.position?.y || 0) + 20)
+        ctx.lineTo((tn.position?.x || 0) + 60, (tn.position?.y || 0) + 20)
         ctx.stroke()
       }
     }
@@ -1830,19 +1512,14 @@ async function captureAndSaveThumbnail() {
     for (const node of flowExport.nodes || []) {
       const x = node.position?.x || 0
       const y = node.position?.y || 0
-      const w = 120
-      const h = 40
-
-      // 根据节点类型设置颜色
       let bgColor = '#2d2d4a'
       let borderColor = '#5898ff'
-      if (node.type?.includes('trigger')) {
+      if (node.data?.type?.includes('trigger')) {
         bgColor = '#1a3a4a'
-        borderColor = '#5898ff'
-      } else if (node.type?.includes('condition') || node.type?.includes('logic')) {
+      } else if (node.data?.type?.includes('condition') || node.data?.type?.includes('logic')) {
         bgColor = '#3a2d4a'
         borderColor = '#aa66ff'
-      } else if (node.type?.includes('action') || node.type?.includes('yolo')) {
+      } else if (node.data?.type?.includes('action') || node.data?.type?.includes('yolo')) {
         bgColor = '#2d4a3a'
         borderColor = '#22c55e'
       }
@@ -1851,25 +1528,21 @@ async function captureAndSaveThumbnail() {
       ctx.strokeStyle = borderColor
       ctx.lineWidth = 2 / scale
       ctx.beginPath()
-      ctx.roundRect(x, y, w, h, 6 / scale)
+      ctx.roundRect(x, y, 120, 40, 6 / scale)
       ctx.fill()
       ctx.stroke()
 
-      // 节点名称
       ctx.fillStyle = '#fff'
       ctx.font = `${12 / scale}px sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      const label = node.data?.label || node.id || ''
-      ctx.fillText(label.substring(0, 12), x + w / 2, y + h / 2)
+      ctx.fillText((node.data?.label || node.id || '').substring(0, 12), x + 60, y + 20)
     }
 
     ctx.restore()
 
-    // 转换为 Base64
     const dataUrl = canvas.toDataURL('image/png', 0.7)
-    // 上传到后端
-    await ruleEngineApi.updateThumbnail(graphId.value, dataUrl)
+    await ruleEngineApi.updateThumbnail(store.graphMeta?.id || graphId.value, dataUrl)
   } catch (err) {
     console.error('生成缩略图失败:', err)
   }
@@ -1894,11 +1567,10 @@ async function handleExecute() {
   await handleSave()
 
   executing.value = true
-  executionStatus.value = 'running'
-  executionProgress.value = 0
+  store.setExecutionStatus('running')
+  store.setExecutionProgress(0)
+  store.clearExecution()
   showExecutionPanel.value = true
-  executionLogs.value = []
-  nodeStates.value = {}
 
   try {
     const res = await ruleEngineApi.execute({
@@ -1906,16 +1578,12 @@ async function handleExecute() {
       trigger_type: 'manual'
     })
 
-    // Phase 5: WebSocket 实时推送
     const execId = res.data.execution_id
-    executionId.value = execId
+    store.setExecutionId(execId)
     connectWebSocket(execId)
-
-    // WebSocket 足够可靠，前端轮询备用方案暂不实现
-
   } catch (err: any) {
-    executionStatus.value = 'failed'
-    executionLogs.value.push({
+    store.setExecutionStatus('failed')
+    store.addExecutionLog({
       level: 'error',
       timestamp: new Date().toLocaleTimeString(),
       message: err?.response?.data?.detail || '执行失败'
@@ -1927,7 +1595,7 @@ async function handleExecute() {
 
 // 清空日志
 function clearLogs() {
-  executionLogs.value = []
+  store.clearExecution()
 }
 </script>
 

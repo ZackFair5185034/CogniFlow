@@ -179,7 +179,7 @@
             <el-input
               v-model="createForm.description"
               type="textarea"
-              rows="3"
+              :rows="3"
               placeholder="描述规则的用途..."
             />
           </div>

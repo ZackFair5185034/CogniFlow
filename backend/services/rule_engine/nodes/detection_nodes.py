@@ -177,8 +177,8 @@ class YOLOModelNode(BaseExecutor):
                 db = SessionLocal()
                 try:
                     model_record = db.query(Model).filter(Model.id == model_id).first()
-                    if model_record and model_record.model_path:
-                        model_path = model_record.model_path
+                    if model_record and model_record.file_path:
+                        model_path = model_record.file_path
                 finally:
                     db.close()
 
@@ -366,8 +366,8 @@ class YOLOTriggerNode(BaseExecutor):
                             db = SessionLocal()
                             try:
                                 model_record = db.query(Model).filter(Model.id == model_id).first()
-                                if model_record and model_record.model_path:
-                                    model_path = model_record.model_path
+                                if model_record and model_record.file_path:
+                                    model_path = model_record.file_path
                             finally:
                                 db.close()
 

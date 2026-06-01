@@ -128,10 +128,11 @@ node_modules
 .playwright-cli/
 .playwright-mcp/
 
-# Claude
+# vib coding
 **/.claude/
 **/.omc/
 **/.rtk/
+**/.codegraph/
 
 # Uploads (runtime data)
 uploads/

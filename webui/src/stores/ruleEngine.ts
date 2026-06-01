@@ -2,12 +2,14 @@
 /**
  * 规则引擎状态管理 - Pinia Store
  *
- * 提供规则引擎的全局状态管理，包括节点定义、规则图、变量、撤销重做等。
+ * 提供规则引擎的全局状态管理，作为唯一数据源（Single Source of Truth）。
+ * RuleCanvas（画布视图）和 RuleNode（节点组件）均从此读取/写入状态。
+ * VueFlow 通过 storeToRefs 绑定的 writable ref 与 store 保持同步。
  */
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { ruleEngineApi } from '@/api'
+import { ruleEngineApi, modelApi } from '@/api'
 import type {
   NodeDefinition as NodeDefinitionBase,
   GraphNode as GraphNodeBase,
@@ -17,6 +19,8 @@ import type {
   RuleNodeData,
   VariableType
 } from '@/types/api'
+import type { Node, Edge } from '@vue-flow/core'
+import type { Ref } from 'vue'
 
 // ============ 类型别名（兼容旧代码）============
 
@@ -33,58 +37,88 @@ export interface Variable {
   description?: string
 }
 
+/** 规则图元数据 */
+export interface GraphMeta {
+  id: number
+  name: string
+  description?: string
+  is_active: boolean
+  version?: string
+  thumbnail?: string
+}
+
+/** 执行状态 */
+export interface ExecutionState {
+  status: 'idle' | 'running' | 'success' | 'failed'
+  progress: number
+  executionId: number | null
+  logs: Array<{
+    level: string
+    timestamp: string
+    node_type?: string
+    message: string
+    duration_ms?: number
+  }>
+  nodeStates: Record<string, string>
+}
+
 // ============ Store 定义 ============
 
 export const useRuleEngineStore = defineStore('ruleEngine', () => {
-  // ---- 状态 ----
+  // ============ 状态 ============
 
-  /** 节点定义列表 */
+  /** 节点定义列表（节点面板数据） */
   const nodeDefinitions = ref<NodeDefinition[]>([])
 
-  /** 当前规则图 */
-  const currentGraph = ref<{
-    id: number
-    name: string
-    description?: string
-    is_active: boolean
-    nodes: GraphNode[]
-    edges: GraphEdge[]
-  } | null>(null)
+  /** 规则图元数据 */
+  const graphMeta = ref<GraphMeta | null>(null)
+
+  /** 规则图节点 - 唯一数据源，VueFlow v-model 绑定到此 */
+  const nodes: Ref<Node<RuleNodeData>[]> = ref([])
+
+  /** 规则图边 - 唯一数据源，VueFlow v-model 绑定到此 */
+  const edges: Ref<Edge[]> = ref([])
 
   /** 选中的节点 ID */
   const selectedNodeId = ref<string | null>(null)
 
-  /** 执行状态 - 正在执行的图 ID */
-  const executingGraphId = ref<number | null>(null)
-
-  /** 执行历史 */
-  const executionHistory = ref<Array<{
-    id: number
-    status: string
-    start_time: string
-    end_time?: string
-  }>>([])
-
   /** 变量列表 */
   const variables = ref<Variable[]>([])
 
+  /** 可用模型列表（供 model-select widget 使用） */
+  const availableModels = ref<Array<{ id: number; name: string }>>([])
+
+  /** 执行状态 */
+  const executionState = ref<ExecutionState>({
+    status: 'idle',
+    progress: 0,
+    executionId: null,
+    logs: [],
+    nodeStates: {}
+  })
+
   // ---- Undo/Redo 栈 ----
-  const historyStack = ref<Array<{ nodes: GraphNode[]; edges: GraphEdge[] }>>([])
+  const historyStack = ref<Array<{ nodes: any[]; edges: any[] }>>([])
   const historyIndex = ref(-1)
-  const maxHistorySize = 20
+  const isHistoryPaused = ref(false)
+  const maxHistorySize = 50
 
-  // ---- 计算属性 ----
+  // ============ 计算属性 ============
 
-  /** 选中的节点 */
-  const selectedNode = computed(() =>
-    currentGraph.value?.nodes.find(n => n.id === selectedNodeId.value) ?? null
-  )
+  /** 选中的节点对象 */
+  const selectedNode = computed((): Node<RuleNodeData> | null => {
+    const list: Node<RuleNodeData>[] = nodes.value
+    return list.find(n => n.id === selectedNodeId.value) ?? null
+  })
 
   /** 是否可以撤销 */
   const canUndo = computed(() => historyIndex.value > 0)
 
   /** 是否可以重做 */
   const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
+
+  /** 是否有节点 */
+  const hasNodes = computed(() => nodes.value.length > 0)
 
   /** 按类别分组的节点定义 */
   const nodeDefinitionsByCategory = computed(() => {
@@ -96,28 +130,85 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     return map
   })
 
-  // ---- Actions ----
+  // ============ 数据加载 ============
 
-  /**
-   * 获取节点定义列表
-   */
+  /** 获取节点定义列表 */
   async function fetchNodeDefinitions() {
-    const res = await ruleEngineApi.getNodeDefinitions()
-    nodeDefinitions.value = res.data
-    return res.data
+    try {
+      const res = await ruleEngineApi.getNodeDefinitions()
+      nodeDefinitions.value = res.data
+      return res.data
+    } catch (err) {
+      console.error('加载节点定义失败:', err)
+      return []
+    }
+  }
+
+  /** 加载可用模型列表 */
+  async function fetchModels() {
+    try {
+      const res = await modelApi.list()
+      availableModels.value = res.data as Array<{ id: number; name: string }>
+    } catch (err) {
+      console.error('加载模型列表失败:', err)
+    }
   }
 
   /**
-   * 获取规则图详情
+   * 加载规则图 - 从 API 获取并解析为 VueFlow 可用的节点/边格式。
+   *
+   * 数据规范：
+   * - n.type 始终归一化为 'ruleNode'（VueFlow 组件类型）
+   * - 原始业务类型（如 yolo_model）存储在 n.data.type 中
+   * - 兼容旧数据：旧版 n.type 可能为 'ruleNode'/'rule-node'
    */
-  async function fetchGraph(id: number) {
+  async function loadGraph(id: number) {
     const res = await ruleEngineApi.getGraphDetail(id)
-    currentGraph.value = res.data
+    const data = res.data
+
+    graphMeta.value = {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      is_active: data.is_active,
+      version: data.version,
+      thumbnail: data.thumbnail
+    }
+
+    // 解析节点：标准化 type 字段，补充必要属性
+    nodes.value = (data.nodes || []).map((n: any) => {
+      const isVueFlowType = n.type === 'ruleNode' || n.type === 'rule-node'
+      return {
+        id: n.id,
+        type: 'ruleNode',
+        position: n.position || { x: 0, y: 0 },
+        data: {
+          ...(n.data || {}),
+          // 确保 data.type 为原始业务类型（兼容新旧数据格式）
+          type: isVueFlowType ? (n.data?.type || 'unknown') : n.type,
+          id: n.id
+        } as RuleNodeData
+      }
+    })
+
+    // 解析边
+    edges.value = (data.edges || []).map((e: any) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.source_handle,
+      targetHandle: e.target_handle,
+      type: 'default',
+      animated: false,
+      markerEnd: { type: 'arrowclosed' }
+    }))
 
     // 解析变量
-    if (res.data.variables_json) {
+    if (data.variables_json) {
       try {
-        const vars = JSON.parse(res.data.variables_json) as Record<string, { type?: string; defaultValue?: VariableDefaultValue; description?: string }>
+        const vars = JSON.parse(data.variables_json) as Record<string, {
+          type?: string; defaultValue?: VariableDefaultValue; description?: string
+        }>
         variables.value = Object.entries(vars).map(([name, config]) => ({
           name,
           type: (config.type as VariableType) ?? 'STRING',
@@ -127,23 +218,29 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       } catch {
         variables.value = []
       }
-    } else if (res.data.variables) {
-      variables.value = res.data.variables
+    } else if (data.variables) {
+      variables.value = data.variables
     }
 
-    // 初始化撤销栈
-    saveToHistory()
-    return res.data
+    saveHistory()
+    return data
   }
 
+  // ============ 保存 ============
+
   /**
-   * 保存规则图
+   * 保存规则图 - 将节点/边序列化为 JSON 字符串写入后端。
+   *
+   * 保存规范：
+   * - 只保存业务字段（id, position, data），不保存 VueFlow 内部字段
+   * - type 保存原始业务类型（n.data.type），便于后续兼容
    */
   async function saveGraph() {
-    if (!currentGraph.value) return
+    if (!graphMeta.value) return
 
-    // 构建变量 JSON
-    const varsObj: Record<string, { type: VariableType; defaultValue: VariableDefaultValue; description: string }> = {}
+    const varsObj: Record<string, {
+      type: VariableType; defaultValue: VariableDefaultValue; description: string
+    }> = {}
     for (const v of variables.value) {
       varsObj[v.name] = {
         type: v.type,
@@ -152,153 +249,174 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       }
     }
 
-    await ruleEngineApi.updateGraph(currentGraph.value.id, {
-      name: currentGraph.value.name,
-      nodes_json: JSON.stringify(currentGraph.value.nodes),
-      edges_json: JSON.stringify(currentGraph.value.edges),
+    await ruleEngineApi.updateGraph(graphMeta.value.id, {
+      name: graphMeta.value.name,
+      nodes_json: JSON.stringify(nodes.value.map(n => ({
+        id: n.id,
+        type: n.data?.type || 'unknown',
+        position: n.position,
+        data: n.data
+      }))),
+      edges_json: JSON.stringify(edges.value.map(e => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        source_handle: e.sourceHandle,
+        target_handle: e.targetHandle
+      }))),
       variables_json: JSON.stringify(varsObj)
     })
+
+    saveHistory()
   }
 
-  // ---- 节点操作 ----
+  // ============ 节点操作 ============
 
   /**
-   * 添加节点到画布
+   * 创建并添加节点到画布。
+   * - 使用 'ruleNode' 作为 VueFlow 组件类型
+   * - 原始业务类型（如 yolo_model）存储在 data.type 中
+   * - 自动从 configSchema 提取默认配置值
    */
-  function addNode(def: NodeDefinition, position: { x: number; y: number }): string | undefined {
-    if (!currentGraph.value) return
-
+  function createNode(
+    def: NodeDefinition,
+    position: { x: number; y: number }
+  ): boolean {
     const id = `node_${Date.now()}`
-    const newNode: GraphNode = {
+    const newNode: Node<RuleNodeData> = {
       id,
-      type: 'rule-node',
-      position,
+      type: 'ruleNode',
+      position: { ...position },
       data: {
+        id,
         type: def.type,
         label: def.label,
         category: def.category,
+        description: def.description,
         inputs: def.inputs,
         outputs: def.outputs,
         configSchema: def.config_schema,
         config: getDefaultConfig(def.config_schema),
-        status: 'idle'
-      }
+        status: 'idle',
+        selected: false
+      } as unknown as RuleNodeData
     }
-
-    currentGraph.value.nodes.push(newNode)
-    saveToHistory()
-    return id
+    nodes.value.push(newNode)
+    saveHistory()
+    return true
   }
 
   /**
-   * 更新节点配置
+   * 更新节点配置 - 不可变更新。
+   * RuleNode 组件通过此方法直接写入 store，绕过事件转发。
    */
   function updateNodeConfig(nodeId: string, key: string, value: VariableDefaultValue) {
-    const node = currentGraph.value?.nodes.find(n => n.id === nodeId)
-    if (node) {
-      node.data.config = node.data.config ?? {}
-      node.data.config[key] = value
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (node && node.data) {
+      node.data = {
+        ...node.data,
+        config: {
+          ...(node.data.config || {}),
+          [key]: value
+        }
+      } as RuleNodeData
     }
   }
 
   /**
-   * 删除节点
+   * 删除节点并清理关联边 / 选中状态 / 历史记录。
    */
   function removeNode(nodeId: string) {
-    if (!currentGraph.value) return
-
-    currentGraph.value.nodes = currentGraph.value.nodes.filter(n => n.id !== nodeId)
-    currentGraph.value.edges = currentGraph.value.edges.filter(
-      e => e.source !== nodeId && e.target !== nodeId
-    )
-
+    nodes.value = nodes.value.filter(n => n.id !== nodeId)
+    edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
     if (selectedNodeId.value === nodeId) {
       selectedNodeId.value = null
     }
-
-    saveToHistory()
+    saveHistory()
   }
 
-  /**
-   * 选择节点
-   */
+  /** 选中节点 */
   function selectNode(nodeId: string | null) {
     selectedNodeId.value = nodeId
   }
 
-  // ---- 边操作 ----
+  // ============ 边操作 ============
 
-  /**
-   * 添加边
-   */
-  function addEdge(edge: Omit<GraphEdge, 'id'>) {
-    if (!currentGraph.value) return
-    const id = `edge_${Date.now()}`
-    currentGraph.value.edges.push({ ...edge, id })
-    saveToHistory()
+  /** 添加边 */
+  function addEdge(connection: {
+    source: string; target: string
+    sourceHandle?: string | null; targetHandle?: string | null
+  }) {
+    edges.value.push({
+      id: `edge_${Date.now()}`,
+      source: connection.source,
+      target: connection.target,
+      sourceHandle: connection.sourceHandle ?? undefined,
+      targetHandle: connection.targetHandle ?? undefined,
+      type: 'default',
+      animated: false
+    })
+    saveHistory()
   }
 
-  /**
-   * 删除边
-   */
+  /** 删除边 */
   function removeEdge(edgeId: string) {
-    if (!currentGraph.value) return
-    currentGraph.value.edges = currentGraph.value.edges.filter(e => e.id !== edgeId)
-    saveToHistory()
+    edges.value = edges.value.filter(e => e.id !== edgeId)
+    saveHistory()
   }
 
-  // ---- Undo/Redo ----
+  // ============ Undo/Redo ============
 
-  /**
-   * 保存状态到历史记录
-   */
-  function saveToHistory() {
-    if (!currentGraph.value) return
-
-    const snapshot = {
-      nodes: JSON.parse(JSON.stringify(currentGraph.value.nodes)),
-      edges: JSON.parse(JSON.stringify(currentGraph.value.edges))
-    }
-
-    // 截断 redo 栈
+  /** 保存当前状态到历史栈（深拷贝，排除 VueFlow 内部字段） */
+  function saveHistory() {
+    if (isHistoryPaused.value) return
     historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
-    historyStack.value.push(snapshot)
-
-    // 限制栈大小
+    historyStack.value.push({
+      nodes: JSON.parse(
+        JSON.stringify(nodes.value.map(n => ({ ...n, selected: false, dragging: false })))
+      ),
+      edges: JSON.parse(
+        JSON.stringify(edges.value.map(e => ({ ...e, selected: false })))
+      )
+    })
+    historyIndex.value = historyStack.value.length - 1
     if (historyStack.value.length > maxHistorySize) {
       historyStack.value.shift()
-    } else {
-      historyIndex.value++
+      historyIndex.value--
     }
   }
 
-  /**
-   * 撤销
-   */
+  /** 撤销 */
   function undo() {
-    if (!canUndo.value || !currentGraph.value) return
+    if (!canUndo.value) return
     historyIndex.value--
     const snapshot = historyStack.value[historyIndex.value]
-    currentGraph.value.nodes = JSON.parse(JSON.stringify(snapshot.nodes))
-    currentGraph.value.edges = JSON.parse(JSON.stringify(snapshot.edges))
+    nodes.value = JSON.parse(JSON.stringify(snapshot.nodes))
+    edges.value = JSON.parse(JSON.stringify(snapshot.edges))
   }
 
-  /**
-   * 重做
-   */
+  /** 重做 */
   function redo() {
-    if (!canRedo.value || !currentGraph.value) return
+    if (!canRedo.value) return
     historyIndex.value++
     const snapshot = historyStack.value[historyIndex.value]
-    currentGraph.value.nodes = JSON.parse(JSON.stringify(snapshot.nodes))
-    currentGraph.value.edges = JSON.parse(JSON.stringify(snapshot.edges))
+    nodes.value = JSON.parse(JSON.stringify(snapshot.nodes))
+    edges.value = JSON.parse(JSON.stringify(snapshot.edges))
   }
 
-  // ---- 变量操作 ----
+  /** 暂停历史记录（拖拽等批量操作） */
+  function pauseHistory() {
+    isHistoryPaused.value = true
+  }
 
-  /**
-   * 添加变量
-   */
+  /** 恢复历史记录并保存快照 */
+  function unpauseHistory() {
+    isHistoryPaused.value = false
+    saveHistory()
+  }
+
+  // ============ 变量操作 ============
+
   function addVariable(variable?: Partial<Variable>): Variable {
     const newVar: Variable = {
       name: variable?.name ?? `var_${variables.value.length + 1}`,
@@ -310,16 +428,10 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     return newVar
   }
 
-  /**
-   * 删除变量
-   */
   function removeVariable(name: string) {
     variables.value = variables.value.filter(v => v.name !== name)
   }
 
-  /**
-   * 更新变量
-   */
   function updateVariable(name: string, updates: Partial<Variable>) {
     const v = variables.value.find(item => item.name === name)
     if (v) {
@@ -327,17 +439,46 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
   }
 
-  /**
-   * 获取变量
-   */
   function getVariable(name: string): Variable | undefined {
     return variables.value.find(v => v.name === name)
   }
 
-  // ---- 辅助函数 ----
+  // ============ 执行管理 ============
+
+  function setExecutionStatus(status: ExecutionState['status']) {
+    executionState.value.status = status
+  }
+
+  function addExecutionLog(log: ExecutionState['logs'][0]) {
+    executionState.value.logs.push(log)
+  }
+
+  function setExecutionProgress(progress: number) {
+    executionState.value.progress = progress
+  }
+
+  function setNodeExecutionState(nodeId: string, state: string) {
+    executionState.value.nodeStates[nodeId] = state
+  }
+
+  function clearExecution() {
+    executionState.value = {
+      status: 'idle',
+      progress: 0,
+      executionId: null,
+      logs: [],
+      nodeStates: {}
+    }
+  }
+
+  function setExecutionId(id: number) {
+    executionState.value.executionId = id
+  }
+
+  // ============ 辅助函数 ============
 
   /**
-   * 从 config_schema 获取默认值
+   * 从 config_schema 提取默认配置值。
    */
   function getDefaultConfig(
     schema: Record<string, ConfigSchemaProperty>
@@ -351,49 +492,76 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     return config
   }
 
-  // ---- 导出 ----
+  /**
+   * 获取节点类型对应的分类名称。
+   */
+  function getNodeCategory(type: string): string {
+    const def = nodeDefinitions.value.find(d => d.type === type)
+    return def?.category || 'action'
+  }
+
+  // ============ 导出 ============
   return {
     // 状态
     nodeDefinitions,
-    currentGraph,
+    graphMeta,
+    nodes,
+    edges,
     selectedNodeId,
-    executingGraphId,
-    executionHistory,
     variables,
+    availableModels,
+    executionState,
+    historyStack,
+    historyIndex,
+    isHistoryPaused,
+    maxHistorySize,
 
     // 计算属性
     selectedNode,
     canUndo,
     canRedo,
+    hasNodes,
     nodeDefinitionsByCategory,
 
-    // Actions - 数据获取
+    // 数据加载
     fetchNodeDefinitions,
-    fetchGraph,
+    fetchModels,
+    loadGraph,
     saveGraph,
 
-    // Actions - 节点操作
-    addNode,
+    // 节点操作
+    createNode,
     updateNodeConfig,
     removeNode,
     selectNode,
 
-    // Actions - 边操作
+    // 边操作
     addEdge,
     removeEdge,
 
-    // Actions - Undo/Redo
-    saveToHistory,
+    // Undo/Redo
+    saveHistory,
     undo,
     redo,
+    pauseHistory,
+    unpauseHistory,
 
-    // Actions - 变量操作
+    // 变量操作
     addVariable,
     removeVariable,
     updateVariable,
     getVariable,
 
+    // 执行管理
+    setExecutionStatus,
+    addExecutionLog,
+    setExecutionProgress,
+    setNodeExecutionState,
+    clearExecution,
+    setExecutionId,
+
     // 辅助函数
-    getDefaultConfig
+    getDefaultConfig,
+    getNodeCategory
   }
 })
