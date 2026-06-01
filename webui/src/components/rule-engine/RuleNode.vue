@@ -299,6 +299,7 @@
 <script setup lang="ts">
 import { Position } from '@vue-flow/core'
 import { useRuleEngineStore } from '@/stores/ruleEngine'
+import type { Variable } from '@/stores/ruleEngine'
 
 /** 节点配置值类型 */
 type NodeConfigValue = string | number | boolean | (string | number)[] | null
@@ -384,12 +385,8 @@ function getNodeValue(key: string): NodeConfigValue {
 // 可用模型（model-select用，从 Pinia store 读取）
 const availableModels = computed(() => store.availableModels)
 
-// 可用变量列表（从父组件注入）
-interface Variable {
-  name: string
-  type: string
-}
-const variables = inject<Variable[]>('variables', [])
+// 可用变量列表（从 Pinia store 读取，单源模式）
+const variables = computed<Variable[]>(() => store.variables)
 
 // 变量绑定菜单状态
 const activeVarMenu = ref<string | null>(null)

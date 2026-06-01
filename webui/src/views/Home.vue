@@ -216,8 +216,15 @@ const statusItems = computed(() => {
 // WebSocket
 let wsSystem: WebSocket | null = null
 let wsTraining: WebSocket | null = null
+// 防止组件卸载后定时器继续重连
+let intentionalDisconnect = false
+// 保存 setTimeout 句柄，便于卸载时清理
+let reconnectSystemTimer: number | null = null
+let reconnectTrainingTimer: number | null = null
 
 const connectSystemWs = () => {
+  // 组件已卸载则不再建立连接
+  if (intentionalDisconnect) return
   wsSystem = new WebSocket('/ws/system')
   wsSystem.onmessage = (event) => {
     const data = JSON.parse(event.data)
@@ -226,11 +233,16 @@ const connectSystemWs = () => {
     }
   }
   wsSystem.onclose = () => {
-    setTimeout(connectSystemWs, 3000)
+    wsSystem = null
+    // 组件已卸载则不重连
+    if (intentionalDisconnect) return
+    reconnectSystemTimer = window.setTimeout(connectSystemWs, 3000)
   }
 }
 
 const connectTrainingWs = () => {
+  // 组件已卸载则不再建立连接
+  if (intentionalDisconnect) return
   wsTraining = new WebSocket('/ws/training')
   wsTraining.onmessage = (event) => {
     const data = JSON.parse(event.data)
@@ -239,7 +251,10 @@ const connectTrainingWs = () => {
     }
   }
   wsTraining.onclose = () => {
-    setTimeout(connectTrainingWs, 3000)
+    wsTraining = null
+    // 组件已卸载则不重连
+    if (intentionalDisconnect) return
+    reconnectTrainingTimer = window.setTimeout(connectTrainingWs, 3000)
   }
 }
 
@@ -317,8 +332,25 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (wsSystem) wsSystem.close()
-  if (wsTraining) wsTraining.close()
+  // 标记为主动断开，避免 onclose 触发重连
+  intentionalDisconnect = true
+  // 清理待执行的重连定时器
+  if (reconnectSystemTimer !== null) {
+    clearTimeout(reconnectSystemTimer)
+    reconnectSystemTimer = null
+  }
+  if (reconnectTrainingTimer !== null) {
+    clearTimeout(reconnectTrainingTimer)
+    reconnectTrainingTimer = null
+  }
+  if (wsSystem) {
+    wsSystem.close()
+    wsSystem = null
+  }
+  if (wsTraining) {
+    wsTraining.close()
+    wsTraining = null
+  }
   stopTrainingProgressPolling()
 })
 </script>

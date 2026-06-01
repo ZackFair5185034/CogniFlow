@@ -3,13 +3,13 @@
     <!-- 顶部工具栏 -->
     <header class="canvas-header">
       <div class="header-left">
-        <el-button
+        <button
           class="icon-btn back-btn"
           title="返回规则列表"
           @click="goBack"
         >
           <SvgIcon name="back" />
-        </el-button>
+        </button>
         <div class="rule-name-section">
           <el-input
             v-model="graphName"
@@ -1212,8 +1212,6 @@ onMounted(async () => {
     console.error('加载模型列表失败:', err)
   }
   loading.value = false
-  // 注入变量供 RuleNode 使用
-  provide('variables', variables)
   // 键盘事件
   window.addEventListener('keydown', handleKeyDown)
 })
