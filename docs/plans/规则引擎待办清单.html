@@ -153,6 +153,40 @@
       </table>
     </div>
 
+    <!-- Phase 10 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">Phase 10: 端到端可用性 — Bug 修复 (2026-06-02)</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 12px;">
+        d2b7bbd 重构（Pinia Store 单源模式）落地后，前端启动报三个错误。逐一修复并落实单源模式。
+      </p>
+      <table class="doc-table">
+        <thead><tr><th>#</th><th>任务</th><th>文件</th><th>状态</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>10.1</td>
+            <td>WebSocket 关闭前未建立警告</td>
+            <td>webui/src/views/Home.vue</td>
+            <td><span class="doc-badge">已完成</span></td>
+            <td>增加 <code>intentionalDisconnect</code> 标志 + 保存/清理 <code>setTimeout</code> 句柄；用户快速卸载时不再出现孤儿重连</td>
+          </tr>
+          <tr>
+            <td>10.2</td>
+            <td>back-btn renderSlot null 'ce' 崩溃</td>
+            <td>webui/src/views/RuleCanvas.vue</td>
+            <td><span class="doc-badge">已完成</span></td>
+            <td>back-btn 从 <code>&lt;el-button&gt;</code> 改回原生 <code>&lt;button&gt;</code>，规避 ElButton slot 在快速卸载时访问 <code>vnode.ce</code> 为 null 的边缘崩溃</td>
+          </tr>
+          <tr>
+            <td>10.3</td>
+            <td>variables provide/inject 双源清理</td>
+            <td>RuleCanvas.vue / RuleNode.vue</td>
+            <td><span class="doc-badge">已完成</span></td>
+            <td>删除 <code>onMounted</code> 内错误的 <code>provide('variables', variables)</code>（<code>variables</code> 实际未定义）；RuleNode 改为 <code>computed(() =&gt; store.variables)</code>，彻底落实 d2b7bbd 单源模式</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- 已完成记录 -->
     <div class="doc-section">
       <h2 class="doc-section-title">已完成记录</h2>
@@ -171,6 +205,7 @@
           <tr><td>2026-05-11</td><td>Phase 7.1 输入类型节点输出端口居中修复</td><td>202df72</td></tr>
           <tr><td>2026-05-11</td><td>Phase 8 代码审查高/中优先级问题修复 + 后端Bug + Webhook认证 + 进度节流 + 响应式优化</td><td>002b50b</td></tr>
           <tr><td>2026-05-12</td><td>Phase 9 el-button 替换 + 画布头部样式优化</td><td>c4d1539</td></tr>
+          <tr><td>2026-06-02</td><td>Phase 10 Bug 修复：WebSocket 关闭警告 + back-btn 崩溃 + variables provide 错误</td><td>aaafd93</td></tr>
         </tbody>
       </table>
     </div>
