@@ -187,6 +187,48 @@
       </table>
     </div>
 
+    <!-- Phase 10.2 -->
+    <div class="doc-section">
+      <h2 class="doc-section-title">Phase 10.2: 端到端可用性 — 执行超时保护 (2026-06-02)</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 12px;">
+        增强执行引擎的超时保护：核心 <code>asyncio.wait_for()</code> 逻辑已存在，本次补充专用 <code>node_timeout</code> 事件、
+        BaseExecutor 节点级 timeout 配置、前端差异化处理及完整测试覆盖。
+      </p>
+      <table class="doc-table">
+        <thead><tr><th>#</th><th>任务</th><th>文件</th><th>状态</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>10.2.1</td>
+            <td>专用 <code>node_timeout</code> WebSocket 事件</td>
+            <td>websocket_manager.py / executor.py</td>
+            <td><span class="doc-badge">已完成</span></td>
+            <td>新增 <code>send_node_timeout()</code> 和 <code>_broadcast_node_timeout()</code>，区别于通用 <code>node_failed</code>，便于前端做差异化展示（黄色警告 vs 红色错误）</td>
+          </tr>
+          <tr>
+            <td>10.2.2</td>
+            <td>BaseExecutor <code>default_timeout</code> 字段</td>
+            <td>backend/services/rule_engine/nodes/base.py</td>
+            <td><span class="doc-badge">已完成</span></td>
+            <td>新增类属性 <code>default_timeout: Optional[float] = None</code>，子类（如 yolo_model）可覆盖此值设置特定节点的超时阈值</td>
+          </tr>
+          <tr>
+            <td>10.2.3</td>
+            <td>前端 <code>node_timeout</code> 事件处理</td>
+            <td>webui/src/views/RuleCanvas.vue</td>
+            <td><span class="doc-badge">已完成</span></td>
+            <td>WebSocket 消息处理添加 <code>case 'node_timeout'</code>，使用 <code>warning</code> 级别日志 + ElMessage.warning 提示，前端节点状态显示为 <code>timeout</code>（区别于 <code>failed</code>）</td>
+          </tr>
+          <tr>
+            <td>10.2.4</td>
+            <td>超时场景单元测试</td>
+            <td>backend/tests/test_rule_engine/test_execution_timeout.py</td>
+            <td><span class="doc-badge">已完成</span></td>
+            <td>新增 12 个测试覆盖：(1) 默认 300s；(2) context.node_timeout 覆盖；(3) 显式 timeout 参数覆盖；(4) 断路器模式（下游继续执行）；(5) node_timeout 事件格式；(6) BaseExecutor default_timeout；(7) WebSocket 推送格式；(8) 端到端流程</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- 已完成记录 -->
     <div class="doc-section">
       <h2 class="doc-section-title">已完成记录</h2>
@@ -206,6 +248,7 @@
           <tr><td>2026-05-11</td><td>Phase 8 代码审查高/中优先级问题修复 + 后端Bug + Webhook认证 + 进度节流 + 响应式优化</td><td>002b50b</td></tr>
           <tr><td>2026-05-12</td><td>Phase 9 el-button 替换 + 画布头部样式优化</td><td>c4d1539</td></tr>
           <tr><td>2026-06-02</td><td>Phase 10 Bug 修复：WebSocket 关闭警告 + back-btn 崩溃 + variables provide 错误</td><td>aaafd93</td></tr>
+          <tr><td>2026-06-02</td><td>Phase 10.2 执行超时保护增强：node_timeout 事件 + BaseExecutor.default_timeout + 前端处理 + 12 个单元测试</td><td>待提交</td></tr>
         </tbody>
       </table>
     </div>
