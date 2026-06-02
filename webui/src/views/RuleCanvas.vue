@@ -601,36 +601,7 @@
       @contextmenu.prevent="hideContextMenu"
     />
 
-    <!-- 变量绑定菜单 -->
-    <div
-      v-if="varMenu.show"
-      class="var-menu"
-      :style="{ left: varMenu.x + 'px', top: varMenu.y + 'px' }"
-      @click.stop
-    >
-      <div class="var-menu-title">
-        插入变量
-      </div>
-      <div
-        v-if="variables.length === 0"
-        class="var-menu-empty"
-      >
-        暂无变量，请先在左侧添加
-      </div>
-      <div
-        v-for="v in variables"
-        :key="v.name"
-        class="var-menu-item"
-        @click="insertVariable(v.name)"
-      >
-        📌 {{ v.name }} <span class="var-type-tag">{{ v.type }}</span>
-      </div>
-    </div>
-    <div
-      v-if="varMenu.show"
-      class="var-menu-overlay"
-      @click="hideVariableMenu"
-    />
+    <!-- 变量绑定菜单已废弃: 节点内嵌 📎 按钮接管 (RuleNode.vue:218 activeVarMenu) -->
   </div>
 </template>
 
@@ -732,14 +703,6 @@ const panelResizeCleanup = ref<(() => void) | null>(null)
 // palette 折叠后的宽度
 const COLLAPSED_WIDTH = 48
 const EXPANDED_WIDTH = 280
-
-// 变量绑定菜单
-const varMenu = reactive({
-  show: false,
-  x: 0,
-  y: 0,
-  fieldKey: '' as string
-})
 
 // 节点分类展开状态（reactive，分离避免循环引用）
 const categoryExpanded = reactive({
@@ -1191,25 +1154,7 @@ function hideContextMenu() {
   contextMenu.show = false
 }
 
-function hideVariableMenu() {
-  varMenu.show = false
-}
-
-// 插入变量到字段
-function insertVariable(varName: string) {
-  if (!varMenu.fieldKey) return
-  const selNode = store.selectedNode
-  if (!selNode?.data?.config) return
-  const currentValue = String(selNode.data.config[varMenu.fieldKey] || '')
-  const varRef = `{{${varName}}}`
-  if (currentValue.includes(varRef)) {
-    hideVariableMenu()
-    return
-  }
-  const newValue = currentValue ? `${currentValue} ${varRef}` : varRef
-  store.updateNodeConfig(selNode.id, varMenu.fieldKey, newValue)
-  hideVariableMenu()
-}
+// 已废弃: 变量绑定菜单由 RuleNode.vue 内嵌 📎 按钮接管 (bindVariable/toggleVarMenu)
 
 // 右键菜单操作
 function handleContextAction(action: string) {
