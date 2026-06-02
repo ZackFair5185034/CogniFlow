@@ -58,6 +58,8 @@ export interface ExecutionState {
     node_type?: string
     message: string
     duration_ms?: number
+    /** 节点输出指标（如 detections 数量、数据量等） */
+    metrics?: Record<string, number>
   }>
   nodeStates: Record<string, string>
 }

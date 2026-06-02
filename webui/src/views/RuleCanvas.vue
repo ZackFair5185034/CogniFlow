@@ -501,6 +501,11 @@
             >{{ log.node_type }}</span>
             <span class="log-message">{{ log.message }}</span>
             <span
+              v-if="log.metrics && Object.keys(log.metrics).length > 0"
+              class="log-metrics"
+              :title="formatMetrics(log.metrics)"
+            >{{ formatMetrics(log.metrics) }}</span>
+            <span
               v-if="log.duration_ms != null"
               class="log-duration"
             >{{ formatDuration(log.duration_ms) }}</span>
@@ -892,7 +897,8 @@ function handleWsMessage(msg: any) {
         timestamp: formatTime(msg.timestamp),
         node_type: msg.node_type,
         message: `${msg.node_type} 执行成功`,
-        duration_ms: msg.duration_ms
+        duration_ms: msg.duration_ms,
+        metrics: msg.metrics,
       })
       break
     case 'node_failed':
@@ -955,6 +961,13 @@ function formatDuration(ms: number) {
   if (ms < 1000) return `${ms}ms`
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
   return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`
+}
+
+/** 格式化节点输出指标为可读字符串（key=value, key=value）。 */
+function formatMetrics(metrics: Record<string, number>): string {
+  return Object.entries(metrics)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(', ')
 }
 
 // 节流进度更新函数
@@ -3189,6 +3202,14 @@ $panel-header-height: 44px;
   .log-message {
     color: #888;
     flex: 1;
+  }
+
+  .log-metrics {
+    color: #6a8;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    flex-shrink: 0;
+    opacity: 0.85;
   }
 }
 

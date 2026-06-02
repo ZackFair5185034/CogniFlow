@@ -155,14 +155,28 @@ class RuleExecutionConnectionManager:
             "node_type": node_type,
         })
 
-    async def send_node_executed(self, execution_id: int, node_id: str, status: str, outputs: dict):
-        """广播节点执行完成。"""
+    async def send_node_executed(
+        self,
+        execution_id: int,
+        node_id: str,
+        status: str,
+        outputs: dict,
+        metrics: dict = None,
+    ):
+        """广播节点执行完成。
+
+        Args:
+            metrics: 节点输出指标（如 detections 数量、字节数等），可选。
+                区别于 outputs 中的原始数据，metrics 是聚合后的统计信息，
+                便于前端做轻量级展示而无需解析完整 outputs。
+        """
         await self.broadcast({
             "execution_id": execution_id,
             "type": "node_executed",
             "node_id": node_id,
             "status": status,
             "outputs": outputs,
+            "metrics": metrics,
         })
 
     async def send_node_failed(self, execution_id: int, node_id: str, error: str):

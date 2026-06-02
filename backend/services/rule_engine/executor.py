@@ -625,13 +625,17 @@ class RuleGraphExecutor:
             context.set_node_status(node_id, "completed")
             status = "completed"
 
-            # 推送节点完成（含耗时）
+            # 计算输出指标（detections 数量、数据量等），用于前端轻量级展示
+            node_metrics = self._compute_metrics(outputs)
+
+            # 推送节点完成（含耗时 + 指标）
             await self._broadcast_node_executed(
                 context.execution_id,
                 node_id,
                 "success",
                 outputs,
-                duration_ms=node_duration_ms
+                duration_ms=node_duration_ms,
+                metrics=node_metrics,
             )
 
         except asyncio.TimeoutError:
@@ -873,9 +877,16 @@ class RuleGraphExecutor:
         node_id: str,
         status: str,
         outputs: Dict[str, Any],
-        duration_ms: int = None
+        duration_ms: int = None,
+        metrics: Dict[str, Any] = None,
     ):
-        """广播节点执行完成。"""
+        """广播节点执行完成。
+
+        Args:
+            metrics: 节点输出指标（detections 数量、数据量等），可选。
+                前端可基于 metrics 做轻量级展示（徽章、计数等），
+                无需解析完整 outputs 即可了解节点产出规模。
+        """
         if self.ws_manager:
             await self.ws_manager.broadcast({
                 "type": "node_executed",
@@ -884,6 +895,7 @@ class RuleGraphExecutor:
                 "status": status,
                 "outputs": outputs,
                 "duration_ms": duration_ms,
+                "metrics": metrics,
                 "timestamp": datetime.now().isoformat()
             })
 
