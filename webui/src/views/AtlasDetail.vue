@@ -497,12 +497,14 @@
           <h3>图片详情</h3>
           <div class="dialog-actions">
             <el-button
+              v-if="selectedImage"
               link
               @click="handleAnnotateImage(selectedImage)"
             >
               标注
             </el-button>
             <el-button
+              v-if="selectedImage"
               link
               @click="handleDeleteImage(selectedImage)"
             >
@@ -1022,14 +1024,14 @@ const handleDeleteDirectory = async (dir: string) => {
   }
 }
 
-const handleAnnotateImage = (img: { id: number }) => {
+const handleAnnotateImage = (img: ImageResponse) => {
   const query: Record<string, string> = selectedDirectory.value ? { directory: selectedDirectory.value } : {}
   query.sort_by = sortConfig.value.by
   query.sort_order = sortConfig.value.order
   router.push({ path: `/annotate/${img.id}`, query })
 }
 
-const handleDeleteImage = async (img: { file_path: string; id: number }) => {
+const handleDeleteImage = async (img: ImageResponse) => {
   try {
     await ElMessageBox.confirm(
       `确定删除图片 "${getFileName(img.file_path)}" 吗？此操作不可撤销。`,

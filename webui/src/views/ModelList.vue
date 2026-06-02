@@ -295,10 +295,6 @@
               class="full-width"
             >
               <el-option
-                :value="null"
-                label="不关联图集"
-              />
-              <el-option
                 v-for="atlas in atlases"
                 :key="atlas.id"
                 :value="atlas.id"
@@ -750,6 +746,10 @@ const handleUploadSubmit = async () => {
     ElMessage.warning('请选择模型文件')
     return
   }
+  if (!selectedModel.value) {
+    ElMessage.warning('请先选择模型')
+    return
+  }
   uploading.value = true
   try {
     await modelApi.upload(selectedModel.value.id, uploadFile.value)
@@ -823,6 +823,10 @@ const handleRename = (row: ModelResponse) => {
 const handleRenameSubmit = async () => {
   if (!renameForm.value.name) {
     ElMessage.warning('请输入模型名称')
+    return
+  }
+  if (!renameTarget.value) {
+    ElMessage.warning('请先选择要编辑的模型')
     return
   }
   renaming.value = true

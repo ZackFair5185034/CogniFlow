@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type { DetectImageResponse } from '@/types/api'
 
 const api = axios.create({
   baseURL: '/api',
@@ -103,8 +104,20 @@ export const annotationApi = {
 export const modelApi = {
   list: () => api.get('/models'),
   get: (id: number) => api.get(`/models/${id}`),
-  create: (data: { name: string; version?: string; file_path?: string; atlas_id?: number }) => api.post('/models', data),
-  update: (id: number, data: { name?: string; version?: string; metrics?: object }) => api.put(`/models/${id}`, data),
+  create: (data: {
+    name: string
+    version?: string
+    file_path?: string
+    pretrained_model?: string
+    atlas_id?: number | null
+  }) => api.post('/models', data),
+  update: (id: number, data: {
+    name?: string
+    version?: string
+    pretrained_model?: string
+    atlas_id?: number | null
+    metrics?: object
+  }) => api.put(`/models/${id}`, data),
   delete: (id: number) => api.delete(`/models/${id}`),
   setBest: (id: number) => api.post(`/models/${id}/set-best`),
   getDownloadUrl: (id: number) => `/api/models/${id}/download`,
@@ -149,7 +162,7 @@ export const inferenceApi = {
     if (device) url += `&device=${device}`
     if (precision) url += `&precision=${precision}`
     if (format) url += `&format=${format}`
-    return api.post(url, formData, {
+    return api.post<DetectImageResponse>(url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000,
     })

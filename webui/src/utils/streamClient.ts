@@ -58,12 +58,23 @@ type ErrorCallback = (error: string) => void
 
 interface WsMessage {
   type: string
+  // frame_meta / frame 字段
+  frame_id?: number
+  timestamp?: number
+  detections?: StreamDetection[]
+  stats?: { inference_ms: number; total_detections: number }
+  progress?: StreamFrameProgress
+  // complete / stopped 字段
+  total_frames?: number
+  total_detections?: number
+  // error 字段
+  error?: string
+  // 允许其他未知字段（后端可能扩展）
   [key: string]: unknown
 }
 
 export class StreamClient {
   private ws: WebSocket | null = null
-  private jobId: string | null = null
   private url: string = ''
   private reconnectAttempts = 0
   private maxReconnectAttempts = 3
@@ -85,8 +96,7 @@ export class StreamClient {
    * @param jobId 任务 ID
    * @param streamUrl WebSocket URL（相对路径，如 /ws/inference/stream/abc123）
    */
-  connect(jobId: string, streamUrl: string): void {
-    this.jobId = jobId
+  connect(_jobId: string, streamUrl: string): void {
     this.url = this._buildWsUrl(streamUrl)
     this.reconnectAttempts = 0
     this._intentionalDisconnect = false
@@ -104,7 +114,6 @@ export class StreamClient {
       this.ws.close()
       this.ws = null
     }
-    this.jobId = null
     this.pendingMeta = null
   }
 
@@ -180,8 +189,8 @@ export class StreamClient {
       case 'frame_meta':
         // 缓存元数据，等待后续的二进制帧数据
         this.pendingMeta = {
-          frame_id: msg.frame_id,
-          timestamp: msg.timestamp,
+          frame_id: msg.frame_id ?? 0,
+          timestamp: msg.timestamp ?? 0,
           detections: msg.detections ?? [],
           stats: msg.stats ?? { inference_ms: 0, total_detections: 0 },
           progress: msg.progress,

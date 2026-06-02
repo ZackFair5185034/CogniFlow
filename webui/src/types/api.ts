@@ -42,7 +42,7 @@ export interface ImageResponse {
   id: number
   atlas_id: number
   file_path: string
-  directory?: string
+  directory: string | null  // 根目录为 null
   width?: number
   height?: number
   annotated: boolean
@@ -113,6 +113,24 @@ export interface ModelFileResponse {
   created_at: string
 }
 
+/** 模型类别元数据 */
+export interface ModelCategory {
+  id?: number
+  name: string
+  color?: string
+}
+
+/** 模型指标 - 已知字段类型化, 未知字段保留 unknown */
+export interface ModelMetrics {
+  mAP50?: number
+  mAP50_95?: number
+  precision?: number
+  recall?: number
+  num_classes?: number
+  categories?: ModelCategory[]
+  [key: string]: unknown
+}
+
 /** 模型响应 */
 export interface ModelResponse {
   id: number
@@ -124,7 +142,7 @@ export interface ModelResponse {
   device_preference?: string
   precision?: string
   atlas_id?: number
-  metrics?: Record<string, unknown>
+  metrics?: ModelMetrics
   is_best: boolean
   created_at: string
   files: ModelFileResponse[]
@@ -173,20 +191,31 @@ export interface InferenceLoadStatus {
 
 // ============ Inference ============
 
-/** 检测结果项 */
+/** 推理检测结果项 - 单个目标 */
 export interface DetectionItem {
-  bbox: number[]
+  bbox: [number, number, number, number]  // [x1, y1, x2, y2]
+  class_id: number
+  class_name: string
   confidence: number
-  category_id: number
-  category_name?: string
 }
 
-/** 图片检测响应 */
+/** 类别配置项 (来自后端) */
+export interface CategoryConfig {
+  id?: number
+  name: string
+  color?: string
+}
+
+/** 图片检测响应 - 与 backend/routers/inference.py:detect_image 返回一致 */
 export interface DetectImageResponse {
+  success: boolean
+  original_image?: string
+  result_image?: string
+  result_image_base64: string
   detections: DetectionItem[]
-  image_width: number
-  image_height: number
-  inference_time: number
+  num_detections: number
+  categories?: CategoryConfig[]
+  used_format?: string | null
 }
 
 /** 推理任务记录 */

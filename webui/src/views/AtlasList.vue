@@ -280,6 +280,10 @@ const handleRenameSubmit = async () => {
     ElMessage.warning('请输入图集名称')
     return
   }
+  if (!renameTarget.value) {
+    ElMessage.warning('请先选择要编辑的图集')
+    return
+  }
   renaming.value = true
   try {
     await atlasApi.update(renameTarget.value.id, renameForm.value)

@@ -698,7 +698,7 @@ const availableFormats = computed(() => {
     ? (DEVICE_FORMAT_MAP[currentDevice] ?? null)
     : null
 
-  return model.files.map((f: any) => ({
+  return model.files.map((f) => ({
     value: f.format,
     label: f.format.toUpperCase(),
     is_default: f.is_default,
@@ -707,7 +707,7 @@ const availableFormats = computed(() => {
 })
 
 const resultImage = ref<string | null>(null)
-const detections = ref<unknown[]>([])
+const detections = ref<Detection[]>([])
 const imageSize = ref({ width: 0, height: 0 })
 const zoomLevel = ref(1)
 
@@ -776,6 +776,14 @@ interface ConsoleEntry {
   summary: string
   data: unknown
   expanded: boolean
+}
+
+/** 推理检测结果 - 单个目标的边界框与类别信息 */
+interface Detection {
+  bbox: [number, number, number, number]  // [x1, y1, x2, y2]
+  class_id: number
+  class_name: string
+  confidence: number
 }
 const consoleExpanded = ref(false)
 const consoleEntries = ref<ConsoleEntry[]>([])
@@ -883,7 +891,7 @@ watch(device, (newDevice) => {
   if (!model?.files?.length) return
   const compatibleFormats = DEVICE_FORMAT_MAP[newDevice]
   if (!compatibleFormats) return
-  const available = model.files.filter((f: any) => compatibleFormats.includes(f.format))
+  const available = model.files.filter((f) => compatibleFormats.includes(f.format))
   if (available.length === 1) {
     modelFormat.value = available[0].format
   } else if (available.length === 0) {
@@ -900,7 +908,7 @@ watch(selectedModel, () => {
   if (!model?.files?.length) return
   const compatibleFormats = DEVICE_FORMAT_MAP[curDevice]
   if (!compatibleFormats) return
-  const available = model.files.filter((f: any) => compatibleFormats.includes(f.format))
+  const available = model.files.filter((f) => compatibleFormats.includes(f.format))
   if (available.length === 1) {
     modelFormat.value = available[0].format
   }
@@ -1181,7 +1189,7 @@ const startDetection = async () => {
         // 构建类别颜色映射（来自模型配置，使用数组索引作为 key）
         if (res.data.categories) {
           const colors: Record<number, string> = {}
-          res.data.categories.forEach((cat: unknown, idx: number) => {
+          res.data.categories.forEach((cat, idx) => {
             colors[idx] = cat.color || '#FF0000'
           })
           categoryColors.value = colors
