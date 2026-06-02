@@ -187,6 +187,27 @@
           </el-button>
         </div>
 
+        <!-- 端口类型过滤（与文本搜索组合使用；空值=全部） -->
+        <div
+          v-show="showPalette"
+          class="palette-port-filter"
+        >
+          <button
+            class="port-filter-btn"
+            :class="{ active: portTypeFilter === '' }"
+            title="全部"
+            @click="portTypeFilter = ''"
+          >全部</button>
+          <button
+            v-for="pt in portTypeFilterOptions"
+            :key="pt.type"
+            class="port-filter-btn"
+            :class="{ active: portTypeFilter === pt.type }"
+            :title="`仅显示有 ${pt.type} 端口的节点`"
+            @click="portTypeFilter = pt.type"
+          >{{ pt.label }}</button>
+        </div>
+
         <div
           v-show="showPalette"
           class="palette-content"
@@ -742,19 +763,45 @@ const nodeCategories = computed(() => [
 
 // 节点搜索
 const nodeSearchQuery = ref('')
+
+// 端口类型过滤：'' 表示全部；常用类型列出按钮，长尾类型通过文本搜索触达
+const portTypeFilter = ref<string>('')
+const portTypeFilterOptions = [
+  { type: 'IMAGE', label: '图像' },
+  { type: 'BBOX', label: '检测框' },
+  { type: 'MODEL', label: '模型' },
+  { type: 'STRING', label: '字符串' },
+  { type: 'CONTROL', label: '控制' },
+]
+
+/** 节点是否匹配端口类型过滤。空过滤视为全匹配。 */
+function matchesPortType(node: NodeDefinition): boolean {
+  const filter = portTypeFilter.value
+  if (!filter) return true
+  // 任一输入或输出端口匹配即通过
+  const inputMatch = node.inputs?.some((p) => p.type === filter) ?? false
+  const outputMatch = node.outputs?.some((p) => p.type === filter) ?? false
+  return inputMatch || outputMatch
+}
+
 const filteredCategories = computed(() => {
   const query = nodeSearchQuery.value.trim().toLowerCase()
-  if (!query) {
+  if (!query && !portTypeFilter.value) {
     return nodeCategories.value
   }
   return nodeCategories.value
     .map(cat => ({
       ...cat,
-      nodes: cat.nodes.filter((n) =>
-        n.label?.toLowerCase().includes(query) ||
-        n.type?.toLowerCase().includes(query) ||
-        n.description?.toLowerCase().includes(query)
-      ),
+      nodes: cat.nodes.filter((n) => {
+        // 文本搜索匹配
+        const matchesQuery = !query ||
+          n.label?.toLowerCase().includes(query) ||
+          n.type?.toLowerCase().includes(query) ||
+          n.description?.toLowerCase().includes(query)
+        // 端口类型匹配
+        const matchesPort = matchesPortType(n)
+        return matchesQuery && matchesPort
+      }),
       expanded: true
     }))
     .filter(cat => cat.nodes.length > 0)
@@ -2104,6 +2151,37 @@ $panel-header-height: 44px;
       border-color: rgba(0, 240, 255, 0.2);
       color: var(--accent-blue);
     }
+  }
+}
+
+.palette-port-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 12px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.port-filter-btn {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #888;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+  }
+
+  &.active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: #000;
+    font-weight: 600;
   }
 }
 
