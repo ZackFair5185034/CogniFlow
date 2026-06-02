@@ -608,10 +608,13 @@ class RuleGraphExecutor:
                     node_type=node_type
                 )
 
+            # 节点级超时覆盖：优先使用节点定义中的 default_timeout，
+            # 然后是规则图级别的 node_timeout，最后是 300s 默认
+            node_timeout = getattr(executor, "default_timeout", None) or timeout
             # 执行（带超时保护）
             outputs = await asyncio.wait_for(
                 executor.execute(merged_inputs, context),
-                timeout=timeout
+                timeout=node_timeout
             )
 
             # 计算执行耗时
@@ -633,13 +636,14 @@ class RuleGraphExecutor:
 
         except asyncio.TimeoutError:
             status = "failed"
-            error_msg = f"执行超时（{timeout}s）"
-            # 超时：标记为 failed，不抛异常继续执行下游
+            error_msg = f"执行超时（{node_timeout}s）"
+            # 超时：标记为 failed，不抛异常继续执行下游（断路器模式）
             context.set_node_status(node_id, "failed")
-            await self._broadcast_node_failed(
+            await self._broadcast_node_timeout(
                 context.execution_id,
                 node_id,
-                error_msg
+                timeout_seconds=node_timeout,
+                error=error_msg
             )
 
         except Exception as e:
@@ -896,6 +900,28 @@ class RuleGraphExecutor:
                 "execution_id": execution_id,
                 "node_id": node_id,
                 "error": error,
+                "timestamp": datetime.now().isoformat()
+            })
+
+    async def _broadcast_node_timeout(
+        self,
+        execution_id: int,
+        node_id: str,
+        timeout_seconds: float,
+        error: str = None
+    ):
+        """广播节点执行超时。
+
+        区别于通用的 node_failed：用于前端做差异化展示（黄色警告 vs 红色错误）。
+        超时后下游节点仍会继续执行（断路器模式）。
+        """
+        if self.ws_manager:
+            await self.ws_manager.broadcast({
+                "type": "node_timeout",
+                "execution_id": execution_id,
+                "node_id": node_id,
+                "timeout_seconds": timeout_seconds,
+                "error": error or f"节点执行超时（{timeout_seconds}s）",
                 "timestamp": datetime.now().isoformat()
             })
 

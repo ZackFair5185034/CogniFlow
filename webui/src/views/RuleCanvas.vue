@@ -905,6 +905,17 @@ function handleWsMessage(msg: any) {
       })
       ElMessage.error(`节点执行失败: ${msg.error}`)
       break
+    case 'node_timeout':
+      // 节点执行超时 — 区别于 node_failed，下游继续执行（断路器模式）
+      store.setNodeExecutionState(msg.node_id, 'timeout')
+      store.addExecutionLog({
+        level: 'warning',
+        timestamp: formatTime(msg.timestamp),
+        node_type: msg.node_type,
+        message: msg.error || `执行超时（${msg.timeout_seconds}s）`
+      })
+      ElMessage.warning(`节点执行超时: ${msg.error || ''}（下游继续执行）`)
+      break
     case 'execution_progress':
       throttledUpdateProgress(msg.progress)
       break

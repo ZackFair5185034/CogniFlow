@@ -174,6 +174,26 @@ class RuleExecutionConnectionManager:
             "error": error,
         })
 
+    async def send_node_timeout(
+        self,
+        execution_id: int,
+        node_id: str,
+        timeout_seconds: float,
+        error: str = None
+    ):
+        """广播节点执行超时。
+
+        区别于通用的 node_failed，便于前端做差异化展示（黄色警告 vs 红色错误）。
+        下游节点将继续执行（断路器模式）。
+        """
+        await self.broadcast({
+            "execution_id": execution_id,
+            "type": "node_timeout",
+            "node_id": node_id,
+            "timeout_seconds": timeout_seconds,
+            "error": error or f"节点执行超时（{timeout_seconds}s）",
+        })
+
     async def send_progress(self, execution_id: int, progress: float, current_level: int,
                             total_levels: int, completed_nodes: int, total_nodes: int):
         """广播执行进度。"""

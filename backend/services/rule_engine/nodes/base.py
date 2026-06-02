@@ -122,6 +122,11 @@ class BaseExecutor(ABC):
     icon: str = "circle"
     color: str = "#7D7D7D"
 
+    # 节点级默认超时（秒），None 表示使用执行上下文的全局超时（默认 300s）。
+    # 子类可覆盖此值以调整特定节点的超时阈值。
+    # 例如：yolo_model 节点加载大型模型可能需要更长时间，可设为 600。
+    default_timeout: Optional[float] = None
+
     def __init__(self, node_id: str = None, config: dict = None):
         """初始化节点执行器。
 
