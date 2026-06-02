@@ -9,7 +9,7 @@ docs/research/rule-engine-phase1-node-registry.md
 import asyncio
 from typing import Any, Dict, Optional, Tuple
 
-from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty, Region
 from typing import Dict
 from .base import BaseExecutor
 
@@ -265,14 +265,28 @@ class ScreenCaptureNode(BaseExecutor):
         context
     ) -> Dict[str, Any]:
         params = self.config.get("params", {})
-        region = params.get("region", None)
+        raw_region = params.get("region", None)
 
         # TODO: 对接屏幕截图服务
         # from engine.core.data_input.capture import ScreenCapturer
         # capturer = ScreenCapturer()
-        # image_data = await capturer.capture(region=region)
+        # image_data = await capturer.capture(region=raw_region)
+
+        # region 输出遵循 Region Pydantic model 序列化格式（dict），
+        # 下游节点可通过 Region.model_validate() 安全解析。
+        serialized_region = None
+        if isinstance(raw_region, dict):
+            try:
+                serialized_region = Region.model_validate(raw_region).model_dump()
+            except Exception:
+                # 配置数据不合法时透传原始值，避免阻塞屏幕采集主流程
+                serialized_region = raw_region
+        elif isinstance(raw_region, Region):
+            serialized_region = raw_region.model_dump()
+        else:
+            serialized_region = raw_region  # None 或其他类型直接透传
 
         return {
             "image": None,  # 占位
-            "region": region,
+            "region": serialized_region,
         }

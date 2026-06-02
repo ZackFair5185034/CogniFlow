@@ -38,6 +38,26 @@ class PortDefinition(BaseModel):
     description: str = Field("", description="端口功能描述")
 
 
+class Region(BaseModel):
+    """屏幕采集区域 - screen_capture.region 输出的标准序列化格式。
+
+    用于规范 OBJECT 类型端口的数据契约，下游节点可基于该 Pydantic model
+    解析（通过 model_validate(dict)）而不依赖隐式的 dict 结构。
+
+    字段：
+        x: 区域左上角 X 坐标（像素）
+        y: 区域左上角 Y 坐标（像素）
+        width: 区域宽度（像素）
+        height: 区域高度（像素）
+        monitor: 多显示器场景下的屏幕索引，None 表示默认主屏
+    """
+    x: int = Field(..., description="左上角 X 坐标")
+    y: int = Field(..., description="左上角 Y 坐标")
+    width: int = Field(..., description="宽度", ge=1)
+    height: int = Field(..., description="高度", ge=1)
+    monitor: Optional[int] = Field(None, description="显示器索引（多屏场景）")
+
+
 class NodeCategory(str, Enum):
     """节点分类枚举 - 按设计文档的 6 大类。"""
     INPUT = "input"       # 输入类：ImageCapture, VideoCapture, ScreenCapture
