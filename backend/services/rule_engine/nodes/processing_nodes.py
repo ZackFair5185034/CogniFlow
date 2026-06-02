@@ -564,3 +564,151 @@ class ImagePreprocessorNode(BaseExecutor):
         except Exception as e:
             logger.error(f"图像预处理失败: {e}")
             return {"error": f"图像预处理失败: {str(e)}"}
+
+
+# ============================================================================
+# 模板渲染节点 - 用变量插值生成文本/JSON 输出
+# ============================================================================
+
+import json
+import re
+
+
+def _resolve_scope_key(scope: Dict[str, Any], dotted_key: str) -> Any:
+    """解析嵌套 key（如 'user.name'）从 scope dict 中取值。
+
+    中间任意一段缺失返回 None，不抛异常（避免阻塞模板渲染主流程）。
+    """
+    current: Any = scope
+    for part in dotted_key.split("."):
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        else:
+            return None
+    return current
+
+
+def _interpolate_template(template: str, scope: Dict[str, Any]) -> str:
+    """简单变量插值：支持 {{var}} 与 {{a.b.c}} 两种语法。
+
+    未定义变量替换为空字符串（不抛异常）。
+    """
+    if not template:
+        return ""
+    pattern = re.compile(r"\{\{\s*([\w.]+)\s*\}\}")
+    return pattern.sub(
+        lambda m: str(_resolve_scope_key(scope, m.group(1)) or ""),
+        template,
+    )
+
+
+class TemplateNode(BaseExecutor):
+    """模板渲染节点 — 用变量插值生成文本或 JSON 输出。
+
+    用途：
+    - 拼接 webhook payload / SQL 语句 / 日志消息等结构化输出
+    - 把上游检测结果格式化为可视化文本
+
+    模板语法：`{{var_name}}` 或 `{{nested.key}}`
+
+    变量来源（按优先级合并，高优先级覆盖低优先级）：
+    1. inputs.data — 上游 OBJECT 输入
+    2. context.variables — 规则图级变量
+    3. context.trigger_data — 触发数据（作为 `trigger.*` 访问）
+
+    输出：
+    - result: 渲染结果（parse_as=text 时为字符串；parse_as=json 时为解析后的对象）
+    - raw: 始终为字符串形式的渲染结果（便于排查与日志记录）
+    """
+
+    node_type = "template"
+    category = NodeCategory.PROCESSING
+    display_name = "模板渲染"
+    description = "用变量插值生成文本或 JSON 输出"
+    icon = "file-text"
+    color = "#FFFF4C"
+
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={
+                "data": PortDefinition(
+                    name="数据",
+                    type="OBJECT",
+                    required=False,
+                    description="上游提供的对象数据（其字段可在模板中通过 {{key}} 引用）",
+                ),
+            },
+            outputs={
+                "result": PortDefinition(
+                    name="渲染结果",
+                    type="STRING",
+                    description="渲染后的文本或 JSON 对象",
+                ),
+                "raw": PortDefinition(
+                    name="原始文本",
+                    type="STRING",
+                    description="始终为字符串形式的渲染结果",
+                ),
+            },
+            config_schema=self.get_config_schema(),
+        )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "template": ConfigSchemaProperty(
+                type="string",
+                title="模板",
+                description="支持 {{var}} 与 {{nested.key}} 插值；未定义变量替换为空字符串",
+                default="",
+                widget="textarea",
+            ),
+            "parse_as": ConfigSchemaProperty(
+                type="string",
+                title="输出格式",
+                description="text 渲染为字符串；json 解析为对象（解析失败回退为字符串）",
+                default="text",
+                enum=["text", "json"],
+                widget="dropdown",
+            ),
+        }
+
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        return True, None
+
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context,
+    ) -> Dict[str, Any]:
+        params = self.config.get("params", {})
+        template = params.get("template", "")
+        parse_as = params.get("parse_as", "text")
+
+        # 合并变量作用域（后 update 覆盖先 update，故高优先级放最后）：
+        # 触发数据 < 规则图变量 < 上游 inputs
+        scope: Dict[str, Any] = {}
+        trigger_data = getattr(context, "trigger_data", None)
+        if isinstance(trigger_data, dict) and trigger_data:
+            scope["trigger"] = trigger_data
+        if getattr(context, "variables", None):
+            scope.update(context.variables)
+        upstream_data = inputs.get("data")
+        if isinstance(upstream_data, dict):
+            scope.update(upstream_data)
+
+        raw = _interpolate_template(template, scope)
+
+        if parse_as == "json":
+            try:
+                return {"result": json.loads(raw), "raw": raw}
+            except (json.JSONDecodeError, TypeError):
+                # 解析失败时回退为字符串，便于下游继续处理
+                return {"result": raw, "raw": raw}
+
+        return {"result": raw, "raw": raw}
