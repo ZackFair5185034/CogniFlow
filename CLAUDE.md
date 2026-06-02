@@ -229,14 +229,30 @@ Closes #123
 - 使用 `pytest` 框架
 - 测试文件放在 `tests/` 目录
 - 覆盖率目标：核心模块 > 80%
+- **运行规则引擎测试必须用 `PYTHONPATH=.`**：backend 测试用 `from backend.xxx import` 但项目无 conftest/pyproject.toml，`backend/` 不在 `sys.path`。命令：`PYTHONPATH=. python -m pytest backend/tests/`
+- 已知遗留失败 1 个：`test_node_executors.py::TestImagePreprocessorNode::test_fallback_when_cv2_missing` — 假设 cv2 不可用，但环境 cv2 已装，走正常错误路径。与本次 phase 无关。
 
-## 6. 依赖管理
+## 6. 文档维护
+
+- **统一格式**：所有设计文档均为 Markdown（`.md`），位于 `docs/*-md/` 目录
+- **目录结构**：
+  - `docs/research-md/` — 架构设计、技术调研（10 份）
+  - `docs/guides-md/` — 使用指南（3 份）
+  - `docs/plans-md/` — 迭代计划（4 份）
+  - `docs/archives-md/` — 已完成阶段归档（15 份）
+  - `docs/dev-md/` — 开发参考（节点手册等）
+  - `docs/文档中心.md` — 顶级入口
+- **总览索引**：`docs/research-md/rule-engine-index.md`（项目入口，含阶段规划、节点清单、状态评估）
+- **HTML → MD 转换器**（仅历史保留）：`scripts/docs/html_to_md.py`（基于 `html.parser`，支持标题/表格/列表/代码块/加粗/多语言嗅探）
+- **直接编辑 MD**：2026-06-03 起 HTML 源已清空，新文档直接编辑 MD 文件
+
+## 7. 依赖管理
 
 - 使用 `requirements.txt` 管理依赖
 - 开发依赖放在 `extras_require["dev"]`
 - 定期更新依赖版本
 
-## 7. WebUI 前端规范
+## 8. WebUI 前端规范
 
 ### 7.1 技术栈
 
