@@ -197,7 +197,9 @@
             :class="{ active: portTypeFilter === '' }"
             title="全部"
             @click="portTypeFilter = ''"
-          >全部</button>
+          >
+            全部
+          </button>
           <button
             v-for="pt in portTypeFilterOptions"
             :key="pt.type"
@@ -205,7 +207,9 @@
             :class="{ active: portTypeFilter === pt.type }"
             :title="`仅显示有 ${pt.type} 端口的节点`"
             @click="portTypeFilter = pt.type"
-          >{{ pt.label }}</button>
+          >
+            {{ pt.label }}
+          </button>
         </div>
 
         <div
@@ -611,6 +615,8 @@ import { useRuleEngineStore, type RuleNodeData, type NodeDefinition } from '@/st
 import { storeToRefs } from 'pinia'
 import { ruleEngineApi } from '@/api'
 import type { Node, Edge, NodeMouseEvent, EdgeMouseEvent } from '@vue-flow/core'
+// SelectionMode 在 <template> 里使用（Vue 模板作用域只解析 <script setup> 顶层 binding，
+// auto-import 的全局 const 在 template 中不被 TS 识别），需要显式 import
 import { SelectionMode } from '@vue-flow/core'
 import RuleNode from '@/components/rule-engine/RuleNode.vue'
 import '@vue-flow/core/dist/style.css'

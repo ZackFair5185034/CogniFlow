@@ -411,7 +411,10 @@
               :class="['dir-item', { active: dir === selectedDirectory }]"
             >
               <div class="dir-info">
-                <SvgIcon name="folder" class="dir-icon" />
+                <SvgIcon
+                  name="folder"
+                  class="dir-icon"
+                />
                 <span class="dir-name">{{ dir }}</span>
               </div>
               <div class="dir-actions">
