@@ -1,6 +1,6 @@
 # CogniFlow 规则引擎文档索引
 
-> 📅 最后更新：2026-06-03 | 🔄 源格式：HTML → Markdown 自动转换
+> 📅 最后更新：2026-06-04 | 🔄 源格式：HTML → Markdown 自动转换
 
 CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，允许用户通过节点编辑器定义"检测→处理→动作"的完整流程。参考对象是 **ComfyUI**（最成熟的 AI 节点编辑器）和 **Node-RED**（工业级流程编排工具）。
 
@@ -86,7 +86,7 @@ CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，
 
 | 文档 | 内容 |
 |------|------|
-| [**规则引擎节点参考**](../../dev-md/规则引擎节点参考.md) | 29 节点完整参数手册 |
+| [**规则引擎节点参考**](../../dev-md/规则引擎节点参考.md) | 31 已注册节点完整参数手册（含 1 个未注册 `template` 告警） |
 
 ### 🌐 顶级入口
 
@@ -139,19 +139,18 @@ CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，
 
 ---
 
-## 🧩 节点类型体系（6 类 29 个）
+## 🧩 节点类型体系（6 类 31 个已注册 + 1 个待注册）
 
-| 类别 | 颜色 | 节点数 | 代表节点 |
-|------|------|------|---------|
-| **输入 INPUT** | 🟢 绿 #4CFF4C | 8 | ImageCapture, VideoCapture, ManualTrigger, TimerTrigger, CronTrigger, WebhookTrigger, ApiTrigger, ScreenCapture |
-| **检测 DETECTION** | 🔵 青 #00F0FF | 3 | YOLOModel, YOLOTrigger, ObjectDetector |
-| **处理 PROCESSING** | 🟡 黄 #FFFF4C | 4 | CategoryEncode, Filter, Tracker, ImagePreprocessor |
+| 类别 | 颜色 | 节点数 | 节点 |
+|------|------|------|------|
+| **输入 INPUT** | 🟢 绿 #4CFF4C | 9 | ImageCapture, VideoCapture, ScreenCapture, ManualTrigger, TimerTrigger, CronTrigger, WebhookTrigger, ApiTrigger, YOLOTrigger |
+| **检测 DETECTION** | 🔵 青 #00F0FF | 2 | YOLOModel, ObjectDetector |
+| **处理 PROCESSING** | 🟡 黄 #FFFF4C | 4 | ImagePreprocessor, Filter, Tracker, CategoryEncode |
 | **动作 ACTION** | 🟠 橙 #FF7F4C | 5 | KeyboardAction, MouseAction, WaitAction, HttpRequestAction, LogAction |
-| **逻辑 LOGIC** | 🟣 紫 #DC4FDC | 5 | Branch, ParallelBranch, Delay, SetVariable, Counter |
-| **条件 CONDITION** | 🟣 紫 #DC4FDC | 3 | ObjectExistsCondition, ConfidenceThresholdCondition, VariableCondition |
+| **逻辑 LOGIC** | 🟣 紫 #DC4FDC | 8 | Branch, ParallelBranch, Delay, SetVariable, Counter, ObjectExistsCondition, ConfidenceThresholdCondition, VariableCondition |
 | **输出 OUTPUT** | 🔴 红 #FF4C4C | 3 | SaveResult, Notification, Display |
 
-> 📊 **总计：29 个节点**（截至 2026-06）
+> 📊 **总计：31 个已注册**（截至 2026-06-04）。条件类节点在 `NodeCategory` 枚举中归入 LOGIC（枚举共 6 类），故此处不单列 CONDITION。另有 `template` 节点（`processing_nodes.py:605`）已定义但未注册到 `init_builtin_executors()`，详见节点参考手册"五、已知问题"。
 
 ---
 
@@ -160,16 +159,17 @@ CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，
 | 维度 | 现状 | 完成度 |
 |------|------|--------|
 | 后端 API | 20 个端点（CRUD + 验证 + 激活 + Webhook + 执行 + 取消） | ✅ 100% |
-| 节点定义 | NodeRegistry 统一管理，29 节点全部注册 | ✅ 100% |
+| 节点定义 | NodeRegistry 统一管理，31 节点已注册（另有 1 个 `template` 待注册） | ⚠️ 缺口 |
 | 执行引擎 | Kahn 拓扑排序 + 层内 `asyncio.gather()` 并行 | ✅ 100% |
 | WebSocket | 6 种事件（started/executed/failed/timeout/progress/complete） | ✅ 100% |
-| 单元测试 | 160/161 通过（99.4%） | ✅ |
-| 节点配置 schema | 30/30 = 100% 覆盖 | ✅ |
+| 单元测试 | 161/161 通过（100%） | ✅ |
+| 节点配置 schema | 31/31 = 100% 覆盖 | ✅ |
 | 变量系统 | `{{var}}` 插值 + 变量面板 | ✅ |
 | 撤销重做 | 50 步历史 | ✅ |
 | **属性面板 UI** | 数据绑定有，模板无 drawer | ⚠️ 缺口 |
 | **YOLO 触发对接** | 框架有，未对接推理服务 | ⚠️ 缺口 |
-| **节点实现 TODO** | 6 处（键盘/鼠标/视频/屏幕/通知/timer） | ⚠️ 缺口 |
+| **节点实现 TODO** | 5 处（键盘/鼠标/视频/屏幕/通知） | ⚠️ 缺口 |
+| **`template` 节点未注册** | `processing_nodes.py:605` 已定义，`registry.py` 缺 1 行 register | ⚠️ 缺口 |
 
 ---
 
@@ -177,7 +177,7 @@ CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，
 
 ### Phase 1-6：核心功能（后端为主）
 
-- **Phase 1** ✅ — 节点注册表（29 节点、6 类、Pydantic 模型）
+- **Phase 1** ✅ — 节点注册表（31 节点、6 类、Pydantic 模型）
 - **Phase 2** ✅ — 执行引擎（Kahn 拓扑、环检测、并行执行）
 - **Phase 3** ✅ — 画布交互（拖拽/连线/选择/复制/删除/撤销重做）
 - **Phase 4** ⚠️ — 属性配置面板（数据层完成，UI 待补）
@@ -186,7 +186,7 @@ CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，
 
 ### Phase A-H：前端专项重构
 
-- **Phase A** ✅ — 30/30 节点 `config_schema` 补全
+- **Phase A** ✅ — 31/31 节点 `config_schema` 补全
 - **Phase B** ✅ — 自定义 `RuleNode.vue` 组件（ComfyUI 风格）
 - **Phase C** ✅ — 节点内嵌配置控件（slider/dropdown/checkbox）
 - **Phase D** ✅ — 属性面板完善（动态表单、变量绑定、断连）

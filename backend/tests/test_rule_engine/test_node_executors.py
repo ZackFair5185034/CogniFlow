@@ -12,35 +12,39 @@
 一、节点类型概览
 ============================================================================
 
-| 类别       | 颜色    | 节点                  | 端口类型               | 说明               |
-|------------|---------|-----------------------|------------------------|--------------------|
-| INPUT      | #4CFF4C | ImageCapture          | IMAGE →                | 图像采集            |
-| INPUT      | #4CFF4C | VideoCapture          | IMAGE →                | 视频采集            |
-| INPUT      | #4CFF4C | ScreenCapture         | IMAGE →                | 屏幕截图            |
-| INPUT      | #4CFF4C | ManualTrigger         | TRIGGER →              | 手动触发            |
-| INPUT      | #4CFF4C | TimerTrigger          | TRIGGER →              | 定时触发            |
-| INPUT      | #4CFF4C | CronTrigger           | TRIGGER →              | Cron 触发           |
-| INPUT      | #4CFF4C | YOLOTrigger           | IMAGE →, BOOLEAN+ARRAY | 检测到目标时触发     |
-| DETECTION  | #00f0FF | YOLOModel             | IMAGE → BBOX+SCORES    | YOLO 目标检测        |
-| DETECTION  | #00f0FF | ObjectDetector        | IMAGE → ARRAY          | 通用目标检测          |
-| PROCESSING | #FFFF4C | ImagePreprocessor     | IMAGE → IMAGE          | 图像预处理            |
-| PROCESSING | #FFFF4C | Filter                | ARRAY → ARRAY          | 检测结果过滤          |
-| PROCESSING | #FFFF4C | Tracker               | ARRAY → ARRAY          | 目标跟踪（SORT）      |
-| PROCESSING | #FFFF4C | CategoryEncode        | ARRAY → ARRAY          | 类别名称/ID 互转      |
-| ACTION     | #FF7F4C | LogAction             | STRING →               | 日志输出              |
-| ACTION     | #FF7F4C | MouseAction           | BBOX+INT →             | 鼠标操作              |
-| ACTION     | #FF7F4C | KeyboardAction        | STRING →               | 键盘操作              |
-| ACTION     | #FF7F4C | HttpRequestAction     | OBJECT →               | HTTP 请求             |
-| ACTION     | #FF7F4C | WaitAction            | -                      | 等待延迟              |
-| LOGIC      | #DC4FDC | Branch                | BOOLEAN → ANY          | 条件分支              |
-| LOGIC      | #DC4FDC | Delay                 | -                      | 延时控制              |
-| LOGIC      | #DC4FDC | SetVariable           | ANY → OBJECT           | 变量赋值              |
-| LOGIC      | #DC4FDC | Counter               | TRIGGER → INT          | 计数循环              |
-| CONDITION  | #DC4FDC | ObjectExistsCondition | ARRAY → BOOLEAN        | 检测目标存在判断       |
-| CONDITION  | #DC4FDC | ConfidenceThreshold   | SCORES → BOOLEAN       | 置信度阈值判断         |
-| OUTPUT     | #FF4C4C | SaveResult            | ANY →                  | 结果保存              |
-| OUTPUT     | #FF4C4C | Notification          | STRING →               | 桌面通知              |
-| OUTPUT     | #FF4C4C | Display               | IMAGE →                | 图像显示              |
+| 类别       | 颜色    | 节点                  | 端口类型                  | 说明               |
+|------------|---------|-----------------------|---------------------------|--------------------|
+| INPUT      | #4CFF4C | ImageCapture          | IMAGE →                   | 图像采集            |
+| INPUT      | #4CFF4C | VideoCapture          | IMAGE →                   | 视频采集            |
+| INPUT      | #4CFF4C | ScreenCapture         | IMAGE →                   | 屏幕截图            |
+| INPUT      | #4CFF4C | ManualTrigger         | TRIGGER →                 | 手动触发            |
+| INPUT      | #4CFF4C | TimerTrigger          | TRIGGER →                 | 定时触发            |
+| INPUT      | #4CFF4C | CronTrigger           | TRIGGER →                 | Cron 触发           |
+| INPUT      | #4CFF4C | WebhookTrigger        | TRIGGER →                 | Webhook 触发         |
+| INPUT      | #4CFF4C | ApiTrigger            | TRIGGER →                 | API 触发            |
+| INPUT      | #4CFF4C | YOLOTrigger           | IMAGE →, BOOLEAN+ARRAY    | 检测到目标时触发     |
+| DETECTION  | #00f0FF | YOLOModel             | IMAGE → BBOX+SCORES       | YOLO 目标检测        |
+| DETECTION  | #00f0FF | ObjectDetector        | IMAGE → ARRAY             | 通用目标检测          |
+| PROCESSING | #FFFF4C | ImagePreprocessor     | IMAGE → IMAGE             | 图像预处理            |
+| PROCESSING | #FFFF4C | Filter                | ARRAY → ARRAY             | 检测结果过滤          |
+| PROCESSING | #FFFF4C | Tracker               | ARRAY → ARRAY             | 目标跟踪（SORT）      |
+| PROCESSING | #FFFF4C | CategoryEncode        | ARRAY → ARRAY             | 类别名称/ID 互转      |
+| ACTION     | #FF7F4C | LogAction             | STRING →                  | 日志输出              |
+| ACTION     | #FF7F4C | MouseAction           | BBOX+INT →                | 鼠标操作              |
+| ACTION     | #FF7F4C | KeyboardAction        | STRING →                  | 键盘操作              |
+| ACTION     | #FF7F4C | HttpRequestAction     | OBJECT →                  | HTTP 请求             |
+| ACTION     | #FF7F4C | WaitAction            | -                         | 等待延迟              |
+| LOGIC      | #DC4FDC | Branch                | BOOLEAN → ANY             | 条件分支              |
+| LOGIC      | #DC4FDC | ParallelBranch        | TRIGGER → CONTROL×N       | 并行分支              |
+| LOGIC      | #DC4FDC | Delay                 | -                         | 延时控制              |
+| LOGIC      | #DC4FDC | SetVariable           | ANY → OBJECT              | 变量赋值              |
+| LOGIC      | #DC4FDC | Counter               | TRIGGER → INT             | 计数循环              |
+| LOGIC      | #DC4FDC | ObjectExistsCondition | ARRAY → BOOLEAN           | 检测目标存在判断       |
+| LOGIC      | #DC4FDC | ConfidenceThreshold   | ARRAY → BOOLEAN+FLOAT     | 置信度阈值判断         |
+| LOGIC      | #DC4FDC | VariableCondition     | - → BOOLEAN+ANY           | 变量条件判断          |
+| OUTPUT     | #FF4C4C | SaveResult            | ANY →                     | 结果保存              |
+| OUTPUT     | #FF4C4C | Notification          | STRING →                  | 桌面通知              |
+| OUTPUT     | #FF4C4C | Display               | IMAGE →                   | 图像显示              |
 
 ============================================================================
 二、典型连接模式（节点间数据流）
