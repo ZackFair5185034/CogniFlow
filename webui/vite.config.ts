@@ -52,6 +52,8 @@ export default defineConfig(({ mode }) => {
             '@/utils/toast': ['registerToast'],
           },
         ],
+        // 让 auto-import 在 <template> 里也生效 (e.g. <VueFlow :selection-mode="SelectionMode.Partial">)
+        includeTemplate: true,
         // API 模块按需显式导入（named exports 无法自动按名导入）
         eslintrc: {
           enabled: true,
