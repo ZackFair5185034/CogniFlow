@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { DetectImageResponse } from '@/types/api'
+import type { DetectImageResponse, RuleGraphDetail } from '@/types/api'
 
 const api = axios.create({
   baseURL: '/api',
@@ -202,7 +202,8 @@ export const ruleEngineApi = {
   // 规则图 CRUD
   listGraphs: () => api.get('/rule-engine/graphs'),
   getGraph: (id: number) => api.get(`/rule-engine/graphs/${id}`),
-  getGraphDetail: (id: number) => api.get(`/rule-engine/graphs/${id}/detail`),
+  getGraphDetail: (id: number) =>
+    api.get<RuleGraphDetail>(`/rule-engine/graphs/${id}/detail`),
   createGraph: (data: {
     name: string
     description?: string

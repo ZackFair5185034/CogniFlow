@@ -4,39 +4,18 @@ import tseslint from 'typescript-eslint'
 import globals from 'globals'
 import vueParser from 'vue-eslint-parser'
 import tsParser from '@typescript-eslint/parser'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
+import autoImportGlobals from './.eslintrc-auto-import.json' with { type: 'json' }
 
 /**
- * 解析 unplugin-auto-import 生成的 auto-imports.d.ts,
- * 提取 `const X: typeof import('xxx').X` 形式声明的全局标识符,
- * 转换为 ESLint globals 格式。
- *
- * 这样 ESLint 与 TS/IDE 共享同一份 auto-import 源,避免重复维护。
+ * ESLint flat config: globals 是 readonly/writable
+ * unplugin-auto-import 生成的 .eslintrc-auto-import.json 用 true/false 表示
+ * 这里统一转换为 readonly (auto-import 生成的都是 const, 只读)
  */
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const autoImportsPath = resolve(__dirname, 'src/auto-imports.d.ts')
-
-function parseAutoImportGlobals(): Record<string, 'readonly'> {
-  const result: Record<string, 'readonly'> = {}
-  try {
-    const content = readFileSync(autoImportsPath, 'utf-8')
-    // 匹配 declare global 块内的 `const X: typeof import('xxx').X`
-    const globalBlock = content.match(/declare global \{([\s\S]*?)\n\}/)
-    if (!globalBlock) return result
-    const re = /^\s*const\s+(\w+)\s*:/gm
-    let m: RegExpExecArray | null
-    while ((m = re.exec(globalBlock[1])) !== null) {
-      result[m[1]] = 'readonly'
-    }
-  } catch {
-    // 文件不存在/无法读取时返回空对象,不影响其他规则
-  }
-  return result
-}
-
-const autoImportGlobals = parseAutoImportGlobals()
+const autoImportGlobalsReadonly: Record<string, 'readonly'> = Object.fromEntries(
+  Object.entries(autoImportGlobals.globals as Record<string, boolean>).map(
+    ([key]) => [key, 'readonly' as const],
+  ),
+)
 
 export default tseslint.config(
   // 忽略文件
@@ -94,8 +73,8 @@ export default tseslint.config(
       globals: {
         ...globals.browser,
         ...globals.node,
-        // unplugin-auto-import 注入的全局 (从 auto-imports.d.ts 自动解析)
-        ...autoImportGlobals,
+        // unplugin-auto-import 注入的全局（来自 .eslintrc-auto-import.json）
+        ...autoImportGlobalsReadonly,
         // main.ts 全局注册的 SvgIcon 组件 (auto-import 未覆盖)
         SvgIcon: 'readonly',
       },

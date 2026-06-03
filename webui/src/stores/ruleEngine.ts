@@ -20,6 +20,7 @@ import type {
   VariableType
 } from '@/types/api'
 import type { Node, Edge } from '@vue-flow/core'
+import { MarkerType } from '@vue-flow/core'
 import type { Ref } from 'vue'
 
 // ============ 类型别名（兼容旧代码）============
@@ -100,7 +101,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   })
 
   // ---- Undo/Redo 栈 ----
-  const historyStack = ref<Array<{ nodes: any[]; edges: any[] }>>([])
+  const historyStack = ref<Array<{ nodes: GraphNode[]; edges: GraphEdge[] }>>([])
   const historyIndex = ref(-1)
   const isHistoryPaused = ref(false)
   const maxHistorySize = 50
@@ -178,7 +179,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
 
     // 解析节点：标准化 type 字段，补充必要属性
-    nodes.value = (data.nodes ?? []).map((n: any) => {
+    nodes.value = (data.nodes ?? []).map((n: GraphNode) => {
       const isVueFlowType = n.type === 'ruleNode' || n.type === 'rule-node'
       return {
         id: n.id,
@@ -194,7 +195,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     })
 
     // 解析边
-    edges.value = (data.edges ?? []).map((e: any) => ({
+    edges.value = (data.edges ?? []).map((e: GraphEdge) => ({
       id: e.id,
       source: e.source,
       target: e.target,
@@ -202,7 +203,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       targetHandle: e.target_handle,
       type: 'default',
       animated: false,
-      markerEnd: { type: 'arrowclosed' }
+      markerEnd: MarkerType.ArrowClosed
     }))
 
     // 解析变量
@@ -221,7 +222,18 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         variables.value = []
       }
     } else if (data.variables) {
-      variables.value = data.variables
+      // 后端返回 Record<string, {type, defaultValue, description}>
+      const vars = data.variables as Record<string, {
+        type?: VariableType
+        defaultValue?: VariableDefaultValue
+        description?: string
+      }>
+      variables.value = Object.entries(vars).map(([name, config]) => ({
+        name,
+        type: config.type ?? 'STRING',
+        defaultValue: config.defaultValue,
+        description: config.description ?? ''
+      }))
     }
 
     saveHistory()

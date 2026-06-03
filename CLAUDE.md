@@ -230,7 +230,10 @@ Closes #123
 - 测试文件放在 `tests/` 目录
 - 覆盖率目标：核心模块 > 80%
 - **运行规则引擎测试必须用 `PYTHONPATH=.`**：backend 测试用 `from backend.xxx import` 但项目无 conftest/pyproject.toml，`backend/` 不在 `sys.path`。命令：`PYTHONPATH=. python -m pytest backend/tests/`
-- 已知遗留失败 1 个：`test_node_executors.py::TestImagePreprocessorNode::test_fallback_when_cv2_missing` — 假设 cv2 不可用，但环境 cv2 已装，走正常错误路径。与本次 phase 无关。
+- **已知遗留失败（2026-06-03 更新）**：
+  - `test_node_executors.py::TestImagePreprocessorNode::test_fallback_when_cv2_missing` — 假设 cv2 不可用，但环境 cv2 已装，走正常错误路径。与 phase 无关。
+  - `tests/test_api/test_atlas.py` 全部 5 个测试失败（`test_health_check` / `test_create_atlas` / `test_list_atlases` / `test_get_atlas` / `test_update_atlas`）— fixture 数据库隔离问题：`app.dependency_overrides[get_db]` + autouse `setup_database` 之间存在 race condition，跨测试数据污染（`UNIQUE constraint failed: atlas.name`、`assert 6 == 2` 等）。git stash 后同样失败，与前端改动无关。
+- **测试基线**：排除上述 6 个遗留失败，剩余 **41/41 通过**（`tests/test_rule_engine/` + `tests/test_hermes_agent.py`）
 
 ## 6. 文档维护
 

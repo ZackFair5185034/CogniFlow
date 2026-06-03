@@ -344,6 +344,7 @@ export interface RuleGraphResponse extends RuleGraphBase {
 export interface RuleGraphDetail extends RuleGraphResponse {
   nodes: GraphNode[]
   edges: GraphEdge[]
+  variables?: Record<string, unknown>
 }
 
 /** 执行触发请求 */
