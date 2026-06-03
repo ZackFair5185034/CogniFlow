@@ -29,6 +29,9 @@
 | PROCESSING | #FFFF4C | Filter                | ARRAY → ARRAY             | 检测结果过滤          |
 | PROCESSING | #FFFF4C | Tracker               | ARRAY → ARRAY             | 目标跟踪（SORT）      |
 | PROCESSING | #FFFF4C | CategoryEncode        | ARRAY → ARRAY             | 类别名称/ID 互转      |
+| PROCESSING | #FFFF4C | Template              | OBJECT → STRING+OBJECT    | 文本/JSON 模板渲染    |
+| PROCESSING | #FFFF4C | MergeDetections       | ARRAY×8 → ARRAY           | 多源检测结果融合      |
+| PROCESSING | #FFFF4C | RoiExtract            | IMAGE+ARRAY → IMAGE       | 按 BBOX 裁剪 ROI       |
 | ACTION     | #FF7F4C | LogAction             | STRING →                  | 日志输出              |
 | ACTION     | #FF7F4C | MouseAction           | BBOX+INT →                | 鼠标操作              |
 | ACTION     | #FF7F4C | KeyboardAction        | STRING →                  | 键盘操作              |

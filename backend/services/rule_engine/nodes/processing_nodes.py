@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
 from backend.services.rule_engine.tracker import SortTracker
 from typing import Dict
-from .base import BaseExecutor
+from .base import BaseExecutor, ExecutionContext
 
 logger = logging.getLogger(__name__)
 
@@ -712,3 +712,437 @@ class TemplateNode(BaseExecutor):
                 return {"result": raw, "raw": raw}
 
         return {"result": raw, "raw": raw}
+
+
+class MergeDetectionsNode(BaseExecutor):
+    """多源检测结果融合节点。
+
+    接收多个 ARRAY 输入（每个数组的元素是 dict，至少含 bbox/confidence/
+    class_id/class_name 字段；典型上游为 YOLOModel / ObjectDetector /
+    Filter / Tracker），合并后按 IoU 阈值去重，输出统一格式的 ARRAY。
+
+    与 Tracker 节点的区别：Tracker 维护时序跟踪（同一目标跨帧保持 ID），
+    本节点是"多模型/多源单帧融合"，无时序假设。
+
+    配置项:
+        iou_threshold: float - IoU 阈值，超过此值的检测框视为同一目标
+        strategy: str - 融合策略（nms/union）
+            nms:  跨输入按 IoU 去重，保留置信度最高的
+            union: 简单拼接，不去重（保留所有结果）
+        keep_source: bool - 是否在每个检测 dict 中保留 source 字段
+    """
+
+    node_type = "merge_detections"
+    category = NodeCategory.PROCESSING
+    display_name = "检测结果融合"
+    description = "合并多个检测源的检测结果，按 IoU 去重（多 YOLO 模型融合）"
+    icon = "merge"
+    color = "#FFFF4C"
+
+    def get_definition(self) -> NodeDefinition:
+        # 动态输入端口列表（input_1, input_2, ..., input_N）
+        # 至少 2 个，最多 8 个输入
+        max_inputs = 8
+        inputs_def = {
+            f"input_{i+1}": PortDefinition(
+                name=f"检测源 {i+1}",
+                type="ARRAY",
+                required=False,
+                description=f"第 {i+1} 路检测源输出（dict 列表）"
+            )
+            for i in range(max_inputs)
+        }
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs=inputs_def,
+            outputs={
+                "merged": PortDefinition(
+                    name="融合结果",
+                    type="ARRAY",
+                    description="去重后的合并检测列表"
+                ),
+                "count": PortDefinition(
+                    name="数量",
+                    type="INT",
+                    description="融合后检测框数量"
+                ),
+            },
+            config_schema=self.get_config_schema(),
+        )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "iou_threshold": ConfigSchemaProperty(
+                type="number",
+                title="IoU 阈值",
+                description="IoU 超过此值的两个检测框视为同一目标（0.0-1.0）",
+                default=0.5,
+                minimum=0.0,
+                maximum=1.0,
+                step=0.05,
+                widget="slider",
+            ),
+            "strategy": ConfigSchemaProperty(
+                type="string",
+                title="融合策略",
+                description="nms=按 IoU 去重保留最高置信度；union=简单拼接不去重",
+                default="nms",
+                widget="dropdown",
+                enum=["nms", "union"],
+            ),
+            "keep_source": ConfigSchemaProperty(
+                type="boolean",
+                title="保留来源标签",
+                description="在每个检测 dict 中添加 source 字段（input_1/input_2/...）",
+                default=False,
+                widget="checkbox",
+            ),
+        }
+
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """校验：至少 1 路非空输入。"""
+        active = [v for v in inputs.values() if v is not None and v != []]
+        if not active:
+            return False, "至少需要 1 路非空检测源输入"
+        return True, None
+
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context: ExecutionContext,
+    ) -> Dict[str, Any]:
+        cfg = context.config if hasattr(context, "config") else {}
+        iou_threshold = float(cfg.get("iou_threshold", 0.5))
+        strategy = cfg.get("strategy", "nms")
+        keep_source = bool(cfg.get("keep_source", False))
+
+        # 1) 收集所有非空输入
+        all_detections: List[Dict[str, Any]] = []
+        for port_name, payload in inputs.items():
+            if payload is None or payload == []:
+                continue
+            if not isinstance(payload, list):
+                return {"merged": [], "count": 0}
+            for det in payload:
+                if not isinstance(det, dict):
+                    continue
+                item = dict(det)  # 拷贝避免修改上游数据
+                if keep_source:
+                    item["source"] = port_name
+                all_detections.append(item)
+
+        if not all_detections:
+            return {"merged": [], "count": 0}
+
+        # 2) union 策略：直接返回
+        if strategy == "union":
+            return {"merged": all_detections, "count": len(all_detections)}
+
+        # 3) nms 策略：按置信度降序贪心去重
+        all_detections.sort(
+            key=lambda d: float(d.get("confidence", d.get("score", 0.0))),
+            reverse=True,
+        )
+        kept: List[Dict[str, Any]] = []
+        for det in all_detections:
+            bbox = det.get("bbox", [])
+            if not _is_valid_bbox(bbox):
+                # 无效 bbox 直接保留（无法做 IoU 比较）
+                kept.append(det)
+                continue
+            # 与已保留的所有框比较
+            duplicate = False
+            for kept_det in kept:
+                kept_bbox = kept_det.get("bbox", [])
+                if not _is_valid_bbox(kept_bbox):
+                    continue
+                iou = _compute_iou(bbox, kept_bbox)
+                # 类别不同则不去重（不同目标可重叠）
+                if (
+                    iou >= iou_threshold
+                    and det.get("class_id", -1) == kept_det.get("class_id", -1)
+                    and det.get("class_id", -1) != -1
+                ):
+                    duplicate = True
+                    break
+                # 类别字段缺失时也按 IoU 去重（兜底）
+                if (
+                    iou >= iou_threshold
+                    and det.get("class_id") is None
+                    and kept_det.get("class_id") is None
+                ):
+                    duplicate = True
+                    break
+            if not duplicate:
+                kept.append(det)
+
+        return {"merged": kept, "count": len(kept)}
+
+
+def _is_valid_bbox(bbox: Any) -> bool:
+    """校验 bbox 是否为 [x1, y1, x2, y2] 形式且坐标合法。"""
+    if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+        return False
+    try:
+        x1, y1, x2, y2 = (float(v) for v in bbox)
+    except (TypeError, ValueError):
+        return False
+    return x2 > x1 and y2 > y1
+
+
+def _compute_iou(b1: List[float], b2: List[float]) -> float:
+    """计算两个 [x1, y1, x2, y2] 框的 IoU。"""
+    x1 = max(b1[0], b2[0])
+    y1 = max(b1[1], b2[1])
+    x2 = min(b1[2], b2[2])
+    y2 = min(b1[3], b2[3])
+    inter = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+    area1 = max(0.0, b1[2] - b1[0]) * max(0.0, b1[3] - b1[1])
+    area2 = max(0.0, b2[2] - b2[0]) * max(0.0, b2[3] - b2[1])
+    union = area1 + area2 - inter
+    if union <= 0:
+        return 0.0
+    return inter / union
+
+
+class RoiExtractNode(BaseExecutor):
+    """按 BBOX 裁剪图像 ROI 区域。
+
+    输入 image（IMAGE，路径字符串或 {"path": str} dict）+ detections（ARRAY，
+    含 bbox 字段的检测列表），输出每张 ROI 裁剪后的图片（IMAGE 端口，
+    {"path": str}）+ 元数据（orig_width/orig_height/roi_count/bboxes）。
+
+    典型用法：YOLOModel → RoiExtract → ImagePreprocessor（缩放到统一尺寸）
+    → 次级模型（如 OCR、分类器）。
+
+    与 ImagePreprocessor 的区别：ImagePreprocessor 居中裁剪整张图；
+    本节点按 BBOX 列表从原图逐个裁剪，每个检测目标一张 ROI。
+
+    配置项:
+        padding: float - bbox 周边扩展比例（0.0 = 严格裁剪，0.1 = 外扩 10%）
+        min_size: int - 裁剪后最小边长（小于则跳过该 ROI）
+        max_rois: int - 最多保留的 ROI 数量（按 confidence 降序）
+        output_format: str - 输出图片格式（jpg/png，缺省沿用输入）
+
+    依赖 opencv-python（cv2）。未安装时返回原图，附加 warning。
+    """
+
+    node_type = "roi_extract"
+    category = NodeCategory.PROCESSING
+    display_name = "ROI 裁剪"
+    description = "按 BBOX 从原图裁剪 ROI 区域（每个检测目标一张）"
+    icon = "crop"
+    color = "#FFFF4C"
+
+    def get_definition(self) -> NodeDefinition:
+        return NodeDefinition(
+            type=self.node_type,
+            category=self.category.value,
+            display_name=self.display_name,
+            description=self.description,
+            icon=self.icon,
+            color=self.color,
+            inputs={
+                "image": PortDefinition(
+                    name="原图",
+                    type=PortType.IMAGE.value,
+                    required=True,
+                    description="原图路径或 {path: str}"
+                ),
+                "detections": PortDefinition(
+                    name="检测结果",
+                    type="ARRAY",
+                    required=True,
+                    description="含 bbox 字段的检测列表（来自 YOLOModel/Filter/Tracker）"
+                ),
+            },
+            outputs={
+                "roi": PortDefinition(
+                    name="ROI 图片",
+                    type=PortType.IMAGE.value,
+                    description="第一张 ROI（{path: str}）"
+                ),
+                "roi_count": PortDefinition(
+                    name="ROI 数量",
+                    type="INT",
+                    description="实际裁剪得到的 ROI 数量"
+                ),
+                "width": PortDefinition(
+                    name="宽度",
+                    type="INT",
+                    description="ROI 宽度（像素，第一张）"
+                ),
+                "height": PortDefinition(
+                    name="高度",
+                    type="INT",
+                    description="ROI 高度（像素，第一张）"
+                ),
+            },
+            config_schema=self.get_config_schema(),
+        )
+
+    def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
+        return {
+            "padding": ConfigSchemaProperty(
+                type="number",
+                title="扩展比例",
+                description="bbox 周边扩展比例（0.0 = 严格裁剪，0.1 = 外扩 10%）",
+                default=0.0,
+                minimum=0.0,
+                maximum=0.5,
+                step=0.05,
+                widget="slider",
+            ),
+            "min_size": ConfigSchemaProperty(
+                type="integer",
+                title="最小边长",
+                description="裁剪后最小边长（像素），小于则跳过该 ROI",
+                default=4,
+                minimum=1,
+                maximum=1024,
+                step=1,
+                widget="number",
+            ),
+            "max_rois": ConfigSchemaProperty(
+                type="integer",
+                title="最大 ROI 数",
+                description="最多保留的 ROI 数量（按 confidence 降序截取）",
+                default=10,
+                minimum=1,
+                maximum=100,
+                step=1,
+                widget="number",
+            ),
+        }
+
+    def validate_inputs(self, inputs: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        if not inputs.get("image"):
+            return False, "缺少必需参数 'image'"
+        if not inputs.get("detections"):
+            return False, "缺少必需参数 'detections'"
+        return True, None
+
+    @staticmethod
+    def _extract_image_path(image: Any) -> Optional[str]:
+        """从 IMAGE 端口数据中提取路径字符串。"""
+        if isinstance(image, str):
+            return image
+        if isinstance(image, dict):
+            return image.get("path")
+        return None
+
+    async def execute(
+        self,
+        inputs: Dict[str, Any],
+        context: ExecutionContext,
+    ) -> Dict[str, Any]:
+        cfg = context.config if hasattr(context, "config") else {}
+        padding = float(cfg.get("padding", 0.0))
+        min_size = int(cfg.get("min_size", 4))
+        max_rois = int(cfg.get("max_rois", 10))
+
+        image_path = self._extract_image_path(inputs.get("image"))
+        if not image_path:
+            return {"error": "无效的 image 输入（需 str 或 {path: str}）"}
+
+        detections = inputs.get("detections") or []
+        if not isinstance(detections, list):
+            return {"error": "无效的 detections 输入（需 list）"}
+
+        # 按 confidence 降序截取前 max_rois
+        sorted_dets = sorted(
+            detections,
+            key=lambda d: float(d.get("confidence", d.get("score", 0.0)) or 0.0),
+            reverse=True,
+        )[:max_rois]
+
+        # cv2 可选
+        try:
+            import cv2  # type: ignore
+        except ImportError:
+            logger.warning("OpenCV (cv2) 未安装，ROI 裁剪不可用")
+            return {
+                "roi": {"path": image_path},
+                "roi_count": 0,
+                "width": 0,
+                "height": 0,
+                "warning": "OpenCV 未安装，ROI 裁剪未执行",
+            }
+
+        try:
+            img = cv2.imread(image_path)
+            if img is None:
+                return {"error": f"无法读取图片: {image_path}"}
+            orig_h, orig_w = img.shape[:2]
+        except Exception as e:
+            return {"error": f"读取图片失败: {str(e)}"}
+
+        # 逐个 ROI 裁剪
+        from backend.services.rule_engine.utils import get_temp_image_path
+
+        roi_paths: List[str] = []
+        roi_bboxes: List[List[float]] = []
+        first_size: Optional[tuple] = None
+        for det in sorted_dets:
+            bbox = det.get("bbox", [])
+            if not _is_valid_bbox(bbox):
+                continue
+            x1, y1, x2, y2 = (float(v) for v in bbox)
+
+            # 应用 padding（外扩）
+            if padding > 0:
+                bw = x2 - x1
+                bh = y2 - y1
+                x1 -= bw * padding
+                y1 -= bh * padding
+                x2 += bw * padding
+                y2 += bh * padding
+
+            # 裁剪到图像边界
+            ix1 = max(0, int(x1))
+            iy1 = max(0, int(y1))
+            ix2 = min(orig_w, int(x2))
+            iy2 = min(orig_h, int(y2))
+
+            cw = ix2 - ix1
+            ch = iy2 - iy1
+            if cw < min_size or ch < min_size:
+                continue
+
+            cropped = img[iy1:iy2, ix1:ix2]
+            if cropped.size == 0:
+                continue
+
+            output_path = get_temp_image_path(
+                f"{self.node_id}_roi{len(roi_paths)}", image_path
+            )
+            import os
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            cv2.imwrite(output_path, cropped)
+            roi_paths.append(output_path)
+            roi_bboxes.append([ix1, iy1, ix2, iy2])
+            if first_size is None:
+                first_size = (cw, ch)
+
+        if not roi_paths:
+            return {
+                "roi": {"path": image_path},
+                "roi_count": 0,
+                "width": orig_w,
+                "height": orig_h,
+            }
+
+        first_w, first_h = first_size
+        return {
+            "roi": {"path": roi_paths[0]},
+            "roi_count": len(roi_paths),
+            "width": first_w,
+            "height": first_h,
+            "_all_rois": roi_paths,  # 附加字段，便于调试
+            "_all_bboxes": roi_bboxes,
+        }

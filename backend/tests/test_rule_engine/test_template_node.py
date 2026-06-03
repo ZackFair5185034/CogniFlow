@@ -303,8 +303,10 @@ class TestTemplateNodeRegistration:
         assert schema["parse_as"]["widget"] == "dropdown"
         assert set(schema["parse_as"]["enum"]) == {"text", "json"}
 
-    def test_total_registered_count_is_32(self):
-        """完整注册列表应包含 32 个节点（含 template）。"""
+    def test_total_registered_count_at_least_32(self):
+        """完整注册列表应 ≥ 32 个节点（含 template）。"""
         from backend.services.rule_engine.registry import init_builtin_executors
         registry = init_builtin_executors()
-        assert len(registry.list_types()) == 32
+        # 不写死具体数字（merge_detections / roi_extract 等新节点会持续加）
+        # 仅断言 template 不会让总数倒退
+        assert len(registry.list_types()) >= 32
