@@ -11,122 +11,126 @@
     <template v-else>
       <!-- 统计卡片 -->
       <div class="grid grid-cols-4 gap-4">
-      <div
-        v-for="stat in stats"
-        :key="stat.label"
-        class="stat-card"
-      >
-        <div class="stat-icon">
-          <SvgIcon :name="stat.icon" />
-        </div>
-        <div class="stat-content">
-          <div class="stat-value">{{ stat.value }}</div>
-          <div class="stat-label">{{ stat.label }}</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 主功能区 -->
-    <div class="main-grid">
-      <!-- 快速操作 -->
-      <div class="ui-card">
-        <div class="ui-card-header">
-          <h3>快速操作</h3>
-        </div>
-        <div class="action-grid">
-          <button
-            v-for="action in quickActions"
-            :key="action.label"
-            class="action-tile"
-            @click="$router.push(action.path)"
-          >
-            <div class="action-icon">
-              <SvgIcon :name="action.icon" />
+        <div
+          v-for="stat in stats"
+          :key="stat.label"
+          class="stat-card"
+        >
+          <div class="stat-icon">
+            <SvgIcon :name="stat.icon" />
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">
+              {{ stat.value }}
             </div>
-            <span class="action-label">{{ action.label }}</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 系统状态 -->
-      <div class="ui-card">
-        <div class="ui-card-header">
-          <h3>系统状态</h3>
-        </div>
-        <div class="status-content">
-          <div
-            v-for="item in statusItems"
-            :key="item.label"
-            class="status-item"
-          >
-            <div class="status-header">
-              <span class="status-label">{{ item.label }}</span>
-              <span class="status-value">{{ item.value }}</span>
-            </div>
-            <div class="status-bar">
-              <div
-                class="status-fill"
-                :class="item.status"
-                :style="{ width: item.percent + '%' }"
-              />
+            <div class="stat-label">
+              {{ stat.label }}
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 训练进度 -->
-    <div class="ui-card">
-      <div class="ui-card-header">
-        <h3>训练进度</h3>
-      </div>
-      <div class="ui-card-content">
-        <div
-          v-if="recentJobs.length > 0"
-          class="training-list"
-        >
-          <div
-            v-for="job in recentJobs"
-            :key="job.id"
-            class="training-item"
-          >
-            <div class="training-info">
-              <span class="training-id">TASK #{{ job.id.toString().padStart(4, '0') }}</span>
-              <span
-                class="training-status"
-                :class="job.status"
-              >
-                {{ statusText[job.status] || job.status }}
-              </span>
-            </div>
-            <div class="training-progress">
-              <div class="progress-bar">
+      <!-- 主功能区 -->
+      <div class="main-grid">
+        <!-- 快速操作 -->
+        <div class="ui-card">
+          <div class="ui-card-header">
+            <h3>快速操作</h3>
+          </div>
+          <div class="action-grid">
+            <button
+              v-for="action in quickActions"
+              :key="action.label"
+              class="action-tile"
+              @click="$router.push(action.path)"
+            >
+              <div class="action-icon">
+                <SvgIcon :name="action.icon" />
+              </div>
+              <span class="action-label">{{ action.label }}</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 系统状态 -->
+        <div class="ui-card">
+          <div class="ui-card-header">
+            <h3>系统状态</h3>
+          </div>
+          <div class="status-content">
+            <div
+              v-for="item in statusItems"
+              :key="item.label"
+              class="status-item"
+            >
+              <div class="status-header">
+                <span class="status-label">{{ item.label }}</span>
+                <span class="status-value">{{ item.value }}</span>
+              </div>
+              <div class="status-bar">
                 <div
-                  class="progress-fill"
-                  :class="job.status"
-                  :style="{ width: getProgress(job) + '%' }"
+                  class="status-fill"
+                  :class="item.status"
+                  :style="{ width: item.percent + '%' }"
                 />
               </div>
-              <span class="progress-text">{{ job.current_step }} / {{ job.total_steps }}</span>
-            </div>
-            <div class="training-meta">
-              <span class="meta-item">Model #{{ job.model_id }}</span>
-              <span class="meta-item">Atlas #{{ job.atlas_id }}</span>
             </div>
           </div>
-        </div>
-        <div
-          v-else
-          class="empty-state"
-        >
-          <div class="empty-icon">
-            <SvgIcon name="clock" />
-          </div>
-          <p>暂无训练任务</p>
-          <span class="empty-hint">开始一个新训练来监控进度</span>
         </div>
       </div>
-    </div>
+
+      <!-- 训练进度 -->
+      <div class="ui-card">
+        <div class="ui-card-header">
+          <h3>训练进度</h3>
+        </div>
+        <div class="ui-card-content">
+          <div
+            v-if="recentJobs.length > 0"
+            class="training-list"
+          >
+            <div
+              v-for="job in recentJobs"
+              :key="job.id"
+              class="training-item"
+            >
+              <div class="training-info">
+                <span class="training-id">TASK #{{ job.id.toString().padStart(4, '0') }}</span>
+                <span
+                  class="training-status"
+                  :class="job.status"
+                >
+                  {{ statusText[job.status] || job.status }}
+                </span>
+              </div>
+              <div class="training-progress">
+                <div class="progress-bar">
+                  <div
+                    class="progress-fill"
+                    :class="job.status"
+                    :style="{ width: getProgress(job) + '%' }"
+                  />
+                </div>
+                <span class="progress-text">{{ job.current_step }} / {{ job.total_steps }}</span>
+              </div>
+              <div class="training-meta">
+                <span class="meta-item">Model #{{ job.model_id }}</span>
+                <span class="meta-item">Atlas #{{ job.atlas_id }}</span>
+              </div>
+            </div>
+          </div>
+          <div
+            v-else
+            class="empty-state"
+          >
+            <div class="empty-icon">
+              <SvgIcon name="clock" />
+            </div>
+            <p>暂无训练任务</p>
+            <span class="empty-hint">开始一个新训练来监控进度</span>
+          </div>
+        </div>
+      </div>
     </template>
   </div>
 </template>

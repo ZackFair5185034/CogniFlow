@@ -178,23 +178,23 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
 
     // 解析节点：标准化 type 字段，补充必要属性
-    nodes.value = (data.nodes || []).map((n: any) => {
+    nodes.value = (data.nodes ?? []).map((n: any) => {
       const isVueFlowType = n.type === 'ruleNode' || n.type === 'rule-node'
       return {
         id: n.id,
         type: 'ruleNode',
-        position: n.position || { x: 0, y: 0 },
+        position: n.position ?? { x: 0, y: 0 },
         data: {
-          ...(n.data || {}),
+          ...(n.data ?? {}),
           // 确保 data.type 为原始业务类型（兼容新旧数据格式）
-          type: isVueFlowType ? (n.data?.type || 'unknown') : n.type,
+          type: isVueFlowType ? (n.data?.type ?? 'unknown') : n.type,
           id: n.id
         } as RuleNodeData
       }
     })
 
     // 解析边
-    edges.value = (data.edges || []).map((e: any) => ({
+    edges.value = (data.edges ?? []).map((e: any) => ({
       id: e.id,
       source: e.source,
       target: e.target,
@@ -255,7 +255,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       name: graphMeta.value.name,
       nodes_json: JSON.stringify(nodes.value.map(n => ({
         id: n.id,
-        type: n.data?.type || 'unknown',
+        type: n.data?.type ?? 'unknown',
         position: n.position,
         data: n.data
       }))),
@@ -314,11 +314,11 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    */
   function updateNodeConfig(nodeId: string, key: string, value: VariableDefaultValue) {
     const node = nodes.value.find(n => n.id === nodeId)
-    if (node && node.data) {
+    if (node?.data) {
       node.data = {
         ...node.data,
         config: {
-          ...(node.data.config || {}),
+          ...(node.data.config ?? {}),
           [key]: value
         }
       } as RuleNodeData
@@ -499,7 +499,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    */
   function getNodeCategory(type: string): string {
     const def = nodeDefinitions.value.find(d => d.type === type)
-    return def?.category || 'action'
+    return def?.category ?? 'action'
   }
 
   // ============ 导出 ============

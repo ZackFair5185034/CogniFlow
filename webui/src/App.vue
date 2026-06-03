@@ -1,5 +1,4 @@
 <template>
-
   <!-- 规则设计器 - 顶层全屏页面，不走 App 布局 -->
   <router-view v-if="$route.meta.layout === 'none'" />
 

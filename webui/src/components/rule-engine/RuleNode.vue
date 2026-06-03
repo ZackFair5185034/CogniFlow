@@ -32,7 +32,10 @@
         <div class="field-control">
           <!-- Slider -->
           <template v-if="schema.widget === 'slider'">
-            <div style="flex:1; min-width:0;" @mousedown.stop>
+            <div
+              style="flex:1; min-width:0;"
+              @mousedown.stop
+            >
               <el-slider
                 :model-value="getNodeValue(key) as number"
                 :min="schema.minimum"
@@ -144,18 +147,18 @@
               accept="image/*,video/*"
               class="file-input-hidden"
               @change="handleFileSelected(key, $event)"
-            />
+            >
           </template>
 
           <!-- Textarea -->
           <template v-else-if="schema.widget === 'textarea'">
             <el-input
+              :ref="el => setInputRef(key, el)"
               :model-value="(getNodeValue(key) as string | number | null) ?? ''"
               type="textarea"
               :placeholder="schema.description || ''"
               :rows="2"
               class="textarea-input"
-              :ref="el => setInputRef(key, el)"
               @update:model-value="updateConfig(key, $event)"
             />
           </template>
@@ -163,12 +166,12 @@
           <!-- Code -->
           <template v-else-if="schema.widget === 'code'">
             <el-input
+              :ref="el => setInputRef(key, el)"
               :model-value="(getNodeValue(key) as string | number | null) ?? ''"
               type="textarea"
               :placeholder="schema.description || ''"
               :rows="2"
               class="code-input"
-              :ref="el => setInputRef(key, el)"
               @update:model-value="updateConfig(key, $event)"
             />
           </template>
@@ -197,10 +200,10 @@
           <!-- Text / Default -->
           <template v-else>
             <el-input
+              :ref="el => setInputRef(key, el)"
               :model-value="String(getNodeValue(key) ?? '')"
               :placeholder="schema.description || ''"
               class="text-input"
-              :ref="el => setInputRef(key, el)"
               @update:model-value="updateConfig(key, $event)"
             />
           </template>

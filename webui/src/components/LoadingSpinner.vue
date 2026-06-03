@@ -11,7 +11,9 @@
       <p
         v-if="text"
         class="cf-loading__text"
-      >{{ text }}</p>
+      >
+        {{ text }}
+      </p>
     </div>
   </div>
 </template>
@@ -27,7 +29,7 @@ withDefaults(defineProps<{
 })
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .cf-loading {
   display: flex;
   align-items: center;
