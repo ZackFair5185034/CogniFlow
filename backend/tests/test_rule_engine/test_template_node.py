@@ -258,3 +258,53 @@ class TestTemplateNode:
         valid, err = node.validate_inputs({})
         assert valid is True
         assert err is None
+
+
+class TestTemplateNodeRegistration:
+    """验证 TemplateNode 已注册到 NodeRegistry。
+
+    回归测试：防止未来重构时再次遗漏 registry.register(TemplateNode)
+    导致前端节点面板不显示该节点（参见节点参考手册"五、已知问题"章节）。
+    """
+
+    def test_registered_in_init_builtin_executors(self):
+        """init_builtin_executors() 后 'template' 出现在 list_types() 中。"""
+        from backend.services.rule_engine.registry import init_builtin_executors
+        registry = init_builtin_executors()
+        assert "template" in registry.list_types()
+
+    def test_definition_category_processing(self):
+        """注册的 template 节点 category 必须为 processing。"""
+        from backend.services.rule_engine.registry import init_builtin_executors
+        registry = init_builtin_executors()
+        defs = registry.get_definitions()
+        template_def = next(d for d in defs if d["type"] == "template")
+        assert template_def["category"] == "processing"
+
+    def test_definition_has_expected_ports(self):
+        """端口签名：输入 data（OBJECT，可选），输出 result + raw。"""
+        from backend.services.rule_engine.registry import init_builtin_executors
+        registry = init_builtin_executors()
+        defs = registry.get_definitions()
+        template_def = next(d for d in defs if d["type"] == "template")
+        assert [i["name"] for i in template_def["inputs"]] == ["data"]
+        assert [o["name"] for o in template_def["outputs"]] == ["result", "raw"]
+
+    def test_definition_config_schema_complete(self):
+        """config_schema 必含 template（textarea）+ parse_as（dropdown）。"""
+        from backend.services.rule_engine.registry import init_builtin_executors
+        registry = init_builtin_executors()
+        defs = registry.get_definitions()
+        template_def = next(d for d in defs if d["type"] == "template")
+        schema = template_def["config_schema"]
+        assert "template" in schema
+        assert schema["template"]["widget"] == "textarea"
+        assert "parse_as" in schema
+        assert schema["parse_as"]["widget"] == "dropdown"
+        assert set(schema["parse_as"]["enum"]) == {"text", "json"}
+
+    def test_total_registered_count_is_32(self):
+        """完整注册列表应包含 32 个节点（含 template）。"""
+        from backend.services.rule_engine.registry import init_builtin_executors
+        registry = init_builtin_executors()
+        assert len(registry.list_types()) == 32

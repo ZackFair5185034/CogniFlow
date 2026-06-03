@@ -281,11 +281,13 @@ def init_builtin_executors() -> NodeRegistry:
         FilterNode,
         TrackerNode,
         ImagePreprocessorNode,
+        TemplateNode,
     )
     registry.register(CategoryEncodeNode)
     registry.register(FilterNode)
     registry.register(TrackerNode)
     registry.register(ImagePreprocessorNode)
+    registry.register(TemplateNode)
 
     # ===== 动作类节点 =====
     from .nodes.actions import (
