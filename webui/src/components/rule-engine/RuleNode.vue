@@ -135,10 +135,17 @@
               />
               <button
                 class="file-picker-btn"
-                title="选择文件"
+                title="本地上传"
                 @click.stop="openFilePicker(key)"
               >
                 <SvgIcon name="file" />
+              </button>
+              <button
+                class="file-picker-btn file-picker-btn-atlas"
+                title="从图集选择"
+                @click.stop="openAtlasPicker(key)"
+              >
+                <SvgIcon name="folder" />
               </button>
             </div>
             <input
@@ -297,12 +304,60 @@
       ×
     </button>
   </div>
+
+  <!-- Atlas 图集选择对话框 -->
+  <el-dialog
+    v-model="atlasDialog.visible"
+    title="从图集选择"
+    width="600px"
+    :close-on-click-modal="false"
+    @close="closeAtlasDialog"
+  >
+    <div v-if="atlasDialog.errorMessage" class="atlas-error">
+      {{ atlasDialog.errorMessage }}
+    </div>
+    <div v-if="atlasDialog.atlases.length > 0" class="atlas-section">
+      <label class="atlas-label">选择图集：</label>
+      <el-select
+        :model-value="atlasDialog.selectedAtlasId"
+        placeholder="选择图集"
+        :loading="atlasDialog.loading"
+        @update:model-value="(v: number | null) => v && selectAtlas(v)"
+      >
+        <el-option
+          v-for="a in atlasDialog.atlases"
+          :key="a.id"
+          :value="a.id"
+          :label="a.name"
+        />
+      </el-select>
+    </div>
+    <div v-else-if="!atlasDialog.loading" class="atlas-empty">
+      暂无图集
+    </div>
+    <div v-if="atlasDialog.images.length > 0" class="atlas-image-grid">
+      <div
+        v-for="img in atlasDialog.images"
+        :key="img.id"
+        class="atlas-image-item"
+        :title="img.filename"
+        @click="selectAtlasImage(img)"
+      >
+        <img :src="img.url" :alt="img.filename">
+        <span class="atlas-image-name">{{ img.filename }}</span>
+      </div>
+    </div>
+    <template #footer>
+      <button class="ui-btn ui-btn-small" @click="closeAtlasDialog">关闭</button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
 import { Position } from '@vue-flow/core'
 import { useRuleEngineStore } from '@/stores/ruleEngine'
 import type { Variable } from '@/stores/ruleEngine'
+import { atlasApi } from '@/api'
 
 /** 节点配置值类型 */
 type NodeConfigValue = string | number | boolean | (string | number)[] | null
@@ -400,6 +455,25 @@ const inputRefs = ref<Record<string, HTMLInputElement | HTMLTextAreaElement>>({}
 // 文件输入引用字典（file-picker widget 使用）
 const fileInputRefs = ref<Record<string, HTMLInputElement>>({})
 
+// Atlas 图集选择对话框状态
+const atlasDialog = reactive<{
+  visible: boolean
+  targetKey: string | null
+  atlases: Array<{ id: number; name: string }>
+  selectedAtlasId: number | null
+  images: Array<{ id: number; filename: string; url: string }>
+  loading: boolean
+  errorMessage: string
+}>({
+  visible: false,
+  targetKey: null,
+  atlases: [],
+  selectedAtlasId: null,
+  images: [],
+  loading: false,
+  errorMessage: '',
+})
+
 // 设置输入框引用（el-input 内部有 .input 或 .textarea 属性指向原生元素）
 function setInputRef(key: string, el: any) {
   if (!el) {
@@ -443,6 +517,71 @@ function handleFileSelected(key: string, event: Event) {
   if (file) {
     updateConfig(key, file.name)
   }
+}
+
+// 打开 Atlas 图集选择对话框
+async function openAtlasPicker(key: string) {
+  atlasDialog.targetKey = key
+  atlasDialog.visible = true
+  atlasDialog.errorMessage = ''
+  atlasDialog.images = []
+  atlasDialog.selectedAtlasId = null
+  await loadAtlasList()
+}
+
+// 加载图集列表
+async function loadAtlasList() {
+  atlasDialog.loading = true
+  try {
+    const res = await atlasApi.list()
+    const list = (res.data as Array<{ id: number; name: string }>) || []
+    atlasDialog.atlases = list.map((a: { id: number; name: string }) => ({ id: a.id, name: a.name }))
+    // 默认选中第一个
+    if (atlasDialog.atlases.length > 0 && atlasDialog.selectedAtlasId === null) {
+      await selectAtlas(atlasDialog.atlases[0].id)
+    }
+  } catch (err: any) {
+    atlasDialog.errorMessage = `加载图集失败: ${err?.message || String(err)}`
+  } finally {
+    atlasDialog.loading = false
+  }
+}
+
+// 选中某个图集 → 加载图片列表
+async function selectAtlas(atlasId: number) {
+  atlasDialog.selectedAtlasId = atlasId
+  atlasDialog.loading = true
+  atlasDialog.errorMessage = ''
+  try {
+    const res = await atlasApi.getImages(atlasId, undefined, 1, 200)
+    const items = (res.data as any)?.items || res.data || []
+    atlasDialog.images = items.map((img: any) => ({
+      id: img.id,
+      filename: img.filename || img.name || `image_${img.id}`,
+      url: img.url || `/api/image/${img.id}/file`,
+    }))
+  } catch (err: any) {
+    atlasDialog.errorMessage = `加载图片失败: ${err?.message || String(err)}`
+    atlasDialog.images = []
+  } finally {
+    atlasDialog.loading = false
+  }
+}
+
+// 选中某张图片 → 写入配置
+function selectAtlasImage(img: { id: number; filename: string; url: string }) {
+  if (atlasDialog.targetKey === null) return
+  // 优先写文件名（与 file-picker 一致），保留 url 作为前缀路径
+  updateConfig(atlasDialog.targetKey, img.filename)
+  atlasDialog.visible = false
+}
+
+// 关闭对话框
+function closeAtlasDialog() {
+  atlasDialog.visible = false
+  atlasDialog.targetKey = null
+  atlasDialog.images = []
+  atlasDialog.errorMessage = ''
 }
 
 function toggleVarMenu(key: string) {
@@ -989,6 +1128,82 @@ onBeforeUnmount(() => {
 
 .file-input-hidden {
   display: none;
+}
+
+/* Atlas 图集按钮（与 file-picker 按钮紧邻，提示从图集选择） */
+.file-picker-btn-atlas {
+  color: var(--accent-cyan, #00f0ff);
+}
+
+/* Atlas 对话框 */
+.atlas-error {
+  color: #ff4c4c;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.atlas-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.atlas-label {
+  font-size: 13px;
+  color: var(--text-secondary, #8888aa);
+  white-space: nowrap;
+}
+
+.atlas-empty {
+  color: var(--text-muted, #555566);
+  text-align: center;
+  padding: 24px 0;
+  font-size: 13px;
+}
+
+.atlas-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.atlas-image-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px;
+  border: 1px solid var(--border-color, #2a2a3a);
+  border-radius: 6px;
+  cursor: pointer;
+  background: var(--bg-primary, #0a0a0f);
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.atlas-image-item:hover {
+  border-color: var(--accent-cyan, #00f0ff);
+  background: rgba(0, 240, 255, 0.08);
+}
+
+.atlas-image-item img {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #1a1a24;
+}
+
+.atlas-image-name {
+  font-size: 11px;
+  color: var(--text-secondary, #8888aa);
+  margin-top: 4px;
+  text-align: center;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 </style>
