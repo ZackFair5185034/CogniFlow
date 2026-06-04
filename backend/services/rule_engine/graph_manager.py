@@ -187,6 +187,17 @@ class GraphManager:
         edge_sources = {edge["source"] for edge in edges}
         edge_targets = {edge["target"] for edge in edges}
 
+        # 兼容两种节点 type 字段位置：
+        # - 后端测试/直存格式：node.type 在顶层（值为具体节点类型）
+        # - VueFlow 前端格式：node.type="custom"（节点种类），实际类型在 node.data.type
+        # 启发式：顶层 type 如果是 "custom"/"group" 等 VueFlow 节点种类则忽略，否则优先用
+        _VUEFLOW_PLACEHOLDER_TYPES = {"custom", "group", "default", "input", "output"}
+        def get_node_type(node: dict) -> str:
+            top = node.get("type") or ""
+            if top and top not in _VUEFLOW_PLACEHOLDER_TYPES:
+                return top
+            return (node.get("data") or {}).get("type") or ""
+
         # 检查孤立节点（排除没有输入边的节点，因为触发器节点通常没有输入）
         isolated_nodes = []
         for node in nodes:
@@ -195,7 +206,7 @@ class GraphManager:
             if node_id not in edge_sources and node_id not in edge_targets:
                 # 如果既没有输入边也没有输出边，则为孤立节点
                 # 排除触发器类型的节点
-                node_type = node.get("type", "")
+                node_type = get_node_type(node)
                 if node_type not in ("yolo_trigger", "timer_trigger", "manual_trigger"):
                     isolated_nodes.append(node_id)
         if isolated_nodes:
@@ -214,7 +225,7 @@ class GraphManager:
         # 检查是否有起始节点（没有输入边的节点，且类型为触发器）
         trigger_nodes = {
             node["id"] for node in nodes
-            if node.get("type") in ("yolo_trigger", "timer_trigger", "manual_trigger")
+            if get_node_type(node) in ("yolo_trigger", "timer_trigger", "manual_trigger")
         }
         nodes_without_inputs = node_ids - edge_targets
 

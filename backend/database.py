@@ -282,6 +282,11 @@ def init_db():
     _migrate_add_column("inference_job", "precision", "VARCHAR(10) DEFAULT 'fp32'")
     _migrate_add_column("inference_job", "used_format", "VARCHAR(20) DEFAULT 'yolo_pt'")
 
+    # 迁移：Phase 11.1 节点执行指标端到端链路（2026-06-04 验收发现 P0 缺口）
+    # _save_node_log 写 duration_ms / metrics_json 但表缺这两列导致执行失败
+    _migrate_add_column("node_execution_log", "duration_ms", "INTEGER")
+    _migrate_add_column("node_execution_log", "metrics_json", "TEXT")
+
     # 迁移：rule_graph 表新增字段
     _migrate_add_column("rule_graph", "cron_expression", "VARCHAR(100)")
     _migrate_add_column("rule_graph", "thumbnail", "TEXT")

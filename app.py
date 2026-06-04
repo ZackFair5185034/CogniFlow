@@ -90,6 +90,10 @@ async def lifespan(app: FastAPI):
     os.makedirs(YOLO_RUNS_DIR, exist_ok=True)
 
     init_db()
+    # 启动时初始化节点注册表单例（修复 2026-06-04 验收发现的 P1：
+    # 否则 executor 用 get_registry() 拿不到节点，所有执行都报"未知节点类型"）
+    from backend.services.rule_engine.registry import init_builtin_executors
+    init_builtin_executors()
     # 启动规则引擎调度器
     from backend.services.rule_engine.scheduler import rule_scheduler
     rule_scheduler.start()
@@ -151,6 +155,18 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 os.makedirs(INFERENCE_OUTPUT_DIR, exist_ok=True)
 app.mount("/inference_output", StaticFiles(directory=INFERENCE_OUTPUT_DIR), name="inference_output")
 
+
+@app.get("/api/health")
+async def health_check():
+    """健康检查端点。
+
+    必须在下方 catch-all 路由（serve_frontend）之前注册，
+    否则 FastAPI 按注册顺序匹配会被前端路由吞掉返回 index.html。
+    （修复 2026-06-04 验收发现的 P0：监控/探活失败）
+    """
+    return {"status": "ok"}
+
+
 # 挂载 Vue 前端静态文件（开发时若无 dist 目录则跳过）
 # Docker 环境: WEBUI_DIST=/app/webui/dist
 _WEBUI_DIST = os.environ.get("WEBUI_DIST", os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui", "dist"))
@@ -171,12 +187,6 @@ async def root():
     if os.path.exists(_WEBUI_DIST):
         return RedirectResponse(url="/webui/index.html")
     return {"message": "CogniFlow API running", "docs": "/docs"}
-
-
-@app.get("/api/health")
-async def health_check():
-    """健康检查端点。"""
-    return {"status": "ok"}
 
 
 # 端口配置（由环境变量控制，默认 18080）

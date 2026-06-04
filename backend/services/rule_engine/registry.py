@@ -233,9 +233,11 @@ def init_builtin_executors() -> NodeRegistry:
     - output: SaveResult, Notification, Display
 
     Returns:
-        已注册内置节点的注册表实例
+        已注册内置节点的注册表实例（即全局单例）
     """
-    registry = NodeRegistry()
+    # 修复 2026-06-04 验收发现的 P1：在单例上注册而非新建临时实例，
+    # 否则 executor 用 get_registry() 拿不到节点（会全部报"未知节点类型"）
+    registry = get_registry()
 
     # 避免重复注册
     if registry.list_types():
