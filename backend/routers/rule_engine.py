@@ -400,15 +400,22 @@ async def get_execution(execution_id: int, db: Session = Depends(get_db)):
 
 @router.get("/executions/{execution_id}/logs")
 async def get_execution_logs(execution_id: int, db: Session = Depends(get_db)):
-    """获取执行日志详情。"""
+    """获取执行日志详情。
+
+    返回 List[dict]，每项为一条节点执行日志（按 start_time 升序）。
+    执行记录不存在返回 404；执行存在但无节点日志时返回空列表。
+
+    历史：原实现返回 {execution: {...}, node_logs: [...]} 包装对象，
+    前端按 list 解析时失败（'str' object has no attribute 'keys'）。
+    REST 约定 "X 的日志" 应直接返回日志数组。
+    """
     from backend.database import ExecutionHistory, NodeExecutionLog
 
-    # 获取执行记录
-    execution = db.query(ExecutionHistory).filter(
+    # 仅校验执行记录存在（不再返回整个对象，前端不需要）
+    execution_exists = db.query(ExecutionHistory.id).filter(
         ExecutionHistory.id == execution_id
     ).first()
-
-    if execution is None:
+    if execution_exists is None:
         raise HTTPException(status_code=404, detail="执行记录不存在")
 
     # 获取节点执行日志
@@ -416,22 +423,19 @@ async def get_execution_logs(execution_id: int, db: Session = Depends(get_db)):
         NodeExecutionLog.execution_id == execution_id
     ).order_by(NodeExecutionLog.start_time).all()
 
-    return {
-        "execution": execution,
-        "node_logs": [
-            {
-                "node_id": log.node_id,
-                "node_type": log.node_type,
-                "status": log.status,
-                "input_data": log.input_data_json,
-                "output_data": log.output_data_json,
-                "error_message": log.error_message,
-                "start_time": log.start_time,
-                "end_time": log.end_time,
-            }
-            for log in node_logs
-        ],
-    }
+    return [
+        {
+            "node_id": log.node_id,
+            "node_type": log.node_type,
+            "status": log.status,
+            "input_data": log.input_data_json,
+            "output_data": log.output_data_json,
+            "error_message": log.error_message,
+            "start_time": log.start_time,
+            "end_time": log.end_time,
+        }
+        for log in node_logs
+    ]
 
 
 @router.delete("/executions/{execution_id}/cancel")
