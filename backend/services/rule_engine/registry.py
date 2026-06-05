@@ -137,6 +137,7 @@ class NodeRegistry:
                         "enum": prop.enum,
                         "widget": prop.widget,
                         "required": prop.required,
+                        "allow_create": prop.allow_create,
                     }
                     for key, prop in defn.config_schema.items()
                 } if defn.config_schema else {},

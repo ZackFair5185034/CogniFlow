@@ -85,8 +85,11 @@
               multiple
               collapse-tags
               collapse-tags-tooltip
+              :filterable="!!schema.allow_create"
+              :allow-create="!!schema.allow_create"
+              :default-first-option="!!schema.allow_create"
               class="select-input"
-              placeholder="请选择..."
+              :placeholder="schema.allow_create ? '可输入或选择...' : '请选择...'"
               @mousedown.stop
               @update:model-value="updateConfig(key, $event)"
             >
@@ -372,6 +375,8 @@ interface ConfigSchemaProperty {
   step?: number
   enum?: string[]
   widget?: string
+  /** multiselect 控件是否允许用户输入自定义选项（不限于 enum） */
+  allow_create?: boolean
 }
 
 interface Port {

@@ -91,6 +91,7 @@ class ConfigSchemaProperty(BaseModel):
     enum: Optional[List[Any]] = Field(None, description="枚举选项（dropdown）")
     widget: str = Field("text", description="控件类型：text/number/slider/dropdown/model-select/checkbox/file-path/textarea/code")
     required: bool = Field(False, description="是否为必填项")
+    allow_create: bool = Field(False, description="multiselect 控件是否允许用户输入自定义选项（不限于 enum）")
 
 
 class NodeDefinition(BaseModel):

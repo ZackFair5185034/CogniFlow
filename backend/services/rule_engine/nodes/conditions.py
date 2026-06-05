@@ -66,10 +66,11 @@ class ObjectExistsConditionNode(BaseExecutor):
             "class_names": ConfigSchemaProperty(
                 type="array",
                 title="目标类别",
-                description="要检查的类别名称列表",
+                description="要检查的类别名称列表（可输入上游 yolo 检测节点输出的实际类别）",
                 default=[],
                 widget="multiselect",
-                enum=["person", "car", "dog", "cat", "bicycle", "truck", "bus"],
+                enum=[],
+                allow_create=True,
             ),
             "min_count": ConfigSchemaProperty(
                 type="number",

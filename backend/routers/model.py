@@ -564,6 +564,35 @@ async def export_model_sync(
 
 # ============ ModelFile CRUD ============
 
+@router.get("/{model_id}/categories", response_model=List[str])
+async def get_model_categories(model_id: int, db: Session = Depends(get_db)):
+    """获取模型支持的目标类别名称列表。
+
+    供 yolo_trigger / ObjectExistsCondition 等节点的 multiselect 控件
+    动态加载所选模型的实际训练类别（而非硬编码 COCO 7 类）。
+    类别来源：Model.metrics_json 里的 categories 字段。
+
+    Args:
+        model_id: 模型 ID
+
+    Returns:
+        类别名称列表（如 ["猫", "马里奥", "金币数"]）。模型不存在返回 404，
+        无 metrics 字段返回空列表。
+    """
+    m = db.query(Model).filter(Model.id == model_id).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="Model not found")
+    if not m.metrics:
+        return []
+    try:
+        metrics = json.loads(m.metrics)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    categories = metrics.get("categories", [])
+    # categories 是 [{"id": 0, "name": "猫"}, ...] 格式，提取 name
+    return [c.get("name", "") for c in categories if c.get("name")]
+
+
 @router.get("/{model_id}/files", response_model=List[ModelFileResponse])
 async def list_model_files(model_id: int, db: Session = Depends(get_db)):
     """获取模型关联的所有格式文件。"""

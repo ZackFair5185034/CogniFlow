@@ -284,10 +284,11 @@ class YOLOTriggerNode(BaseExecutor):
             "class_names": ConfigSchemaProperty(
                 type="array",
                 title="目标类别",
-                description="要检测的类别名称列表",
+                description="要检测的类别名称列表（可输入所选模型训练时的实际类别）",
                 default=[],
                 widget="multiselect",
-                enum=["person", "car", "dog", "cat", "bicycle", "truck", "bus"],
+                enum=[],
+                allow_create=True,
             ),
             "min_confidence": ConfigSchemaProperty(
                 type="number",
