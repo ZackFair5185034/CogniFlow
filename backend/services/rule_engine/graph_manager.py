@@ -189,14 +189,15 @@ class GraphManager:
 
         # 兼容两种节点 type 字段位置：
         # - 后端测试/直存格式：node.type 在顶层（值为具体节点类型）
-        # - VueFlow 前端格式：node.type="custom"（节点种类），实际类型在 node.data.type
-        # 启发式：顶层 type 如果是 "custom"/"group" 等 VueFlow 节点种类则忽略，否则优先用
-        _VUEFLOW_PLACEHOLDER_TYPES = {"custom", "group", "default", "input", "output"}
+        # - VueFlow 前端格式：node.type="ruleNode"（节点种类），实际类型在 node.data.type
+        # 原则：data.type 是权威业务类型（前端 VueFlow 总是设置，后端直存也常设置），
+        # 顶层 type 可能是 VueFlow 占位（"ruleNode"/"custom"/"group" 等），
+        # 仅当 data.type 缺失时才回退到顶层 type。
         def get_node_type(node: dict) -> str:
-            top = node.get("type") or ""
-            if top and top not in _VUEFLOW_PLACEHOLDER_TYPES:
-                return top
-            return (node.get("data") or {}).get("type") or ""
+            data_type = (node.get("data") or {}).get("type") or ""
+            if data_type:
+                return data_type
+            return node.get("type") or ""
 
         # 检查孤立节点（排除没有输入边的节点，因为触发器节点通常没有输入）
         isolated_nodes = []
