@@ -1076,7 +1076,7 @@ function handleCopy(event?: MouseEvent) {
   )
   clipboard.value = {
     nodes: selected.map((n: any) => JSON.parse(JSON.stringify(n))),
-    edges: relatedEdges.map((e) => JSON.parse(JSON.stringify(e))),
+    edges: relatedEdges.map((e: any) => JSON.parse(JSON.stringify(e))),
     mousePos: event ? { x: event.clientX, y: event.clientY } : { x: 0, y: 0 }
   }
   clipboardMode.value = 'copy'
@@ -1097,7 +1097,7 @@ function handleCut(event?: MouseEvent) {
   )
   clipboard.value = {
     nodes: selected.map((n: any) => JSON.parse(JSON.stringify(n))),
-    edges: relatedEdges.map((e) => JSON.parse(JSON.stringify(e))),
+    edges: relatedEdges.map((e: any) => JSON.parse(JSON.stringify(e))),
     mousePos: event ? { x: event.clientX, y: event.clientY } : { x: 0, y: 0 }
   }
   clipboardMode.value = 'cut'
@@ -1111,22 +1111,41 @@ function handleCut(event?: MouseEvent) {
 }
 
 // 粘贴
-function handlePaste() {
-  if (clipboard.value.length === 0) {
+function handlePaste(event?: MouseEvent) {
+  if (!clipboard.value || clipboard.value.nodes.length === 0) {
     ElMessage.warning('剪贴板为空')
     return
   }
 
-  const offsetX = 50
-  const offsetY = 50
+  const { nodes: srcNodes, edges: srcEdges, mousePos } = clipboard.value
 
-  const newNodes: Node<RuleNodeData>[] = []
-  for (const n of clipboard.value) {
+  // 计算鼠标偏移 (屏幕坐标 → 画布坐标)
+  // Figma 模式: 偏移 = (当前鼠标 - 复制时鼠标) / 缩放
+  const currentMouse = event ? { x: event.clientX, y: event.clientY } : null
+  let offsetX = 50
+  let offsetY = 50
+  if (currentMouse) {
+    const zoom = getViewport().zoom
+    const dxScreen = currentMouse.x - mousePos.x
+    const dyScreen = currentMouse.y - mousePos.y
+    offsetX = dxScreen / zoom
+    offsetY = dyScreen / zoom
+  }
+
+  // 旧 ID → 新 ID 映射 (用于重映射边的 source/target)
+  const idMap = new Map<string, string>()
+  // 防止短时间戳碰撞: 每个节点用序号后缀
+  const ts = Date.now()
+  let seq = 0
+  const newId = () => `node_${ts}_${(seq++).toString(36)}`
+
+  const newNodes: Node<RuleNodeData>[] = srcNodes.map((n: any) => {
+    const newNodeId = newId()
+    idMap.set(n.id, newNodeId)
     const cloned = JSON.parse(JSON.stringify(n))
-    const newId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-    newNodes.push({
+    return {
       ...cloned,
-      id: newId,
+      id: newNodeId,
       type: 'ruleNode',
       position: {
         x: n.position.x + offsetX,
@@ -1135,21 +1154,33 @@ function handlePaste() {
       selected: false,
       data: {
         ...(cloned.data || {}),
-        id: newId,
+        id: newNodeId,
         selected: false
       }
-    })
-  }
-  // shallowRef 数组必须重新赋值触发响应式（与 createNode/addEdge 同样原因）
+    }
+  })
+
+  // 重映射边 — srcEdges 的端点都在复制集中
+  const newEdges: Edge[] = srcEdges.map((e: any) => {
+    const newEdgeId = `edge_${ts}_${(seq++).toString(36)}`
+    return {
+      ...e,
+      id: newEdgeId,
+      source: idMap.get(e.source) ?? e.source,
+      target: idMap.get(e.target) ?? e.target
+    } as Edge
+  })
+
+  // shallowRef 数组必须重新赋值触发响应式
   store.nodes = [...store.nodes, ...newNodes]
+  store.edges = [...(store.edges as Edge[]), ...newEdges]
 
   if (clipboardMode.value === 'cut') {
-    clipboard.value = []
+    clipboard.value = null
   }
 
   store.saveHistory()
-  // 提示文案：cut 模式粘贴后剪贴板会被清空, 用粘贴数展示
-  ElMessage.success(`已粘贴 ${newNodes.length} 个节点`)
+  ElMessage.success(`已粘贴 ${newNodes.length} 个节点${newEdges.length > 0 ? `, ${newEdges.length} 条连线` : ''}`)
 }
 
 // 框选结束
@@ -1219,18 +1250,19 @@ function hideContextMenu() {
 // 已废弃: 变量绑定菜单由 RuleNode.vue 内嵌 📎 按钮接管 (bindVariable/toggleVarMenu)
 
 // 右键菜单操作
-function handleContextAction(action: string) {
+function handleContextAction(action: string, event?: MouseEvent) {
   switch (action) {
     case 'copy':
-      handleCopy()
+      // 复制触发源: 右键时 clientX/Y 即 mousePos
+      handleCopy(event)
       hideContextMenu()
       break
     case 'cut':
-      handleCut()
+      handleCut(event)
       hideContextMenu()
       break
     case 'paste':
-      handlePaste()
+      handlePaste(event)
       hideContextMenu()
       break
     case 'delete':
