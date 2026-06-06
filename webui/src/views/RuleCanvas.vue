@@ -362,8 +362,8 @@
         >
           <VueFlow
             ref="vueFlowRef"
-            v-model:nodes="nodes"
-            v-model:edges="edges"
+            :nodes="nodes"
+            :edges="edges"
             :node-types="nodeTypes"
             :default-edge-options="defaultEdgeOptions"
             :connection-line-style="connectionLineStyle"
@@ -626,7 +626,18 @@ import '@vue-flow/minimap/dist/style.css'
 
 const router = useRouter()
 const route = useRoute()
-const { fitView, setCenter, screenToFlowCoordinate, userSelectionRect, setViewport, getViewport, addSelectedNodes, getNodes } = useVueFlow()
+const {
+  fitView,
+  setCenter,
+  screenToFlowCoordinate,
+  userSelectionRect,
+  setViewport,
+  getViewport,
+  addSelectedNodes,
+  getNodes,
+  applyNodeChanges: applyVueFlowNodeChanges,
+  applyEdgeChanges: applyVueFlowEdgeChanges,
+} = useVueFlow()
 
 // ============ Store 绑定（唯一数据源）============
 const store = useRuleEngineStore()
@@ -1394,20 +1405,37 @@ function handleConnect(params: any) {
   })
 }
 
-// 节点/边变化
-function handleNodesChange(changes: Array<{ type: string; id?: string }>) {
-  const hasRemoval = changes.some(c => c.type === 'remove')
+// 节点/边变化 - manual control 模式
+// 拖拽中（dragging=true）的 position 变化不写回 store（每帧 60Hz 会爆）
+// 仅在拖拽结束（dragging=false）或非 position 类型变更时应用
+function handleNodesChange(changes: any[]) {
+  if (changes.length === 0) return
+  const meaningful = changes.filter(c => {
+    // 过滤掉拖拽中 transient position 更新 —— VueFlow 内部自有管理
+    if (c.type === 'position' && c.dragging === true) return false
+    return true
+  })
+  if (meaningful.length === 0) return
+  // 让 VueFlow 计算新状态（含尺寸、最终位置、添加/删除/选中）
+  const newNodes = applyVueFlowNodeChanges(meaningful)
+  // remove 类型：附带清理孤立边 + 保存历史
+  const hasRemoval = meaningful.some(c => c.type === 'remove')
   if (hasRemoval) {
-    const remainingNodeIds = nodes.value.map((n) => n.id)
+    const remainingIds = new Set(newNodes.map(n => n.id))
     store.edges = store.edges.filter((e: Edge) =>
-      remainingNodeIds.includes(e.source) && remainingNodeIds.includes(e.target)
+      remainingIds.has(e.source) && remainingIds.has(e.target)
     ) as any
-    store.saveHistory()
   }
+  store.nodes = newNodes as any
+  if (hasRemoval) store.saveHistory()
 }
 
-function handleEdgesChange(_changes: Array<{ type: string; id?: string }>) {
-  // 边变化由 store 的 addEdge/removeEdge 自动保存历史
+function handleEdgesChange(changes: any[]) {
+  if (changes.length === 0) return
+  const newEdges = applyVueFlowEdgeChanges(changes)
+  const hasRemoval = changes.some(c => c.type === 'remove')
+  store.edges = newEdges as any
+  if (hasRemoval) store.saveHistory()
 }
 
 // 画布平移
