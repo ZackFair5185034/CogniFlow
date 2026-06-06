@@ -787,25 +787,61 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 
-/* 输入控件样式 */
+/* ============================================
+ * 输入控件样式
+ * 原则：所有视觉样式（背景/边框/颜色/padding）由全局 _element-plus.scss 统一控制
+ * 本处只负责：1) 布局（flex / min-width） 2) :deep() 缩小字号到 12px（适配 280px 节点）
+ * 3) 强制统一高度 32px + box-sizing，避免 model-select/dropdown/multiselect/number
+ * 各自 Element Plus 默认 padding 不一致导致"一个大一个小"
+ * ============================================ */
 .text-input,
 .number-input,
-.select-input {
+.select-input,
+.textarea-input,
+.code-input {
   flex: 1;
-  background: #1a1a1c;
-  border: 1px solid #3a3a3c;
-  border-radius: 4px;
-  padding: 5px 8px;
-  font-size: 12px;
-  color: #e0e0e0;
   min-width: 0;
+  width: 100%;
 }
 
-.text-input:focus,
-.number-input:focus,
-.select-input:focus {
-  outline: none;
-  border-color: #5898ff;
+.select-input {
+  cursor: pointer;
+}
+
+/* 统一输入控件高度与盒模型 —— 消除"一个大一个小" */
+:deep(.el-input__wrapper),
+:deep(.el-select__wrapper) {
+  box-sizing: border-box !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  padding: 0 8px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+:deep(.el-input__wrapper .el-input__inner) {
+  height: 30px !important;
+  line-height: 30px !important;
+  font-size: 12px !important;
+}
+
+:deep(.el-textarea__inner) {
+  font-size: 12px !important;
+  padding: 6px 8px !important;
+  box-sizing: border-box !important;
+}
+
+/* textarea / code 区别：等宽字体 + 最小高度 */
+:deep(.el-textarea__inner) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  min-height: 40px;
+  resize: vertical;
+}
+
+/* code 风格：更深背景作为视觉区分（差异化基于内层 textarea） */
+.code-input :deep(.el-textarea__inner) {
+  background: #0a0a12;
+  min-height: 36px;
 }
 
 .slider-input {
@@ -831,37 +867,6 @@ onBeforeUnmount(() => {
   min-width: 32px;
   text-align: right;
   font-family: monospace;
-}
-
-.select-input {
-  cursor: pointer;
-}
-
-/* Textarea / Code */
-.textarea-input,
-.code-input {
-  flex: 1;
-  width: 100%;
-  background: #1a1a24;
-  border: 1px solid #3a3a4a;
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-size: 11px;
-  color: #e0e0e0;
-  font-family: monospace;
-  resize: vertical;
-  min-height: 40px;
-}
-
-.code-input {
-  background: #0a0a12;
-  min-height: 36px;
-}
-
-.textarea-input:focus,
-.code-input:focus {
-  outline: none;
-  border-color: #5898ff;
 }
 
 
