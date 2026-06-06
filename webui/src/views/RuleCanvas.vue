@@ -194,9 +194,9 @@
         >
           <button
             class="port-filter-btn"
-            :class="{ active: portTypeFilter === '' }"
-            title="全部"
-            @click="portTypeFilter = ''"
+            :class="{ active: portTypeFilter.size === 0 }"
+            title="全部（清除过滤）"
+            @click="portTypeFilter = new Set()"
           >
             全部
           </button>
@@ -204,9 +204,9 @@
             v-for="pt in portTypeFilterOptions"
             :key="pt.type"
             class="port-filter-btn"
-            :class="{ active: portTypeFilter === pt.type }"
-            :title="`仅显示有 ${pt.type} 端口的节点`"
-            @click="portTypeFilter = pt.type"
+            :class="{ active: portTypeFilter.has(pt.type) }"
+            :title="portTypeFilter.has(pt.type) ? `点击取消 ${pt.type} 过滤` : `仅显示有 ${pt.type} 端口的节点`"
+            @click="togglePortTypeFilter(pt.type)"
           >
             {{ pt.label }}
           </button>
@@ -745,7 +745,17 @@ const nodeCategories = computed(() => [
 const nodeSearchQuery = ref('')
 
 // 端口类型过滤：'' 表示全部；常用类型列出按钮，长尾类型通过文本搜索触达
-const portTypeFilter = ref<string>('')
+const portTypeFilter = ref<Set<string>>(new Set())
+/** 切换某端口类型过滤（多选模式：选多个端口类型时节点含任一即匹配） */
+function togglePortTypeFilter(t: string) {
+  const next = new Set(portTypeFilter.value)
+  if (next.has(t)) {
+    next.delete(t)
+  } else {
+    next.add(t)
+  }
+  portTypeFilter.value = next
+}
 const portTypeFilterOptions = [
   { type: 'IMAGE', label: '图像' },
   { type: 'BBOX', label: '检测框' },
@@ -754,19 +764,20 @@ const portTypeFilterOptions = [
   { type: 'CONTROL', label: '控制' },
 ]
 
-/** 节点是否匹配端口类型过滤。空过滤视为全匹配。 */
+/** 节点是否匹配端口类型过滤。空集合视为全匹配；多选时节点含任一即通过。 */
 function matchesPortType(node: NodeDefinition): boolean {
   const filter = portTypeFilter.value
-  if (!filter) return true
-  // 任一输入或输出端口匹配即通过
-  const inputMatch = node.inputs?.some((p) => p.type === filter) ?? false
-  const outputMatch = node.outputs?.some((p) => p.type === filter) ?? false
+  if (filter.size === 0) return true
+  // 任一输入或输出端口匹配任一选中类型即通过
+  const inputMatch = node.inputs?.some((p) => filter.has(p.type)) ?? false
+  const outputMatch = node.outputs?.some((p) => filter.has(p.type)) ?? false
   return inputMatch || outputMatch
 }
 
 const filteredCategories = computed(() => {
   const query = nodeSearchQuery.value.trim().toLowerCase()
-  if (!query && !portTypeFilter.value) {
+  const hasFilter = query || portTypeFilter.value.size > 0
+  if (!hasFilter) {
     return nodeCategories.value
   }
   return nodeCategories.value
