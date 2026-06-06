@@ -2,6 +2,7 @@
   <div
     class="rule-node"
     :class="[`category-${data.category}`, { selected }]"
+    :data-status="data.status || 'idle'"
     @contextmenu.prevent="handleContextMenu"
   >
     <!-- 标题栏 -->
@@ -289,12 +290,13 @@
 
     <!-- 执行状态指示 -->
     <div
-      v-if="data.status"
+      v-if="data.status && data.status !== 'idle'"
       class="node-status"
     >
       <div
         class="status-indicator"
         :class="data.status"
+        :title="statusTitle"
       />
     </div>
 
@@ -406,6 +408,17 @@ function handleContextMenu(event: MouseEvent) {
   event.preventDefault()
   emit('contextmenu', event)
 }
+
+// 状态指示器 tooltip 文案
+const statusTitle = computed(() => {
+  switch (props.data.status) {
+    case 'running': return '正在执行...'
+    case 'success': return '执行成功'
+    case 'failed': return '执行失败'
+    case 'timeout': return '执行超时'
+    default: return ''
+  }
+})
 
 // 可用模型（model-select用）
 const configProperties = computed((): Record<string, ConfigSchemaProperty> => {
@@ -683,6 +696,37 @@ onBeforeUnmount(() => {
     inset 0 1px 0 rgba(255,255,255,0.08),
     0 0 0 1px rgba(88,152,255,0.3),
     0 4px 16px rgba(0,0,0,0.4);
+}
+
+/* Phase 14 节点状态可视高亮：边框颜色按执行状态区分，
+   一眼看出哪个节点 running / success / failed / timeout */
+.rule-node[data-status='running'] {
+  border-color: #5898ff;
+  box-shadow:
+    inset 0 1px 0 rgba(88,152,255,0.15),
+    0 0 0 1px rgba(88,152,255,0.4),
+    0 0 18px rgba(88,152,255,0.25);
+}
+.rule-node[data-status='success'] {
+  border-color: #4CFF4C;
+  box-shadow:
+    inset 0 1px 0 rgba(76,255,76,0.12),
+    0 0 0 1px rgba(76,255,76,0.3),
+    0 0 12px rgba(76,255,76,0.18);
+}
+.rule-node[data-status='failed'] {
+  border-color: #FF4C4C;
+  box-shadow:
+    inset 0 1px 0 rgba(255,76,76,0.12),
+    0 0 0 1px rgba(255,76,76,0.3),
+    0 0 14px rgba(255,76,76,0.2);
+}
+.rule-node[data-status='timeout'] {
+  border-color: #FFA500;
+  box-shadow:
+    inset 0 1px 0 rgba(255,165,0,0.12),
+    0 0 0 1px rgba(255,165,0,0.3),
+    0 0 14px rgba(255,165,0,0.2);
 }
 
 /* 标题栏 - 使用背景色区分类型 */
@@ -1035,23 +1079,32 @@ onBeforeUnmount(() => {
 }
 
 .status-indicator {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: #666;
+  box-shadow: 0 0 6px currentColor;
 }
 
 .status-indicator.running {
   background: #5898ff;
+  color: #5898ff;
   animation: pulse 1s infinite;
 }
 
 .status-indicator.success {
   background: #4CFF4C;
+  color: #4CFF4C;
 }
 
 .status-indicator.failed {
   background: #FF4C4C;
+  color: #FF4C4C;
+}
+
+.status-indicator.timeout {
+  background: #FFA500;
+  color: #FFA500;
 }
 
 @keyframes pulse {
