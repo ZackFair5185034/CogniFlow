@@ -133,6 +133,13 @@ node_modules
 **/.omc/
 **/.rtk/
 **/.codegraph/
+.superpowers/
+
+# Brainstorm / debug screenshots
+brainstorm-*.png
+canvas-initial.png
+cleanup-image-input.png
+nodes-*.png
 
 # Uploads (runtime data)
 uploads/
