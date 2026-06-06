@@ -1,5 +1,6 @@
 <template>
   <div
+    v-bind="$attrs"
     class="rule-node"
     :class="[`category-${data.category}`, { selected }]"
     :data-status="data.status || 'idle'"
@@ -158,13 +159,6 @@
               >
                 <SvgIcon name="file" />
               </button>
-              <button
-                class="file-picker-btn file-picker-btn-atlas"
-                title="从图集选择"
-                @click.stop="openAtlasPicker(key)"
-              >
-                <SvgIcon name="folder" />
-              </button>
             </div>
             <input
               :ref="el => setFileInputRef(key, el)"
@@ -282,7 +276,7 @@
           :id="input.name"
           type="target"
           :position="Position.Left"
-          :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`]"
+          :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`, { 'is-connected': isHandleConnected(input.name) }]"
         />
         <span class="port-label">{{ input.label || input.name }}</span>
       </div>
@@ -297,7 +291,7 @@
           :id="output.name"
           type="source"
           :position="Position.Right"
-          :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`]"
+          :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`, { 'is-connected': isHandleConnected(output.name) }]"
         />
       </div>
     </div>
@@ -316,60 +310,20 @@
 
     <!-- 删除按钮已移除：保留右键菜单删除 + Delete/Backspace 快捷键删除 -->
   </div>
-
-  <!-- Atlas 图集选择对话框 -->
-  <el-dialog
-    v-model="atlasDialog.visible"
-    title="从图集选择"
-    width="600px"
-    :close-on-click-modal="false"
-    @close="closeAtlasDialog"
-  >
-    <div v-if="atlasDialog.errorMessage" class="atlas-error">
-      {{ atlasDialog.errorMessage }}
-    </div>
-    <div v-if="atlasDialog.atlases.length > 0" class="atlas-section">
-      <label class="atlas-label">选择图集：</label>
-      <el-select
-        :model-value="atlasDialog.selectedAtlasId"
-        placeholder="选择图集"
-        :loading="atlasDialog.loading"
-        @update:model-value="(v: number | null) => v && selectAtlas(v)"
-      >
-        <el-option
-          v-for="a in atlasDialog.atlases"
-          :key="a.id"
-          :value="a.id"
-          :label="a.name"
-        />
-      </el-select>
-    </div>
-    <div v-else-if="!atlasDialog.loading" class="atlas-empty">
-      暂无图集
-    </div>
-    <div v-if="atlasDialog.images.length > 0" class="atlas-image-grid">
-      <div
-        v-for="img in atlasDialog.images"
-        :key="img.id"
-        class="atlas-image-item"
-        :title="img.filename"
-        @click="selectAtlasImage(img)"
-      >
-        <img :src="img.url" :alt="img.filename">
-        <span class="atlas-image-name">{{ img.filename }}</span>
-      </div>
-    </div>
-    <template #footer>
-      <button class="ui-btn ui-btn-small" @click="closeAtlasDialog">关闭</button>
-    </template>
-  </el-dialog>
 </template>
 
 <script setup lang="ts">
 import { Position } from '@vue-flow/core'
 import { useRuleEngineStore } from '@/stores/ruleEngine'
 import type { Variable } from '@/stores/ruleEngine'
-import { atlasApi, modelApi } from '@/api'
+import { modelApi } from '@/api'
+
+/**
+ * 关闭自动属性透传：模板根是 fragment（节点 div + el-dialog），
+ * Vue Flow 注入的 props (id/type/position/dimensions/dragging 等)
+ * 会触发"fragment 根无法继承"警告。关闭后手动用 v-bind="$attrs" 绑到节点 div。
+ */
+defineOptions({ inheritAttrs: false })
 
 /** 节点配置值类型 */
 type NodeConfigValue = string | number | boolean | (string | number)[] | null
@@ -414,6 +368,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'contextmenu', event: MouseEvent): void
+  /**
+   * Vue Flow 透传的节点内部更新事件(节点大小/端口变化时通知父组件刷新 Handles)
+   * 声明在 emits 中,避免 fragment 根触发"non-emits event listener"警告
+   */
+  (e: 'updateNodeInternals'): void
 }>()
 
 const store = useRuleEngineStore()
@@ -497,7 +456,7 @@ async function loadModelCategories(fieldKey: string) {
 // 保留旧模型的 class_names 会导致静默 0 检测）
 watch(
   () => props.data.config?.model_id,
-  (newVal, oldVal) => {
+  (_newVal, oldVal) => {
     // 首次设置（oldVal 为空）不做清空操作
     if (oldVal === undefined || oldVal === null || oldVal === '' || oldVal === 0) {
       dynamicCategoryEnum.value = []
@@ -553,6 +512,22 @@ const availableModels = computed(() => store.availableModels)
 // 可用变量列表（从 Pinia store 读取，单源模式）
 const variables = computed<Variable[]>(() => store.variables)
 
+// 已连接 handle id 集合（vue-flow 1.48 不会自动给 handle 加 connected class，
+// 我们自己从 store.edges 算 — 用于 CSS 区分未连/已连 handle）
+const connectedHandleIds = computed<Set<string>>(() => {
+  const ids = new Set<string>()
+  for (const e of store.edges) {
+    if (e.source === props.data.id && e.sourceHandle) ids.add(e.sourceHandle)
+    if (e.target === props.data.id && e.targetHandle) ids.add(e.targetHandle)
+  }
+  return ids
+})
+
+// 判断 handle 是否已连接 (模板辅助)
+function isHandleConnected(handleId: string): boolean {
+  return connectedHandleIds.value.has(handleId)
+}
+
 // 变量绑定菜单状态
 const activeVarMenu = ref<string | null>(null)
 
@@ -561,25 +536,6 @@ const inputRefs = ref<Record<string, HTMLInputElement | HTMLTextAreaElement>>({}
 
 // 文件输入引用字典（file-picker widget 使用）
 const fileInputRefs = ref<Record<string, HTMLInputElement>>({})
-
-// Atlas 图集选择对话框状态
-const atlasDialog = reactive<{
-  visible: boolean
-  targetKey: string | null
-  atlases: Array<{ id: number; name: string }>
-  selectedAtlasId: number | null
-  images: Array<{ id: number; filename: string; url: string }>
-  loading: boolean
-  errorMessage: string
-}>({
-  visible: false,
-  targetKey: null,
-  atlases: [],
-  selectedAtlasId: null,
-  images: [],
-  loading: false,
-  errorMessage: '',
-})
 
 // 设置输入框引用（el-input 内部有 .input 或 .textarea 属性指向原生元素）
 function setInputRef(key: string, el: any) {
@@ -624,71 +580,6 @@ function handleFileSelected(key: string, event: Event) {
   if (file) {
     updateConfig(key, file.name)
   }
-}
-
-// 打开 Atlas 图集选择对话框
-async function openAtlasPicker(key: string) {
-  atlasDialog.targetKey = key
-  atlasDialog.visible = true
-  atlasDialog.errorMessage = ''
-  atlasDialog.images = []
-  atlasDialog.selectedAtlasId = null
-  await loadAtlasList()
-}
-
-// 加载图集列表
-async function loadAtlasList() {
-  atlasDialog.loading = true
-  try {
-    const res = await atlasApi.list()
-    const list = (res.data as Array<{ id: number; name: string }>) || []
-    atlasDialog.atlases = list.map((a: { id: number; name: string }) => ({ id: a.id, name: a.name }))
-    // 默认选中第一个
-    if (atlasDialog.atlases.length > 0 && atlasDialog.selectedAtlasId === null) {
-      await selectAtlas(atlasDialog.atlases[0].id)
-    }
-  } catch (err: any) {
-    atlasDialog.errorMessage = `加载图集失败: ${err?.message || String(err)}`
-  } finally {
-    atlasDialog.loading = false
-  }
-}
-
-// 选中某个图集 → 加载图片列表
-async function selectAtlas(atlasId: number) {
-  atlasDialog.selectedAtlasId = atlasId
-  atlasDialog.loading = true
-  atlasDialog.errorMessage = ''
-  try {
-    const res = await atlasApi.getImages(atlasId, undefined, 1, 200)
-    const items = (res.data as any)?.items || res.data || []
-    atlasDialog.images = items.map((img: any) => ({
-      id: img.id,
-      filename: img.filename || img.name || `image_${img.id}`,
-      url: img.url || `/api/image/${img.id}/file`,
-    }))
-  } catch (err: any) {
-    atlasDialog.errorMessage = `加载图片失败: ${err?.message || String(err)}`
-    atlasDialog.images = []
-  } finally {
-    atlasDialog.loading = false
-  }
-}
-
-// 选中某张图片 → 写入配置
-function selectAtlasImage(img: { id: number; filename: string; url: string }) {
-  if (atlasDialog.targetKey === null) return
-  // 优先写文件名（与 file-picker 一致），保留 url 作为前缀路径
-  updateConfig(atlasDialog.targetKey, img.filename)
-  atlasDialog.visible = false
-}
-
-// 关闭对话框
-function closeAtlasDialog() {
-  atlasDialog.visible = false
-  atlasDialog.targetKey = null
-  atlasDialog.images = []
-  atlasDialog.errorMessage = ''
 }
 
 function toggleVarMenu(key: string) {
@@ -790,13 +681,19 @@ onBeforeUnmount(() => {
     0 4px 16px rgba(0,0,0,0.4);
 }
 
+/* 节点选中边框：按 category 色 (决策 4) — 2px 实色 */
 .rule-node.selected {
-  border-color: #5898ff;
+  border-width: 2px;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.08),
-    0 0 0 1px rgba(88,152,255,0.3),
     0 4px 16px rgba(0,0,0,0.4);
 }
+.rule-node.selected.category-input     { border-color: #4CFF4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(76,255,76,0.3),   0 4px 16px rgba(0,0,0,0.4); }
+.rule-node.selected.category-detection { border-color: #00f0FF; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(0,240,255,0.3),   0 4px 16px rgba(0,0,0,0.4); }
+.rule-node.selected.category-processing{ border-color: #FFFF4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,255,76,0.3),  0 4px 16px rgba(0,0,0,0.4); }
+.rule-node.selected.category-action   { border-color: #FF7F4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,127,76,0.3),  0 4px 16px rgba(0,0,0,0.4); }
+.rule-node.selected.category-logic     { border-color: #DC4FDC; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(220,79,220,0.3),  0 4px 16px rgba(0,0,0,0.4); }
+.rule-node.selected.category-output    { border-color: #FF4C4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,76,76,0.3),   0 4px 16px rgba(0,0,0,0.4); }
 
 /* Phase 14 节点状态可视高亮：边框颜色按执行状态区分，
    一眼看出哪个节点 running / success / failed / timeout */
@@ -1106,27 +1003,29 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
-/* VueFlow Handle 样式 - 确保连接点定位在节点边框上 */
+/* VueFlow Handle 样式 - 确保连接点定位在节点边框上
+   未连接：浅灰亮边 + 略亮背景 + 略大尺寸，让锚点在节点深色背景上清晰可见 */
 .node-handle {
-  width: 14px !important;
-  height: 14px !important;
-  background: #1e1e2e !important;
-  border: 2px solid #5a5a6a !important;
+  width: 16px !important;
+  height: 16px !important;
+  background: #2a2a3a !important;
+  border: 2.5px solid #c8c8d8 !important;
   border-radius: 50% !important;
   cursor: crosshair !important;
   transition: all 0.15s ease !important;
   flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
 }
 
 /* 强制 Handle 定位到节点边框，垂直居中对齐 port-item */
 :deep(.vue-flow__handle-left) {
-  left: -7px !important;
+  left: -8px !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
 }
 
 :deep(.vue-flow__handle-right) {
-  right: -7px !important;
+  right: -8px !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
 }
@@ -1159,11 +1058,28 @@ onBeforeUnmount(() => {
 .node-handle.type-model    { border-color: #888888; }   /* 灰色 */
 .node-handle.type-any      { border-color: #E0E0E0; }   /* 浅灰 */
 
-/* 已连接端口：类型色 + 绿色边框叠加，不覆盖类型色本身 */
-.node-handle.vue-flow-handle-connected {
-  border-color: #22c55e !important;
-  background: #1e1e2e !important;
+/* 已连接端口：边框保留类型色，中心填充类型色 (决策 3)
+   注：vue-flow 1.48 不会自动给 handle 加 connected class，
+   我们在 RuleNode.vue 用 connectedHandleIds computed 加 .is-connected */
+.node-handle.is-connected {
+  /* 边框由 .type-X 控制，不强制覆盖 */
+  background: #2a2a3a !important;
 }
+/* connected 时中心填充 = 类型色 */
+.node-handle.is-connected.type-image    { background: #4CFF4C !important; box-shadow: 0 0 8px rgba(76,255,76,0.5); }
+.node-handle.is-connected.type-bbox     { background: #00f0FF !important; box-shadow: 0 0 8px rgba(0,240,255,0.5); }
+.node-handle.is-connected.type-mask     { background: #00f0FF !important; box-shadow: 0 0 8px rgba(0,240,255,0.5); }
+.node-handle.is-connected.type-scores   { background: #FF7F4C !important; box-shadow: 0 0 8px rgba(255,127,76,0.5); }
+.node-handle.is-connected.type-trigger  { background: #DC4FDC !important; box-shadow: 0 0 8px rgba(220,79,220,0.5); }
+.node-handle.is-connected.type-control  { background: #DC4FDC !important; box-shadow: 0 0 8px rgba(220,79,220,0.5); }
+.node-handle.is-connected.type-int      { background: #3B82F6 !important; box-shadow: 0 0 8px rgba(59,130,246,0.5); }
+.node-handle.is-connected.type-float    { background: #14B8A6 !important; box-shadow: 0 0 8px rgba(20,184,166,0.5); }
+.node-handle.is-connected.type-boolean  { background: #FF4C4C !important; box-shadow: 0 0 8px rgba(255,76,76,0.5); }
+.node-handle.is-connected.type-string   { background: #8B5CF6 !important; box-shadow: 0 0 8px rgba(139,92,246,0.5); }
+.node-handle.is-connected.type-array    { background: #FFFF4C !important; box-shadow: 0 0 8px rgba(255,255,76,0.5); }
+.node-handle.is-connected.type-object   { background: #FFFF4C !important; box-shadow: 0 0 8px rgba(255,255,76,0.5); }
+.node-handle.is-connected.type-model    { background: #888888 !important; box-shadow: 0 0 8px rgba(136,136,136,0.5); }
+.node-handle.is-connected.type-any      { background: #E0E0E0 !important; box-shadow: 0 0 8px rgba(224,224,224,0.5); }
 
 .port-label {
   font-size: 12px;
@@ -1247,82 +1163,6 @@ onBeforeUnmount(() => {
 
 .file-input-hidden {
   display: none;
-}
-
-/* Atlas 图集按钮（与 file-picker 按钮紧邻，提示从图集选择） */
-.file-picker-btn-atlas {
-  color: var(--accent-cyan, #00f0ff);
-}
-
-/* Atlas 对话框 */
-.atlas-error {
-  color: #ff4c4c;
-  margin-bottom: 12px;
-  font-size: 13px;
-}
-
-.atlas-section {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.atlas-label {
-  font-size: 13px;
-  color: var(--text-secondary, #8888aa);
-  white-space: nowrap;
-}
-
-.atlas-empty {
-  color: var(--text-muted, #555566);
-  text-align: center;
-  padding: 24px 0;
-  font-size: 13px;
-}
-
-.atlas-image-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 8px;
-  max-height: 360px;
-  overflow-y: auto;
-}
-
-.atlas-image-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 6px;
-  border: 1px solid var(--border-color, #2a2a3a);
-  border-radius: 6px;
-  cursor: pointer;
-  background: var(--bg-primary, #0a0a0f);
-  transition: border-color 0.2s, background 0.2s;
-}
-
-.atlas-image-item:hover {
-  border-color: var(--accent-cyan, #00f0ff);
-  background: rgba(0, 240, 255, 0.08);
-}
-
-.atlas-image-item img {
-  width: 100%;
-  height: 80px;
-  object-fit: cover;
-  border-radius: 4px;
-  background: #1a1a24;
-}
-
-.atlas-image-name {
-  font-size: 11px;
-  color: var(--text-secondary, #8888aa);
-  margin-top: 4px;
-  text-align: center;
-  width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 </style>

@@ -119,6 +119,14 @@
 
       <div class="header-right">
         <el-button
+          class="palette-toggle-btn"
+          :class="{ active: showPalette }"
+          :title="showPalette ? '收起节点面板' : '展开节点面板'"
+          @click="showPalette = !showPalette"
+        >
+          <SvgIcon name="panel-left" />
+        </el-button>
+        <el-button
           class="action-btn secondary"
           @click="handleValidate"
         >
@@ -146,28 +154,18 @@
 
     <!-- 主体区域 -->
     <div class="canvas-body">
-      <!-- 左侧节点面板 -->
+      <!-- 左侧节点面板 (折叠时整段隐藏 — 完全收纳) -->
       <aside
+        v-show="showPalette"
         class="node-palette"
-        :class="{ collapsed: !showPalette }"
       >
-        <el-button
-          class="collapse-btn"
-          :class="{ collapsed: !showPalette }"
-          :title="showPalette ? '收起面板' : '展开面板'"
-          @click="showPalette = !showPalette"
-        >
-          <SvgIcon :name="showPalette ? 'chevron-left' : 'chevron-right'" />
-        </el-button>
         <div
-          v-show="showPalette"
           class="palette-header"
         >
           <h3>节点库</h3>
         </div>
 
         <div
-          v-show="showPalette"
           class="palette-search"
         >
           <el-input
@@ -189,7 +187,6 @@
 
         <!-- 端口类型过滤（与文本搜索组合使用；空值=全部） -->
         <div
-          v-show="showPalette"
           class="palette-port-filter"
         >
           <button
@@ -213,7 +210,6 @@
         </div>
 
         <div
-          v-show="showPalette"
           class="palette-content"
         >
           <div
@@ -822,18 +818,19 @@ const executionStatusText = computed(() => ({
   failed: '执行失败'
 }[executionStatus.value]))
 
-// 默认边样式 - 使用贝塞尔曲线
+// 默认边样式 - 不设置内联 style（避免与 CSS 三态规则冲突），
+// stroke / stroke-width / stroke-opacity 全部由 .vue-flow__edge-path CSS 控制
 const defaultEdgeOptions = {
   type: 'default',
   animated: false,
   markerEnd: MarkerType.ArrowClosed,
-  style: { stroke: 'var(--accent-blue)', strokeWidth: 2 }
 }
 
-// 连接线样式
+// 连接线样式 (用户拖拽新连线时显示)
 const connectionLineStyle = {
   stroke: 'var(--accent-blue)',
   strokeWidth: 2,
+  strokeOpacity: 0.7,
   markerEnd: MarkerType.ArrowClosed
 }
 
@@ -1207,19 +1204,24 @@ function handleContextAction(action: string) {
       hideContextMenu()
       break
     case 'delete':
+      // 直接从 contextMenu.target 取 id 删除 —— 不要再走 addSelectedNodes 绕路
+      // (VueFlow 1.48 addSelectedNodes 接收 GraphNode[]，不是 string[]；
+      //  传 id 字符串会导致 nodes.map((n) => n.id) 得到 undefined，
+      //  选中状态变更静默失败，handleDelete() 因无选中节点而早返回)
       if (contextMenu.targetType === 'node' && contextMenu.target) {
-        ;(addSelectedNodes as any)([(contextMenu.target as any).id])
+        const targetId = (contextMenu.target as any).id as string
+        store.removeNode(targetId)
+        ElMessage.success('已删除节点')
       } else if (contextMenu.targetType === 'edge' && contextMenu.target) {
         const targetEdge = contextMenu.target as Edge
-        store.edges = store.edges.map((e: Edge) => ({ ...e, selected: e.id === targetEdge.id })) as any
+        store.removeEdge(targetEdge.id)
+        ElMessage.success('已删除连线')
       }
-      handleDelete()
       hideContextMenu()
       break
     case 'selectAll':
-      for (const n of nodes.value) {
-        ;(addSelectedNodes as any)([n.id])
-      }
+      // 直接传节点对象数组（VueFlow 1.48 签名 GraphNode[]，传 id 字符串会 .id 取值变 undefined 静默失败）
+      addSelectedNodes(nodes.value as any)
       hideContextMenu()
       break
   }
@@ -2014,26 +2016,17 @@ $panel-header-height: 44px;
   position: relative;
 }
 
-// 左侧节点面板
+// 左侧节点面板 (折叠时整段隐藏 — 完全收纳)
 .node-palette {
   width: $palette-width;
   background: #0e0e14;
   border-right: 1px solid #1e1e2e;
   display: flex;
   flex-direction: column;
-  transition: width 0.3s ease;
   flex-shrink: 0;
   z-index: 50;
   position: relative;
   overflow: visible;
-
-  &.collapsed {
-    width: 48px;
-
-    .palette-content,
-    .palette-search,
-    .palette-header { display: none; }
-  }
 }
 
 .palette-header {
@@ -2054,24 +2047,21 @@ $panel-header-height: 44px;
   }
 }
 
-.collapse-btn {
-  position: absolute;
-  right: -14px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 14px;
-  height: 48px;
-  display: flex;
+// 工具栏 panel-left 折叠按钮 (32x32，比普通 icon-btn 略大)
+.palette-toggle-btn {
+  width: 32px !important;
+  height: 32px !important;
+  margin-right: 4px !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 6px !important;
+  color: #888 !important;
+  padding: 0 !important;
+  display: flex !important;
   align-items: center;
   justify-content: center;
-  background: #0e0e14;
-  border: 1px solid #1e1e2e;
-  border-left: none;
-  border-radius: 0 6px 6px 0;
-  color: #666;
   cursor: pointer;
-  z-index: 20;
-  padding: 0;
+  transition: all 0.15s ease;
 
   :deep(button) {
     background: transparent !important;
@@ -2086,19 +2076,21 @@ $panel-header-height: 44px;
     color: inherit;
   }
 
-  &:hover {
-    color: var(--accent-blue);
-    border-color: var(--accent-blue);
-    border-left: none;
-  }
-
   svg {
-    width: 12px;
-    height: 12px;
+    width: 16px;
+    height: 16px;
   }
 
-  &.collapsed svg {
-    transform: translateX(1px);
+  &:hover {
+    background: rgba(0, 240, 255, 0.06) !important;
+    color: #00f0ff !important;
+    border-color: rgba(0, 240, 255, 0.2) !important;
+  }
+
+  &.active {
+    background: rgba(0, 240, 255, 0.1) !important;
+    color: #00f0ff !important;
+    border-color: rgba(0, 240, 255, 0.3) !important;
   }
 }
 
@@ -2536,10 +2528,12 @@ $panel-header-height: 44px;
     display: none;
   }
 
+  /* 连接线：未选中 35% 蓝、悬停 70%、选中 100% 青色 + 发光 (决策 2) */
   :deep(.vue-flow__edge-path) {
     stroke: var(--accent-blue);
     stroke-width: 2;
-    transition: stroke 0.15s ease, stroke-width 0.15s ease;
+    stroke-opacity: 0.35;
+    transition: stroke 0.15s ease, stroke-width 0.15s ease, stroke-opacity 0.15s ease;
   }
 
   :deep(.vue-flow__edge.animated .vue-flow__edge-path) {
@@ -2547,22 +2541,22 @@ $panel-header-height: 44px;
     animation: dash 0.5s linear infinite;
   }
 
-  /* 连线选中态：橙色高亮 + 加粗 */
+  /* 连线选中态：100% 青色 + 加粗（去掉辉光） */
   :deep(.vue-flow__edge.selected .vue-flow__edge-path) {
-    stroke: #ff7f4c;
-    stroke-width: 3;
+    stroke: #00f0ff !important;
+    stroke-width: 3 !important;
+    stroke-opacity: 1 !important;
   }
 
   :deep(.vue-flow__edge.selected .vue-flow__edge-interaction) {
-    stroke: #ff7f4c;
+    stroke: #00f0ff;
     stroke-width: 12;
-    stroke-opacity: 0.15;
+    stroke-opacity: 0.2;
   }
 
-  /* hover 态：轻量加亮（仅非选中时） */
+  /* hover 态：70% 蓝过渡 */
   :deep(.vue-flow__edge:hover .vue-flow__edge-path) {
-    stroke: #5898ff;
-    stroke-width: 2.5;
+    stroke-opacity: 0.7;
   }
 
   :deep(.vue-flow__controls) {
