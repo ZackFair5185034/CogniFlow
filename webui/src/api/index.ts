@@ -130,6 +130,8 @@ export const modelApi = {
   },
   getTrainingHistory: (id: number) => api.get(`/models/${id}/training-history`),
   exportAsync: (id: number, data: { target_format: string; half: boolean }) => api.post(`/models/${id}/export`, data),
+  /** 获取模型训练类别名列表（Phase 14 起，yolo_trigger/conditions class_names 自动填充用） */
+  getCategories: (id: number) => api.get<string[]>(`/models/${id}/categories`),
 }
 
 // Training API

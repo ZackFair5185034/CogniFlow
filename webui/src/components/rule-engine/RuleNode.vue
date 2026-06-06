@@ -95,12 +95,26 @@
               @update:model-value="updateConfig(key, $event)"
             >
               <el-option
-                v-for="opt in schema.enum"
-                :key="opt"
-                :value="opt"
+                v-for="opt in dynamicEnumFor(key, schema)"
+                :key="String(opt)"
+                :value="opt as string | number"
                 :label="String(opt)"
               />
             </el-select>
+            <el-tooltip
+              v-if="key === 'class_names' && hasModelIdField()"
+              content="从所选模型加载训练类别（覆盖当前输入）"
+              placement="top"
+            >
+              <button
+                class="var-bind-btn"
+                title="从所选模型加载类别"
+                :disabled="loadingCategories.has(key)"
+                @click.stop="loadModelCategories(key)"
+              >
+                <SvgIcon :name="loadingCategories.has(key) ? 'loading' : 'refresh'" />
+              </button>
+            </el-tooltip>
           </template>
 
           <!-- Model Select -->
@@ -355,7 +369,7 @@
 import { Position } from '@vue-flow/core'
 import { useRuleEngineStore } from '@/stores/ruleEngine'
 import type { Variable } from '@/stores/ruleEngine'
-import { atlasApi } from '@/api'
+import { atlasApi, modelApi } from '@/api'
 
 /** 节点配置值类型 */
 type NodeConfigValue = string | number | boolean | (string | number)[] | null
@@ -419,6 +433,74 @@ const statusTitle = computed(() => {
     default: return ''
   }
 })
+
+// Phase 14 增强：class_names multiselect 可从所选 model_id 动态拉取类别
+const loadingCategories = ref<Set<string>>(new Set())
+
+/** 拿到所选 model_id 字段的值（如果存在且非空） */
+function getModelIdValue(): number | null {
+  const modelId = props.data.config?.model_id
+  if (modelId === undefined || modelId === null || modelId === '') return null
+  const n = Number(modelId)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** 检查当前节点的 configSchema 是否包含 model_id 字段（决定是否显示加载按钮） */
+function hasModelIdField(): boolean {
+  return !!props.data.configSchema?.model_id
+}
+
+/** 动态 enum 源：class_names 字段如果有缓存的模型类别，优先使用 */
+function dynamicEnumFor(key: string, schema: ConfigSchemaProperty): unknown[] {
+  if (key === 'class_names' && dynamicCategoryEnum.value.length > 0) {
+    return dynamicCategoryEnum.value
+  }
+  return schema.enum ?? []
+}
+
+const dynamicCategoryEnum = ref<string[]>([])
+
+/** 从所选模型加载训练类别名列表，覆盖到 enum（同时写入 multiselect 的实际值） */
+async function loadModelCategories(fieldKey: string) {
+  const modelId = getModelIdValue()
+  if (!modelId) {
+    ElMessage.warning('请先在模型字段选择模型')
+    return
+  }
+  loadingCategories.value.add(fieldKey)
+  try {
+    const res = await modelApi.getCategories(modelId)
+    const cats = (res.data || []) as string[]
+    if (cats.length === 0) {
+      ElMessage.info('该模型未提供训练类别，请手动输入')
+      return
+    }
+    dynamicCategoryEnum.value = cats
+    // 覆盖当前字段值为模型类别（仅在字段为空时自动填）
+    const current = getNodeValue(fieldKey) as unknown
+    const isEmpty = !Array.isArray(current) || (current as unknown[]).length === 0
+    if (isEmpty) {
+      // updateConfig 单值签名不支持 array，绕过它直接调 store
+      store.updateNodeConfig(props.data.id, fieldKey, cats as unknown as NodeConfigValue)
+    }
+    ElMessage.success(`已加载 ${cats.length} 个训练类别${isEmpty ? '并填入' : '（已有输入，未覆盖）'}`)
+  } catch (err) {
+    console.error('加载模型类别失败:', err)
+    ElMessage.error('加载模型类别失败')
+  } finally {
+    loadingCategories.value.delete(fieldKey)
+  }
+}
+
+// 当 model_id 改变时清除缓存的 enum（让用户重新点"加载"按钮）
+watch(
+  () => props.data.config?.model_id,
+  () => {
+    // 保留用户已选的值（不动 config.class_names）
+    // 但清空 dynamicCategoryEnum（防止不同模型的类别混淆）
+    dynamicCategoryEnum.value = []
+  }
+)
 
 // 可用模型（model-select用）
 const configProperties = computed((): Record<string, ConfigSchemaProperty> => {
