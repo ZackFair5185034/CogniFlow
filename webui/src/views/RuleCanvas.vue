@@ -1062,31 +1062,51 @@ function handleKeyDown(event: KeyboardEvent) {
 }
 
 // 复制
-function handleCopy() {
+function handleCopy(event?: MouseEvent) {
   const vfNodes = getNodes.value as any[]
   const selected = vfNodes.filter((n) => n.selected)
   if (selected.length === 0) {
     ElMessage.warning('请先选择要复制的节点')
     return
   }
-  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
+  // 收集选中节点之间的边 (源和目标都在选中集)
+  const selectedIds = new Set(selected.map((n) => n.id))
+  const relatedEdges = (edges.value as Edge[]).filter(
+    (e) => selectedIds.has(e.source) && selectedIds.has(e.target)
+  )
+  clipboard.value = {
+    nodes: selected.map((n: any) => JSON.parse(JSON.stringify(n))),
+    edges: relatedEdges.map((e) => JSON.parse(JSON.stringify(e))),
+    mousePos: event ? { x: event.clientX, y: event.clientY } : { x: 0, y: 0 }
+  }
   clipboardMode.value = 'copy'
   ElMessage.success(`已复制 ${selected.length} 个节点`)
 }
 
 // 剪切
-function handleCut() {
+function handleCut(event?: MouseEvent) {
   const vfNodes = getNodes.value as any[]
   const selected = vfNodes.filter((n) => n.selected)
   if (selected.length === 0) {
     ElMessage.warning('请先选择要剪切的节点')
     return
   }
-  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
-  clipboardMode.value = 'cut'
-  for (const n of selected) {
-    store.removeNode(n.id)
+  const selectedIds = new Set(selected.map((n) => n.id))
+  const relatedEdges = (edges.value as Edge[]).filter(
+    (e) => selectedIds.has(e.source) && selectedIds.has(e.target)
+  )
+  clipboard.value = {
+    nodes: selected.map((n: any) => JSON.parse(JSON.stringify(n))),
+    edges: relatedEdges.map((e) => JSON.parse(JSON.stringify(e))),
+    mousePos: event ? { x: event.clientX, y: event.clientY } : { x: 0, y: 0 }
   }
+  clipboardMode.value = 'cut'
+  // 批量删除节点 + 关联边, 避免循环里反复重渲染
+  const nodeIds = selected.map((n) => n.id)
+  store.nodes = store.nodes.filter((n) => !nodeIds.includes(n.id))
+  store.edges = (store.edges as Edge[]).filter(
+    (e) => !nodeIds.includes(e.source) && !nodeIds.includes(e.target)
+  )
   ElMessage.success(`已剪切 ${selected.length} 个节点`)
 }
 
