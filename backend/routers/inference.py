@@ -170,7 +170,7 @@ async def detect_image(
             }
         else:
             # YOLO 模型，使用原有的 inference_yolo
-            result = inference_yolo(detector, str(file_path), conf_threshold)
+            result = inference_yolo(detector, str(file_path), conf_threshold, device=actual_device)
 
         # 返回原图（画框由前端 SVG overlay 负责）
         with open(file_path, 'rb') as f:
@@ -860,7 +860,7 @@ async def rerun_inference_job(
             }
         else:
             # YOLO 模型
-            result = inference_yolo(detector, job.file_path, conf_threshold)
+            result = inference_yolo(detector, job.file_path, conf_threshold, device=actual_device)
 
         # 返回原图（画框由前端 SVG overlay 负责）
         with open(job.file_path, 'rb') as f:

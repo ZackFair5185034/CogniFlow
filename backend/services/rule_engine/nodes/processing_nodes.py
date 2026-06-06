@@ -1094,14 +1094,17 @@ class RoiExtractNode(BaseExecutor):
                 continue
             x1, y1, x2, y2 = (float(v) for v in bbox)
 
-            # 应用 padding（外扩）
+            # 应用 padding（外扩）：padding 表示总膨胀比例
+            # 例 bbox=50, padding=0.2 → 总尺寸 60 (每边 +5 = 50*0.2/2)
             if padding > 0:
                 bw = x2 - x1
                 bh = y2 - y1
-                x1 -= bw * padding
-                y1 -= bh * padding
-                x2 += bw * padding
-                y2 += bh * padding
+                dx = bw * padding / 2.0
+                dy = bh * padding / 2.0
+                x1 -= dx
+                y1 -= dy
+                x2 += dx
+                y2 += dy
 
             # 裁剪到图像边界
             ix1 = max(0, int(x1))
