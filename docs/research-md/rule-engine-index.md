@@ -208,6 +208,7 @@ CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，
 - **Phase 14** ✅ — VueFlow 格式校验修复 + class_names 动态化 + logs API List 格式
 - **Phase 15** ✅ — 8 项画布性能优化（shallowRef + VueFlow manual control + JSON 路线 + 历史栈瘦身 + updateNodeConfig 内变 + widget v-memo + 缩略图 idle + 节点重绘隔离）
 - **Phase 15 验收**：后端 208 passed / vue-tsc 0 错误 / Playwright 0 console errors / 远端已同步
+- **Phase 15 后续用户报告 Bug** ✅ — el-select popper z-index 修复（YOLO检测下拉可见）+ Atlas↔Model 双向关系 + YOLO 节点 device 字段透传 + model_id 类型 integer
 
 ---
 
