@@ -2,3 +2,6 @@ allowBuilds:
   '@parcel/watcher': true
   esbuild: true
   vue-demi: true
+
+# 允许非交互场景下重建 modules
+confirmModulesPurge: false

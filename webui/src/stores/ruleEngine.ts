@@ -318,7 +318,9 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         selected: false
       } as unknown as RuleNodeData
     }
-    nodes.value.push(newNode)
+    // 关键：shallowRef 不会追踪内部数组突变,需用新数组重新赋值触发响应式
+    // 之前直接 push() 会让节点"进了 store 但不渲染"（拖拽/双击添加都不显示）
+    nodes.value = [...nodes.value, newNode]
     saveHistory()
     return true
   }
@@ -364,7 +366,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     source: string; target: string
     sourceHandle?: string | null; targetHandle?: string | null
   }) {
-    edges.value.push({
+    // shallowRef 需重新赋值触发响应式（与 createNode 同问题）
+    edges.value = [...edges.value, {
       id: `edge_${Date.now()}`,
       source: connection.source,
       target: connection.target,
@@ -372,7 +375,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       targetHandle: connection.targetHandle ?? undefined,
       type: 'default',
       animated: false
-    })
+    }]
     saveHistory()
   }
 
