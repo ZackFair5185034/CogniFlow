@@ -89,10 +89,10 @@ class YOLOModelNode(BaseExecutor):
         """返回节点的可配置参数 schema。"""
         return {
             "model_id": ConfigSchemaProperty(
-                type="string",
+                type="integer",
                 title="模型",
                 description="选择要使用的 YOLO 检测模型",
-                default="",
+                default=0,
                 widget="model-select",
                 required=True,
             ),
@@ -152,6 +152,7 @@ class YOLOModelNode(BaseExecutor):
         confidence = params.get("confidence", 0.5)
         iou_threshold = params.get("iou_threshold", 0.45)
         max_detections = params.get("max_detections", 300)
+        device = params.get("device", "auto")
 
         if not model_id and not model_path:
             return {"error": "必须提供 model_id 或 model_path"}
@@ -185,15 +186,18 @@ class YOLOModelNode(BaseExecutor):
             if not model_path:
                 return {"error": f"模型 {model_id} 未找到或无模型文件"}
 
-            # 通过缓存加载模型
+            # 通过缓存加载模型（设备作为 cache key 一部分，避免跨设备误用）
             from backend.routers.yolo_training import load_yolo_model, inference_yolo
 
-            cache_key = f"yolo:{model_path}"
+            cache_key = f"yolo:{model_path}:{device}"
             cache = ModelCache.get_instance()
-            model = cache.get_or_load(cache_key, lambda: load_yolo_model(model_path))
+            model = cache.get_or_load(
+                cache_key,
+                lambda: load_yolo_model(model_path, device=device)
+            )
 
             # 执行推理
-            result = inference_yolo(model, image_path, conf_threshold=confidence)
+            result = inference_yolo(model, image_path, conf_threshold=confidence, device=device)
 
             detections = result.get("detections", [])
 
@@ -275,10 +279,10 @@ class YOLOTriggerNode(BaseExecutor):
     def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
         return {
             "model_id": ConfigSchemaProperty(
-                type="string",
+                type="integer",
                 title="模型",
                 description="选择要使用的 YOLO 检测模型",
-                default="",
+                default=0,
                 widget="model-select",
             ),
             "class_names": ConfigSchemaProperty(
@@ -334,6 +338,7 @@ class YOLOTriggerNode(BaseExecutor):
         class_names = params.get("class_names", [])
         min_confidence = params.get("min_confidence", 0.5)
         max_objects = params.get("max_objects", 10)
+        device = params.get("device", "auto")
 
         try:
             # 优先使用 context.trigger_data 中的检测结果（外部触发）
@@ -373,10 +378,16 @@ class YOLOTriggerNode(BaseExecutor):
                                 db.close()
 
                         if model_path:
-                            cache_key = f"yolo:{model_path}"
+                            cache_key = f"yolo:{model_path}:{device}"
                             cache = ModelCache.get_instance()
-                            model = cache.get_or_load(cache_key, lambda: load_yolo_model(model_path))
-                            result = inference_yolo(model, image_path, conf_threshold=min_confidence)
+                            model = cache.get_or_load(
+                                cache_key,
+                                lambda: load_yolo_model(model_path, device=device)
+                            )
+                            result = inference_yolo(
+                                model, image_path,
+                                conf_threshold=min_confidence, device=device
+                            )
                             detections = result.get("detections", [])
                         else:
                             return {

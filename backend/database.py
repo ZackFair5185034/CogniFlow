@@ -34,6 +34,7 @@ class Atlas(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    models = relationship("Model", back_populates="atlas", cascade="all, delete-orphan")
     images = relationship("Image", back_populates="atlas", cascade="all, delete-orphan")
 
 
@@ -112,7 +113,7 @@ class Model(Base):
     precision = Column(String(10), default="fp32")  # 推理精度: fp32/fp16/int8
     input_shape = Column(String(50), nullable=True)  # 输入尺寸，如 "640x640"
 
-    atlas = relationship("Atlas", back_populates=None)
+    atlas = relationship("Atlas", back_populates="models")
     inference_jobs = relationship("InferenceJob", back_populates="model", cascade="all, delete-orphan")
     files = relationship("ModelFile", back_populates="model", cascade="all, delete-orphan")
 

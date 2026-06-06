@@ -179,6 +179,13 @@
   border: 1px solid var(--border-color) !important;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
 }
+// Phase 14 Bug A 修复：RuleCanvas.canvas-wrapper z-index:9999 盖住 el-select popper
+// 把 el-select 弹层提到比画布更高层，确保 YOLO检测 节点的下拉列表可见
+.el-select__popper,
+.el-dropdown__popper,
+.el-popper.is-light {
+  z-index: 10000 !important;
+}
 .el-popper .el-popper__arrow::before {
   background: var(--bg-card) !important;
   border-color: var(--border-color) !important;

@@ -571,18 +571,28 @@ def _extract_class_names(pt_model_path: str) -> Optional[Dict[int, str]]:
     return None
 
 
-def inference_yolo(model, image_path: str, conf_threshold: float = 0.25) -> Dict:
+def inference_yolo(model, image_path: str, conf_threshold: float = 0.25, device: str = "cpu") -> Dict:
     """使用 YOLO 模型进行推理。
 
     Args:
         model: 加载的 YOLO 模型
         image_path: 图片路径
         conf_threshold: 置信度阈值
+        device: 推理设备 (cpu/cuda/auto/directml)
 
     Returns:
         检测结果
     """
-    results = model(image_path, conf=conf_threshold)
+    # Ultralytics YOLO 支持 device 关键字：把 model 临时 to(device) 后推理
+    # 避免永久移动（cache 复用同一实例）
+    target_device = None if device == "auto" else device
+    if target_device is not None:
+        try:
+            model.to(target_device)
+        except Exception:
+            # 设备不可用时静默回退（推断报错由调用方处理）
+            pass
+    results = model(image_path, conf=conf_threshold, device=target_device)
 
     detections = []
     for result in results:
