@@ -14,7 +14,6 @@
       </div>
       <div class="node-title">
         <span class="node-label">{{ data.label || data.type }}</span>
-        <span class="node-type">{{ data.type }}</span>
       </div>
     </div>
 
@@ -298,14 +297,7 @@
       />
     </div>
 
-    <!-- 删除按钮 -->
-    <button
-      class="node-delete-btn"
-      title="删除节点"
-      @click.stop="handleDelete"
-    >
-      ×
-    </button>
+    <!-- 删除按钮已移除：保留右键菜单删除 + Delete/Backspace 快捷键删除 -->
   </div>
 
   <!-- Atlas 图集选择对话框 -->
@@ -408,10 +400,6 @@ const emit = defineEmits<{
 }>()
 
 const store = useRuleEngineStore()
-
-function handleDelete() {
-  store.removeNode(props.data.id)
-}
 
 function handleContextMenu(event: MouseEvent) {
   event.preventDefault()
@@ -667,7 +655,7 @@ onBeforeUnmount(() => {
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
     0 2px 8px rgba(0,0,0,0.3);
-  /* 连接点和删除按钮需要溢出显示，但不能影响布局 */
+  /* 连接点需要溢出显示，但不能影响布局 */
   overflow: visible;
 }
 
@@ -701,7 +689,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 5px 10px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
 }
 
@@ -752,9 +740,7 @@ onBeforeUnmount(() => {
 }
 
 .node-type {
-  font-size: 10px;
-  color: #888;
-  font-family: monospace;
+  display: none; /* 隐藏英文节点类型，只保留中文 label */
 }
 
 /* 配置区域 */
@@ -1071,39 +1057,7 @@ onBeforeUnmount(() => {
   50% { opacity: 0.5; }
 }
 
-/* 删除按钮 */
-.node-delete-btn {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #ff4c4c;
-  border: 2px solid #1e1e2e;
-  color: #fff;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-
-  &:hover {
-    opacity: 1;
-    transform: scale(1.1);
-  }
-
-  /* 节点选中或悬停时显示删除按钮 */
-  .rule-node:hover &,
-  .rule-node.selected & {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
+/* 删除按钮已移除：删除操作通过右键菜单 + Delete/Backspace 快捷键 */
 
 /* File Picker 控件 */
 .file-picker-wrapper {

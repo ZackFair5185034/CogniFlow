@@ -2479,11 +2479,30 @@ $panel-header-height: 44px;
   :deep(.vue-flow__edge-path) {
     stroke: var(--accent-blue);
     stroke-width: 2;
+    transition: stroke 0.15s ease, stroke-width 0.15s ease;
   }
 
   :deep(.vue-flow__edge.animated .vue-flow__edge-path) {
     stroke-dasharray: 5;
     animation: dash 0.5s linear infinite;
+  }
+
+  /* 连线选中态：橙色高亮 + 加粗 */
+  :deep(.vue-flow__edge.selected .vue-flow__edge-path) {
+    stroke: #ff7f4c;
+    stroke-width: 3;
+  }
+
+  :deep(.vue-flow__edge.selected .vue-flow__edge-interaction) {
+    stroke: #ff7f4c;
+    stroke-width: 12;
+    stroke-opacity: 0.15;
+  }
+
+  /* hover 态：轻量加亮（仅非选中时） */
+  :deep(.vue-flow__edge:hover .vue-flow__edge-path) {
+    stroke: #5898ff;
+    stroke-width: 2.5;
   }
 
   :deep(.vue-flow__controls) {
