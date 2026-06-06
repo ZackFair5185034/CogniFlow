@@ -743,7 +743,7 @@ onBeforeUnmount(() => {
   display: none; /* 隐藏英文节点类型，只保留中文 label */
 }
 
-/* 配置区域 */
+/* 配置区域 - contain 隔离重绘避免影响整图 */
 .node-body {
   padding: 8px 12px;
   display: flex;
@@ -751,6 +751,7 @@ onBeforeUnmount(() => {
   gap: 8px;
   background: rgba(0,0,0,0.15);
   border-bottom: 1px solid rgba(255,255,255,0.03);
+  contain: layout style paint;
 }
 
 .node-field {

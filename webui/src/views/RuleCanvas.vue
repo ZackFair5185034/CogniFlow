@@ -1471,7 +1471,13 @@ async function handleSave() {
   saving.value = true
   try {
     await store.saveGraph()
-    await captureAndSaveThumbnail()
+    // 缩略图生成较重（base64 编码 + HTTP），用 requestIdleCallback 推迟到
+    // 浏览器空闲时执行，避免阻塞主流程的 ElMessage.success() 反馈
+    const scheduleIdle: (cb: () => void) => void =
+      (window as any).requestIdleCallback || ((cb) => setTimeout(cb, 100))
+    scheduleIdle(() => {
+      captureAndSaveThumbnail()
+    })
     ElMessage.success('保存成功')
   } catch (err) {
     console.error('保存失败:', err)
