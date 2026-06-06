@@ -492,13 +492,31 @@ async function loadModelCategories(fieldKey: string) {
   }
 }
 
-// 当 model_id 改变时清除缓存的 enum（让用户重新点"加载"按钮）
+// 当 model_id 改变时清除缓存的 enum 并清空已选 class_names
+// 避免不同模型的类别混淆（下游 YOLO 节点按 class_name 匹配，
+// 保留旧模型的 class_names 会导致静默 0 检测）
 watch(
   () => props.data.config?.model_id,
-  () => {
-    // 保留用户已选的值（不动 config.class_names）
-    // 但清空 dynamicCategoryEnum（防止不同模型的类别混淆）
+  (newVal, oldVal) => {
+    // 首次设置（oldVal 为空）不做清空操作
+    if (oldVal === undefined || oldVal === null || oldVal === '' || oldVal === 0) {
+      dynamicCategoryEnum.value = []
+      return
+    }
+    // 切换模型：清空 dynamicCategoryEnum + 已选 class_names
     dynamicCategoryEnum.value = []
+    const classNamesKey = 'class_names'
+    if (hasModelIdField() && configProperties.value[classNamesKey]) {
+      const current = getNodeValue(classNamesKey) as unknown
+      if (Array.isArray(current) && (current as unknown[]).length > 0) {
+        store.updateNodeConfig(
+          props.data.id,
+          classNamesKey,
+          [] as unknown as NodeConfigValue
+        )
+        ElMessage.warning('模型已切换，原目标类别已清空，请重新加载或手动输入')
+      }
+    }
   }
 )
 

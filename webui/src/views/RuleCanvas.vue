@@ -684,6 +684,9 @@ const graphName = ref('')
 const showVariables = ref(true)
 const loading = ref(false)
 const saving = ref(false)
+// 缩略图生成并发防护：连击"保存"时若上一次 captureAndSaveThumbnail 仍在跑，跳过本次。
+// requestIdleCallback 100ms fallback 会让 200ms 内的多次保存都进队列，导致并发。
+const thumbnailInflight = ref(false)
 const executing = ref(false)
 const showPalette = ref(true)
 const showMiniMap = ref(true)
@@ -1512,11 +1515,19 @@ async function handleSave() {
     await store.saveGraph()
     // 缩略图生成较重（base64 编码 + HTTP），用 requestIdleCallback 推迟到
     // 浏览器空闲时执行，避免阻塞主流程的 ElMessage.success() 反馈
-    const scheduleIdle: (cb: () => void) => void =
-      (window as any).requestIdleCallback || ((cb) => setTimeout(cb, 100))
-    scheduleIdle(() => {
-      captureAndSaveThumbnail()
-    })
+    // inflight 标志位：连击"保存"时若上一次 captureAndSaveThumbnail 仍在跑，跳过本次
+    if (!thumbnailInflight.value) {
+      thumbnailInflight.value = true
+      const scheduleIdle: (cb: () => void) => void =
+        (window as any).requestIdleCallback || ((cb) => setTimeout(cb, 100))
+      scheduleIdle(async () => {
+        try {
+          await captureAndSaveThumbnail()
+        } finally {
+          thumbnailInflight.value = false
+        }
+      })
+    }
     ElMessage.success('保存成功')
   } catch (err) {
     console.error('保存失败:', err)
