@@ -1539,8 +1539,8 @@ async function captureAndSaveThumbnail() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    canvas.width = 320
-    canvas.height = 180
+    canvas.width = 80
+    canvas.height = 60
     ctx.fillStyle = '#1a1a2e'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
