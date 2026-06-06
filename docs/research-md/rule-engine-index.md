@@ -150,7 +150,7 @@ CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，
 | **逻辑 LOGIC** | 🟣 紫 #DC4FDC | 8 | Branch, ParallelBranch, Delay, SetVariable, Counter, ObjectExistsCondition, ConfidenceThresholdCondition, VariableCondition |
 | **输出 OUTPUT** | 🔴 红 #FF4C4C | 3 | SaveResult, Notification, Display |
 
-> 📊 **总计：34 个已注册**（截至 2026-06-04，Phase 13 推进后）。条件类节点在 `NodeCategory` 枚举中归入 LOGIC（枚举共 6 类），故此处不单列 CONDITION。
+> 📊 **总计：34 个已注册**（截至 2026-06-06，Phase 15 推进后）。条件类节点在 `NodeCategory` 枚举中归入 LOGIC（枚举共 6 类），故此处不单列 CONDITION。
 
 ---
 
@@ -203,6 +203,11 @@ CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，
 - **Phase 11** ✅ — 节点面板端口类型过滤
 - **Phase 11.1** ✅ — 逐节点前端验证计划
 - **Phase 12** ✅ — `template` 节点 + Region 模型
+- **Phase 12.1/2/3** ✅ — Phase 13 节点扩展
+- **Phase 13** ✅ — `merge_detections` + `roi_extract` + Atlas 对话框 + 4 Bug 修复
+- **Phase 14** ✅ — VueFlow 格式校验修复 + class_names 动态化 + logs API List 格式
+- **Phase 15** ✅ — 8 项画布性能优化（shallowRef + VueFlow manual control + JSON 路线 + 历史栈瘦身 + updateNodeConfig 内变 + widget v-memo + 缩略图 idle + 节点重绘隔离）
+- **Phase 15 验收**：后端 208 passed / vue-tsc 0 错误 / Playwright 0 console errors / 远端已同步
 
 ---
 
