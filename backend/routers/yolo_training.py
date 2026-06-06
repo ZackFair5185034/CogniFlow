@@ -5,10 +5,13 @@ import os
 import json
 import shutil
 import time
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Callable
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 
 def check_gpu_available() -> Dict:
@@ -584,14 +587,10 @@ def inference_yolo(model, image_path: str, conf_threshold: float = 0.25, device:
         检测结果
     """
     # Ultralytics YOLO 支持 device 关键字：把 model 临时 to(device) 后推理
-    # 避免永久移动（cache 复用同一实例）
+    # 注意：不要调用 model.to(target_device) —— 那会永久 in-place 修改 cached 实例，
+    # 后续 model(...) 的 device= 关键字已能处理 device 切换（一次性、临时）。
+    # 之前冗余的 model.to + try/except 还吞掉了 CUDA 不可用等真实错误，排查困难。
     target_device = None if device == "auto" else device
-    if target_device is not None:
-        try:
-            model.to(target_device)
-        except Exception:
-            # 设备不可用时静默回退（推断报错由调用方处理）
-            pass
     results = model(image_path, conf=conf_threshold, device=target_device)
 
     detections = []

@@ -36,18 +36,23 @@ class TestInferenceYoloDeviceParam:
         assert sig.parameters["device"].default == "cpu"
 
     def test_passes_device_to_model_call(self):
-        """inference_yolo 应把 device 透传给 model.predict/model() 调用。"""
+        """inference_yolo 应把 device 作为关键字透传给 model() 调用。
+
+        之前的实现额外调用了 model.to(target_device)，那是冗余且有副作用的
+        —— 永久 in-place 修改 cached 实例，且 except: pass 会静默吞掉真实错误
+        （如 CUDA 不可用）。修复后改用 Ultralytics 原生 device= 关键字参数，
+        既不修改 cached 实例，也不会吞错。
+        """
         from backend.routers import yolo_training
         mock_model = MagicMock()
-        mock_model.to.return_value = mock_model
         mock_model.return_value = []
 
         yolo_training.inference_yolo(mock_model, "/tmp/x.jpg",
                                      conf_threshold=0.5, device="cuda:0")
 
-        # model.to 应被以 cuda:0 调用
-        mock_model.to.assert_called_with("cuda:0")
-        # model() 应被以 device=cuda:0 调用
+        # 不应再调用 model.to() —— 防止永久修改 cached 实例
+        mock_model.to.assert_not_called()
+        # model() 必须以 device="cuda:0" 关键字透传
         mock_model.assert_called_with("/tmp/x.jpg", conf=0.5, device="cuda:0")
 
     def test_device_auto_skips_to_call(self):

@@ -397,8 +397,13 @@ class YOLOTriggerNode(BaseExecutor):
                             }
 
             # 过滤符合条件的检测
+            # 先按 confidence 降序排序，确保 max_objects 截取的是"置信度最高的前 N 个"
+            # 而非"按 detections 顺序的前 N 个"（外部 trigger_data 可能不按 conf 排序）
             matched = []
-            for det in detections:
+            sorted_detections = sorted(
+                detections, key=lambda d: d.get("confidence", 0), reverse=True
+            )
+            for det in sorted_detections:
                 confidence = det.get("confidence", 0)
                 class_name = det.get("class_name", "")
 

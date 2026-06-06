@@ -116,3 +116,27 @@ class TestVueFlowFormatValidation:
 
         assert not valid, "无连接的 action 节点应报孤立"
         assert "孤立" in err
+
+    def test_data_field_missing_falls_back_to_top_type(self, db_session):
+        """data 字段完全缺失时，应回退到顶层 type 识别节点。
+
+        回归保护：graph_manager 的 get_node_type 在 data 不存在时
+        必须正确处理（防止后续重构时改成强制要求 data 字段）。
+        """
+        nodes = [{"id": "n1", "type": "manual_trigger"}]  # 无 data 字段
+        graph_id = self._save_graph(db_session, "test_validate_no_data", nodes, [])
+
+        manager = GraphManager(db_session)
+        valid, err = manager.validate_graph(graph_id)
+
+        assert valid, f"data 缺失时应回退到顶层 type，但报错: {err}"
+
+    def test_data_field_none_falls_back_to_top_type(self, db_session):
+        """data 字段显式 None 时，应回退到顶层 type 识别节点。"""
+        nodes = [{"id": "n1", "type": "manual_trigger", "data": None}]
+        graph_id = self._save_graph(db_session, "test_validate_none_data", nodes, [])
+
+        manager = GraphManager(db_session)
+        valid, err = manager.validate_graph(graph_id)
+
+        assert valid, f"data=None 时应回退到顶层 type，但报错: {err}"
