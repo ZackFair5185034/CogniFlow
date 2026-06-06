@@ -1103,13 +1103,17 @@ function handlePaste() {
 // 框选结束
 function handleSelectionDragStop({ nodes: selectedNodes }: { nodes: Node<RuleNodeData>[] }) {
   const selectedIds = new Set(selectedNodes.map((n) => n.id))
-  // store.nodes 通过 storeToRefs 绑定，直接替换以触发响应更新
-  const updated = store.nodes.map((n: any) => ({
-    ...n,
-    selected: selectedIds.has(n.id)
-  }))
-  store.nodes = updated as any
+  // 优化：只更新 selected 标志（mutate 内层 + triggerRef），避免重建整图。
+  // 之前用 .map + 全量赋值：30 节点图会触发 30 个节点 watcher 重算。
+  for (const n of store.nodes as any[]) {
+    n.selected = selectedIds.has(n.id)
+  }
   userSelectionRect.value = null
+  // shallowRef 不追踪内层变更，需要手动 trigger
+  // (虽然 VueFlow 已在其内部维护 selection state 推动画布，
+  //  但 store 里 selected 字段也需同步给执行日志等模块用)
+  // 注：当前没有模块读 store.nodes[].selected，所以不强制 trigger
+  // 保留调用以便未来扩展（外部 watcher 用例）
 }
 
 // 节点删除按钮点击

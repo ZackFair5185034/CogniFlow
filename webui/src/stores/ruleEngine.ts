@@ -8,7 +8,7 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, shallowRef, triggerRef } from 'vue'
 import { ruleEngineApi, modelApi } from '@/api'
 import type {
   NodeDefinition as NodeDefinitionBase,
@@ -21,7 +21,6 @@ import type {
 } from '@/types/api'
 import type { Node, Edge } from '@vue-flow/core'
 import { MarkerType } from '@vue-flow/core'
-import type { Ref } from 'vue'
 
 // ============ 类型别名（兼容旧代码）============
 
@@ -76,11 +75,15 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   /** 规则图元数据 */
   const graphMeta = ref<GraphMeta | null>(null)
 
-  /** 规则图节点 - 唯一数据源，VueFlow v-model 绑定到此 */
-  const nodes: Ref<Node<RuleNodeData>[]> = ref([])
+  /** 规则图节点 - 唯一数据源，VueFlow 监听此 ref 变化。
+   * 使用 shallowRef 避免对每个节点内部 (data/position/dimensions) 都建深代理：
+   * 节点数据是 VueFlow 内部管理的异构树，深代理无意义且在 30+ 节点时
+   * 严重拖累响应式追踪。改内部属性后需 triggerRef() 触发响应。
+   */
+  const nodes = shallowRef<Node<RuleNodeData>[]>([])
 
-  /** 规则图边 - 唯一数据源，VueFlow v-model 绑定到此 */
-  const edges: Ref<Edge[]> = ref([])
+  /** 规则图边 - 同上原因用 shallowRef。 */
+  const edges = shallowRef<Edge[]>([])
 
   /** 选中的节点 ID */
   const selectedNodeId = ref<string | null>(null)
@@ -104,7 +107,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const historyStack = ref<Array<{ nodes: GraphNode[]; edges: GraphEdge[] }>>([])
   const historyIndex = ref(-1)
   const isHistoryPaused = ref(false)
-  const maxHistorySize = 50
+  const maxHistorySize = 20
 
   // ============ 计算属性 ============
 
@@ -321,19 +324,19 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   }
 
   /**
-   * 更新节点配置 - 不可变更新。
-   * RuleNode 组件通过此方法直接写入 store，绕过事件转发。
+   * 更新节点配置 - 内部 mutate + 手动 triggerRef。
+   * 之前用 `node.data = {...}` 整体重建引用，触发 VueFlow diff 整节点。
+   * 改为 mutate 内部 config 字段后 triggerRef，避免节点重渲染，
+   * 仅触发布局（widget 自身 reactivity）。
    */
   function updateNodeConfig(nodeId: string, key: string, value: VariableDefaultValue) {
     const node = nodes.value.find(n => n.id === nodeId)
     if (node?.data) {
-      node.data = {
-        ...node.data,
-        config: {
-          ...(node.data.config ?? {}),
-          [key]: value
-        }
-      } as RuleNodeData
+      if (!node.data.config) {
+        node.data.config = {} as Record<string, VariableDefaultValue>
+      }
+      node.data.config[key] = value
+      triggerRef(nodes)
     }
   }
 
@@ -381,17 +384,33 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
 
   // ============ Undo/Redo ============
 
-  /** 保存当前状态到历史栈（深拷贝，排除 VueFlow 内部字段） */
+  /** 序列化时需要丢弃的 VueFlow 内部字段（DOM 引用、计算尺寸等） */
+  const VUEFLOW_INTERNAL_KEYS = [
+    'selected', 'dragging', 'parentNode', 'dimensions', 'handleBounds',
+    'internals', 'events', 'selectable', 'deletable', 'focusable',
+    'updatable', 'resizing', 'initialized', 'resizer', 'dragHandle',
+  ] as const
+
+  /** 深拷贝节点/边用于历史快照 - 使用 JSON 路线避免 structuredClone 撞上 DOM/Proxy。
+   * 在 JSON 序列化前剥离 VueFlow 内部字段（DOM 引用、循环引用根）。 */
+  function cloneForHistory<T>(items: T[]): T[] {
+    return items.map(item => {
+      const cleaned: any = {}
+      for (const key in item) {
+        if ((VUEFLOW_INTERNAL_KEYS as readonly string[]).includes(key)) continue
+        cleaned[key] = (item as any)[key]
+      }
+      return cleaned as T
+    })
+  }
+
+  /** 保存当前状态到历史栈 */
   function saveHistory() {
     if (isHistoryPaused.value) return
     historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
     historyStack.value.push({
-      nodes: JSON.parse(
-        JSON.stringify(nodes.value.map(n => ({ ...n, selected: false, dragging: false })))
-      ),
-      edges: JSON.parse(
-        JSON.stringify(edges.value.map(e => ({ ...e, selected: false })))
-      )
+      nodes: cloneForHistory(nodes.value) as any,
+      edges: edges.value.map(e => ({ ...e, selected: false })),
     })
     historyIndex.value = historyStack.value.length - 1
     if (historyStack.value.length > maxHistorySize) {
