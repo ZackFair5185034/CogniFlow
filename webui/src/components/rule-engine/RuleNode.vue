@@ -24,6 +24,7 @@
     >
       <div
         v-for="(schema, key) in configProperties"
+        v-memo="[getNodeValue(key)]"
         :key="key"
         class="node-field"
       >
