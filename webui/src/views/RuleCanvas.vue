@@ -1093,10 +1093,11 @@ function handlePaste() {
   const offsetX = 50
   const offsetY = 50
 
+  const newNodes: Node<RuleNodeData>[] = []
   for (const n of clipboard.value) {
     const cloned = JSON.parse(JSON.stringify(n))
     const newId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-    const nodeData = {
+    newNodes.push({
       ...cloned,
       id: newId,
       type: 'ruleNode',
@@ -1110,9 +1111,10 @@ function handlePaste() {
         id: newId,
         selected: false
       }
-    }
-    store.nodes.push(nodeData)
+    })
   }
+  // shallowRef 数组必须重新赋值触发响应式（与 createNode/addEdge 同样原因）
+  store.nodes = [...store.nodes, ...newNodes]
 
   if (clipboardMode.value === 'cut') {
     clipboard.value = []
