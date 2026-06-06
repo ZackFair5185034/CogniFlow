@@ -699,7 +699,14 @@ const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
 
 // 复制粘贴
-const clipboard = ref<Node<RuleNodeData>[]>([])
+/** 剪贴板 payload: 复制/剪切时把节点+关联边+鼠标位置一起记下 */
+interface ClipboardPayload {
+  nodes: Node<RuleNodeData>[]
+  edges: Edge[]
+  /** 复制/剪切时鼠标在浏览器视口的屏幕坐标 (event.clientX/Y) */
+  mousePos: { x: number; y: number }
+}
+const clipboard = ref<ClipboardPayload | null>(null)
 const clipboardMode = ref<'copy' | 'cut'>('copy')
 
 // 右键菜单
