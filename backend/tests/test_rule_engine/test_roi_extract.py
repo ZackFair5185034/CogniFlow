@@ -286,6 +286,80 @@ class TestEdgeCases:
         assert result["width"] == 60
         assert result["height"] == 60
 
+    def test_padding_50_percent(self, sample_image_path):
+        """padding=0.5 → bbox 50x50 + 50% total = 75x75（每边 +12.5）"""
+        node = RoiExtractNode()
+        ctx = Mock(spec=ExecutionContext)
+        ctx.config = {"padding": 0.5, "min_size": 4, "max_rois": 10}
+        result = asyncio.run(
+            node.execute(
+                {
+                    "image": sample_image_path,
+                    "detections": [_det([20, 20, 70, 70])],  # 50x50
+                },
+                ctx,
+            )
+        )
+        assert result["roi_count"] == 1
+        assert result["width"] == 75
+        assert result["height"] == 75
+
+    def test_padding_zero_no_expansion(self, sample_image_path):
+        """padding=0 → 严格裁剪 bbox 原尺寸"""
+        node = RoiExtractNode()
+        ctx = Mock(spec=ExecutionContext)
+        ctx.config = {"padding": 0.0, "min_size": 4, "max_rois": 10}
+        result = asyncio.run(
+            node.execute(
+                {
+                    "image": sample_image_path,
+                    "detections": [_det([20, 20, 70, 70])],  # 50x50
+                },
+                ctx,
+            )
+        )
+        assert result["width"] == 50
+        assert result["height"] == 50
+
+    def test_padding_clamped_to_image_bounds(self, sample_image_path):
+        """padding 0.5 让 50x50 bbox 扩到 75x75 (padding 0.5 远超 0.1 边界时不应被裁剪)"""
+        node = RoiExtractNode()
+        ctx = Mock(spec=ExecutionContext)
+        ctx.config = {"padding": 0.5, "min_size": 4, "max_rois": 10}
+        result = asyncio.run(
+            node.execute(
+                {
+                    "image": sample_image_path,  # 100x100
+                    "detections": [_det([20, 20, 70, 70])],  # 50x50
+                },
+                ctx,
+            )
+        )
+        assert result["roi_count"] == 1
+        # bbox=[7.5,7.5,82.5,82.5], int 后 75x75（未触顶 100）
+        assert result["width"] == 75
+        assert result["height"] == 75
+
+    def test_padding_truly_exceeds_bounds(self, sample_image_path):
+        """padding 让 bbox 超出 100x100 图边界时，应被 clamp 而不报错"""
+        node = RoiExtractNode()
+        ctx = Mock(spec=ExecutionContext)
+        # 用一个本来就靠边的大 bbox + padding 让它出界
+        ctx.config = {"padding": 0.5, "min_size": 4, "max_rois": 10}
+        result = asyncio.run(
+            node.execute(
+                {
+                    "image": sample_image_path,  # 100x100
+                    "detections": [_det([80, 80, 99, 99])],  # 19x19 靠右下
+                },
+                ctx,
+            )
+        )
+        assert result["roi_count"] == 1
+        # bbox=[75.25,75.25,103.75,103.75] → clamp 到 100 → width=25, height=25
+        assert result["width"] == 25
+        assert result["height"] == 25
+
     def test_clamp_to_image_bounds(self, sample_image_path, ctx):
         """bbox 超出图像边界时裁剪到图像范围（不报错）。"""
         node = RoiExtractNode()
