@@ -1121,7 +1121,8 @@ function handlePaste() {
   }
 
   store.saveHistory()
-  ElMessage.success(`已粘贴 ${clipboard.value.length} 个节点`)
+  // 提示文案：cut 模式粘贴后剪贴板会被清空, 用粘贴数展示
+  ElMessage.success(`已粘贴 ${newNodes.length} 个节点`)
 }
 
 // 框选结束
@@ -1194,11 +1195,11 @@ function hideContextMenu() {
 function handleContextAction(action: string) {
   switch (action) {
     case 'copy':
-      if (contextMenu.targetType === 'node' && contextMenu.target) {
-        clipboard.value = [JSON.parse(JSON.stringify(contextMenu.target))]
-        clipboardMode.value = 'copy'
-        ElMessage.success('已复制节点')
-      }
+      handleCopy()
+      hideContextMenu()
+      break
+    case 'cut':
+      handleCut()
       hideContextMenu()
       break
     case 'paste':
