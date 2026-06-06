@@ -1003,18 +1003,18 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
-/* VueFlow Handle 样式 - 确保连接点定位在节点边框上
-   未连接：浅灰亮边 + 略亮背景 + 略大尺寸，让锚点在节点深色背景上清晰可见 */
+/* VueFlow Handle 样式
+   始终按 port type 颜色填充 (Blender 风格 — 一眼看出可连接的兼容性:
+   同色 = 兼容可连, 不同色 = 类型不匹配) */
 .node-handle {
   width: 16px !important;
   height: 16px !important;
-  background: #2a2a3a !important;
-  border: 2.5px solid #c8c8d8 !important;
+  border: 2px solid rgba(0, 0, 0, 0.4) !important;
   border-radius: 50% !important;
   cursor: crosshair !important;
   transition: all 0.15s ease !important;
   flex-shrink: 0;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
 }
 
 /* 强制 Handle 定位到节点边框，垂直居中对齐 port-item */
@@ -1036,50 +1036,51 @@ onBeforeUnmount(() => {
 }
 
 .node-handle:hover {
-  width: 16px !important;
-  height: 16px !important;
-  border-color: #5898ff !important;
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.6) !important;
+  width: 18px !important;
+  height: 18px !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 12px rgba(0, 240, 255, 0.6) !important;
 }
 
-/* 端口类型颜色 — 同色可连（Blender风格） */
-.node-handle.type-image    { border-color: #4CFF4C; }   /* 绿色 */
-.node-handle.type-bbox     { border-color: #00f0FF; }   /* 青色 */
-.node-handle.type-mask     { border-color: #00f0FF; }   /* 青色 */
-.node-handle.type-scores   { border-color: #FF7F4C; }   /* 橙色 */
-.node-handle.type-trigger  { border-color: #DC4FDC; }   /* 紫色 */
-.node-handle.type-control  { border-color: #DC4FDC; }   /* 紫色 */
-.node-handle.type-int      { border-color: #3B82F6; }   /* 蓝色 */
-.node-handle.type-float    { border-color: #14B8A6; }  /* 青色 */
-.node-handle.type-boolean  { border-color: #FF4C4C; }   /* 红色 */
-.node-handle.type-string   { border-color: #8B5CF6; }   /* 紫色 */
-.node-handle.type-array    { border-color: #FFFF4C; }   /* 黄色 */
-.node-handle.type-object   { border-color: #FFFF4C; }   /* 黄色 */
-.node-handle.type-model    { border-color: #888888; }   /* 灰色 */
-.node-handle.type-any      { border-color: #E0E0E0; }   /* 浅灰 */
+/* 14 种 port type 颜色 (Blender 风格 — 同色 = 兼容可连)
+   背景 = type 色 (始终显示, 便于识别兼容性)
+   边框 = 暗一档 type 色 (与节点背景区分的层次) */
+/* 视觉型 (图像/几何) */
+.node-handle.type-image    { background: #4CFF4C; border-color: #2eb92e; }
+.node-handle.type-bbox     { background: #00f0FF; border-color: #00b8d4; }
+.node-handle.type-mask     { background: #00f0FF; border-color: #00b8d4; }
+/* 评分/分数 */
+.node-handle.type-scores   { background: #FF7F4C; border-color: #d9642e; }
+/* 控制流 */
+.node-handle.type-trigger  { background: #DC4FDC; border-color: #b02db0; }
+.node-handle.type-control  { background: #DC4FDC; border-color: #b02db0; }
+/* 数值 */
+.node-handle.type-int      { background: #3B82F6; border-color: #2563c4; }
+.node-handle.type-float    { background: #14B8A6; border-color: #0e8a7c; }
+/* 逻辑 */
+.node-handle.type-boolean  { background: #FF4C4C; border-color: #d62828; }
+/* 文本/集合 */
+.node-handle.type-string   { background: #8B5CF6; border-color: #6d3dd4; }
+.node-handle.type-array    { background: #FFFF4C; border-color: #c4c41e; }
+.node-handle.type-object   { background: #FFFF4C; border-color: #c4c41e; }
+/* 元数据 */
+.node-handle.type-model    { background: #888888; border-color: #5e5e5e; }
+.node-handle.type-any      { background: #E0E0E0; border-color: #a8a8a8; }
 
-/* 已连接端口：边框保留类型色，中心填充类型色 (决策 3)
-   注：vue-flow 1.48 不会自动给 handle 加 connected class，
-   我们在 RuleNode.vue 用 connectedHandleIds computed 加 .is-connected */
-.node-handle.is-connected {
-  /* 边框由 .type-X 控制，不强制覆盖 */
-  background: #2a2a3a !important;
-}
-/* connected 时中心填充 = 类型色 */
-.node-handle.is-connected.type-image    { background: #4CFF4C !important; box-shadow: 0 0 8px rgba(76,255,76,0.5); }
-.node-handle.is-connected.type-bbox     { background: #00f0FF !important; box-shadow: 0 0 8px rgba(0,240,255,0.5); }
-.node-handle.is-connected.type-mask     { background: #00f0FF !important; box-shadow: 0 0 8px rgba(0,240,255,0.5); }
-.node-handle.is-connected.type-scores   { background: #FF7F4C !important; box-shadow: 0 0 8px rgba(255,127,76,0.5); }
-.node-handle.is-connected.type-trigger  { background: #DC4FDC !important; box-shadow: 0 0 8px rgba(220,79,220,0.5); }
-.node-handle.is-connected.type-control  { background: #DC4FDC !important; box-shadow: 0 0 8px rgba(220,79,220,0.5); }
-.node-handle.is-connected.type-int      { background: #3B82F6 !important; box-shadow: 0 0 8px rgba(59,130,246,0.5); }
-.node-handle.is-connected.type-float    { background: #14B8A6 !important; box-shadow: 0 0 8px rgba(20,184,166,0.5); }
-.node-handle.is-connected.type-boolean  { background: #FF4C4C !important; box-shadow: 0 0 8px rgba(255,76,76,0.5); }
-.node-handle.is-connected.type-string   { background: #8B5CF6 !important; box-shadow: 0 0 8px rgba(139,92,246,0.5); }
-.node-handle.is-connected.type-array    { background: #FFFF4C !important; box-shadow: 0 0 8px rgba(255,255,76,0.5); }
-.node-handle.is-connected.type-object   { background: #FFFF4C !important; box-shadow: 0 0 8px rgba(255,255,76,0.5); }
-.node-handle.is-connected.type-model    { background: #888888 !important; box-shadow: 0 0 8px rgba(136,136,136,0.5); }
-.node-handle.is-connected.type-any      { background: #E0E0E0 !important; box-shadow: 0 0 8px rgba(224,224,224,0.5); }
+/* 已连仅加同色发光 (fill 仍按 type 色 — 不区分已连/未连填色状态) */
+.node-handle.is-connected.type-image    { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(76,255,76,0.7); }
+.node-handle.is-connected.type-bbox     { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(0,240,255,0.7); }
+.node-handle.is-connected.type-mask     { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(0,240,255,0.7); }
+.node-handle.is-connected.type-scores   { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(255,127,76,0.7); }
+.node-handle.is-connected.type-trigger  { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(220,79,220,0.7); }
+.node-handle.is-connected.type-control  { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(220,79,220,0.7); }
+.node-handle.is-connected.type-int      { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(59,130,246,0.7); }
+.node-handle.is-connected.type-float    { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(20,184,166,0.7); }
+.node-handle.is-connected.type-boolean  { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(255,76,76,0.7); }
+.node-handle.is-connected.type-string   { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(139,92,246,0.7); }
+.node-handle.is-connected.type-array    { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(255,255,76,0.7); }
+.node-handle.is-connected.type-object   { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(255,255,76,0.7); }
+.node-handle.is-connected.type-model    { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(136,136,136,0.7); }
+.node-handle.is-connected.type-any      { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 0 8px rgba(224,224,224,0.7); }
 
 .port-label {
   font-size: 12px;
