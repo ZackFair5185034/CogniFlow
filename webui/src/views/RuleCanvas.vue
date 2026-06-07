@@ -1182,11 +1182,14 @@ function handlePaste(event?: MouseEvent) {
         x: n.position.x + offsetX,
         y: n.position.y + offsetY
       },
-      selected: false,
+      // 粘贴时把新节点置为 selected: 视觉高亮, 方便用户继续操作 (拖动/再次粘贴/删除)
+      // 复制粘贴: 原节点保持未选, 粘贴项 selected → 用户一眼看出新增了哪些
+      // 剪切粘贴: 原节点已删, 粘贴项 selected → 用户可立即拖到目标位置
+      selected: true,
       data: {
         ...(cloned.data || {}),
         id: newNodeId,
-        selected: false
+        selected: true
       }
     }
   })
