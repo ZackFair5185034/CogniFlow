@@ -698,6 +698,8 @@ const panY = ref(0)
 const zoomLevel = ref(1)
 const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
+/** 全局鼠标位置: 任何 mousemove 都更新, 用于快捷键 Ctrl+V 拿鼠标坐标 (KeyboardEvent 没 clientX/Y) */
+const globalMousePos = ref({ x: 0, y: 0 })
 
 // 复制粘贴
 /** 剪贴板 payload: 复制/剪切时把节点+关联边+鼠标位置一起记下 */
@@ -1062,10 +1064,32 @@ function handleKeyDown(event: KeyboardEvent) {
   }
 }
 
+/**
+ * 拿到当前已选节点的 bounding box 中心点 (屏幕坐标).
+ * 用于快捷键复制/剪切: 粘贴时按"当前鼠标 - bbox 中心"算偏移.
+ * 不用鼠标位置是因为 Ctrl+C 触发时鼠标可能在画布外, 而 bbox 中心
+ * 永远在选中集内, 跟用户视觉感知一致.
+ */
+function getSelectionBboxCenter(): { x: number; y: number } {
+  const selectedEls = document.querySelectorAll('.vue-flow__node.selected')
+  if (selectedEls.length === 0) return { x: 0, y: 0 }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const el of selectedEls) {
+    const r = el.getBoundingClientRect()
+    if (r.left < minX) minX = r.left
+    if (r.top < minY) minY = r.top
+    if (r.right > maxX) maxX = r.right
+    if (r.bottom > maxY) maxY = r.bottom
+  }
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }
+}
+
 // 复制
-function handleCopy(event?: MouseEvent) {
-  const vfNodes = getNodes.value as any[]
-  const selected = vfNodes.filter((n) => n.selected)
+function handleCopy(_event?: MouseEvent) {
+  // 关键: 从 store.nodes 过滤 selected. 用 getNodes.value 是 VueFlow 内部 ref,
+  // shallowRef 内层 mutation (selected = true) 不会传播到 VueFlow 内部,
+  // 用 store.nodes 才是数据源, 反映用户当前选择
+  const selected = (store.nodes as any[]).filter((n) => n.selected)
   if (selected.length === 0) {
     ElMessage.warning('请先选择要复制的节点')
     return
@@ -1075,19 +1099,20 @@ function handleCopy(event?: MouseEvent) {
   const relatedEdges = (edges.value as Edge[]).filter(
     (e) => selectedIds.has(e.source) && selectedIds.has(e.target)
   )
+  // 参考点用 selection bbox 中心 (屏幕坐标), 粘贴时用 (当前鼠标 - bbox 中心) / zoom 算偏移
+  // 不用鼠标位置是因快捷键触发时鼠标可能在画布外
   clipboard.value = {
     nodes: selected.map((n: any) => JSON.parse(JSON.stringify(n))),
     edges: relatedEdges.map((e: any) => JSON.parse(JSON.stringify(e))),
-    mousePos: event ? { x: event.clientX, y: event.clientY } : { x: 0, y: 0 }
+    mousePos: getSelectionBboxCenter()
   }
   clipboardMode.value = 'copy'
   ElMessage.success(`已复制 ${selected.length} 个节点`)
 }
 
 // 剪切
-function handleCut(event?: MouseEvent) {
-  const vfNodes = getNodes.value as any[]
-  const selected = vfNodes.filter((n) => n.selected)
+function handleCut(_event?: MouseEvent) {
+  const selected = (store.nodes as any[]).filter((n) => n.selected)
   if (selected.length === 0) {
     ElMessage.warning('请先选择要剪切的节点')
     return
@@ -1099,7 +1124,7 @@ function handleCut(event?: MouseEvent) {
   clipboard.value = {
     nodes: selected.map((n: any) => JSON.parse(JSON.stringify(n))),
     edges: relatedEdges.map((e: any) => JSON.parse(JSON.stringify(e))),
-    mousePos: event ? { x: event.clientX, y: event.clientY } : { x: 0, y: 0 }
+    mousePos: getSelectionBboxCenter()
   }
   clipboardMode.value = 'cut'
   // 批量删除节点 + 关联边, 避免循环里反复重渲染
@@ -1122,7 +1147,12 @@ function handlePaste(event?: MouseEvent) {
 
   // 计算鼠标偏移 (屏幕坐标 → 画布坐标)
   // Figma 模式: 偏移 = (当前鼠标 - 复制时鼠标) / 缩放
-  const currentMouse = event ? { x: event.clientX, y: event.clientY } : null
+  // 优先级: event.clientX/Y > globalMousePos (快捷键场景) > +50/+50 fallback
+  const currentMouse = event
+    ? { x: event.clientX, y: event.clientY }
+    : (globalMousePos.value.x || globalMousePos.value.y
+        ? globalMousePos.value
+        : null)
   let offsetX = 50
   let offsetY = 50
   if (currentMouse) {
@@ -1328,6 +1358,10 @@ onMounted(async () => {
   loading.value = false
   // 键盘事件
   window.addEventListener('keydown', handleKeyDown)
+  // 全局鼠标位置追踪 — 快捷键 Ctrl+V 没有 MouseEvent, 需要 lastMousePos
+  window.addEventListener('mousemove', (e) => {
+    globalMousePos.value = { x: e.clientX, y: e.clientY }
+  })
 })
 
 onBeforeUnmount(() => {
