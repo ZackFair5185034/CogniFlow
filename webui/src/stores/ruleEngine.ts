@@ -393,11 +393,11 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       if (!node.data.config) {
         node.data.config = {} as Record<string, VariableDefaultValue>
       }
-      // 替换整个 config 对象引用: RuleNode.vue 根 v-memo 用 data.config 引用
-      // (===) 检测配置变更, O(1) 引用比较替代 O(n) JSON.stringify
-      const prev = node.data.config
-      node.data.config = { ...prev, [key]: value }
-      triggerRef(nodes)
+      node.data.config[key] = value
+      // 不再 triggerRef(nodes): RuleNode 不再渲染 config 值,
+      // 只有 NodeConfigEditor(右侧面板)消费它, 而右侧面板通过 computed
+      // 监听 selectedNode 引用, 不需要 triggerRef.
+      // 去掉 triggerRef 避免了每次调参时 VueFlow 整图 diff.
     }
   }
 

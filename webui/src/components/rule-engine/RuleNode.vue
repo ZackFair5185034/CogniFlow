@@ -1,11 +1,10 @@
 <template>
   <div
     v-bind="$attrs"
-    v-memo="[data.id, data.status, data.config, summaryText]"
     class="rule-node"
     :class="`category-${data.category}`"
     :data-status="data.status || 'idle'"
-    @contextmenu.prevent="handleContextMenu"
+    @contextmenu.prevent="emit('contextmenu', $event)"
   >
     <!-- 标题栏 -->
     <div class="node-header">
@@ -20,82 +19,19 @@
       </div>
     </div>
 
-    <!-- 节点摘要: 1-2 行关键配置值 -->
+    <!-- 节点摘要: 由父组件计算后传入，不依赖节点内部数据 -->
     <div
-      v-if="summaryText"
+      v-if="data.summaryText"
       class="node-summary"
     >
-      {{ summaryText }}
+      {{ data.summaryText }}
     </div>
 
-    <!--
-      Quick Controls: 默认隐藏, 节点壳 100% 纯净 (Phase A 用户决定)
-      配置编辑全权由 NodeConfigEditor (右侧属性面板) 接管.
-      如需启用, 把 v-if 改为 "enableQuickControls && quickControls.length > 0",
-      并在 store 暴露 enableQuickControls 开关. 下方 quickControls / getQuickValue /
-      updateQuick / quickControlsHash 已保留, 注释掉模板即可.
-    -->
-    <div
-      v-if="ENABLE_QUICK_CONTROLS && quickControls.length > 0"
-      class="node-quick-controls"
-    >
-      <div
-        v-for="ctrl in quickControls"
-        :key="ctrl.key"
-        class="quick-ctrl"
-        @mousedown.stop
-      >
-        <span class="quick-ctrl-label">{{ ctrl.schema.title || ctrl.key }}</span>
-
-        <!-- Toggle -->
-        <el-switch
-          v-if="ctrl.schema.widget === 'toggle'"
-          :model-value="!!getQuickValue(ctrl.key)"
-          @update:model-value="updateQuick(ctrl.key, !!$event)"
-        />
-
-        <!-- Checkbox -->
-        <el-checkbox
-          v-else-if="ctrl.schema.widget === 'checkbox'"
-          :model-value="!!getQuickValue(ctrl.key)"
-          @update:model-value="updateQuick(ctrl.key, $event)"
-        />
-
-        <!-- Number -->
-        <el-input-number
-          v-else-if="ctrl.schema.widget === 'number'"
-          :model-value="getQuickValue(ctrl.key) as number"
-          :min="ctrl.schema.minimum"
-          :max="ctrl.schema.maximum"
-          :step="ctrl.schema.step"
-          :controls="false"
-          class="quick-ctrl-number"
-          @update:model-value="(v: number | undefined) => updateQuick(ctrl.key, v ?? null)"
-        />
-
-        <!-- Short Dropdown (无 enum 的不显示, 留给完整面板) -->
-        <el-select
-          v-else-if="ctrl.schema.widget === 'dropdown' && ctrl.schema.enum"
-          :model-value="getQuickValue(ctrl.key)"
-          class="quick-ctrl-dropdown"
-          @update:model-value="updateQuick(ctrl.key, $event)"
-        >
-          <el-option
-            v-for="opt in ctrl.schema.enum"
-            :key="opt"
-            :value="opt"
-            :label="opt"
-          />
-        </el-select>
-      </div>
-    </div>
-
-    <!-- 端口区域 - 左进右出（自然连接流） -->
+    <!-- 端口区域 - 左进右出 -->
     <div
       v-if="(data.inputs?.length || 0) > 0 || (data.outputs?.length || 0) > 0"
       class="node-ports"
     >
-      <!-- 输入端口：Handle 在左，文字在右（左对齐） -->
       <div
         v-for="input in data.inputs"
         :key="'in-' + input.name"
@@ -109,7 +45,6 @@
         />
         <span class="port-label">{{ input.label || input.name }}</span>
       </div>
-      <!-- 输出端口：文字在左，Handle 在右（右对齐） -->
       <div
         v-for="output in data.outputs"
         :key="'out-' + output.name"
@@ -141,51 +76,25 @@
 
 <script setup lang="ts">
 /**
- * RuleNode - 轻量节点壳 (Phase A 改造)
+ * RuleNode - 轻量节点壳 (Phase B 重构)
  *
- * 节点体职责:
- * 1. 视觉: 标题、类型图标、状态指示、端口
- * 2. 摘要: 1-2 行关键配置值
- * 3. Quick Controls: 最多 3 个最轻量字段 (number/toggle/checkbox/short dropdown)
- * 4. 配置编辑全部移至 NodeConfigEditor.vue (右侧属性面板)
+ * 终极瘦身版: 所有配置编辑全由 NodeConfigEditor (右侧属性面板) 接管。
+ * 节点壳只负责:
+ *   1. 视觉: 标题、类型图标、状态指示、端口
+ *   2. 摘要: 由父组件计算后写入 data.summaryText, 避免内部 computed
+ *   3. Quick Controls: 已彻底移除 (ENABLE_QUICK_CONTROLS = false)
+ *   4. 无 el-* 控件, 无内部接口调用, 所有配置更新走右侧面板
+ *
+ * v-memo 依赖: [data.id, data.status, data.summaryText, data.category]
+ * - data.status 不变 → 状态指示器不重渲染
+ * - data.summaryText 不变 → 摘要文本不重渲染
+ * - selected 等外部状态走 CSS (outline) 不触发组件更新
  */
 import { computed } from 'vue'
-import { Position } from '@vue-flow/core'
+import { Position, Handle } from '@vue-flow/core'
 import { useRuleEngineStore } from '@/stores/ruleEngine'
 
-/**
- * 关闭自动属性透传：Vue Flow 注入的 props (id/type/position/dimensions/dragging)
- * 不会触发 fragment 根警告。手动 v-bind="$attrs" 绑到节点 div。
- */
 defineOptions({ inheritAttrs: false })
-
-/**
- * Quick Controls 开关 (Phase B 任务1: 移除隐藏 quick controls 的计算成本)
- *
- * false: 完全跳过 schema 排序/JSON.stringify, 节点初始化零成本
- * true:  启用 0-3 个最轻量控件在节点壳内直接编辑 (高频微调场景)
- *
- * 后续要切换可: 1) 改这个常量; 2) 在 store 暴露 enableQuickControls 开关;
- *               3) 节点右键菜单加 "显示/隐藏快速输入" 项.
- */
-const ENABLE_QUICK_CONTROLS = false
-
-/** 节点配置值类型 */
-type NodeConfigValue = string | number | boolean | (string | number)[] | null
-
-interface ConfigSchemaProperty {
-  type: string
-  title?: string
-  description?: string
-  default?: NodeConfigValue
-  minimum?: number
-  maximum?: number
-  step?: number
-  enum?: string[]
-  widget?: string
-  /** multiselect 控件是否允许用户输入自定义选项（不限于 enum） */
-  allow_create?: boolean
-}
 
 interface Port {
   name: string
@@ -201,9 +110,9 @@ interface NodeData {
   description?: string
   inputs?: Port[]
   outputs?: Port[]
-  configSchema?: Record<string, ConfigSchemaProperty>
-  config?: Record<string, NodeConfigValue>
   status?: string
+  /** 摘要文本 — 由父组件在写入 summaryText 前预计算好 */
+  summaryText?: string
 }
 
 const props = defineProps<{
@@ -213,10 +122,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'contextmenu', event: MouseEvent): void
-  /**
-   * Vue Flow 透传的节点内部更新事件 (节点大小/端口变化时通知父组件刷新 Handles)
-   */
-  (e: 'updateNodeInternals'): void
 }>()
 
 const store = useRuleEngineStore()
@@ -233,89 +138,20 @@ const statusTitle = computed(() => {
   }
 })
 
-// ============ Handle 连接状态 (Phase B 任务2: 走 store 全局索引 O(1) 查询) ============
+// ============ Handle 连接状态 (store 全局索引 O(1) 查询) ============
 
-/** 输入端 handle 是否已连接 (target direction) */
 function isInputConnected(handleId: string): boolean {
   return store.isHandleConnected(props.data.id, handleId, 'target')
 }
 
-/** 输出端 handle 是否已连接 (source direction) */
 function isOutputConnected(handleId: string): boolean {
   return store.isHandleConnected(props.data.id, handleId, 'source')
-}
-
-// ============ 节点摘要 (1-2 行关键配置) ============
-
-/** 摘要显示: 选前 2 个有值的关键字段, 用 · 分隔 */
-const summaryText = computed(() => {
-  const config = props.data.config ?? {}
-  const schema = props.data.configSchema ?? {}
-  const parts: string[] = []
-  for (const [key, prop] of Object.entries(schema)) {
-    if (parts.length >= 2) break
-    const val = config[key]
-    if (val !== undefined && val !== null && val !== '') {
-      // 数组只显示长度
-      if (Array.isArray(val)) {
-        if (val.length === 0) continue
-        parts.push(`${prop.title || key}: [${val.length}]`)
-      } else {
-        // 数字保留 2 位小数
-        const display = typeof val === 'number' ? Number(val.toFixed(2)) : val
-        parts.push(`${prop.title || key}: ${display}`)
-      }
-    }
-  }
-  return parts.join(' · ')
-})
-
-// ============ Quick Controls (最多 3 个最轻量字段) ============
-
-/** 轻量 widget 类型, 可在节点壳内直接渲染 (不需要复杂交互) */
-const LIGHTWEIGHT_WIDGETS = new Set(['number', 'toggle', 'checkbox', 'dropdown'])
-
-const quickControls = computed(() => {
-  // 任务1: 禁用时直接返回空数组, 跳过整个 schema 排序/映射
-  if (!ENABLE_QUICK_CONTROLS) return []
-  const schema = props.data.configSchema ?? {}
-  const all = Object.entries(schema) as [string, ConfigSchemaProperty][]
-  return all
-    .filter(([_, s]) => LIGHTWEIGHT_WIDGETS.has(s.widget ?? ''))
-    // toggle/checkbox/short-dropdown (无 enum 或 enum 较短) 优先
-    .sort((a, b) => {
-      const order = (s: ConfigSchemaProperty) => {
-        if (s.widget === 'toggle' || s.widget === 'checkbox') return 0
-        if (s.widget === 'dropdown' && (s.enum?.length ?? 0) <= 3) return 1
-        return 2
-      }
-      return order(a[1]) - order(b[1])
-    })
-    .slice(0, 3)
-    .map(([key, sch]) => ({ key, schema: sch }))
-})
-
-/** 拿 quick control 当前值 */
-function getQuickValue(key: string): NodeConfigValue {
-  return (props.data.config as Record<string, NodeConfigValue> | undefined)?.[key] ?? null
-}
-
-/** 更新 quick control 值 */
-function updateQuick(key: string, value: NodeConfigValue) {
-  store.updateNodeConfig(props.data.id, key, value)
-}
-
-// ============ 右键菜单 ============
-
-function handleContextMenu(event: MouseEvent) {
-  event.preventDefault()
-  emit('contextmenu', event)
 }
 </script>
 
 <style scoped lang="scss">
 /* ============================================
- * 轻量节点壳样式 (Phase A)
+ * 终极轻量节点壳样式 (Phase B 重构)
  * ============================================ */
 .rule-node {
   background: linear-gradient(180deg, #2d2d30 0%, #252528 100%);
@@ -329,7 +165,6 @@ function handleContextMenu(event: MouseEvent) {
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
     0 2px 8px rgba(0,0,0,0.3);
-  /* CSS containment: 隔离每个节点的布局/样式重算, 拖拽时不会级联触发兄弟节点 */
   contain: layout style;
   overflow: visible !important;
 }
@@ -403,59 +238,6 @@ function handleContextMenu(event: MouseEvent) {
   contain: layout style;
 }
 
-/* Quick Controls (Phase A 新增) */
-.node-quick-controls {
-  padding: 6px 10px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  background: rgba(0, 0, 0, 0.1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  contain: layout style paint;
-}
-
-.quick-ctrl {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  min-height: 24px;
-}
-
-.quick-ctrl-label {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.5);
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.quick-ctrl-number {
-  width: 90px;
-  flex-shrink: 0;
-}
-
-.quick-ctrl-dropdown {
-  width: 90px;
-  flex-shrink: 0;
-}
-
-:deep(.quick-ctrl-number .el-input__wrapper),
-:deep(.quick-ctrl-dropdown .el-select__wrapper) {
-  min-height: 22px !important;
-  max-height: 22px !important;
-  padding: 0 6px !important;
-}
-
-:deep(.quick-ctrl-number .el-input__wrapper .el-input__inner) {
-  height: 20px !important;
-  line-height: 20px !important;
-  font-size: 11px !important;
-}
-
 /* 节点悬停态 */
 .rule-node:hover {
   border-color: #505055;
@@ -464,7 +246,7 @@ function handleContextMenu(event: MouseEvent) {
     0 4px 16px rgba(0,0,0,0.4);
 }
 
-/* 节点执行状态高亮 (Phase 16.2) */
+/* 节点执行状态高亮 */
 .rule-node[data-status='running'] {
   border-color: #5898ff;
   box-shadow:

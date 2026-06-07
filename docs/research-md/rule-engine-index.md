@@ -1,6 +1,6 @@
 # CogniFlow 规则引擎文档索引
 
-> 📅 最后更新：2026-06-04 | 🔄 源格式：HTML → Markdown 自动转换
+> 📅 最后更新：2026-06-07 | 🔄 源格式：HTML → Markdown 自动转换
 
 CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，允许用户通过节点编辑器定义"检测→处理→动作"的完整流程。参考对象是 **ComfyUI**（最成熟的 AI 节点编辑器）和 **Node-RED**（工业级流程编排工具）。
 
@@ -26,6 +26,7 @@ CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，
 | [**技术调研**](./规则引擎技术调研.md) | ComfyUI/Node-RED 架构对比、方案选型 |
 | [**画布编辑器调研-0506**](./画布编辑器调研-0506.md) | Canvas/VueFlow/Rete.js 调研 |
 | [**画布编辑器调研-0507**](./画布编辑器调研-0507.md) | 补充调研（性能、大规模节点） |
+| [**VueFlow Fork — 拖拽性能优化**](./vueflow-fork-drag-optimization.md) | fork 源码修改：skipTrigger 方案解决多节点拖拽卡顿 |
 
 ### 🎨 前端重构 (`docs/research-md/`)
 

@@ -4,15 +4,15 @@
     <header class="nce-header">
       <div
         class="nce-icon"
-        :class="data.category"
+        :class="nodeData?.category"
       >
-        <SvgIcon :name="data.category" />
+        <SvgIcon :name="nodeData?.category" />
       </div>
       <div class="nce-titles">
         <h3 class="nce-label">
-          {{ data.label || data.type }}
+          {{ nodeData?.label || nodeData?.type || '' }}
         </h3>
-        <span class="nce-type">{{ data.type }}</span>
+        <span class="nce-type">{{ nodeData?.type }}</span>
       </div>
     </header>
 
@@ -285,25 +285,28 @@ import { modelApi } from '@/api'
 
 // ============ 类型定义 ============
 
-interface Props {
-  nodeId: string
-  data: RuleNodeData
-}
 type NodeConfigValue = string | number | boolean | (string | number)[] | null
 
 // ============ Props ============
 
-const props = defineProps<Props>()
-
-// ============ Store ============
+const props = defineProps<{
+  nodeId: string
+}>()
 
 const store = useRuleEngineStore()
+
+// ============ 从 store 读取该节点数据 ============
+
+const nodeData = computed((): RuleNodeData | null => {
+  const node = store.nodeById.get(props.nodeId)
+  return (node?.data as RuleNodeData) ?? null
+})
 
 // ============ 计算属性 ============
 
 /** 节点配置 schema */
 const configProperties = computed((): Record<string, ConfigSchemaProperty> => {
-  return props.data.configSchema ?? (Object.create(null) as Record<string, ConfigSchemaProperty>)
+  return nodeData.value?.configSchema ?? (Object.create(null) as Record<string, ConfigSchemaProperty>)
 })
 
 /** 是否有配置项 */
@@ -313,14 +316,16 @@ const hasConfig = computed(() => {
 
 /** 节点配置值（合并默认值） */
 const nodeConfig = computed((): Record<string, NodeConfigValue> => {
+  const nd = nodeData.value
+  if (!nd) return {}
   const defaults: Record<string, NodeConfigValue> = {}
-  const schema = props.data.configSchema ?? {}
+  const schema = nd.configSchema ?? {}
   for (const [key, prop] of Object.entries(schema)) {
     if ((prop as ConfigSchemaProperty).default !== undefined) {
       defaults[key] = (prop as ConfigSchemaProperty).default as NodeConfigValue
     }
   }
-  return { ...defaults, ...(props.data.config as Record<string, NodeConfigValue>) }
+  return { ...defaults, ...(nd.config as Record<string, NodeConfigValue>) }
 })
 
 /** 拿到节点配置值（辅助方法） */
@@ -341,12 +346,12 @@ const dynamicCategoryEnum = ref<string[]>([])
 
 /** 检查当前节点 configSchema 是否包含 model_id 字段 */
 function hasModelIdField(): boolean {
-  return !!props.data.configSchema?.model_id
+  return !!nodeData.value?.configSchema?.model_id
 }
 
 /** 拿到所选 model_id 字段的值 */
 function getModelIdValue(): number | null {
-  const modelId = props.data.config?.model_id
+  const modelId = nodeData.value?.config?.model_id
   if (modelId === undefined || modelId === null || modelId === '') return null
   const n = Number(modelId)
   return Number.isFinite(n) && n > 0 ? n : null
@@ -393,7 +398,7 @@ async function loadModelCategories(fieldKey: string) {
 
 // 当 model_id 改变时清除缓存的 enum 并清空已选 class_names
 watch(
-  () => props.data.config?.model_id,
+  () => nodeData.value?.config?.model_id,
   (_newVal, oldVal) => {
     if (oldVal === undefined || oldVal === null || oldVal === '' || oldVal === 0) {
       dynamicCategoryEnum.value = []

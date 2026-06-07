@@ -395,7 +395,7 @@
             :nodes-connectable="true"
             :elements-selectable="true"
             :only-render-visible-elements="true"
-            :select-nodes-on-drag="true"
+            :select-nodes-on-drag="false"
             :selection-key-code="true"
             :selection-mode="SelectionMode.Partial"
             :connection-radius="20"
@@ -476,7 +476,6 @@
           v-if="selectedNode"
           :key="selectedNode.id"
           :node-id="selectedNode.id"
-          :data="selectedNode.data as RuleNodeData"
         />
         <div
           v-else
@@ -1293,6 +1292,7 @@ function handlePaste(event?: MouseEvent) {
 // 框选结束
 function handleSelectionDragStop({ nodes: selectedNodes }: { nodes: Node<RuleNodeData>[] }) {
   isSelectionDragging.value = false
+  isBatchDragging.value = false  // P0: 恢复 nodes-change 处理
   const selectedIds = new Set(selectedNodes.map((n) => n.id))
   // 优化：只在实际有变化时遍历写入 selected，跳过无操作场景
   let changed = false
@@ -1519,6 +1519,7 @@ const dragStartPositions = new Map<string, { x: number; y: number }>()
 
 function handleNodeDragStart(event: { node: any }) {
   isNodeDragging.value = true
+  isBatchDragging.value = true  // P0: 拖拽期间节流所有 nodes-change 处理
   store.pauseHistory()
   if (event?.node) {
     dragStartPositions.set(event.node.id, { ...event.node.position })
@@ -1527,6 +1528,7 @@ function handleNodeDragStart(event: { node: any }) {
 
 function handleNodeDragStop(event: { node: any }) {
   isNodeDragging.value = false
+  isBatchDragging.value = false  // P0: 恢复 nodes-change 处理
   // 关键: 必须先 resumeHistory (清 paused) 再 recordMoveHistory
   // 否则 recordMoveHistory 内部 if (paused) return 会跳过
   store.resumeHistory()
@@ -1617,9 +1619,14 @@ function handleConnect(params: any) {
 // 框选拖拽标志: 框选拖拽期间过滤 select changes (避免每帧全量替换 store.nodes)
 // 单击选中/Ctrl+A 等其他场景仍需正常处理 select changes
 const isSelectionDragging = ref(false)
+/** P0 多节点拖拽节流: 拖拽中的 change 全部跳过, stop 统一同步。
+ *  true 时 handleNodesChange 立即 return, 不进行任何拆分/循环/处理,
+ *  消除多节点拖拽时 60Hz × N 节点的函数调用开销 */
+const isBatchDragging = ref(false)
 
 function handleSelectionDragStart() {
   isSelectionDragging.value = true
+  isBatchDragging.value = true  // P0: 框选拖拽期间也节流
 }
 
 // 节点/边变化 - manual control 模式
@@ -1636,9 +1643,18 @@ function handleSelectionDragStart() {
 function handleNodesChange(changes: any[]) {
   if (changes.length === 0) return
 
-  // === 阶段 1: 拆分两类 change ===
-  // positionChanges: drag-stop 持久化（走轻量路径，避免整图重渲染）
-  // meaningful: 其他 change（dimensions/add/remove/select），走 VueFlow 完整重算
+  // === P0 多节点拖拽节流: 拖拽中(含框选拖拽)全部跳过, stop 统一同步 ===
+  // 多节点拖拽时 VueFlow 每帧 emit N 个 position change (dragging=true),
+  // 虽然当前代码已经跳过了 dragging=true 的 position, 但 change 数组的
+  // 遍历/类型检查/循环本身在 60Hz × 50 节点下就是 ~3000 次/秒的函数调用.
+  // isBatchDragging 让 handleNodesChange 立即 return, 零成本.
+  if (isBatchDragging.value) return
+
+  // === 阶段 1: 拆分三类 change ===
+  // P0: dimensions change 不携带位置信息，忽略（节点初次渲染后尺寸稳定，
+  //     即使微调也不影响画布拓扑，跳过可消除 80+ 节点时 90% 的全量 diff）
+  // positionChanges: drag-stop 持久化（走轻量 mutate 路径，避免整图重渲染）
+  // meaningful: add/remove/select，走 VueFlow 完整重算
   const positionChanges: any[] = []
   const meaningful: any[] = []
   for (const c of changes) {
@@ -1651,7 +1667,9 @@ function handleNodesChange(changes: any[]) {
       positionChanges.push(c)
       continue
     }
-    // 其他（dimensions/add/remove/select 正常场景）走 VueFlow 完整重算
+    // P0: dimensions change —— 不影响拓扑/选中/删除，跳过全量重算
+    if (c.type === 'dimensions') continue
+    // 其他（add/remove/select 正常场景）走 VueFlow 完整重算
     meaningful.push(c)
   }
 
@@ -1977,7 +1995,8 @@ $panel-header-height: 44px;
 }
 
 // Phase B 任务5: 大图渲染降级
-// ≥80 节点: 去除节点阴影 / transition / 边动画, 降低 paint 成本
+// ≥80 节点: 去除节点阴影 / transition / 边动画, 降低 paint 成本；
+//           边半透明减淡 + 减细，减少 SVG path 对帧率的消耗
 // ≥200 节点: 额外隐藏节点摘要 / 端口 label
 .large-graph-mode {
   :deep(.rule-node) {
@@ -1991,10 +2010,24 @@ $panel-header-height: 44px;
 
   :deep(.vue-flow__edge-path) {
     transition: none !important;
+    stroke-opacity: 0.2 !important;
+    stroke-width: 1.5 !important;
   }
 
   :deep(.vue-flow__edge.animated .vue-flow__edge-path) {
     animation: none !important;
+  }
+
+  // hover 态同步降级，避免半透明边 hover 时突兀跳变
+  :deep(.vue-flow__edge:hover .vue-flow__edge-path) {
+    stroke-opacity: 0.4 !important;
+    stroke-width: 1.5 !important;
+  }
+
+  // 连线选中态保持可辨识
+  :deep(.vue-flow__edge.selected .vue-flow__edge-path) {
+    stroke-opacity: 1 !important;
+    stroke-width: 2.5 !important;
   }
 }
 
