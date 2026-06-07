@@ -278,6 +278,8 @@ export interface ConfigSchemaProperty {
   enum?: string[]
   widget?: string
   visible?: string
+  /** multiselect 控件是否允许用户输入自定义选项（不限于 enum） */
+  allow_create?: boolean
 }
 
 /** 规则图节点数据 */

@@ -30,6 +30,7 @@ declare module 'vue' {
     Handle: typeof import('@vue-flow/core')['Handle']
     LoadingSpinner: typeof import('./components/LoadingSpinner.vue')['default']
     MiniMap: typeof import('@vue-flow/minimap')['MiniMap']
+    NodeConfigEditor: typeof import('./components/rule-engine/NodeConfigEditor.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     RuleNode: typeof import('./components/rule-engine/RuleNode.vue')['default']
