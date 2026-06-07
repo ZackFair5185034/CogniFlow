@@ -406,7 +406,7 @@
           >
             <!-- 小地图 -->
             <MiniMap
-              v-if="showMiniMap"
+              v-if="showMiniMap && !isNodeDragging && !isSelectionDragging"
               position="bottom-right"
               :node-color="miniMapNodeColor"
               :node-stroke-width="2"
@@ -704,6 +704,7 @@ const showExecutionPanel = ref(false)
 const flowContainer = ref<HTMLElement | null>(null)
 const vueFlowRef = ref<any>(null)
 const canvasWrapper = ref<HTMLElement | null>(null)
+const isNodeDragging = ref(false)
 // zoomLevel: 仅作为内部值供 zoomIn/zoomOut/quickAddNode 读取, 不参与响应式
 // 模板显示走 zoomLevelEl.textContent (DOM 直写), 见 P0-2
 const zoomLevel = ref(1)
@@ -1469,10 +1470,12 @@ function handleNodeClick(event: any) {
 
 // 节点拖拽
 function handleNodeDragStart() {
+  isNodeDragging.value = true
   store.pauseHistory()
 }
 
 function handleNodeDragStop() {
+  isNodeDragging.value = false
   store.unpauseHistory()
 }
 
