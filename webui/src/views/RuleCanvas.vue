@@ -3103,22 +3103,8 @@ $panel-header-height: 44px;
   }
 }
 
-// 右侧属性面板
-.properties-panel {
-  width: 0;
-  background: #0e0e14;
-  border-left: 1px solid transparent;
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s ease, border-color 0.3s ease;
-  overflow: hidden;
-  flex-shrink: 0;
-
-  &.visible {
-    width: $panel-width;
-    border-left-color: #1e1e2e;
-  }
-}
+// 右侧属性面板 (Phase A: 节点配置编辑) - 旧占位代码 (Phase 4.3 废弃后留下) 已清理
+// 新样式在 .canvas-body 后的 .properties-panel 块, 这里不再定义
 
 .panel-header {
   height: $panel-header-height;

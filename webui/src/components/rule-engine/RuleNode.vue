@@ -28,9 +28,15 @@
       {{ summaryText }}
     </div>
 
-    <!-- Quick Controls: 最多 3 个最轻量控件 (Phase A) -->
+    <!--
+      Quick Controls: 默认隐藏, 节点壳 100% 纯净 (Phase A 用户决定)
+      配置编辑全权由 NodeConfigEditor (右侧属性面板) 接管.
+      如需启用, 把 v-if 改为 "enableQuickControls && quickControls.length > 0",
+      并在 store 暴露 enableQuickControls 开关. 下方 quickControls / getQuickValue /
+      updateQuick / quickControlsHash 已保留, 注释掉模板即可.
+    -->
     <div
-      v-if="quickControls.length > 0"
+      v-if="false"
       class="node-quick-controls"
     >
       <div
