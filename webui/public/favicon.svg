@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- CogniFlow Logo — 简化为标签页显示优化 -->
+  <defs>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#73a9ff"/>
+      <stop offset="100%" stop-color="#5898ff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 主体圆环 -->
+  <circle cx="128" cy="128" r="100"
+          fill="none"
+          stroke="url(#accentGrad)"
+          stroke-width="24"/>
+
+  <!-- 中心实心圆 -->
+  <circle cx="128" cy="128" r="56"
+          fill="url(#accentGrad)"/>
+
+  <!-- 中心高光 -->
+  <circle cx="116" cy="116" r="18"
+          fill="#ffffff"
+          opacity="0.9"/>
+</svg>

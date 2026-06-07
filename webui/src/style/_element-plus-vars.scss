@@ -1,0 +1,68 @@
+// -*- coding: utf-8 -*-
+/**
+ * Element Plus CSS 变量主题
+ *
+ * 覆盖 EP 设计令牌，统一使用 CogniFlow 设计系统。
+ * 参考：https://element-plus.org/zh-CN/guide/theming
+ */
+
+:root {
+  // CogniFlow 品牌主色 — 蓝色（替换默认蓝色）
+  --el-color-primary: #5898ff;
+  --el-color-primary-light-3: #73a9ff;
+  --el-color-primary-light-5: #8fbaff;
+  --el-color-primary-light-7: #abcbff;
+  --el-color-primary-light-8: #c7dcff;
+  --el-color-primary-light-9: #e3eeff;
+  --el-color-primary-dark-2: #4a80e0;
+
+  // 成功/警告/危险色 — 保持 EP 语义色
+  --el-color-success: #22c55e;
+  --el-color-warning: #eab308;
+  --el-color-danger: #ef4444;
+  --el-color-info: #5898ff;
+
+  // 文字色
+  --el-text-color-primary: #e8e8f0;
+  --el-text-color-regular: #c0c0d0;
+  --el-text-color-secondary: #9090a8;
+  --el-text-color-placeholder: #55556a;
+  --el-text-color-disabled: #3a3a4a;
+
+  // 边框色
+  --el-border-color: #2a2a38;
+  --el-border-color-light: #22222e;
+  --el-border-color-lighter: #1e1e28;
+  --el-border-color-extra-light: #1a1a24;
+  --el-border-color-dark: #3a3a48;
+  --el-border-color-darker: #4a4a58;
+
+  // 填充色（背景）
+  --el-fill-color: #1c1c26;
+  --el-fill-color-light: #161620;
+  --el-fill-color-lighter: #14141c;
+  --el-fill-color-blank: #0d0d14;
+
+  // 背景色
+  --el-bg-color: #0d0d14;
+  --el-bg-color-page: #0d0d14;
+  --el-bg-color-overlay: #1c1c26;
+
+  // 阴影
+  --el-box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --el-box-shadow-light: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --el-box-shadow-lighter: 0 1px 4px rgba(0, 0, 0, 0.15);
+
+  // 禁用
+  --el-disabled-fill-color: #1c1c26;
+  --el-disabled-border-color: #2a2a38;
+  --el-disabled-color: #3a3a4a;
+
+  // 遮罩层
+  --el-overlay-color: rgba(0, 0, 0, 0.7);
+  --el-overlay-color-light: rgba(0, 0, 0, 0.5);
+  --el-overlay-color-lighter: rgba(0, 0, 0, 0.3);
+
+  // 下拉菜单
+  --el-dropdown-menu-box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
