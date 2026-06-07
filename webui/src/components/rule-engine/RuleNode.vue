@@ -1,7 +1,7 @@
 <template>
   <div
     v-bind="$attrs"
-    v-memo="[data.id, data.status, data.config, quickControlsHash, summaryText]"
+    v-memo="[data.id, data.status, data.config, summaryText]"
     class="rule-node"
     :class="`category-${data.category}`"
     :data-status="data.status || 'idle'"
@@ -36,7 +36,7 @@
       updateQuick / quickControlsHash 已保留, 注释掉模板即可.
     -->
     <div
-      v-if="false"
+      v-if="ENABLE_QUICK_CONTROLS && quickControls.length > 0"
       class="node-quick-controls"
     >
       <div
@@ -105,7 +105,7 @@
           :id="input.name"
           type="target"
           :position="Position.Left"
-          :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`, { 'is-connected': isHandleConnected(input.name) }]"
+          :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`, { 'is-connected': isInputConnected(input.name) }]"
         />
         <span class="port-label">{{ input.label || input.name }}</span>
       </div>
@@ -120,7 +120,7 @@
           :id="output.name"
           type="source"
           :position="Position.Right"
-          :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`, { 'is-connected': isHandleConnected(output.name) }]"
+          :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`, { 'is-connected': isOutputConnected(output.name) }]"
         />
       </div>
     </div>
@@ -158,6 +158,17 @@ import { useRuleEngineStore } from '@/stores/ruleEngine'
  * 不会触发 fragment 根警告。手动 v-bind="$attrs" 绑到节点 div。
  */
 defineOptions({ inheritAttrs: false })
+
+/**
+ * Quick Controls 开关 (Phase B 任务1: 移除隐藏 quick controls 的计算成本)
+ *
+ * false: 完全跳过 schema 排序/JSON.stringify, 节点初始化零成本
+ * true:  启用 0-3 个最轻量控件在节点壳内直接编辑 (高频微调场景)
+ *
+ * 后续要切换可: 1) 改这个常量; 2) 在 store 暴露 enableQuickControls 开关;
+ *               3) 节点右键菜单加 "显示/隐藏快速输入" 项.
+ */
+const ENABLE_QUICK_CONTROLS = false
 
 /** 节点配置值类型 */
 type NodeConfigValue = string | number | boolean | (string | number)[] | null
@@ -222,20 +233,16 @@ const statusTitle = computed(() => {
   }
 })
 
-// ============ Handle 连接状态 (Phase B 连接索引优化前, 这里直接计算) ============
+// ============ Handle 连接状态 (Phase B 任务2: 走 store 全局索引 O(1) 查询) ============
 
-/** 已连接 handle id 集合 */
-const connectedHandleIds = computed<Set<string>>(() => {
-  const ids = new Set<string>()
-  for (const e of store.edges) {
-    if (e.source === props.data.id && e.sourceHandle) ids.add(e.sourceHandle)
-    if (e.target === props.data.id && e.targetHandle) ids.add(e.targetHandle)
-  }
-  return ids
-})
+/** 输入端 handle 是否已连接 (target direction) */
+function isInputConnected(handleId: string): boolean {
+  return store.isHandleConnected(props.data.id, handleId, 'target')
+}
 
-function isHandleConnected(handleId: string): boolean {
-  return connectedHandleIds.value.has(handleId)
+/** 输出端 handle 是否已连接 (source direction) */
+function isOutputConnected(handleId: string): boolean {
+  return store.isHandleConnected(props.data.id, handleId, 'source')
 }
 
 // ============ 节点摘要 (1-2 行关键配置) ============
@@ -269,6 +276,8 @@ const summaryText = computed(() => {
 const LIGHTWEIGHT_WIDGETS = new Set(['number', 'toggle', 'checkbox', 'dropdown'])
 
 const quickControls = computed(() => {
+  // 任务1: 禁用时直接返回空数组, 跳过整个 schema 排序/映射
+  if (!ENABLE_QUICK_CONTROLS) return []
   const schema = props.data.configSchema ?? {}
   const all = Object.entries(schema) as [string, ConfigSchemaProperty][]
   return all
@@ -284,15 +293,6 @@ const quickControls = computed(() => {
     })
     .slice(0, 3)
     .map(([key, sch]) => ({ key, schema: sch }))
-})
-
-/** Quick Controls 配置值哈希 (用于 v-memo 引用比较) */
-const quickControlsHash = computed(() => {
-  if (quickControls.value.length === 0) return ''
-  return quickControls.value.map(c => {
-    const v = props.data.config?.[c.key]
-    return `${c.key}:${v === undefined ? 'u' : JSON.stringify(v)}`
-  }).join('|')
 })
 
 /** 拿 quick control 当前值 */

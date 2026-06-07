@@ -1,5 +1,8 @@
 <template>
-  <div class="rule-canvas-fullscreen">
+  <div
+  class="rule-canvas-fullscreen"
+  :class="{ 'large-graph-mode': largeGraphMode, 'huge-graph-mode': hugeGraphMode }"
+>
     <!-- 顶部工具栏 -->
     <header class="canvas-header">
       <div class="header-left">
@@ -412,9 +415,9 @@
             @selection-drag-start="handleSelectionDragStart"
             @selection-drag-stop="handleSelectionDragStop"
           >
-            <!-- 小地图 -->
+            <!-- 小地图 (Phase B 任务5: shouldShowMiniMap 自动策略) -->
             <MiniMap
-              v-if="showMiniMap && !isNodeDragging && !isSelectionDragging"
+              v-if="shouldShowMiniMap"
               position="bottom-right"
               :node-color="miniMapNodeColor"
               :node-stroke-width="2"
@@ -728,6 +731,19 @@ const thumbnailInflight = ref(false)
 const executing = ref(false)
 const showPalette = ref(true)
 const showMiniMap = ref(true)
+
+// Phase B 任务5: 大图渲染降级
+const LARGE_GRAPH_NODE_THRESHOLD = 80
+const HUGE_GRAPH_NODE_THRESHOLD = 200
+
+const largeGraphMode = computed(() => nodes.value.length >= LARGE_GRAPH_NODE_THRESHOLD)
+const hugeGraphMode = computed(() => nodes.value.length >= HUGE_GRAPH_NODE_THRESHOLD)
+/** MiniMap 自动策略: 拖拽/框选/大图全部隐藏, 但用户手动 on 仍生效 */
+const shouldShowMiniMap = computed(() => {
+  if (isNodeDragging.value || isSelectionDragging.value) return false
+  // 用户手动 on/off 优先; 默认 (true) 时按 largeGraphMode 自动
+  return showMiniMap.value && !largeGraphMode.value
+})
 const showPropertiesPanel = ref(true)  // 右侧属性面板 (Phase A)
 const snapGrid = ref(true)
 const showGrid = ref(true)
@@ -1308,13 +1324,11 @@ function handleDelete() {
 
   if (selectedNodes.length === 0 && selectedEdges.length === 0) return
 
+  // Phase B 任务4: 批量删除一次性 (单次 filter + 单次 saveHistory)
   const nodeIds = selectedNodes.map((n) => n.id)
-  for (const id of nodeIds) {
-    store.removeNode(id)
-  }
-  for (const e of selectedEdges) {
-    store.removeEdge(e.id)
-  }
+  const edgeIds = selectedEdges.map((e) => e.id)
+  if (nodeIds.length > 0) store.removeNodes(nodeIds)
+  if (edgeIds.length > 0) store.removeEdges(edgeIds)
   ElMessage.success(`已删除 ${selectedNodes.length} 个节点`)
 }
 
@@ -1500,14 +1514,30 @@ function handleNodeClick(event: any) {
 }
 
 // 节点拖拽
-function handleNodeDragStart() {
+/** 拖拽起点位置缓存 (Phase B 任务3: drag-stop 走 move history, 不克隆整图) */
+const dragStartPositions = new Map<string, { x: number; y: number }>()
+
+function handleNodeDragStart(event: { node: any }) {
   isNodeDragging.value = true
   store.pauseHistory()
+  if (event?.node) {
+    dragStartPositions.set(event.node.id, { ...event.node.position })
+  }
 }
 
-function handleNodeDragStop() {
+function handleNodeDragStop(event: { node: any }) {
   isNodeDragging.value = false
-  store.unpauseHistory()
+  // 关键: 必须先 resumeHistory (清 paused) 再 recordMoveHistory
+  // 否则 recordMoveHistory 内部 if (paused) return 会跳过
+  store.resumeHistory()
+  // 走 move history: 不克隆整图, 只记 1 个节点位置变化
+  if (event?.node) {
+    const from = dragStartPositions.get(event.node.id)
+    dragStartPositions.delete(event.node.id)
+    if (from) {
+      store.recordMoveHistory(event.node.id, from, { ...event.node.position })
+    }
+  }
 }
 
 // 画布点击
@@ -1525,7 +1555,8 @@ function isPortCompatible(sourceType: string, targetType: string): boolean {
 }
 
 function getNodePortType(nodeId: string, handleId: string | null, isSource: boolean): string | null {
-  const node = nodes.value.find(n => n.id === nodeId)
+  // Phase B 任务6: 用 store.nodeById O(1) 查询替换 nodes.value.find
+  const node = store.nodeById.get(nodeId)
   if (!node) return null
   const ports = isSource ? (node.data?.outputs || []) : (node.data?.inputs || [])
   if (!ports?.length) return null
@@ -1538,8 +1569,9 @@ function getNodePortType(nodeId: string, handleId: string | null, isSource: bool
 
 function validateConnection(params: any): { valid: boolean; error?: string } {
   const { source, target, sourceHandle, targetHandle } = params
-  const sourceNode = nodes.value.find(n => n.id === source)
-  const targetNode = nodes.value.find(n => n.id === target)
+  // Phase B 任务6: 用 store.nodeById O(1) 查询
+  const sourceNode = store.nodeById.get(source)
+  const targetNode = store.nodeById.get(target)
 
   if (!sourceNode || !targetNode) return { valid: false, error: '节点不存在' }
   if (source === target) return { valid: false, error: '不能连接到自己' }
@@ -1942,6 +1974,38 @@ $panel-header-height: 44px;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   z-index: 9999;
   overflow: hidden;
+}
+
+// Phase B 任务5: 大图渲染降级
+// ≥80 节点: 去除节点阴影 / transition / 边动画, 降低 paint 成本
+// ≥200 节点: 额外隐藏节点摘要 / 端口 label
+.large-graph-mode {
+  :deep(.rule-node) {
+    box-shadow: none !important;
+    transition: none !important;
+  }
+
+  :deep(.rule-node:hover) {
+    box-shadow: none !important;
+  }
+
+  :deep(.vue-flow__edge-path) {
+    transition: none !important;
+  }
+
+  :deep(.vue-flow__edge.animated .vue-flow__edge-path) {
+    animation: none !important;
+  }
+}
+
+.huge-graph-mode {
+  :deep(.node-summary) {
+    display: none !important;
+  }
+
+  :deep(.port-label) {
+    display: none !important;
+  }
 }
 
 // 顶部工具栏
