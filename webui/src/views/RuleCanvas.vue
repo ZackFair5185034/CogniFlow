@@ -1266,19 +1266,10 @@ function handleContextAction(action: string, event?: MouseEvent) {
       hideContextMenu()
       break
     case 'delete':
-      // 直接从 contextMenu.target 取 id 删除 —— 不要再走 addSelectedNodes 绕路
-      // (VueFlow 1.48 addSelectedNodes 接收 GraphNode[]，不是 string[]；
-      //  传 id 字符串会导致 nodes.map((n) => n.id) 得到 undefined，
-      //  选中状态变更静默失败，handleDelete() 因无选中节点而早返回)
-      if (contextMenu.targetType === 'node' && contextMenu.target) {
-        const targetId = (contextMenu.target as any).id as string
-        store.removeNode(targetId)
-        ElMessage.success('已删除节点')
-      } else if (contextMenu.targetType === 'edge' && contextMenu.target) {
-        const targetEdge = contextMenu.target as Edge
-        store.removeEdge(targetEdge.id)
-        ElMessage.success('已删除连线')
-      }
+      // 多选时: 删所有 selected 节点 + 相关边 (与键盘 Delete 行为一致)
+      // 单选时: 选中数组也包含目标节点 (VueFlow 自动选中) → 同样全删
+      // 边右键时: targetType === 'edge', 走 handleDelete 的 selectedEdges 路径
+      handleDelete()
       hideContextMenu()
       break
     case 'selectAll':
