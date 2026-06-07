@@ -630,6 +630,7 @@ const {
   setViewport,
   getViewport,
   addSelectedNodes,
+  addSelectedEdges,
   getNodes,
   applyNodeChanges: applyVueFlowNodeChanges,
   applyEdgeChanges: applyVueFlowEdgeChanges,
@@ -1266,9 +1267,14 @@ function handleContextAction(action: string, event?: MouseEvent) {
       hideContextMenu()
       break
     case 'delete':
-      // 多选时: 删所有 selected 节点 + 相关边 (与键盘 Delete 行为一致)
-      // 单选时: 选中数组也包含目标节点 (VueFlow 自动选中) → 同样全删
-      // 边右键时: targetType === 'edge', 走 handleDelete 的 selectedEdges 路径
+      // 右键未选中节点/边时, VueFlow 不会自动加 selected 标志,
+      // handleDelete() 依赖 selected 过滤 → 静默失败.
+      // 先把右键目标加入 selected 状态, 再委托给 handleDelete()
+      if (contextMenu.targetType === 'node' && contextMenu.target) {
+        addSelectedNodes([(contextMenu.target as any).id] as any)
+      } else if (contextMenu.targetType === 'edge' && contextMenu.target) {
+        addSelectedEdges([(contextMenu.target as any).id] as any)
+      }
       handleDelete()
       hideContextMenu()
       break
