@@ -110,3 +110,25 @@ cut 模式下粘贴后清空 `payload` (现有行为保留).
 - 边 ID 重命名不能冲突 (新 id 用 `edge_${Date.now()}_${rand}`)
 - 复制剪贴板存在 store ref 里 (非全局), 切页面会清 — 当前如此, 保留
 - 边可能被同 source/target 重复: 需 dedup 或保持简单 (允许悬空边, 警告即可)
+
+---
+
+## 估量报告: 全选后拖拽画布卡顿
+
+**现象**: 全选 30+ 节点后 alt+左键平移画布, 鼠标移动明显卡顿.
+
+**根因猜测** (3 个可能叠加):
+1. `handleSelectionDragStop` (RuleCanvas.vue:1128-) 在拖拽中持续 mutate `store.nodes` 的 `selected` 字段, 配合 `shallowRef` 触发了大面积响应式更新.
+2. `handleCanvasMouseMove` 每次 mousemove 直接调 `setViewport()`, 无 rAF 节流, 60Hz 触发 VueFlow 全图重渲染.
+3. VueFlow 节点组件未包裹 `v-memo`, 整图所有 30+ 节点 watcher 都重算.
+
+**非本次修复原因**:
+- 涉及 VueFlow 内部 + 全局渲染优化, 改动面大, 风险高
+- 性能基准不易立 (需复现具体卡顿场景)
+- 留待下迭代配合虚拟化一并处理
+
+**建议下迭代修复**:
+- mousemove 用 `requestAnimationFrame` 节流
+- 拖拽期间设 `isDragging` 标志, 跳过 `saveHistory` 等非关键响应式
+- 节点用 `v-memo="[data.id, data.category, data.status, selected]"`
+- 评估引入节点虚拟化 (vue-flow 1.48+)
