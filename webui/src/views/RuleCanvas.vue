@@ -1206,6 +1206,10 @@ function handlePaste(event?: MouseEvent) {
   })
 
   // shallowRef 数组必须重新赋值触发响应式
+  // 取消选中所有原节点, 只保留粘贴项 selected: true
+  for (const n of store.nodes as any[]) {
+    n.selected = false
+  }
   store.nodes = [...store.nodes, ...newNodes]
   store.edges = [...(store.edges as Edge[]), ...newEdges]
 
