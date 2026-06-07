@@ -2663,6 +2663,13 @@ $panel-header-height: 44px;
     display: none;
   }
 
+  /* 拖拽性能优化: 为每个节点 wrapper 创建独立合成层,
+     GPU 直接位移跳过 repaint, 与 CSS containment 配合隔离布局重算 */
+  :deep(.vue-flow__node) {
+    will-change: transform;
+    contain: layout style;
+  }
+
   /* 连接线：未选中 35% 蓝、悬停 70%、选中 100% 青色 + 发光 (决策 2) */
   :deep(.vue-flow__edge-path) {
     stroke: var(--accent-blue);

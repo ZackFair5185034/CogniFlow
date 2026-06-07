@@ -337,7 +337,10 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       if (!node.data.config) {
         node.data.config = {} as Record<string, VariableDefaultValue>
       }
-      node.data.config[key] = value
+      // 替换整个 config 对象引用: RuleNode.vue 根 v-memo 用 data.config 引用
+      // (===) 检测配置变更, O(1) 引用比较替代 O(n) JSON.stringify
+      const prev = node.data.config
+      node.data.config = { ...prev, [key]: value }
       triggerRef(nodes)
     }
   }

@@ -1,7 +1,7 @@
 <template>
   <div
     v-bind="$attrs"
-    v-memo="[data.id, data.status, selected, JSON.stringify(data?.config)]"
+    v-memo="[data.id, data.status, selected, data.config]"
     class="rule-node"
     :class="[`category-${data.category}`, { selected }]"
     :data-status="data.status || 'idle'"
@@ -644,11 +644,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-.rule-node,
-:deep(.vue-flow__node) {
-  overflow: visible !important;
-}
-
 .rule-node {
   background: linear-gradient(180deg, #2d2d30 0%, #252528 100%);
   border: 1px solid #404044;
@@ -657,12 +652,17 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: #e0e0e0;
   position: relative;
-  transition: all 0.2s ease;
+  /* 仅过渡 border/box-shadow — 禁止 transition: all，否则拖拽时 CSS 过渡与
+     VueFlow 的 transform 直接操作冲突，导致 200ms 粘滞/抖动 */
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
     0 2px 8px rgba(0,0,0,0.3);
+  /* CSS containment: 隔离每个节点的布局/样式重算, 拖拽时不会级联触发兄弟节点
+     不用 contain: paint (会裁剪溢出的 Handle) */
+  contain: layout style;
   /* 连接点需要溢出显示，但不能影响布局 */
-  overflow: visible;
+  overflow: visible !important;
 }
 
 /* 确保节点容器不裁剪子元素 */
