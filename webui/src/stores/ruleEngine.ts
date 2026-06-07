@@ -182,9 +182,10 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
 
     // 解析节点：标准化 type 字段，补充必要属性
+    // markRaw 防止 Vue 对每个节点的 n.data 建深代理（80 节点 × ~20 字段 = 1600 个 Proxy）
     nodes.value = (data.nodes ?? []).map((n: GraphNode) => {
       const isVueFlowType = n.type === 'ruleNode' || n.type === 'rule-node'
-      return {
+      return markRaw({
         id: n.id,
         type: 'ruleNode',
         position: n.position ?? { x: 0, y: 0 },
@@ -194,7 +195,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
           type: isVueFlowType ? (n.data?.type ?? 'unknown') : n.type,
           id: n.id
         } as RuleNodeData
-      }
+      })
     })
 
     // 解析边
@@ -320,7 +321,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
     // 关键：shallowRef 不会追踪内部数组突变,需用新数组重新赋值触发响应式
     // 之前直接 push() 会让节点"进了 store 但不渲染"（拖拽/双击添加都不显示）
-    nodes.value = [...nodes.value, newNode]
+    // markRaw 防止 Vue 对 n.data 建深代理（节点体里 el-* 控件的响应式由组件内部自管）
+    nodes.value = [...nodes.value, markRaw(newNode)]
     saveHistory()
     return true
   }

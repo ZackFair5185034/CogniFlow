@@ -70,7 +70,16 @@
           >
             <SvgIcon name="zoom-in" />
           </el-button>
-          <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
+          <!--
+            缩放比例: DOM 直写 (不走 Vue 响应式) - @zoom 每帧触发,
+            走 ref 会触发整个父组件 re-render, 50-60Hz 缩放会爆调度
+            缩放比例只是顶部工具栏一个 span 文本, 用 ref + textContent 直写
+            完全够用, 跳过 Vue 调度
+          -->
+          <span
+            ref="zoomLevelEl"
+            class="zoom-level"
+          >100%</span>
           <el-button
             class="icon-btn"
             title="缩小"
@@ -385,7 +394,6 @@
             @node-drag-stop="handleNodeDragStop"
             @pane-click="handlePaneClick"
             @connect="handleConnect"
-            @move="handlePan"
             @zoom="handleZoom"
             @nodes-change="handleNodesChange"
             @edges-change="handleEdgesChange"
@@ -609,6 +617,7 @@
 
 <script setup lang="ts">
 import { throttle } from 'lodash-es'
+import { triggerRef } from 'vue'
 import { useRuleEngineStore, type RuleNodeData, type NodeDefinition } from '@/stores/ruleEngine'
 import { storeToRefs } from 'pinia'
 import { ruleEngineApi } from '@/api'
@@ -695,9 +704,13 @@ const showExecutionPanel = ref(false)
 const flowContainer = ref<HTMLElement | null>(null)
 const vueFlowRef = ref<any>(null)
 const canvasWrapper = ref<HTMLElement | null>(null)
-const panX = ref(0)
-const panY = ref(0)
+// zoomLevel: 仅作为内部值供 zoomIn/zoomOut/quickAddNode 读取, 不参与响应式
+// 模板显示走 zoomLevelEl.textContent (DOM 直写), 见 P0-2
 const zoomLevel = ref(1)
+// zoomLevelEl: 缩放比例 DOM 引用, 走 textContent 直写不走 Vue 响应式
+const zoomLevelEl = ref<HTMLElement | null>(null)
+// 缓存当前显示值, 避免重复设置相同内容触发无谓的 DOM write
+let lastZoomText = '100%'
 const isPanning = ref(false)
 const lastMousePos = ref({ x: 0, y: 0 })
 /** 全局鼠标位置: 任何 mousemove 都更新, 用于快捷键 Ctrl+V 拿鼠标坐标 (KeyboardEvent 没 clientX/Y) */
@@ -1547,18 +1560,54 @@ function handleSelectionDragStart() {
 // 拖拽中（dragging=true）的 position 变化不写回 store（每帧 60Hz 会爆）
 // 框选拖拽中（isSelectionDragging）的 select 变化不写回 store（drag-stop 统一 sync）
 // 仅在拖拽结束（dragging=false）或非 position/select 类型变更时应用
+//
+// P0-1 优化：drag-stop 的 position change 走轻量路径，**不调用** applyVueFlowNodeChanges。
+// 旧实现: store.nodes = newNodes → 数组引用替换 → storeToRefs trigger → 父组件 re-render →
+//         VueFlow 内部 useVModel 浅 watch 检测到 props.nodes 引用变 → 整图 80 节点 vdom diff。
+// 新实现: mutate store.nodes[i].position + triggerRef(nodes) → 数组引用不变 →
+//         Vue 父组件重渲染但 patchProps 浅比较发现引用未变 → VueFlow 不重渲染。
+// 收益: 拖完 1 节点从 O(80) vdom diff 降到 O(1) 属性写入。
 function handleNodesChange(changes: any[]) {
   if (changes.length === 0) return
-  const meaningful = changes.filter(c => {
-    // 过滤掉拖拽中 transient position 更新 —— VueFlow 内部自有管理
-    if (c.type === 'position' && c.dragging === true) return false
-    // 过滤掉框选拖拽中 select 更新 —— 避免每帧全量替换 store.nodes 触发整图重渲染
-    // 单击/Ctrl+A 等场景 isSelectionDragging=false，select changes 正常处理
-    if (c.type === 'select' && isSelectionDragging.value) return false
-    return true
-  })
+
+  // === 阶段 1: 拆分两类 change ===
+  // positionChanges: drag-stop 持久化（走轻量路径，避免整图重渲染）
+  // meaningful: 其他 change（dimensions/add/remove/select），走 VueFlow 完整重算
+  const positionChanges: any[] = []
+  const meaningful: any[] = []
+  for (const c of changes) {
+    // 拖拽中 transient position —— VueFlow 内部自有管理，跳过
+    if (c.type === 'position' && c.dragging === true) continue
+    // 框选拖拽中 transient select —— handleSelectionDragStop 统一处理
+    if (c.type === 'select' && isSelectionDragging.value) continue
+    // 拖拽结束 position change —— 走轻量 mutate 路径
+    if (c.type === 'position' && c.dragging === false) {
+      positionChanges.push(c)
+      continue
+    }
+    // 其他（dimensions/add/remove/select 正常场景）走 VueFlow 完整重算
+    meaningful.push(c)
+  }
+
+  // === 阶段 2: position 轻量持久化（drag-stop 路径，60Hz 不会触发这里）===
+  // 关键: nodes.value.find().position 赋值是 O(1) 属性写入，不替换数组引用。
+  // triggerRef 仅通知 deps（父组件 render effect），但 patchProps 浅比较会过滤掉引用未变的情况。
+  if (positionChanges.length > 0) {
+    for (const c of positionChanges) {
+      const node = nodes.value.find(n => n.id === c.id)
+      if (node && c.position) {
+        // 替换整个 position 对象（VueFlow 内部已存了完整 position 数据）
+        node.position = c.position
+      }
+    }
+    // 手动通知响应式 —— 不替换 .value 数组引用，避免 VueFlow useVModel 浅 watch 误判变化
+    triggerRef(nodes)
+    // 注意: 不调 saveHistory —— unpauseHistory 在 @node-drag-stop 时已记录 drag 前的旧 position，
+    // 撤销回到 drag 前的位置是用户期望行为。
+  }
+
+  // === 阶段 3: 其他 change 走 VueFlow 完整重算路径（低频）===
   if (meaningful.length === 0) return
-  // 让 VueFlow 计算新状态（含尺寸、最终位置、添加/删除/选中）
   const newNodes = applyVueFlowNodeChanges(meaningful)
   // remove 类型：附带清理孤立边 + 保存历史
   const hasRemoval = meaningful.some(c => c.type === 'remove')
@@ -1580,13 +1629,19 @@ function handleEdgesChange(changes: any[]) {
   if (hasRemoval) store.saveHistory()
 }
 
-// 画布平移
-function handlePan(moveEvent: { event: unknown; flowTransform: { x: number; y: number; zoom: number } }) {
-  panX.value = -moveEvent.flowTransform.x
-  panY.value = -moveEvent.flowTransform.y
-}
+// P1-2: 原 handlePan 死代码 (panX/panY 从未被消费) 已删除
 
 function handleZoom({ zoom }: { zoom: number; event: unknown }) {
+  // P0-2: 缩放走 DOM textContent 直写, 不走模板响应式
+  // 60Hz 触发不重渲染父组件, 仅一次 DOM 属性写入
+  const text = `${Math.round(zoom * 100)}%`
+  if (text !== lastZoomText) {
+    lastZoomText = text
+    if (zoomLevelEl.value) {
+      zoomLevelEl.value.textContent = text
+    }
+  }
+  // 同步 zoomLevel ref (供 zoomIn/zoomOut/quickAddNode 读, 不参与响应式)
   zoomLevel.value = zoom
 }
 
