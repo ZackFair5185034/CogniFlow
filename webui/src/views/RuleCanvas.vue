@@ -393,6 +393,7 @@
             @pane-context-menu="(e: MouseEvent) => handleContextMenu(e, null, 'pane')"
             @edge-context-menu="(e: EdgeMouseEvent) => handleContextMenu(e.event as MouseEvent, e.edge, 'edge')"
             @node-delete="handleNodeDelete"
+            @selection-drag-start="handleSelectionDragStart"
             @selection-drag-stop="handleSelectionDragStop"
           >
             <!-- 小地图 -->
@@ -1230,6 +1231,7 @@ function handlePaste(event?: MouseEvent) {
 
 // 框选结束
 function handleSelectionDragStop({ nodes: selectedNodes }: { nodes: Node<RuleNodeData>[] }) {
+  isSelectionDragging.value = false
   const selectedIds = new Set(selectedNodes.map((n) => n.id))
   // 优化：只在实际有变化时遍历写入 selected，跳过无操作场景
   let changed = false
@@ -1533,14 +1535,26 @@ function handleConnect(params: any) {
   })
 }
 
+// 框选拖拽标志: 框选拖拽期间过滤 select changes (避免每帧全量替换 store.nodes)
+// 单击选中/Ctrl+A 等其他场景仍需正常处理 select changes
+const isSelectionDragging = ref(false)
+
+function handleSelectionDragStart() {
+  isSelectionDragging.value = true
+}
+
 // 节点/边变化 - manual control 模式
 // 拖拽中（dragging=true）的 position 变化不写回 store（每帧 60Hz 会爆）
-// 仅在拖拽结束（dragging=false）或非 position 类型变更时应用
+// 框选拖拽中（isSelectionDragging）的 select 变化不写回 store（drag-stop 统一 sync）
+// 仅在拖拽结束（dragging=false）或非 position/select 类型变更时应用
 function handleNodesChange(changes: any[]) {
   if (changes.length === 0) return
   const meaningful = changes.filter(c => {
     // 过滤掉拖拽中 transient position 更新 —— VueFlow 内部自有管理
     if (c.type === 'position' && c.dragging === true) return false
+    // 过滤掉框选拖拽中 select 更新 —— 避免每帧全量替换 store.nodes 触发整图重渲染
+    // 单击/Ctrl+A 等场景 isSelectionDragging=false，select changes 正常处理
+    if (c.type === 'select' && isSelectionDragging.value) return false
     return true
   })
   if (meaningful.length === 0) return
@@ -2669,6 +2683,22 @@ $panel-header-height: 44px;
     will-change: transform;
     contain: layout style;
   }
+
+  /* 节点选中视觉效果 — 通过父 wrapper 的 .selected class 驱动 (纯 CSS, 不触发 RuleNode 重渲染)
+     VueFlow 在框选/点击时自动给 .vue-flow__node 添加 .selected, 结束后移除。
+     RuleNode.vue 的 v-memo 不含 selected → 选中态变化不触发 Element Plus widget 重渲染 */
+  :deep(.vue-flow__node.selected .rule-node) {
+    border-width: 2px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      0 4px 16px rgba(0,0,0,0.4);
+  }
+  :deep(.vue-flow__node.selected .rule-node.category-input)      { border-color: #4CFF4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(76,255,76,0.3),   0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-detection)  { border-color: #00f0FF; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(0,240,255,0.3),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-processing) { border-color: #FFFF4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,255,76,0.3),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-action)     { border-color: #FF7F4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,127,76,0.3),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-logic)      { border-color: #DC4FDC; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(220,79,220,0.3),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-output)     { border-color: #FF4C4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,76,76,0.3),  0 4px 16px rgba(0,0,0,0.4); }
 
   /* 连接线：未选中 35% 蓝、悬停 70%、选中 100% 青色 + 发光 (决策 2) */
   :deep(.vue-flow__edge-path) {

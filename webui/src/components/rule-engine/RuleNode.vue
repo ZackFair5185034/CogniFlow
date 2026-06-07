@@ -1,9 +1,9 @@
 <template>
   <div
     v-bind="$attrs"
-    v-memo="[data.id, data.status, selected, data.config]"
+    v-memo="[data.id, data.status, data.config]"
     class="rule-node"
-    :class="[`category-${data.category}`, { selected }]"
+    :class="`category-${data.category}`"
     :data-status="data.status || 'idle'"
     @contextmenu.prevent="handleContextMenu"
   >
@@ -681,20 +681,6 @@ onBeforeUnmount(() => {
     inset 0 1px 0 rgba(255,255,255,0.08),
     0 4px 16px rgba(0,0,0,0.4);
 }
-
-/* 节点选中边框：按 category 色 (决策 4) — 2px 实色 */
-.rule-node.selected {
-  border-width: 2px;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.08),
-    0 4px 16px rgba(0,0,0,0.4);
-}
-.rule-node.selected.category-input     { border-color: #4CFF4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(76,255,76,0.3),   0 4px 16px rgba(0,0,0,0.4); }
-.rule-node.selected.category-detection { border-color: #00f0FF; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(0,240,255,0.3),   0 4px 16px rgba(0,0,0,0.4); }
-.rule-node.selected.category-processing{ border-color: #FFFF4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,255,76,0.3),  0 4px 16px rgba(0,0,0,0.4); }
-.rule-node.selected.category-action   { border-color: #FF7F4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,127,76,0.3),  0 4px 16px rgba(0,0,0,0.4); }
-.rule-node.selected.category-logic     { border-color: #DC4FDC; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(220,79,220,0.3),  0 4px 16px rgba(0,0,0,0.4); }
-.rule-node.selected.category-output    { border-color: #FF4C4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,76,76,0.3),   0 4px 16px rgba(0,0,0,0.4); }
 
 /* Phase 14 节点状态可视高亮：边框颜色按执行状态区分，
    一眼看出哪个节点 running / success / failed / timeout */
