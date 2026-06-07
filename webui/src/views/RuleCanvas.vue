@@ -552,19 +552,19 @@
       <template v-if="contextMenu.targetType === 'node'">
         <div
           class="context-menu-item"
-          @click="handleContextAction('copy')"
+          @click="handleContextAction('copy', $event)"
         >
           <SvgIcon name="copy" /> 复制
         </div>
         <div
           class="context-menu-item"
-          @click="handleContextAction('cut')"
+          @click="handleContextAction('cut', $event)"
         >
           <SvgIcon name="cut" /> 剪切
         </div>
         <div
           class="context-menu-item danger"
-          @click="handleContextAction('delete')"
+          @click="handleContextAction('delete', $event)"
         >
           <SvgIcon name="delete" /> 删除
         </div>
@@ -573,7 +573,7 @@
       <template v-if="contextMenu.targetType === 'edge'">
         <div
           class="context-menu-item danger"
-          @click="handleContextAction('delete')"
+          @click="handleContextAction('delete', $event)"
         >
           <SvgIcon name="delete" /> 删除连线
         </div>
@@ -581,7 +581,7 @@
       </template>
       <div
         class="context-menu-item"
-        @click="handleContextAction('paste')"
+        @click="handleContextAction('paste', $event)"
       >
         <SvgIcon name="paste" /> 粘贴
       </div>
@@ -1269,11 +1269,13 @@ function handleContextAction(action: string, event?: MouseEvent) {
     case 'delete':
       // 右键未选中节点/边时, VueFlow 不会自动加 selected 标志,
       // handleDelete() 依赖 selected 过滤 → 静默失败.
-      // 先把右键目标加入 selected 状态, 再委托给 handleDelete()
+      // 先把右键目标对象加入 selected, 再委托给 handleDelete()
+      // (VueFlow addSelectedNodes/addSelectedEdges 签名接收 GraphNode[]/Edge[],
+      //  内部用 .id 取值, 传对象数组而非字符串 ID 数组)
       if (contextMenu.targetType === 'node' && contextMenu.target) {
-        addSelectedNodes([(contextMenu.target as any).id] as any)
+        addSelectedNodes([contextMenu.target as any])
       } else if (contextMenu.targetType === 'edge' && contextMenu.target) {
-        addSelectedEdges([(contextMenu.target as any).id] as any)
+        addSelectedEdges([contextMenu.target as any])
       }
       handleDelete()
       hideContextMenu()
