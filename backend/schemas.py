@@ -320,8 +320,9 @@ class RuleGraphUpdate(BaseModel):
 class RuleGraphResponse(RuleGraphBase):
     """规则图响应。"""
     id: int
-    created_at: datetime
-    updated_at: datetime
+    # 兼容历史数据：早期插入的规则图可能没有时间戳
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
