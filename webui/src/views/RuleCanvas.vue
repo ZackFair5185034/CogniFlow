@@ -136,6 +136,14 @@
           <SvgIcon name="panel-left" />
         </el-button>
         <el-button
+          class="palette-toggle-btn"
+          :class="{ active: showPropertiesPanel }"
+          :title="showPropertiesPanel ? '收起属性面板' : '展开属性面板'"
+          @click="showPropertiesPanel = !showPropertiesPanel"
+        >
+          <SvgIcon name="panel-right" />
+        </el-button>
+        <el-button
           class="action-btn secondary"
           @click="handleValidate"
         >
@@ -455,6 +463,26 @@
           />
         </div>
       </div>
+
+      <!-- 右侧属性面板 (Phase A: 选中节点配置编辑) -->
+      <aside
+        v-if="showPropertiesPanel"
+        class="properties-panel"
+      >
+        <NodeConfigEditor
+          v-if="selectedNode"
+          :key="selectedNode.id"
+          :node-id="selectedNode.id"
+          :data="selectedNode.data as RuleNodeData"
+        />
+        <div
+          v-else
+          class="properties-panel-empty"
+        >
+          <SvgIcon name="info" />
+          <p>选中节点以编辑配置</p>
+        </div>
+      </aside>
     </div>
 
     <!-- 执行日志面板 -->
@@ -626,6 +654,7 @@ import type { Node, Edge, NodeMouseEvent, EdgeMouseEvent } from '@vue-flow/core'
 // auto-import 的全局 const 在 template 中不被 TS 识别），需要显式 import
 import { SelectionMode } from '@vue-flow/core'
 import RuleNode from '@/components/rule-engine/RuleNode.vue'
+import NodeConfigEditor from '@/components/rule-engine/NodeConfigEditor.vue'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -658,6 +687,7 @@ const {
   variables,
   nodeDefinitions,
   graphMeta: graph,
+  selectedNode,
 } = storeToRefs(store)
 
 // 执行状态（computed 包装，保持模板兼容）
@@ -698,6 +728,7 @@ const thumbnailInflight = ref(false)
 const executing = ref(false)
 const showPalette = ref(true)
 const showMiniMap = ref(true)
+const showPropertiesPanel = ref(true)  // 右侧属性面板 (Phase A)
 const snapGrid = ref(true)
 const showGrid = ref(true)
 const showExecutionPanel = ref(false)
@@ -1619,6 +1650,11 @@ function handleNodesChange(changes: any[]) {
     store.edges = store.edges.filter((e: Edge) =>
       remainingIds.has(e.source) && remainingIds.has(e.target)
     ) as any
+    // Phase A: 同步清理选中节点 (否则右侧属性面板渲染已删节点的"幽灵")
+    const removedIds = new Set(meaningful.filter(c => c.type === 'remove').map(c => c.id))
+    if (removedIds.has(store.selectedNodeId)) {
+      store.selectNode(null)
+    }
   }
   store.nodes = newNodes as any
   if (hasRemoval) store.saveHistory()
@@ -2221,6 +2257,38 @@ $panel-header-height: 44px;
   display: flex;
   overflow: hidden;
   position: relative;
+}
+
+// 右侧属性面板 (Phase A)
+.properties-panel {
+  width: 360px;
+  background: var(--bg-card, #1c1c26);
+  border-left: 1px solid var(--border-color, #2a2a38);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  z-index: 50;
+  overflow: hidden;
+  contain: layout style;
+}
+
+.properties-panel-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted, #55556a);
+  font-size: 13px;
+  padding: 20px;
+  text-align: center;
+}
+
+.properties-panel-empty svg {
+  width: 36px;
+  height: 36px;
+  opacity: 0.4;
 }
 
 // 左侧节点面板 (折叠时整段隐藏 — 完全收纳)
