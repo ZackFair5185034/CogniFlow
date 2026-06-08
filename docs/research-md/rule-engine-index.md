@@ -27,6 +27,7 @@ CogniFlow 规则引擎是一个**可视化编排**的视觉感知处理引擎，
 | [**画布编辑器调研-0506**](./画布编辑器调研-0506.md) | Canvas/VueFlow/Rete.js 调研 |
 | [**画布编辑器调研-0507**](./画布编辑器调研-0507.md) | 补充调研（性能、大规模节点） |
 | [**VueFlow Fork — 拖拽性能优化**](./vueflow-fork-drag-optimization.md) | fork 源码修改：skipTrigger 方案解决多节点拖拽卡顿 |
+| [**VueFlow Fork — 框选性能优化**](./vueflow-fork-selection-optimization.md) | fork 源码修改：process-skip 方案解决框选过程 O(N) 包围盒检测 |
 
 ### 🎨 前端重构 (`docs/research-md/`)
 
