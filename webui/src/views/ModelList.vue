@@ -207,15 +207,15 @@
                 <!-- 直接显示第1个操作 -->
                 <el-button
                   class="action-text"
-                  @click.stop="handleAction('rename', row)"
+                  @click.stop="handleAction('rename', row as ModelResponse)"
                 >
                   编辑
                 </el-button>
                 <!-- 收纳剩余操作 -->
                 <el-dropdown
-                  v-if="getVisibleActions(row).length > 0"
+                  v-if="getVisibleActions(row as ModelResponse).length > 0"
                   trigger="click"
-                  @command="(cmd: string) => handleAction(cmd, row)"
+                  @command="(cmd: string) => handleAction(cmd, row as ModelResponse)"
                 >
                   <el-button class="action-text">
                     更多
@@ -223,7 +223,7 @@
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item
-                        v-for="action in getVisibleActions(row)"
+                        v-for="action in getVisibleActions(row as ModelResponse)"
                         :key="action.command"
                         :command="action.command"
                         :divided="action.command === 'delete'"

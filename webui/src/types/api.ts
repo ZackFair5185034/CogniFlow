@@ -280,6 +280,8 @@ export interface ConfigSchemaProperty {
   visible?: string
   /** multiselect 控件是否允许用户输入自定义选项（不限于 enum） */
   allow_create?: boolean
+  /** 是否隐藏该字段（true = 在 UI 中不渲染） */
+  hidden?: boolean
 }
 
 /** 规则图节点数据 */
@@ -304,6 +306,8 @@ export interface RuleNodeData {
   selected?: boolean
   /** 是否拖拽中 */
   dragging?: boolean
+  /** 节点配置区展开状态（用于内联配置折叠/展开） */
+  configExpanded?: boolean
 }
 
 /** 规则图节点 - 用于存储和传输 */

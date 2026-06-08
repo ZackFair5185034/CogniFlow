@@ -6,68 +6,68 @@
   -->
   <div class="node-config-inline">
     <div
-      v-for="(schema, key) in schemaEntries"
-      :key="key"
+      v-for="entry in schemaEntries"
+      :key="entry.key"
       class="nci-field"
     >
       <label class="nci-label">
-        {{ schema.title || key }}
+        {{ entry.schema.title || entry.key }}
         <span
-          v-if="schema.description"
+          v-if="entry.schema.description"
           class="nci-hint"
-          :title="schema.description"
+          :title="entry.schema.description"
         >?</span>
       </label>
 
       <!-- text -->
-      <template v-if="schema.widget === 'text' || !schema.widget">
+      <template v-if="entry.schema.widget === 'text' || !entry.schema.widget">
         <el-input
-          :model-value="getValue(key) as string"
+          :model-value="getValue(entry.key) as string"
           size="small"
-          :placeholder="String(schema.default ?? '')"
-          @update:model-value="(v: string | number) => updateConfig(key, v)"
+          :placeholder="String(entry.schema.default ?? '')"
+          @update:model-value="(v: string | number) => updateConfig(entry.key, v)"
         />
       </template>
 
       <!-- number -->
-      <template v-else-if="schema.widget === 'number'">
+      <template v-else-if="entry.schema.widget === 'number'">
         <el-input-number
-          :model-value="getValue(key) as number"
-          :min="schema.minimum"
-          :max="schema.maximum"
-          :step="schema.step"
+          :model-value="getValue(entry.key) as number"
+          :min="entry.schema.minimum"
+          :max="entry.schema.maximum"
+          :step="entry.schema.step"
           :controls="false"
           size="small"
           class="nci-number"
-          @update:model-value="(v: number | undefined) => updateConfig(key, v ?? null)"
+          @update:model-value="(v: number | undefined) => updateConfig(entry.key, v ?? null)"
         />
       </template>
 
       <!-- slider -->
-      <template v-else-if="schema.widget === 'slider'">
+      <template v-else-if="entry.schema.widget === 'slider'">
         <div class="nci-slider-row">
           <el-slider
-            :model-value="getValue(key) as number"
-            :min="schema.minimum ?? 0"
-            :max="schema.maximum ?? 100"
-            :step="schema.step"
+            :model-value="getValue(entry.key) as number"
+            :min="entry.schema.minimum ?? 0"
+            :max="entry.schema.maximum ?? 100"
+            :step="entry.schema.step"
             size="small"
-            @update:model-value="(v: number | number[]) => updateConfig(key, Array.isArray(v) ? v[0] : v)"
+            @update:model-value="(v: number | number[]) => updateConfig(entry.key, Array.isArray(v) ? v[0] : v)"
           />
-          <span class="nci-slider-value">{{ getValue(key) }}</span>
+          <span class="nci-slider-value">{{ getValue(entry.key) }}</span>
         </div>
       </template>
 
       <!-- dropdown -->
-      <template v-else-if="schema.widget === 'dropdown'">
+      <template v-else-if="entry.schema.widget === 'dropdown'">
         <el-select
-          :model-value="getValue(key)"
+          :model-value="getValue(entry.key) as string | number | boolean"
           size="small"
           class="nci-select"
-          @update:model-value="(v: unknown) => updateConfig(key, v)"
+          @update:model-value="(v: string | number | boolean) => updateConfig(entry.key, v)"
         >
           <el-option
-            v-for="opt in (schema.enum ?? [])"
+            v-for="opt in (entry.schema.enum ?? [])"
             :key="String(opt)"
             :value="opt"
             :label="String(opt)"
@@ -79,7 +79,7 @@
       <template v-else>
         <div class="nci-degraded">
           <span class="nci-degraded-text">
-            ⚙ {{ schema.widget }} (请用右侧面板)
+            ⚙ {{ entry.schema.widget }} (请用右侧面板)
           </span>
         </div>
       </template>
@@ -113,10 +113,14 @@ const props = defineProps<{
 const store = useRuleEngineStore()
 
 /** 过滤掉不渲染的字段: hidden 字段 / title/description-only 元字段 */
-const schemaEntries = computed(() => {
-  return Object.entries(props.configSchema).filter(([_, schema]) => {
-    return !schema.hidden && schema.widget !== 'display'
-  })
+const schemaEntries = computed<Array<{ key: string; schema: ConfigSchemaProperty }>>(() => {
+  const out: Array<{ key: string; schema: ConfigSchemaProperty }> = []
+  for (const [key, schema] of Object.entries(props.configSchema)) {
+    if (!schema.hidden && schema.widget !== 'display') {
+      out.push({ key, schema })
+    }
+  }
+  return out
 })
 
 function getValue(key: string): unknown {
@@ -179,21 +183,25 @@ function updateConfig(key: string, value: unknown) {
   flex-shrink: 0;
 }
 
-.nci-number,
+.nci-number {
+  width: 100%;
+}
+
 .nci-select {
   width: 100%;
 }
 
 .nci-degraded {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   padding: 4px 8px;
-  background: rgba(255, 165, 0, 0.08);
-  border: 1px solid rgba(255, 165, 0, 0.2);
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 4px;
+  font-size: 10px;
 }
 
 .nci-degraded-text {
-  font-size: 10px;
-  color: #FFA500;
-  font-style: italic;
+  color: rgba(255, 255, 255, 0.4);
 }
 </style>

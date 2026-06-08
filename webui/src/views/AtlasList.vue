@@ -77,21 +77,21 @@
                 <el-button
                   link
                   size="small"
-                  @click="handleRename(row)"
+                  @click="handleRename(row as AtlasResponse)"
                 >
                   编辑
                 </el-button>
                 <el-button
                   link
                   size="small"
-                  @click="$router.push(`/atlas/${row.id}`)"
+                  @click="$router.push(`/atlas/${(row as AtlasResponse).id}`)"
                 >
                   查看
                 </el-button>
                 <el-button
                   link
                   size="small"
-                  @click="handleDelete(row)"
+                  @click="handleDelete(row as AtlasResponse)"
                 >
                   删除
                 </el-button>
