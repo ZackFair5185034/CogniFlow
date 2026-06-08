@@ -391,9 +391,10 @@
             :zoom-on-scroll="true"
             :min-zoom="0.1"
             :max-zoom="4"
-            :nodes-draggable="true"
+            :nodes-draggable="false"
             :nodes-connectable="true"
             :elements-selectable="true"
+            :auto-connect="false"
             :only-render-visible-elements="true"
             :select-nodes-on-drag="false"
             :selection-key-code="true"
@@ -401,8 +402,6 @@
             :connection-radius="20"
             :is-valid-connection="isValidConnection"
             @node-click="handleNodeClick"
-            @node-drag-start="handleNodeDragStart"
-            @node-drag-stop="handleNodeDragStop"
             @pane-click="handlePaneClick"
             @connect="handleConnect"
             @zoom="handleZoom"
@@ -412,8 +411,8 @@
             @pane-context-menu="(e: MouseEvent) => handleContextMenu(e, null, 'pane')"
             @edge-context-menu="(e: EdgeMouseEvent) => handleContextMenu(e.event as MouseEvent, e.edge, 'edge')"
             @node-delete="handleNodeDelete"
-            @selection-drag-start="handleSelectionDragStart"
-            @selection-drag-stop="handleSelectionDragStop"
+            @selection-start="handleSelectionStart"
+            @selection-end="handleSelectionEnd"
           >
             <!-- 小地图 (Phase B 任务5: shouldShowMiniMap 自动策略) -->
             <MiniMap
@@ -647,7 +646,7 @@
 
 <script setup lang="ts">
 import { throttle } from 'lodash-es'
-import { triggerRef } from 'vue'
+import { triggerRef, watch } from 'vue'
 import { useRuleEngineStore, type RuleNodeData, type NodeDefinition } from '@/stores/ruleEngine'
 import { storeToRefs } from 'pinia'
 import { ruleEngineApi } from '@/api'
@@ -661,6 +660,7 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
+import { useCogniFlowDrag } from '@/composables/useCogniFlowDrag'
 
 const router = useRouter()
 const route = useRoute()
@@ -691,6 +691,22 @@ const {
   graphMeta: graph,
   selectedNode,
 } = storeToRefs(store)
+
+// 路径 B: 自研拖动接管 (需在 storeToRefs 之后调用，确保 nodes ref 可用)
+useCogniFlowDrag({
+  nodesRef: nodes,
+  getZoom: () => getViewport().zoom,
+  onStart: () => {
+    isNodeDragging.value = true
+    isBatchDragging.value = true   // 拖动期间节流 handleNodesChange
+    store.setDragging(true)         // LOD-1: 拖动期间锁定 LOD 等级
+  },
+  onEnd: () => {
+    isNodeDragging.value = false
+    isBatchDragging.value = false  // 恢复 handleNodesChange
+    store.setDragging(false)        // LOD-1: 解除 LOD 锁定
+  },
+})
 
 // 执行状态（computed 包装，保持模板兼容）
 const executionStatus = computed(() => store.executionState.status)
@@ -1289,25 +1305,75 @@ function handlePaste(event?: MouseEvent) {
   ElMessage.success(`已粘贴 ${newNodes.length} 个节点${newEdges.length > 0 ? `, ${newEdges.length} 条连线` : ''}`)
 }
 
-// 框选结束
-function handleSelectionDragStop({ nodes: selectedNodes }: { nodes: Node<RuleNodeData>[] }) {
+/**
+ * cachedSelectionRect - 框选矩形缓存 (关键精度问题)
+ *
+ * VueFlow 在 onPointerUp 里先清空 userSelectionRect (line 219), 才 emit selectionEnd (line 222).
+ * 到 selectionEnd 事件触发时, userSelectionRect.value 已经是 null.
+ * 因此需要 watch userSelectionRect 把拖框过程中最后一帧的矩形缓存下来.
+ * Vue watch 回调在微任务执行, onPointerUp 的同步链里 cachedSelectionRect 还保留着上一次 move 的矩形.
+ */
+const cachedSelectionRect = ref<{ x: number; y: number; width: number; height: number; startX?: number; startY?: number } | null>(null)
+
+watch(userSelectionRect, (rect) => {
+  if (rect) {
+    cachedSelectionRect.value = { ...rect } as any
+  }
+})
+
+// 框选开始 - 设 isBatchDragging 使 handleNodesChange 跳过所有 change (不再 60Hz × N 处理 select)
+function handleSelectionStart() {
+  isSelectionDragging.value = true
+  isBatchDragging.value = true  // P0: 框选期间节流, handleNodesChange 立即 return
+  store.setSelectionBoxActive(true) // LOD-1: 框选期间锁定 LOD
+  cachedSelectionRect.value = null
+}
+
+// 框选结束 - 用缓存的矩形做最后一次命中计算, O(N) 写回 store.nodes, 替换数组引用
+function handleSelectionEnd() {
   isSelectionDragging.value = false
   isBatchDragging.value = false  // P0: 恢复 nodes-change 处理
-  const selectedIds = new Set(selectedNodes.map((n) => n.id))
-  // 优化：只在实际有变化时遍历写入 selected，跳过无操作场景
+  store.setSelectionBoxActive(false) // LOD-1: 解除框选 LOD 锁定
+
+  // 用户选缓存矩形 (userSelectionRect 在 selectionEnd 时已被 VueFlow 清空)
+  const rect = cachedSelectionRect.value
+  if (!rect) {
+    cachedSelectionRect.value = null
+    return
+  }
+
+  // 屏幕坐标矩形 → 四个角
+  const minX = Math.min(rect.startX ?? rect.x, rect.x + rect.width)
+  const maxX = Math.max(rect.startX ?? rect.x, rect.x + rect.width)
+  const minY = Math.min(rect.startY ?? rect.y, rect.y + rect.height)
+  const maxY = Math.max(rect.startY ?? rect.y, rect.y + rect.height)
+  // 转画布坐标
+  const tl = screenToFlowCoordinate({ x: minX, y: minY })
+  const br = screenToFlowCoordinate({ x: maxX, y: maxY })
+  const flowMinX = Math.min(tl.x, br.x)
+  const flowMaxX = Math.max(tl.x, br.x)
+  const flowMinY = Math.min(tl.y, br.y)
+  const flowMaxY = Math.max(tl.y, br.y)
+
   let changed = false
   for (const n of store.nodes as any[]) {
-    const shouldSelect = selectedIds.has(n.id)
-    if (n.selected !== shouldSelect) {
-      n.selected = shouldSelect
+    const w = n.dimensions?.width ?? 200
+    const h = n.dimensions?.height ?? 80
+    const hit = n.position.x + w >= flowMinX && n.position.x <= flowMaxX &&
+                n.position.y + h >= flowMinY && n.position.y <= flowMaxY
+    if (n.selected !== hit) {
+      n.selected = hit
       changed = true
     }
   }
   if (changed) {
-    // shallowRef 不追踪内层变更，无需 triggerRef（当前无外部 watcher 读 store.nodes[].selected）
-    // 保留 changed 标志以便未来扩展
+    // 必须替换数组引用 — VueFlow 的 :nodes prop 通过引用相等检测变化,
+    // triggerRef(nodes) 仅触发父组件重渲染但不改变引用, VueFlow 内部 createGraphNodes 不会重新运行.
+    // 替换引用后 VueFlow useVModel 浅 watch 检测到新数组 → 重算 graphNode.selected → 渲染选中态.
+    store.nodes = [...(store.nodes as any)] as any
   }
-  userSelectionRect.value = null
+
+  cachedSelectionRect.value = null
 }
 
 // 节点删除按钮点击
@@ -1513,38 +1579,19 @@ function handleNodeClick(event: any) {
   store.selectNode(event.node.id)
 }
 
-// 节点拖拽
-/** 拖拽起点位置缓存 (Phase B 任务3: drag-stop 走 move history, 不克隆整图) */
-const dragStartPositions = new Map<string, { x: number; y: number }>()
-
-function handleNodeDragStart(event: { node: any }) {
-  isNodeDragging.value = true
-  isBatchDragging.value = true  // P0: 拖拽期间节流所有 nodes-change 处理
-  store.pauseHistory()
-  if (event?.node) {
-    dragStartPositions.set(event.node.id, { ...event.node.position })
-  }
-}
-
-function handleNodeDragStop(event: { node: any }) {
-  isNodeDragging.value = false
-  isBatchDragging.value = false  // P0: 恢复 nodes-change 处理
-  // 关键: 必须先 resumeHistory (清 paused) 再 recordMoveHistory
-  // 否则 recordMoveHistory 内部 if (paused) return 会跳过
-  store.resumeHistory()
-  // 走 move history: 不克隆整图, 只记 1 个节点位置变化
-  if (event?.node) {
-    const from = dragStartPositions.get(event.node.id)
-    dragStartPositions.delete(event.node.id)
-    if (from) {
-      store.recordMoveHistory(event.node.id, from, { ...event.node.position })
-    }
-  }
-}
+// 节点拖拽 (路径 B: 由 useCogniFlowDrag composable 完全接管)
+// 之前 @node-drag-start/@node-drag-stop + handleNodeDragStart/Stop + dragStartPositions
+// 已删除: vue-flow 内部 useDrag 通过 :nodes-draggable="false" 关闭, 不再 emit 这些事件.
+// 拖动行为由 useCogniFlowDrag (见下) 通过 d3-drag 直接接管节点 wrapper DOM,
+// 拖动期间 0 次响应式写入, drag-end 一次性 setNodesPositions + recordMoveHistory.
 
 // 画布点击
 function handlePaneClick() {
+  // 清除所有节点的选中态 (含 VueFlow 视觉 CSS)
+  for (const n of store.nodes as any[]) n.selected = false
   store.selectNode(null)
+  // 触发 VueFlow 同步选中视觉 (直接赋值替换引用, 跟 useCogniFlowDrag rAF 同模式)
+  store.nodes = [...(store.nodes as any)] as any
 }
 
 // 端口类型兼容性检查
@@ -1608,12 +1655,13 @@ function handleConnect(params: any) {
     return
   }
 
-  store.addEdge({
+  const edge = {
     source: params.source,
     target: params.target,
     sourceHandle: params.sourceHandle,
     targetHandle: params.targetHandle
-  })
+  }
+  store.addEdge(edge)
 }
 
 // 框选拖拽标志: 框选拖拽期间过滤 select changes (避免每帧全量替换 store.nodes)
@@ -1623,11 +1671,6 @@ const isSelectionDragging = ref(false)
  *  true 时 handleNodesChange 立即 return, 不进行任何拆分/循环/处理,
  *  消除多节点拖拽时 60Hz × N 节点的函数调用开销 */
 const isBatchDragging = ref(false)
-
-function handleSelectionDragStart() {
-  isSelectionDragging.value = true
-  isBatchDragging.value = true  // P0: 框选拖拽期间也节流
-}
 
 // 节点/边变化 - manual control 模式
 // 拖拽中（dragging=true）的 position 变化不写回 store（每帧 60Hz 会爆）
@@ -1732,6 +1775,8 @@ function handleZoom({ zoom }: { zoom: number; event: unknown }) {
   }
   // 同步 zoomLevel ref (供 zoomIn/zoomOut/quickAddNode 读, 不参与响应式)
   zoomLevel.value = zoom
+  // LOD-1: 同步到 store, 触发 lodLevelMap 重新计算
+  store.setViewportZoom(zoom)
 }
 
 function handleWheel(event: WheelEvent) {
@@ -2357,16 +2402,32 @@ $panel-header-height: 44px;
 }
 
 // 右侧属性面板 (Phase A)
+// - position: fixed 悬浮在画布之上，不占用画布宽度，
+//   原来作为 flex 子项占用 360px 宽度，导致右侧节点的 source handle
+//   被面板遮挡，用户无法点击 handle 进行连线。
+// - pointer-events: none 让面板区域不拦截鼠标事件，
+//   内部的 .node-config-editor 则恢复 pointer-events，保证配置编辑可用。
+//   这样即使用户不关面板，也能点到被面板物理位置遮盖的 handle。
+// - .properties-panel-empty 面板空态也不需要鼠标交互。
 .properties-panel {
+  position: fixed;
+  right: 0;
+  top: 44px;         // canvas-header 高度
+  bottom: 0;
   width: 360px;
   background: var(--bg-card, #1c1c26);
   border-left: 1px solid var(--border-color, #2a2a38);
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
   z-index: 50;
   overflow: hidden;
   contain: layout style;
+  pointer-events: none;     // 面板不拦截鼠标，handle 能透传被点到
+}
+
+// NodeConfigEditor 恢复鼠标交互（表单控件、按钮等）
+.properties-panel :deep(.node-config-editor) {
+  pointer-events: auto;
 }
 
 .properties-panel-empty {

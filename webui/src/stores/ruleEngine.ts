@@ -103,6 +103,15 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     nodeStates: {}
   })
 
+  /** 当前画布缩放级别 (LOD 决策依据) */
+  const viewportZoom = ref(1)
+  /** 拖动中标记 (锁定 LOD, 避免切换抖动破坏 v-memo) */
+  const isDragging = ref(false)
+  /** 框选拖拽中 (同样锁定 LOD) */
+  const isSelectionBoxActive = ref(false)
+  /** 用户主动展开配置的节点 ID 集合 (响应式 Set, 避免 markRaw 内层属性变更不触发响应) */
+  const configExpandedIds = ref<Set<string>>(new Set())
+
   // ---- Undo/Redo 栈 ----
   // Phase B 任务3: 混合 history (snapshot + move entry), 拖拽松手不再克隆整图
   // - snapshot: 完整克隆, 用于非拖拽操作 (创建/删除/连接/粘贴)
@@ -179,6 +188,53 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
 
   /** 是否有节点 */
   const hasNodes = computed(() => nodes.value.length > 0)
+
+  /** 锁定期间的 LOD 缓存, drag 期间维持稳定 (避免切换抖动破坏 v-memo) */
+  const lodLevelMapCache = new Map<string, 0 | 1 | 2>()
+
+  /**
+   * LOD 等级 map (基于缩放级别 + 节点密度)
+   * 0 = 极简 (仅标题), 1 = 节点壳 (含端口+摘要), 2 = 完整 (含配置区)
+   * - 选中节点 / 配置已展开 → 强制 LOD 2
+   * - 拖动中 / 框选拖拽中 → 锁定当前 LOD
+   * - zoom < 0.3 → LOD 0
+   * - zoom < 0.7 或节点数 > 80 → LOD 1
+   * - 其他 → LOD 2
+   */
+  const lodLevelMap = computed<Map<string, 0 | 1 | 2>>(() => {
+    const map = new Map<string, 0 | 1 | 2>()
+    const zoom = viewportZoom.value
+    const count = nodes.value.length
+    const isLodLocked = isDragging.value || isSelectionBoxActive.value
+    // 用 selectedNodeId 响应式 ref 而非 n.selected (后者是 markRaw 内部属性, 不会触发响应式)
+    const selId = selectedNodeId.value
+    // 用 configExpandedIds 响应式 Set 追踪用户主动展开的节点
+    const expanded = configExpandedIds.value
+
+    for (const n of nodes.value) {
+      if (n.id === selId) { map.set(n.id, 2); continue }
+      if (expanded.has(n.id)) { map.set(n.id, 2); continue }
+      if (isLodLocked) {
+        map.set(n.id, lodLevelMapCache.get(n.id) ?? 1)
+        continue
+      }
+      if (zoom < 0.3) map.set(n.id, 0)
+      else if (zoom < 0.7 || count > 80) map.set(n.id, 1)
+      else map.set(n.id, 2)
+    }
+
+    // 非锁定时刷新缓存 (drag 结束后从这里恢复)
+    if (!isLodLocked) {
+      lodLevelMapCache.clear()
+      for (const [k, v] of map) lodLevelMapCache.set(k, v)
+    }
+    return map
+  })
+
+  /** O(1) 查询节点 LOD 等级 */
+  function getLodLevel(nodeId: string): 0 | 1 | 2 {
+    return lodLevelMap.value.get(nodeId) ?? 1
+  }
 
   /** 按类别分组的节点定义 */
   const nodeDefinitionsByCategory = computed(() => {
@@ -399,6 +455,45 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       // 监听 selectedNode 引用, 不需要 triggerRef.
       // 去掉 triggerRef 避免了每次调参时 VueFlow 整图 diff.
     }
+  }
+
+  /**
+   * 批量更新节点位置 (路径 B: 自研拖动专用)
+   *
+   * useCogniFlowDrag 在 drag-end 时调用, 一次性同步所有被拖动节点的 position.
+   * 内部 mutate + 单次 triggerRef, 避免循环 setNodePosition 触发 N 次整图 diff.
+   *
+   * @param updates 节点 id → 新位置 (含 viewport transform 解析后的画布坐标)
+   * @param recordHistory 是否记录 move history (drag-end 时 true, 撤销栈记录 from→to)
+   */
+  function setNodesPositions(
+    updates: Array<{ id: string; position: { x: number; y: number } }>,
+    recordHistory = true,
+  ): void {
+    if (updates.length === 0) return
+    // 用 Map 加速 id 查找, 避免 N 节点 × N updates 的 O(N²) find
+    const updateMap = new Map(updates.map((u) => [u.id, u.position]))
+    for (const node of nodes.value) {
+      const newPos = updateMap.get(node.id)
+      if (newPos) {
+        const from = node.position
+        // mutate 内部字段 (shallowRef 数组元素不深代理, 需 triggerRef)
+        node.position = newPos
+        if (recordHistory) {
+          // 单节点 move entry, 不克隆整图 (Phase B 任务3 模式)
+          historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+          historyStack.value.push({ type: 'move', nodeId: node.id, from: { ...from }, to: { ...newPos } })
+          historyIndex.value = historyStack.value.length - 1
+          if (historyStack.value.length > maxHistorySize) {
+            historyStack.value.shift()
+            historyIndex.value--
+          }
+        }
+      }
+    }
+    // 一次 triggerRef 让 VueFlow 内部 store.nodes watcher 重建,
+    // 边 path 重算, NodeWrapper 模板 transform 同步.
+    triggerRef(nodes)
   }
 
   /**
@@ -683,6 +778,44 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     return def?.category ?? 'action'
   }
 
+  // ============ LOD 状态 (Phase LOD-1) ============
+
+  /**
+   * 同步画布缩放级别到 store.
+   * RuleCanvas 监听 @zoom 事件时调用, 供 lodLevelMap 计算用.
+   */
+  function setViewportZoom(z: number) {
+    viewportZoom.value = z
+  }
+
+  /** 拖动期间锁定 LOD (useCogniFlowDrag onStart 调用) */
+  function setDragging(v: boolean) {
+    isDragging.value = v
+  }
+
+  /** 框选拖拽期间锁定 LOD (handleSelectionDragStart 调用) */
+  function setSelectionBoxActive(v: boolean) {
+    isSelectionBoxActive.value = v
+  }
+
+  /**
+   * 切换节点配置区展开状态 (LOD 2 显示配置).
+   * 维护 configExpandedIds (响应式 Set) 让 lodLevelMap 自动响应.
+   * - 初始 (set 内无此 id) → toggle 加入 set → LOD 2
+   * - 已在 set → toggle 移除 → LOD 1
+   */
+  function toggleConfigExpanded(nodeId: string) {
+    const next = new Set(configExpandedIds.value)
+    if (next.has(nodeId)) next.delete(nodeId)
+    else next.add(nodeId)
+    configExpandedIds.value = next
+    // 同步写回 n.data 用于持久化 (saveGraph 序列化)
+    const n = nodeById.value.get(nodeId)
+    if (n?.data) {
+      n.data.configExpanded = next.has(nodeId)
+    }
+  }
+
   // ============ 导出 ============
   return {
     // 状态
@@ -698,6 +831,10 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     historyIndex,
     isHistoryPaused,
     maxHistorySize,
+    viewportZoom,        // LOD
+    isDragging,          // LOD 锁定
+    isSelectionBoxActive,// LOD 锁定
+    configExpandedIds,   // LOD (展开状态)
 
     // 计算属性
     selectedNode,
@@ -707,6 +844,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     canRedo,
     hasNodes,
     nodeDefinitionsByCategory,
+    lodLevelMap,         // LOD
+    getLodLevel,         // LOD
 
     // 数据加载
     fetchNodeDefinitions,
@@ -717,6 +856,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     // 节点操作
     createNode,
     updateNodeConfig,
+    setNodesPositions,  // 路径 B: 自研拖动 drag-end 批量同步
     removeNode,
     removeNodes,        // Phase B 任务4
     selectNode,
@@ -752,6 +892,12 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
 
     // 辅助函数
     getDefaultConfig,
-    getNodeCategory
+    getNodeCategory,
+
+    // LOD (Phase LOD-1)
+    setViewportZoom,
+    setDragging,
+    setSelectionBoxActive,
+    toggleConfigExpanded
   }
 })

@@ -1,12 +1,21 @@
 <template>
+  <!--
+    v-memo (Phase B + LOD-1): 拖拽时只让 wrapper transform 变化,
+    节点壳内部 vdom 完全跳过 patch, 50 节点场景渲染开销从 O(N) 降到 O(1).
+    依赖选择依据: 拖动时 data.id/status/summaryText/category 都不变.
+    lodLevel 也在依赖里: 缩放切换时强制 patch 一次, 之后稳定.
+    selected 走 VueFlow wrapper 的 CSS class, 不需列入依赖.
+  -->
   <div
+    v-memo="[data.id, data.status, data.summaryText, data.category, lodLevel]"
     v-bind="$attrs"
     class="rule-node"
-    :class="`category-${data.category}`"
+    :class="[`category-${data.category}`, `lod-${lodLevel}`]"
     :data-status="data.status || 'idle'"
+    :data-lod="lodLevel"
     @contextmenu.prevent="emit('contextmenu', $event)"
   >
-    <!-- 标题栏 -->
+    <!-- ========== LOD 0/1/2 通用: 标题栏 ========== -->
     <div class="node-header">
       <div
         class="node-icon"
@@ -17,19 +26,30 @@
       <div class="node-title">
         <span class="node-label">{{ data.label || data.type }}</span>
       </div>
+      <!-- 展开/收起按钮 -->
+      <button
+        v-if="hasConfig && (lodLevel === 1 || lodLevel === 2)"
+        class="node-expand-btn"
+        :class="{ 'is-expanded': lodLevel === 2 }"
+        :title="lodLevel === 2 ? '收起配置' : '展开配置'"
+        @click.stop="handleExpandClick"
+      >
+        <span v-if="lodLevel === 2">×</span>
+        <span v-else>⚙</span>
+      </button>
     </div>
 
-    <!-- 节点摘要: 由父组件计算后传入，不依赖节点内部数据 -->
+    <!-- ========== LOD 1/2: 节点摘要 ========== -->
     <div
-      v-if="data.summaryText"
+      v-if="lodLevel >= 1 && data.summaryText"
       class="node-summary"
     >
       {{ data.summaryText }}
     </div>
 
-    <!-- 端口区域 - 左进右出 -->
+    <!-- ========== LOD 1/2: 端口区域 ========== -->
     <div
-      v-if="(data.inputs?.length || 0) > 0 || (data.outputs?.length || 0) > 0"
+      v-if="lodLevel >= 1 && ((data.inputs?.length || 0) > 0 || (data.outputs?.length || 0) > 0)"
       class="node-ports"
     >
       <div
@@ -43,14 +63,15 @@
           :position="Position.Left"
           :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`, { 'is-connected': isInputConnected(input.name) }]"
         />
-        <span class="port-label">{{ input.label || input.name }}</span>
+        <!-- LOD 2 才显示端口文字 -->
+        <span v-if="lodLevel >= 2" class="port-label">{{ input.label || input.name }}</span>
       </div>
       <div
         v-for="output in data.outputs"
         :key="'out-' + output.name"
         class="port-item port-out"
       >
-        <span class="port-label">{{ output.label || output.name }}</span>
+        <span v-if="lodLevel >= 2" class="port-label">{{ output.label || output.name }}</span>
         <Handle
           :id="output.name"
           type="source"
@@ -60,7 +81,19 @@
       </div>
     </div>
 
-    <!-- 执行状态指示 -->
+    <!-- ========== LOD 2: 内联配置区 ========== -->
+    <div
+      v-if="lodLevel === 2 && hasConfig"
+      class="node-config"
+    >
+      <NodeConfigInline
+        :node-id="data.id"
+        :config-schema="configSchema"
+        :config="config"
+      />
+    </div>
+
+    <!-- 执行状态指示 (所有级别) -->
     <div
       v-if="data.status && data.status !== 'idle'"
       class="node-status"
@@ -76,23 +109,23 @@
 
 <script setup lang="ts">
 /**
- * RuleNode - 轻量节点壳 (Phase B 重构)
+ * RuleNode - 节点壳 (Phase LOD-1)
  *
- * 终极瘦身版: 所有配置编辑全由 NodeConfigEditor (右侧属性面板) 接管。
- * 节点壳只负责:
- *   1. 视觉: 标题、类型图标、状态指示、端口
- *   2. 摘要: 由父组件计算后写入 data.summaryText, 避免内部 computed
- *   3. Quick Controls: 已彻底移除 (ENABLE_QUICK_CONTROLS = false)
- *   4. 无 el-* 控件, 无内部接口调用, 所有配置更新走右侧面板
+ * 三级 LOD 渲染:
+ *   LOD 0 (zoom < 0.3): 仅标题 + 图标 + 极小端口点
+ *   LOD 1 (默认):       节点壳 + 端口 + 摘要 (无配置区)
+ *   LOD 2 (zoom >= 0.7): 完整节点 + 内联配置区 (替代右侧属性面板)
  *
- * v-memo 依赖: [data.id, data.status, data.summaryText, data.category]
- * - data.status 不变 → 状态指示器不重渲染
- * - data.summaryText 不变 → 摘要文本不重渲染
- * - selected 等外部状态走 CSS (outline) 不触发组件更新
+ * v-memo 依赖: [data.id, data.status, data.summaryText, data.category, lodLevel]
+ * - 拖动时 4 个字段不变 → v-memo 命中 → 0 patch
+ * - lodLevel 在依赖里: 缩放切换时强制 patch 一次, 之后稳定
+ * - selected 走 CSS (outline) 不触发组件更新
  */
 import { computed } from 'vue'
 import { Position, Handle } from '@vue-flow/core'
 import { useRuleEngineStore } from '@/stores/ruleEngine'
+import NodeConfigInline from './NodeConfigInline.vue'
+import type { ConfigSchemaProperty } from '@/types/api'
 
 defineOptions({ inheritAttrs: false })
 
@@ -113,11 +146,16 @@ interface NodeData {
   status?: string
   /** 摘要文本 — 由父组件在写入 summaryText 前预计算好 */
   summaryText?: string
+  /** 节点配置 (LOD 2 内联编辑器使用) */
+  config?: Record<string, unknown>
+  configSchema?: Record<string, ConfigSchemaProperty>
 }
 
 const props = defineProps<{
   data: NodeData
   selected?: boolean
+  /** LOD 等级 0/1/2 (由父组件 RuleCanvas 计算传入, 可选 — 内部会用 store 回退) */
+  lodLevel?: 0 | 1 | 2
 }>()
 
 const emit = defineEmits<{
@@ -137,6 +175,31 @@ const statusTitle = computed(() => {
     default: return ''
   }
 })
+
+// ============ LOD 默认值 + 派生属性 ============
+
+/**
+ * LOD 等级: 优先使用 prop (父组件计算传入), 否则从 store 全局 map 查询.
+ * 来自 store 时是响应式的 — 缩放切换 / 选中切换会触发重新计算.
+ */
+const lodLevel = computed<0 | 1 | 2>(() => {
+  if (props.lodLevel !== undefined) return props.lodLevel
+  return store.getLodLevel(props.data.id)
+})
+
+/** 是否有可配置 schema (决定是否显示展开按钮 + 内联配置区) */
+const hasConfig = computed(() => {
+  const schema = props.data.configSchema
+  return !!schema && Object.keys(schema).length > 0
+})
+
+const configSchema = computed(() => props.data.configSchema ?? {})
+const config = computed(() => props.data.config ?? {})
+
+/** 展开按钮点击: 切换 configExpanded → 触发 LOD 2 */
+function handleExpandClick() {
+  store.toggleConfigExpanded(props.data.id)
+}
 
 // ============ Handle 连接状态 (store 全局索引 O(1) 查询) ============
 
@@ -165,7 +228,7 @@ function isOutputConnected(handleId: string): boolean {
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
     0 2px 8px rgba(0,0,0,0.3);
-  contain: layout style;
+  contain: style;
   overflow: visible !important;
 }
 
@@ -176,6 +239,62 @@ function isOutputConnected(handleId: string): boolean {
   gap: 8px;
   padding: 6px 10px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+/* 展开按钮 (LOD 1 提示) */
+.node-expand-btn {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(0, 240, 255, 0.1);
+    border-color: rgba(0, 240, 255, 0.3);
+    color: #00f0ff;
+  }
+}
+
+/* ========== LOD 0 极简模式 ========== */
+.rule-node.lod-0 {
+  width: 120px;
+  min-height: 32px;
+  border-radius: 4px;
+  box-shadow: none;
+
+  .node-header {
+    padding: 4px 8px;
+    border-bottom: none;
+  }
+  .node-icon {
+    width: 16px;
+    height: 16px;
+  }
+  .node-icon svg { width: 10px; height: 10px; }
+  .node-label { font-size: 11px; }
+  .node-summary { display: none; }
+  .node-ports { display: none; }
+  .node-config { display: none; }
+}
+
+/* ========== LOD 2 完整模式 ========== */
+.rule-node.lod-2 {
+  width: 280px;
+
+  .node-config {
+    padding: 8px 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(0, 0, 0, 0.12);
+  }
 }
 
 .node-icon {
@@ -291,6 +410,24 @@ function isOutputConnected(handleId: string): boolean {
   min-height: 20px;
   font-size: 10px;
   color: rgba(255, 255, 255, 0.6);
+  /* 关键: .port-item 是 Handle 的父容器, 自身不应拦截鼠标事件,
+     否则 mousedown 会落在 .port-item 而不是 .vue-flow__handle, 导致
+     d3-drag filter 检测不到 handle, VueFlow Handle 的 onPointerDown 也不触发. */
+  pointer-events: none;
+  /* 必须: 让 Handle 的 position: absolute 相对于 port-item 而非 node wrapper,
+     VueFlow 默认 .vue-flow__handle-right { top: 50% } 把所有右侧 handle 叠在节点中央,
+     多个 handle 互相重叠导致 elementFromPoint 只能命中最后一个. */
+  position: relative;
+}
+
+/* 端口文字 label 也不应拦截 — 只有 Handle 本身需要交互 */
+.port-label {
+  pointer-events: none;
+}
+
+/* 但 Handle 必须能接收事件 */
+:deep(.vue-flow__handle) {
+  pointer-events: all !important;
 }
 
 .port-in {
@@ -316,6 +453,14 @@ function isOutputConnected(handleId: string): boolean {
   background: #1a1a20;
   transition: border-color 0.15s, background 0.15s;
   overflow: visible !important;
+}
+
+/* 显式确认 Handle 在有 connectable 标识时允许事件穿透。
+   VueFlow 自带 CSS 中 .vue-flow__handle.connectable 设置 pointer-events: all，
+   但 scoped :deep() 选择器优先级可能意外占优，此处重声明以确保交互性 */
+:deep(.vue-flow__handle.connectable) {
+  pointer-events: all;
+  cursor: crosshair;
 }
 
 :deep(.vue-flow__handle.type-image) { border-color: #4CFF4C; }
