@@ -14,6 +14,7 @@ import { onBeforeUnmount, onMounted, watch, nextTick, triggerRef, type Ref } fro
 import { select as d3Select } from 'd3-selection'
 import { drag as d3Drag, type D3DragEvent } from 'd3-drag'
 import { useRuleEngineStore, type RuleNodeData } from '@/stores/ruleEngine'
+import { useEdgePathUpdater } from './useEdgePathUpdater'
 import type { Node } from '@vue-flow/core'
 
 type DragEvent = D3DragEvent<HTMLElement, unknown, unknown>
@@ -42,6 +43,8 @@ export interface UseCogniFlowDragOptions {
 
 export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
   const store = useRuleEngineStore()
+  /** Tier 2 边增量更新器: 拖动期间手动更新 incident edges 的 SVG path d 属性 */
+  const edgeUpdater = useEdgePathUpdater()
 
   /** 防止 reinstall 和 drag 冲突 */
   let isDragging = false
@@ -139,6 +142,12 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
         .filter((x): x is DraggedItem => x !== null),
     }
 
+    // === Tier 2: 启动边增量更新器, 收集 incident edges ===
+    edgeUpdater.start(
+      ctx.allDragged.map((i) => i.id),
+      zoomRef,
+    )
+
     // === Tier 0 优化: 标记 .dragging class,触发 CSS 关 transition + GPU 合成层 ===
     for (const item of ctx.allDragged) {
       item.el.classList.add('dragging')
@@ -168,25 +177,26 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
       item.el.style.transform = `translate(${flowX}px, ${flowY}px)`
     }
 
-    // 2) rAF 节流改 VueFlow 内部 reactive GraphNode.position → 触发 getEdges 80 边 path 重算 → 边跟随
-    //    不调 setNodes / createGraphNodes, 绕过 80 节点 vdom diff/patch.
-    //    VueFlow NodeWrapper 内部 watch([node.position.x, node.position.y]) 触发 computedPosition
-    //    更新, 同步设 el.style.transform (跟步骤 1 一致, 不会跳).
+    // 2) rAF 节流:
+    //    Tier 2 边增量更新: 不再写 reactive flowNode.position 触发 vue-flow 全量
+    //    getEdges 路径重算 (P0-1 最大热点), 改为直接对 incident edges 的
+    //    SVG <path> 元素写 d 属性 (O(incident_edges), 通常 2-6 而非 80).
+    //    onDragEnd 时一次性同步 flowNode.position 让 vue-flow 接管, 边路径立即
+    //    跟手不闪烁.
     if (rafPending) return
     rafPending = true
     rafId = requestAnimationFrame(() => {
       rafPending = false
       if (!ctx) return  // 拖动可能已结束
+
+      // Tier 2: 直接重算 incident edges 的 d 属性
+      const positions = new Map<string, { x: number; y: number }>()
       for (const item of ctx.allDragged) {
         const flowX = item.startPos.x + dxScreen / z
         const flowY = item.startPos.y + dyScreen / z
-        const flowNode = options.findFlowNode(item.id)
-        if (flowNode && flowNode.position) {
-          // 改 reactive 包装的 position object, 触发 NodeWrapper watch + getEdges
-          flowNode.position.x = flowX
-          flowNode.position.y = flowY
-        }
+        positions.set(item.id, { x: flowX, y: flowY })
       }
+      edgeUpdater.update(positions)
     })
   }
 
@@ -233,24 +243,46 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
       return
     }
 
-    // === 拖动结束: 写回 store ===
+    // === 拖动结束: 写回 store + 同步 VueFlow 内部状态 ===
     // 关键顺序: 先 resumeHistory 再 setNodesPositions —— 否则 setNodesPositions
     // 内部 `if (recordHistory && !isHistoryPaused.value && moves.length > 0)`
     // 会因 isHistoryPaused=true 跳过 history 写入.
     //
     // rawWrite=true: 用 toRaw(node.position) 绕过 Vue Proxy 直接写原始对象,
-    // 零 watcher 触发, 零微任务调度. 拖动期间 flowNode.position 已实时同步
-    // 到 VueFlow 内部, store 只做持久化/history. undo/redo 走 reactive 路径
-    // (rawWrite=false) 正常触发 triggerRef 重建.
+    // 零 watcher 触发, 零微任务调度. 拖动期间 edgeUpdater 手动更新了 d 属性,
+    // store 只做持久化/history.
+    //
+    // 同步 flowNode.position (让 vue-flow 接管, 接管后我们清 el.style.transform
+    // 让 NodeWrapper 内部 watcher 接管 transform, 跟手不闪烁).
     const dxFlow = dxScreen / z
     const dyFlow = dyScreen / z
-    const updates = ctx.allDragged.map((item) => ({
-      id: item.id,
-      position: {
-        x: item.startPos.x + dxFlow,
-        y: item.startPos.y + dyFlow,
-      },
-    }))
+    const updates = ctx.allDragged.map((item) => {
+      const newX = item.startPos.x + dxFlow
+      const newY = item.startPos.y + dyFlow
+      // === 同步 flowNode.position 让 vue-flow 接管 ===
+      // 这是拖动期间被 vue-flow watch 跳过的 position 写入,
+      // 此时 edgeUpdater 已停止, vue-flow 接管后全图一次重建但仅一次.
+      const flowNode = options.findFlowNode(item.id)
+      if (flowNode?.position) {
+        flowNode.position.x = newX
+        flowNode.position.y = newY
+      }
+      return {
+        id: item.id,
+        position: { x: newX, y: newY },
+      }
+    })
+
+    // === 清 el.style.transform 让 vue-flow 接管节点位置 ===
+    // NodeWrapper 内部 watcher([x, y]) 触发后会自动设 transform,
+    // 与我们之前写的 transform 一致, 不会有跳变.
+    for (const item of ctx.allDragged) {
+      item.el.style.transform = ''
+    }
+
+    // === Tier 2: 清边增量更新器缓存 ===
+    edgeUpdater.clear()
+
     isDragging = false
     ctx = null
     store.resumeHistory()
