@@ -295,12 +295,24 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     installedMap.clear()
   }
 
-  onMounted(() => { nextTick(() => syncDragHandlers()) })
+  onMounted(() => {
+    // 多次重试同步, 解决 vue-flow 节点异步渲染问题:
+    // loadGraph 是 async, 完成后 store.nodes 更新触发 watch, 但 vue-flow 内部
+    // 还要 microtask + rAF 才渲染 DOM. onMounted 时 nodes DOM 通常还不存在.
+    nextTick(() => syncDragHandlers())  // 第 1 次: 立即
+    setTimeout(() => syncDragHandlers(), 0)  // 第 2 次: macrotask
+    setTimeout(() => syncDragHandlers(), 100)  // 第 3 次: 100ms (loadGraph 完成)
+    setTimeout(() => syncDragHandlers(), 500)  // 第 4 次: 500ms (兜底)
+  })
 
   // 替换方式 watch: 框选后 store.nodes = newNodes (length 不变但数组引用变了) 也能触发增量同步
   watch(
     () => store.nodes,
-    () => { nextTick(() => syncDragHandlers()) },
+    () => {
+      // 节点数组变化: 立即 + 100ms 双重保险 (vue-flow 渲染 + transition)
+      nextTick(() => syncDragHandlers())
+      setTimeout(() => syncDragHandlers(), 100)
+    },
   )
 
   onBeforeUnmount(() => { uninstallAll() })

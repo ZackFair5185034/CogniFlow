@@ -32,20 +32,10 @@ interface CachedEdge {
   id: string
   /** DOM <path> 元素 (直接写 d 属性) */
   pathEl: SVGPathElement
-  /** source 节点 ID — 拖动中端点 (新 position); 或非拖动端 (null = 用 path 起点) */
+  /** source 节点 ID */
   sourceNodeId: string
-  /** target 节点 ID — 拖动中端点 (新 position); 或非拖动端 (null = 用 path 终点) */
+  /** target 节点 ID */
   targetNodeId: string
-  /** source 端点 (node 坐标系) — dragStart 时一次性快照 */
-  sourceX: number
-  sourceY: number
-  sourcePosition: 'left' | 'right' | 'top' | 'bottom'
-  /** target 端点 (node 坐标系) — dragStart 时一次性快照 */
-  targetX: number
-  targetY: number
-  targetPosition: 'left' | 'right' | 'top' | 'bottom'
-  /** 当前 zoom (dragStart 时取, 拖动期间 zoom 不变则可用) */
-  zoom: number
 }
 
 /**
@@ -89,39 +79,12 @@ export function useEdgePathUpdater() {
       )
       if (!pathEl) continue
 
-      // 端点快照: 用 .vue-flow__handle DOM getBoundingClientRect 算 viewport 坐标
-      // (但坐标系是 viewport, d 属性也要写 viewport 坐标, OK)
-      const sourceHandle = document.querySelector<HTMLElement>(
-        `[data-id="${edge.source}"] .vue-flow__handle-right`,
-      )
-      const targetHandle = document.querySelector<HTMLElement>(
-        `[data-id="${edge.target}"] .vue-flow__handle-left`,
-      )
-      if (!sourceHandle || !targetHandle) continue
-
-      const viewportEl = document.querySelector('.vue-flow__viewport') as HTMLElement
-      if (!viewportEl) continue
-
-      // viewport 坐标 = (handle 的 client 坐标 - viewport 的 client 坐标) / zoom
-      // 但更简单: 直接用 path 元素当前 d 属性, 解析 M/C 命令拿端点
-      // Bezier: M sx,sy C scx,scy tcx,tcy tx,ty
-      const d = pathEl.getAttribute('d') || ''
-      const m = d.match(/M\s*([\d.-]+)[\s,]+([\d.-]+)\s*C\s*([\d.-]+)[\s,]+([\d.-]+)\s+([\d.-]+)[\s,]+([\d.-]+)\s+([\d.-]+)[\s,]+([\d.-]+)/)
-      if (!m) continue
-      const [_, sx, sy, _scx, _scy, _tcx, _tcy, tx, ty] = m
-
+      // 端点位置: 不在 start 缓存 (依赖实时 bbox), 仅缓存 sourceNodeId/targetNodeId.
       cache.push({
         id: edge.id,
         pathEl,
         sourceNodeId: edge.source,
         targetNodeId: edge.target,
-        sourceX: parseFloat(sx),
-        sourceY: parseFloat(sy),
-        sourcePosition: 'right',
-        targetX: parseFloat(tx),
-        targetY: parseFloat(ty),
-        targetPosition: 'left',
-        zoom: currentZoom,
       })
     }
   }
@@ -132,44 +95,37 @@ export function useEdgePathUpdater() {
    */
   function update(_positions: Map<string, { x: number; y: number }>) {
     if (cache.length === 0) return
-    // 当前实现不直接用 _positions / zoom, 而是从 DOM el.style.transform 推算
-    // (translate(flowX, flowY) 是 onDrag 写的, 与 sourceX/Y 计算自洽)
+    // 当前实现不直接用 _positions / zoom, 而是从 DOM 实际渲染位置推算.
+    // 注意: .vue-flow__transformationpane 应用了 zoom (e.g. 0.65), 节点的
+    // offsetWidth/offsetHeight 是 CSS 像素 (280), 但 SVG <path> d 属性是
+    // viewport 坐标 (已应用 zoom). 直接相加 offsetWidth 算 sourceX 会错位 35%.
+    // 正确做法: getBoundingClientRect 拿到已应用 zoom 的实际渲染坐标.
 
-    // 读改写分离: 阶段 1 - 算所有 d (无 DOM 写入)
+    // 读改写分离: 阶段 1 - 批量读取所有节点 bbox (N 次连续读)
+    const bboxMap = new Map<string, DOMRect>()
+    const nodeIds = new Set<string>()
+    for (const c of cache) {
+      nodeIds.add(c.sourceNodeId)
+      nodeIds.add(c.targetNodeId)
+    }
+    for (const id of nodeIds) {
+      const el = document.querySelector<HTMLElement>(`[data-id="${id}"]`)
+      if (el) bboxMap.set(id, el.getBoundingClientRect())
+    }
+
+    // 阶段 2: 算所有 d (无 DOM 写入)
     const updates: Array<{ el: SVGPathElement; d: string }> = []
     for (const c of cache) {
-      // 移动端点: 拖动节点的 sourceX = node.x + nodeWidth, sourceY = node.y + nodeHeight/2
-      // 静态端点: 用 cache 里的 sourceX/sourceY (源端在动的边, 即 source 是被拖动节点, 则 source 端要更新; 反之亦然)
-      // 简化: source 端 = source 节点右侧 handle; target 端 = target 节点左侧 handle
-      // 拖动节点的 handle 位置 = 它的新 position + 节点宽/2
+      const sourceBox = bboxMap.get(c.sourceNodeId)
+      const targetBox = bboxMap.get(c.targetNodeId)
+      if (!sourceBox || !targetBox) continue
 
-      // 关键: 不知道节点宽/高, 但可以通过 transform 算出 (el.style.transform 写的是 translate(x,y))
-      // 节点 element: data-id="nodeId", 拖动期间 el.style.transform = "translate(flowX, flowY)"
-
-      // 用 cache 里的起始 sourceX/Y + 增量 dx/dy 计算新 sourceX/Y
-      // dx/dy 来自拖动节点 position 差值 (新 - 起始)
-      // 但 cache 里的 sourceX/Y 是当前 d 属性的端点, 不一定是 dragStart 时的值
-      // 实际上, 边 path 在 dragStart 之后被 vue-flow 同步重算过 (dragend 之间)
-      // 简单方案: 直接读每个 source/target 节点的当前 viewport 内位置
-
-      // 取 source 节点和 target 节点
-      const sourceEl = document.querySelector<HTMLElement>(`[data-id="${c.sourceNodeId}"]`)
-      const targetEl = document.querySelector<HTMLElement>(`[data-id="${c.targetNodeId}"]`)
-      if (!sourceEl || !targetEl) continue
-
-      // 节点的 transform 样式: 我们 onDrag 已经写了 translate(flowX, flowY)
-      const sourceTransform = sourceEl.style.transform
-      const targetTransform = targetEl.style.transform
-
-      // 解析: translate(x, y)
-      const sm = sourceTransform.match(/translate\(([\d.-]+)px,\s*([\d.-]+)px\)/)
-      const tm = targetTransform.match(/translate\(([\d.-]+)px,\s*([\d.-]+)px\)/)
-      if (!sm || !tm) continue
-
-      const sxNew = parseFloat(sm[1]) + sourceEl.offsetWidth  // source = 节点右边缘
-      const syNew = parseFloat(sm[2]) + sourceEl.offsetHeight / 2
-      const txNew = parseFloat(tm[1])                       // target = 节点左边缘
-      const tyNew = parseFloat(tm[2]) + targetEl.offsetHeight / 2
+      // source = source 节点右边缘中心 (已应用 zoom 的渲染坐标)
+      const sxNew = sourceBox.right
+      const syNew = sourceBox.top + sourceBox.height / 2
+      // target = target 节点左边缘中心
+      const txNew = targetBox.left
+      const tyNew = targetBox.top + targetBox.height / 2
 
       // Bezier 公式: 与 vue-flow bezier.ts 一致
       // Position.Right: ctX = sx + 0.5*|sx-tx|, ctY = sy
@@ -185,7 +141,7 @@ export function useEdgePathUpdater() {
       updates.push({ el: c.pathEl, d })
     }
 
-    // 阶段 2: 批量写 d (N 次连续写, 不触发 layout thrash)
+    // 阶段 3: 批量写 d (N 次连续写, 不触发 layout thrash)
     for (const u of updates) {
       u.el.setAttribute('d', u.d)
     }
