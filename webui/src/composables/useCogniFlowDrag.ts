@@ -185,6 +185,9 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     }
 
     // === 拖动结束: 写回 store ===
+    // 关键顺序: 先 resumeHistory 再 setNodesPositions —— 否则 setNodesPositions
+    // 内部 `if (recordHistory && !isHistoryPaused.value && moves.length > 0)`
+    // 会因 isHistoryPaused=true 跳过 history 写入, 6 次拖动只 2 个 entry.
     const dxFlow = dxScreen / z
     const dyFlow = dyScreen / z
     const updates = ctx.allDragged.map((item) => ({
@@ -194,8 +197,8 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
         y: item.startPos.y + dyFlow,
       },
     }))
-    store.setNodesPositions(updates, true)
     store.resumeHistory()
+    store.setNodesPositions(updates, true)
     options.onEnd?.()
 
     isDragging = false
