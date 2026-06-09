@@ -119,6 +119,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const historyStack = ref<Array<
     | { type: 'snapshot'; nodes: GraphNode[]; edges: GraphEdge[] }
     | { type: 'move'; nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }
+    | { type: 'groupMove'; moves: Array<{ nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }> }
   >>([])
   const historyIndex = ref(-1)
   const isHistoryPaused = ref(false)
@@ -473,24 +474,39 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     if (updates.length === 0) return
     // 用 Map 加速 id 查找, 避免 N 节点 × N updates 的 O(N²) find
     const updateMap = new Map(updates.map((u) => [u.id, u.position]))
+
+    // batched: 一次循环收集所有 move, 最后 push 1 个 groupMove entry (而不是 N 个)
+    // 80 节点 GROUP 拖动从 80×historySize 次响应式 trigger 降到 1 次.
+    const moves: Array<{ nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }> = []
+    let anyChange = false
     for (const node of nodes.value) {
       const newPos = updateMap.get(node.id)
       if (newPos) {
         const from = node.position
         // mutate 内部字段 (shallowRef 数组元素不深代理, 需 triggerRef)
-        node.position = newPos
-        if (recordHistory) {
-          // 单节点 move entry, 不克隆整图 (Phase B 任务3 模式)
-          historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
-          historyStack.value.push({ type: 'move', nodeId: node.id, from: { ...from }, to: { ...newPos } })
-          historyIndex.value = historyStack.value.length - 1
-          if (historyStack.value.length > maxHistorySize) {
-            historyStack.value.shift()
-            historyIndex.value--
+        if (from.x !== newPos.x || from.y !== newPos.y) {
+          node.position = newPos
+          anyChange = true
+          if (recordHistory) {
+            moves.push({ nodeId: node.id, from: { ...from }, to: { ...newPos } })
           }
         }
       }
     }
+    if (!anyChange) return
+
+    if (recordHistory && !isHistoryPaused.value && moves.length > 0) {
+      // 单次 slice + push + historyIndex 写入 (vs 之前 N 次循环内重复)
+      historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+      // 1 个 groupMove entry 比 N 个 move entry 在 undo/redo 时更紧凑, applyHistoryEntry 走 batched 还原
+      historyStack.value.push({ type: 'groupMove', moves })
+      historyIndex.value = historyStack.value.length - 1
+      if (historyStack.value.length > maxHistorySize) {
+        historyStack.value.shift()
+        historyIndex.value--
+      }
+    }
+
     // 一次 triggerRef 让 VueFlow 内部 store.nodes watcher 重建,
     // 边 path 重算, NodeWrapper 模板 transform 同步.
     triggerRef(nodes)
@@ -654,21 +670,36 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   }
 
   /**
-   * 应用一个 history entry (Phase B 任务3)
+   * 应用一个 history entry
    * - snapshot: 还原整图
    * - move: 只改单节点 position
+   * - groupMove: 批量改多节点 position (setNodesPositions 写入, GROUP 拖动 1 entry)
+   *
+   * undo/redo 复用 applyHistoryEntry: 通过 moveIndex 指针区分"还原方向"——
+   *   entry.from = 还原目标 (undo 时) / entry.to = 还原目标 (redo 时)
+   *   简化方案: 调用方传 toCurrent 标志, 这里根据 historyIndex 与 entry 在 stack 中位置
+   *   关系判断方向.
+   *
+   *   实际实现: setNodesPositions 写 history 时是 "from -> to" (拖动结果),
+   *   undo 时希望回到 from (恢复原位置), redo 时希望到 to.
+   *   通过 setNodesPositions 反向传 updates 即可, 见 undo/redo 函数.
    */
   function applyHistoryEntry(entry: typeof historyStack.value[number]) {
     if (entry.type === 'snapshot') {
       nodes.value = JSON.parse(JSON.stringify(entry.nodes))
       edges.value = JSON.parse(JSON.stringify(entry.edges))
-    } else {
-      // move: 单节点位置变更, 直接 mutate + triggerRef 避免整图重渲染
+    } else if (entry.type === 'move') {
+      // 单节点位置变更, 直接 mutate + triggerRef 避免整图重渲染
       const node = nodes.value.find(n => n.id === entry.nodeId)
       if (node) {
         node.position = { ...entry.from }  // undo 回到 from; redo 调到 to
         triggerRef(nodes)
       }
+    } else {
+      // groupMove: 批量还原
+      // 调用 setNodesPositions 把所有节点归位 (recordHistory=false 避免污染 history stack)
+      const updates = entry.moves.map(m => ({ id: m.nodeId, position: { ...m.from } }))
+      setNodesPositions(updates, false)
     }
   }
 
