@@ -205,16 +205,12 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     // === 拖动结束: 写回 store ===
     // 关键顺序: 先 resumeHistory 再 setNodesPositions —— 否则 setNodesPositions
     // 内部 `if (recordHistory && !isHistoryPaused.value && moves.length > 0)`
-    // 会因 isHistoryPaused=true 跳过 history 写入, 6 次拖动只 2 个 entry.
+    // 会因 isHistoryPaused=true 跳过 history 写入.
     //
-    // skipTrigger=true: 拖动期间 flowNode.position 已实时同步到 VueFlow 内部,
-    // 不需要再 triggerRef 触发 VueFlow 整图重建 (80 节点 createGraphNodes +
-    // 80 边 path 重算, 同步 100-200ms). 只同步 store.nodes / history.
-    //
-    // 但是在下一个微任务里异步 triggerRef: 这不是同步 flush (不会阻塞 mouseup 链),
-    // 而是让 VueFlow 在下一次事件循环前同步内部状态. 微任务在当前 macrotask 结束、
-    // 下一个 macrotask (drag2 mousedown) 开始前执行, 确保 drag2 启动时 VueFlow
-    // 状态完全 clean, 避免 pending effects 溢出到 drag2 的第一帧导致卡顿.
+    // rawWrite=true: 用 toRaw(node.position) 绕过 Vue Proxy 直接写原始对象,
+    // 零 watcher 触发, 零微任务调度. 拖动期间 flowNode.position 已实时同步
+    // 到 VueFlow 内部, store 只做持久化/history. undo/redo 走 reactive 路径
+    // (rawWrite=false) 正常触发 triggerRef 重建.
     const dxFlow = dxScreen / z
     const dyFlow = dyScreen / z
     const updates = ctx.allDragged.map((item) => ({
@@ -227,10 +223,7 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     isDragging = false
     ctx = null
     store.resumeHistory()
-    store.setNodesPositions(updates, true, true)  // skipTrigger=true
-    nextTick(() => {
-      triggerRef(options.nodesRef)
-    })
+    store.setNodesPositions(updates, true, true, true)  // recordHistory, skipTrigger, rawWrite
     options.onEnd?.()
   }
 

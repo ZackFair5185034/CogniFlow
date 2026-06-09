@@ -8,7 +8,7 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed, shallowRef, triggerRef } from 'vue'
+import { ref, computed, shallowRef, triggerRef, toRaw } from 'vue'
 import { ruleEngineApi, modelApi } from '@/api'
 import type {
   NodeDefinition as NodeDefinitionBase,
@@ -458,11 +458,13 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
   }
 
-  /** 批量更新节点位置 (路径 B: 自研拖动专用) */
+  /** 批量更新节点位置 (路径 B: 自研拖动专用)
+   * @param rawWrite - true: 用 toRaw 绕过 Vue Proxy, 零 watcher 触发 (dragEnd 专用) */
   function setNodesPositions(
     updates: Array<{ id: string; position: { x: number; y: number } }>,
     recordHistory = true,
     skipTrigger = false,
+    rawWrite = false,
   ): void {
     if (updates.length === 0) return
     const updateMap = new Map(updates.map((u) => [u.id, u.position]))
@@ -472,17 +474,33 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     for (const node of nodes.value) {
       const newPos = updateMap.get(node.id)
       if (newPos) {
-        const fromX = node.position.x
-        const fromY = node.position.y
-        if (fromX !== newPos.x || fromY !== newPos.y) {
-          // 原地变异 .x/.y: 保持 position 对象引用不变, 避免触发 Vue Proxy
-          // position setter → 所有依赖 node.position 的 watcher 重新调度.
-          // 原地改属性只触发 .x/.y 级别的 setter, 调度量少一个数量级.
-          node.position.x = newPos.x
-          node.position.y = newPos.y
-          anyChange = true
-          if (recordHistory) {
-            moves.push({ nodeId: node.id, from: { x: fromX, y: fromY }, to: { ...newPos } })
+        if (rawWrite) {
+          // 绕过 Vue Proxy: 直接写 raw object, 零 watcher 调度.
+          // 拖动期间 VueFlow 内部 flowNode.position 已实时同步, store 只做持久化.
+          const raw = toRaw(node.position)
+          const oldX = raw.x
+          const oldY = raw.y
+          if (oldX !== newPos.x || oldY !== newPos.y) {
+            raw.x = newPos.x
+            raw.y = newPos.y
+            anyChange = true
+            if (recordHistory) {
+              moves.push({ nodeId: node.id, from: { x: oldX, y: oldY }, to: { ...newPos } })
+            }
+          }
+        } else {
+          const fromX = node.position.x
+          const fromY = node.position.y
+          if (fromX !== newPos.x || fromY !== newPos.y) {
+            // 原地变异 .x/.y: 保持 position 对象引用不变, 避免触发 Vue Proxy
+            // position setter → 所有依赖 node.position 的 watcher 重新调度.
+            // 原地改属性只触发 .x/.y 级别的 setter, 调度量少一个数量级.
+            node.position.x = newPos.x
+            node.position.y = newPos.y
+            anyChange = true
+            if (recordHistory) {
+              moves.push({ nodeId: node.id, from: { x: fromX, y: fromY }, to: { ...newPos } })
+            }
           }
         }
       }
