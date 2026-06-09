@@ -210,6 +210,11 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     // skipTrigger=true: 拖动期间 flowNode.position 已实时同步到 VueFlow 内部,
     // 不需要再 triggerRef 触发 VueFlow 整图重建 (80 节点 createGraphNodes +
     // 80 边 path 重算, 同步 100-200ms). 只同步 store.nodes / history.
+    //
+    // 但是在下一个微任务里异步 triggerRef: 这不是同步 flush (不会阻塞 mouseup 链),
+    // 而是让 VueFlow 在下一次事件循环前同步内部状态. 微任务在当前 macrotask 结束、
+    // 下一个 macrotask (drag2 mousedown) 开始前执行, 确保 drag2 启动时 VueFlow
+    // 状态完全 clean, 避免 pending effects 溢出到 drag2 的第一帧导致卡顿.
     const dxFlow = dxScreen / z
     const dyFlow = dyScreen / z
     const updates = ctx.allDragged.map((item) => ({
@@ -223,6 +228,9 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     ctx = null
     store.resumeHistory()
     store.setNodesPositions(updates, true, true)  // skipTrigger=true
+    nextTick(() => {
+      triggerRef(options.nodesRef)
+    })
     options.onEnd?.()
   }
 
