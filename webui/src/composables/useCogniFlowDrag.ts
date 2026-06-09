@@ -34,6 +34,8 @@ export interface UseCogniFlowDragOptions {
   nodesRef: Ref<Node<RuleNodeData>[]>
   /** 读取当前 zoom 的回调 (从 useVueFlow().getViewport().zoom 获取) */
   getZoom: () => number
+  /** 从 useVueFlow().findNode(id) 拿 VueFlow 内部 reactive GraphNode, 改它 .position 触发 getEdges */
+  findFlowNode: (id: string) => any
   onStart?: () => void
   onEnd?: () => void
 }
@@ -50,6 +52,10 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
 
   /** 当前帧是否视为"点击"（位移 < 3px 算点击，不拖动） */
   let isClick = false
+
+  /** rAF 节流: 拖动 mousemove 频率远高于 rAF, 防止同一帧内多次改 position */
+  let rafId: number | null = null
+  let rafPending = false
 
   function installOnNode(el: HTMLElement) {
     const dragHandler = d3Drag<HTMLElement, unknown>()
@@ -83,6 +89,10 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     if (!node) return
     isDragging = true
     isClick = true
+
+    // 重置 rAF state: 上次拖动可能未正常清理 (异常路径)
+    rafPending = false
+    rafId = null
 
     zoomRef = options.getZoom()
     const src = event.sourceEvent as MouseEvent
@@ -128,34 +138,39 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
       const flowX = item.startPos.x + dxScreen / z
       const flowY = item.startPos.y + dyScreen / z
 
-      // 1) DOM transform → 节点立即跟随
+      // 1) DOM transform → 节点立即跟随 (60fps)
       item.el.style.transform = `translate(${flowX}px, ${flowY}px)`
-
-      // 2) mutate store node.position (同上值, 供 rAF 触发 VueFlow 边更新时读最新位置)
-      const en = store.nodeById.get(item.id)
-      if (en) en.position = { x: flowX, y: flowY }
     }
 
-    // 3) rAF 节流替换数组引用 → VueFlow :nodes prop watcher 检测到新数组 →
-    //    setNodes → createGraphNodes → reactiveState.nodes 更新 → getEdges 重算 → 边跟随
-    //    注意: 不在此处 re-apply transform (被闭包捕获的 event 可能已过期, 写旧值反而导致节点跳动).
-    //    node.position 已在第 2 步 mutate 到最新值, VueFlow 同步后 computedPosition 自动正确.
-    //
-    // === 性能优化：拖动过程不触发 VueFlow 整图 createGraphNodes ===
-    // 真凶: 之前每帧 rAF 调 `store.nodes = [...store.nodes]` 触发 VueFlow
-    //      80 节点 createGraphNodes + getEdges 80 边 path 重算 + 80 节点 vdom diff/patch
-    //      + paint —— 总每帧 200ms (5fps), 肉眼卡顿.
-    //      实测 rAFMax 200ms vs 关闭后 rAFMax 16ms (60fps 流畅).
-    // 现在: 拖动过程只 DOM transform (步骤 1) + mutate markRaw.position (步骤 2),
-    //      不触发 VueFlow 内部响应式链.
-    //      边不实时跟随, dragend 一次性 setNodesPositions(updates, true)
-    //      + triggerRef 让 VueFlow 一次性同步 (1 次, ~30ms).
-    // 视觉差异: 边在拖动过程中保持原位, 拖完那一刻才跳到新位置.
-    // 优化: setNodesPositions 内部 batched groupMove entry (O(N+M) vs O(N×M))
-    //      + 一次 triggerRef 替代 80 次 write, 80 节点 GROUP 拖动 up 974ms → <50ms.
+    // 2) rAF 节流改 VueFlow 内部 reactive GraphNode.position → 触发 getEdges 80 边 path 重算 → 边跟随
+    //    不调 setNodes / createGraphNodes, 绕过 80 节点 vdom diff/patch.
+    //    VueFlow NodeWrapper 内部 watch([node.position.x, node.position.y]) 触发 computedPosition
+    //    更新, 同步设 el.style.transform (跟步骤 1 一致, 不会跳).
+    if (rafPending) return
+    rafPending = true
+    rafId = requestAnimationFrame(() => {
+      rafPending = false
+      if (!ctx) return  // 拖动可能已结束
+      for (const item of ctx.allDragged) {
+        const flowX = item.startPos.x + dxScreen / z
+        const flowY = item.startPos.y + dyScreen / z
+        const flowNode = options.findFlowNode(item.id)
+        if (flowNode && flowNode.position) {
+          // 改 reactive 包装的 position object, 触发 NodeWrapper watch + getEdges
+          flowNode.position.x = flowX
+          flowNode.position.y = flowY
+        }
+      }
+    })
   }
 
   function onDragEnd(event: DragEvent, _el: HTMLElement) {
+    // 清 rAF: 防止最后一帧 rAF 在 onDragEnd 后才跑, 覆盖 setNodesPositions 结果
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId)
+      rafId = null
+    }
+    rafPending = false
     if (!ctx) return
     const src = event.sourceEvent as MouseEvent
     const z = zoomRef

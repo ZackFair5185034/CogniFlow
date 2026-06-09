@@ -675,6 +675,7 @@ const {
   addSelectedEdges,
   getNodes,
   getSelectedNodes,
+  findNode,
   applyNodeChanges: applyVueFlowNodeChanges,
   applyEdgeChanges: applyVueFlowEdgeChanges,
 } = useVueFlow()
@@ -697,6 +698,12 @@ const {
 useCogniFlowDrag({
   nodesRef: nodes,
   getZoom: () => getViewport().zoom,
+  findFlowNode: (id: string) => {
+    // 拿 VueFlow 内部 reactive GraphNode, 改它 .position 触发 getEdges 80 边 path 重算
+    // 不调 setNodes / createGraphNodes, 绕过 80 节点 vdom diff/patch
+    const flowNode = findNode(id) as any
+    return flowNode
+  },
   onStart: () => {
     isNodeDragging.value = true
     isBatchDragging.value = true   // 拖动期间节流 handleNodesChange
