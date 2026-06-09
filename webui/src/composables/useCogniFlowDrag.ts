@@ -48,7 +48,10 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
   let zoomRef = 1
 
   let ctx: DragContext | null = null
-  const cleanups: Array<() => void> = []
+  /** 已挂载节点 -> 卸载函数,实现增量挂载/卸载 (Tier 1 优化)
+   *  替代原 cleanups[]: store.nodes 变化时只 diff 新增/移除的节点,
+   *  避免 N 节点重新挂载 d3-drag handler 的 O(N) 开销 */
+  const installedMap = new Map<HTMLElement, () => void>()
 
   /** 当前帧是否视为"点击"（位移 < 3px 算点击，不拖动） */
   let isClick = false
@@ -79,7 +82,25 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
       .on('drag', (event: DragEvent) => onDrag(event, el))
       .on('end', (event: DragEvent) => onDragEnd(event, el))
     d3Select(el).call(dragHandler)
-    cleanups.push(() => { d3Select(el).on('.drag', null) })
+    installedMap.set(el, () => { d3Select(el).on('.drag', null) })
+  }
+
+  /** 增量同步 d3-drag handler: 仅挂载新增节点, 卸载已移除节点 (Tier 1 优化)
+   *  替代原 reinstallAll: 100 节点 add/remove 1 个时从 O(N) 降到 O(1) */
+  function syncDragHandlers() {
+    if (isDragging) return
+    const els = document.querySelectorAll<HTMLElement>('.vue-flow__node')
+    if (els.length === 0) return
+    const live = new Set<HTMLElement>(Array.from(els))
+    // 卸载已不在 DOM 的旧节点
+    for (const [el, cleanup] of installedMap) {
+      if (!live.has(el)) {
+        cleanup()
+        installedMap.delete(el)
+      }
+    }
+    // 挂载新节点 (installOnNode 内部幂等)
+    live.forEach(installOnNode)
   }
 
   function onDragStart(event: DragEvent, el: HTMLElement) {
@@ -116,6 +137,11 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
           return { id: eid, el: e, startPos: { ...en.position } }
         })
         .filter((x): x is DraggedItem => x !== null),
+    }
+
+    // === Tier 0 优化: 标记 .dragging class,触发 CSS 关 transition + GPU 合成层 ===
+    for (const item of ctx.allDragged) {
+      item.el.classList.add('dragging')
     }
 
     store.pauseHistory()
@@ -172,6 +198,11 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     }
     rafPending = false
     if (!ctx) return
+
+    // === Tier 0 优化: 清除 .dragging class,恢复 transition + 合成层回收 ===
+    for (const item of ctx.allDragged) {
+      item.el.classList.remove('dragging')
+    }
     const src = event.sourceEvent as MouseEvent
     const z = zoomRef
     const dxScreen = src.clientX - ctx.startMouse.x
@@ -228,24 +259,16 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
   }
 
   function uninstallAll() {
-    for (const c of cleanups) c()
-    cleanups.length = 0
+    for (const cleanup of installedMap.values()) cleanup()
+    installedMap.clear()
   }
 
-  function reinstallAll() {
-    if (isDragging) return
-    const els = document.querySelectorAll<HTMLElement>('.vue-flow__node')
-    if (els.length === 0) return  // DOM 还没渲染好, 等下次触发
-    uninstallAll()
-    els.forEach(installOnNode)
-  }
+  onMounted(() => { nextTick(() => syncDragHandlers()) })
 
-  onMounted(() => { nextTick(() => reinstallAll()) })
-
-  // 替换方式 watch: 框选后 store.nodes = newNodes (length 不变但数组引用变了) 也能触发重挂
+  // 替换方式 watch: 框选后 store.nodes = newNodes (length 不变但数组引用变了) 也能触发增量同步
   watch(
     () => store.nodes,
-    () => { nextTick(() => reinstallAll()) },
+    () => { nextTick(() => syncDragHandlers()) },
   )
 
   onBeforeUnmount(() => { uninstallAll() })

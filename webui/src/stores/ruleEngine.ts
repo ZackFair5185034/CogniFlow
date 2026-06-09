@@ -194,34 +194,34 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const lodLevelMapCache = new Map<string, 0 | 1 | 2>()
 
   /**
-   * LOD 等级 map (基于缩放级别 + 节点密度)
+   * 基础 LOD 等级 map (Phase LOD-2 拆分): 仅依赖 zoom + 节点总数,
+   * 不再依赖 selectedNodeId / configExpandedIds.
+   * 选中切换 / 展开切换不再触发 N 大小 Map 重建 → drag-end 体感延迟消除.
+   * 选中态 / 展开态 → 在 getLodLevel() 内做 O(1) 快速路径.
+   *
    * 0 = 极简 (仅标题), 1 = 节点壳 (含端口+摘要), 2 = 完整 (含配置区)
-   * - 选中节点 / 配置已展开 → 强制 LOD 2
-   * - 拖动中 / 框选拖拽中 → 锁定当前 LOD
+   * - 拖动中 / 框选拖拽中 → 锁定当前 LOD (走 lodLevelMapCache)
    * - zoom < 0.3 → LOD 0
    * - zoom < 0.7 或节点数 > 80 → LOD 1
    * - 其他 → LOD 2
    */
-  const lodLevelMap = computed<Map<string, 0 | 1 | 2>>(() => {
+  const baseLodLevelMap = computed<Map<string, 0 | 1 | 2>>(() => {
     const map = new Map<string, 0 | 1 | 2>()
     const zoom = viewportZoom.value
     const count = nodes.value.length
     const isLodLocked = isDragging.value || isSelectionBoxActive.value
-    // 用 selectedNodeId 响应式 ref 而非 n.selected (后者是 markRaw 内部属性, 不会触发响应式)
-    const selId = selectedNodeId.value
-    // 用 configExpandedIds 响应式 Set 追踪用户主动展开的节点
-    const expanded = configExpandedIds.value
+
+    let baseLod: 0 | 1 | 2
+    if (zoom < 0.3) baseLod = 0
+    else if (zoom < 0.7 || count > 80) baseLod = 1
+    else baseLod = 2
 
     for (const n of nodes.value) {
-      if (n.id === selId) { map.set(n.id, 2); continue }
-      if (expanded.has(n.id)) { map.set(n.id, 2); continue }
       if (isLodLocked) {
-        map.set(n.id, lodLevelMapCache.get(n.id) ?? 1)
-        continue
+        map.set(n.id, lodLevelMapCache.get(n.id) ?? baseLod)
+      } else {
+        map.set(n.id, baseLod)
       }
-      if (zoom < 0.3) map.set(n.id, 0)
-      else if (zoom < 0.7 || count > 80) map.set(n.id, 1)
-      else map.set(n.id, 2)
     }
 
     // 非锁定时刷新缓存 (drag 结束后从这里恢复)
@@ -232,9 +232,14 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     return map
   })
 
-  /** O(1) 查询节点 LOD 等级 */
+  /** 保留旧 lodLevelMap 名称作为兼容导出 (RuleNode.vue 等仍可能引用) */
+  const lodLevelMap = baseLodLevelMap
+
+  /** O(1) 查询节点 LOD 等级 - 选中态/展开态走快速路径,不走 Map 重建 */
   function getLodLevel(nodeId: string): 0 | 1 | 2 {
-    return lodLevelMap.value.get(nodeId) ?? 1
+    if (nodeId === selectedNodeId.value) return 2
+    if (configExpandedIds.value.has(nodeId)) return 2
+    return baseLodLevelMap.value.get(nodeId) ?? 1
   }
 
   /** 按类别分组的节点定义 */

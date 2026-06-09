@@ -228,8 +228,21 @@ function isOutputConnected(handleId: string): boolean {
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
     0 2px 8px rgba(0,0,0,0.3);
-  contain: style;
+  /* === GPU 合成层提示 (Tier 0 性能优化) ===
+     - contain: layout style paint  完全隔离子树对外部布局/绘制的影响
+     - will-change: transform        提示浏览器提前创建独立合成层
+     - translateZ(0) + backface-visibility: hidden  兜底强制 layer,避免子像素抖动 */
+  contain: layout style paint;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
   overflow: visible !important;
+}
+
+/* 拖动期间彻底关闭 transition,避免每帧补间触发样式重算 */
+.vue-flow__node.dragging .rule-node,
+.vue-flow__node.selected.dragging .rule-node {
+  transition: none !important;
 }
 
 /* 标题栏 */

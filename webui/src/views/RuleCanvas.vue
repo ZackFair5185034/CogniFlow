@@ -3900,4 +3900,11 @@ $panel-header-height: 44px;
   }
 }
 
+/* === Tier 0 性能优化: 拖动期间整层边的命中测试关闭 ===
+   减少浏览器 hit-test 开销 (100 节点 + 200 边时 hit-test 占 1-2ms/帧)
+   :has() 选择器需要 Chrome 105+ / Safari 15.4+ / Firefox 121+ */
+.rule-canvas-fullscreen:has(.vue-flow__node.dragging) .vue-flow__edges {
+  pointer-events: none;
+}
+
 </style>
