@@ -674,6 +674,7 @@ const {
   addSelectedNodes,
   addSelectedEdges,
   getNodes,
+  getSelectedNodes,
   applyNodeChanges: applyVueFlowNodeChanges,
   applyEdgeChanges: applyVueFlowEdgeChanges,
 } = useVueFlow()
@@ -1329,47 +1330,29 @@ function handleSelectionStart() {
   cachedSelectionRect.value = null
 }
 
-// 框选结束 - 用缓存的矩形做最后一次命中计算, O(N) 写回 store.nodes, 替换数组引用
+// 框选结束 - 用 VueFlow 内部 getSelectedNodes (selectedNodeIds) 同步到 store.nodes[].selected.
+// 之前误加: 自己重做包围盒命中 (n.position + dimensions), 单位混用 (position 画布 + dimensions 屏幕 像素),
+//          导致框外擦边被选. VueFlow 内部 getNodesInside 的 paneRect 跟 nodeToRect 同方向混用,
+//          碰巧等价于画布空间, 实际命中结果是对的.
 function handleSelectionEnd() {
   isSelectionDragging.value = false
   isBatchDragging.value = false  // P0: 恢复 nodes-change 处理
   store.setSelectionBoxActive(false) // LOD-1: 解除框选 LOD 锁定
 
-  // 用户选缓存矩形 (userSelectionRect 在 selectionEnd 时已被 VueFlow 清空)
-  const rect = cachedSelectionRect.value
-  if (!rect) {
-    cachedSelectionRect.value = null
-    return
-  }
-
-  // 屏幕坐标矩形 → 四个角
-  const minX = Math.min(rect.startX ?? rect.x, rect.x + rect.width)
-  const maxX = Math.max(rect.startX ?? rect.x, rect.x + rect.width)
-  const minY = Math.min(rect.startY ?? rect.y, rect.y + rect.height)
-  const maxY = Math.max(rect.startY ?? rect.y, rect.y + rect.height)
-  // 转画布坐标
-  const tl = screenToFlowCoordinate({ x: minX, y: minY })
-  const br = screenToFlowCoordinate({ x: maxX, y: maxY })
-  const flowMinX = Math.min(tl.x, br.x)
-  const flowMaxX = Math.max(tl.x, br.x)
-  const flowMinY = Math.min(tl.y, br.y)
-  const flowMaxY = Math.max(tl.y, br.y)
-
+  // 把 VueFlow 内部 selectedNodeIds 同步到 store.nodes[].selected
+  // (复制 handleCopy/handleCut 依赖 store.nodes.filter(n => n.selected))
+  const selectedIds = new Set(getSelectedNodes.value.map((n: any) => n.id))
   let changed = false
   for (const n of store.nodes as any[]) {
-    const w = n.dimensions?.width ?? 200
-    const h = n.dimensions?.height ?? 80
-    const hit = n.position.x + w >= flowMinX && n.position.x <= flowMaxX &&
-                n.position.y + h >= flowMinY && n.position.y <= flowMaxY
-    if (n.selected !== hit) {
-      n.selected = hit
+    const wasSelected = !!n.selected
+    const shouldSelected = selectedIds.has(n.id)
+    if (wasSelected !== shouldSelected) {
+      n.selected = shouldSelected
       changed = true
     }
   }
   if (changed) {
-    // 必须替换数组引用 — VueFlow 的 :nodes prop 通过引用相等检测变化,
-    // triggerRef(nodes) 仅触发父组件重渲染但不改变引用, VueFlow 内部 createGraphNodes 不会重新运行.
-    // 替换引用后 VueFlow useVModel 浅 watch 检测到新数组 → 重算 graphNode.selected → 渲染选中态.
+    // 必须替换数组引用 — store.nodes 是 ref([...]), Vue 浅 watch 检测到新数组引用.
     store.nodes = [...(store.nodes as any)] as any
   }
 
