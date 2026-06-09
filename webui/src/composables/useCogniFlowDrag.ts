@@ -207,15 +207,9 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     // 内部 `if (recordHistory && !isHistoryPaused.value && moves.length > 0)`
     // 会因 isHistoryPaused=true 跳过 history 写入, 6 次拖动只 2 个 entry.
     //
-    // === 性能修复 (二次拖动卡顿真凶) ===
-    // 实测 setNodesPositions(5 nodes) 内部 triggerRef 同步 flush 跑 200ms,
-    // (VueFlow 80 节点 vdom diff/patch + 80 边 path 重算 + 响应式链).
-    // 慢在 mouseup 之后, 用户立刻开始第二次拖动时 200ms 同步阻塞事件循环,
-    // 导致 mousedown 响应延迟, 视觉上是"二次拖动卡顿".
-    //
-    // 修法: 异步 setNodesPositions (nextTick), mouseup 同步链立刻返回,
-    // 200ms store 同步在后台跑, 不阻塞第二次拖动.
-    // 安全: history 写入延后一次微任务, 不影响 undo/redo 正确性.
+    // skipTrigger=true: 拖动期间 flowNode.position 已实时同步到 VueFlow 内部,
+    // 不需要再 triggerRef 触发 VueFlow 整图重建 (80 节点 createGraphNodes +
+    // 80 边 path 重算, 同步 100-200ms). 只同步 store.nodes / history.
     const dxFlow = dxScreen / z
     const dyFlow = dyScreen / z
     const updates = ctx.allDragged.map((item) => ({
@@ -225,14 +219,10 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
         y: item.startPos.y + dyFlow,
       },
     }))
-    // 同步 reset state (isDragging/ctx), 让 d3-drag 立刻可以接下一次 mousedown
     isDragging = false
     ctx = null
     store.resumeHistory()
-    // 异步执行 setNodesPositions (含 triggerRef), 不阻塞 mouseup 链
-    nextTick(() => {
-      store.setNodesPositions(updates, true)
-    })
+    store.setNodesPositions(updates, true, true)  // skipTrigger=true
     options.onEnd?.()
   }
 

@@ -458,32 +458,21 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
   }
 
-  /**
-   * 批量更新节点位置 (路径 B: 自研拖动专用)
-   *
-   * useCogniFlowDrag 在 drag-end 时调用, 一次性同步所有被拖动节点的 position.
-   * 内部 mutate + 单次 triggerRef, 避免循环 setNodePosition 触发 N 次整图 diff.
-   *
-   * @param updates 节点 id → 新位置 (含 viewport transform 解析后的画布坐标)
-   * @param recordHistory 是否记录 move history (drag-end 时 true, 撤销栈记录 from→to)
-   */
+  /** 批量更新节点位置 (路径 B: 自研拖动专用) */
   function setNodesPositions(
     updates: Array<{ id: string; position: { x: number; y: number } }>,
     recordHistory = true,
+    skipTrigger = false,
   ): void {
     if (updates.length === 0) return
-    // 用 Map 加速 id 查找, 避免 N 节点 × N updates 的 O(N²) find
     const updateMap = new Map(updates.map((u) => [u.id, u.position]))
 
-    // batched: 一次循环收集所有 move, 最后 push 1 个 groupMove entry (而不是 N 个)
-    // 80 节点 GROUP 拖动从 80×historySize 次响应式 trigger 降到 1 次.
     const moves: Array<{ nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }> = []
     let anyChange = false
     for (const node of nodes.value) {
       const newPos = updateMap.get(node.id)
       if (newPos) {
         const from = node.position
-        // mutate 内部字段 (shallowRef 数组元素不深代理, 需 triggerRef)
         if (from.x !== newPos.x || from.y !== newPos.y) {
           node.position = newPos
           anyChange = true
@@ -496,9 +485,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     if (!anyChange) return
 
     if (recordHistory && !isHistoryPaused.value && moves.length > 0) {
-      // 单次 slice + push + historyIndex 写入 (vs 之前 N 次循环内重复)
       historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
-      // 1 个 groupMove entry 比 N 个 move entry 在 undo/redo 时更紧凑, applyHistoryEntry 走 batched 还原
       historyStack.value.push({ type: 'groupMove', moves })
       historyIndex.value = historyStack.value.length - 1
       if (historyStack.value.length > maxHistorySize) {
@@ -507,9 +494,13 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       }
     }
 
-    // 一次 triggerRef 让 VueFlow 内部 store.nodes watcher 重建,
-    // 边 path 重算, NodeWrapper 模板 transform 同步.
-    triggerRef(nodes)
+    // triggerRef 触发 VueFlow 内部 store.nodes watcher 重建 (80 节点 createGraphNodes + 80 边 path 重算),
+    // 对 drag-end 路径完全冗余 (拖动期间 flowNode.position 已实时同步到 VueFlow 内部),
+    // 且同步 flush 100-200ms 阻塞后续事件循环, 导致二次拖动卡顿.
+    // skipTrigger=true 跳过 triggerRef, 仅更新 store.nodes / history.
+    if (!skipTrigger) {
+      triggerRef(nodes)
+    }
   }
 
   /**
