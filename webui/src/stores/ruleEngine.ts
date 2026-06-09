@@ -472,12 +472,17 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     for (const node of nodes.value) {
       const newPos = updateMap.get(node.id)
       if (newPos) {
-        const from = node.position
-        if (from.x !== newPos.x || from.y !== newPos.y) {
-          node.position = newPos
+        const fromX = node.position.x
+        const fromY = node.position.y
+        if (fromX !== newPos.x || fromY !== newPos.y) {
+          // 原地变异 .x/.y: 保持 position 对象引用不变, 避免触发 Vue Proxy
+          // position setter → 所有依赖 node.position 的 watcher 重新调度.
+          // 原地改属性只触发 .x/.y 级别的 setter, 调度量少一个数量级.
+          node.position.x = newPos.x
+          node.position.y = newPos.y
           anyChange = true
           if (recordHistory) {
-            moves.push({ nodeId: node.id, from: { ...from }, to: { ...newPos } })
+            moves.push({ nodeId: node.id, from: { x: fromX, y: fromY }, to: { ...newPos } })
           }
         }
       }
