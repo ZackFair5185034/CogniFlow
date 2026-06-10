@@ -3001,12 +3001,14 @@ $panel-header-height: 44px;
     stroke-opacity: 1 !important;
   }
 
-  /* 取消选中态 interaction 感应层的 12px 宽发光 (用户反馈"更宽的连续"多余视觉) */
+  /* 取消选中态 interaction 感应层的 12px 宽发光 (用户反馈"更宽的连续"多余视觉)
+     关键: 拖动过程中 Tier 2 边增量更新器只写 path.d, 不写 interaction.d
+     (interaction 的 d 保持陈旧旧值). 拖动中如果 interaction 有任何可见像素,
+     就会看到"旧位置"的残影 (interaction d 没跟手). 必须强制完全隐藏:
+     - display: none: 整个 path 元素不渲染 (最彻底, 不依赖 stroke)
+     - !important: 覆盖 vue-flow 内部/attribute 优先级 */
   :deep(.vue-flow__edge.selected .vue-flow__edge-interaction) {
-    stroke: #00f0ff;
-    stroke-width: 0;        /* 之前 12, 改为 0 完全隐藏 */
-    stroke-opacity: 0;      /* 0 透明 */
-    pointer-events: none;   /* 不再接收点击, 防止误操作 */
+    display: none !important;
   }
 
   /* hover 态：70% 蓝过渡 */
