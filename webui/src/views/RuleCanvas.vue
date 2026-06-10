@@ -2964,10 +2964,7 @@ $panel-header-height: 44px;
 
      关键: 用 outline 替代 border-width 变化 (2px→1px)。
      border-width 改变盒模型 → 每次选中/取消选中强制 layout → 80 节点框选 = 80 次 layout
-     outline 在盒模型外部绘制, 不触发布局, 配合 outline-offset: -3px 紧贴 border 内侧
-
-     选中态: 只改 outline 颜色 (按节点 category 着色), 不加 box-shadow 外圈光晕,
-     box-shadow 保留默认 (inset 0 1px 0 + 0 4px 16px 投影) 即可. */
+     outline 在盒模型外部绘制, 不触发布局, 配合 outline-offset: -1px 紧贴 border 内侧 */
   :deep(.vue-flow__node.selected .rule-node) {
     outline: 2px solid var(--accent-blue);
     outline-offset: -3px;
@@ -2976,12 +2973,12 @@ $panel-header-height: 44px;
       inset 0 1px 0 rgba(255,255,255,0.08),
       0 4px 16px rgba(0,0,0,0.4);
   }
-  :deep(.vue-flow__node.selected .rule-node.category-input)      { outline-color: #4CFF4C; }
-  :deep(.vue-flow__node.selected .rule-node.category-detection)  { outline-color: #00f0FF; }
-  :deep(.vue-flow__node.selected .rule-node.category-processing) { outline-color: #FFFF4C; }
-  :deep(.vue-flow__node.selected .rule-node.category-action)     { outline-color: #FF7F4C; }
-  :deep(.vue-flow__node.selected .rule-node.category-logic)      { outline-color: #DC4FDC; }
-  :deep(.vue-flow__node.selected .rule-node.category-output)     { outline-color: #FF4C4C; }
+  :deep(.vue-flow__node.selected .rule-node.category-input)      { outline-color: #4CFF4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(76,255,76,0.3),   0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-detection)  { outline-color: #00f0FF; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(0,240,255,0.3),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-processing) { outline-color: #FFFF4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,255,76,0.3),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-action)     { outline-color: #FF7F4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,127,76,0.3),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-logic)      { outline-color: #DC4FDC; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(220,79,220,0.3),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-output)     { outline-color: #FF4C4C; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(255,76,76,0.3),  0 4px 16px rgba(0,0,0,0.4); }
 
   /* 连接线：未选中 35% 蓝、悬停 70%、选中 100% 青色 + 发光 (决策 2) */
   :deep(.vue-flow__edge-path) {
