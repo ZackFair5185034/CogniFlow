@@ -2996,17 +2996,20 @@ $panel-header-height: 44px;
     animation: dash 0.5s linear infinite;
   }
 
-  /* 连线选中态：100% 青色 + 加粗（去掉辉光） */
+  /* 连线选中态：100% 青色 + 加粗（去掉 12px interaction 感应层外圈高亮,
+     只改 path 颜色和粗细, 跟节点选中态保持一致的"只改颜色"风格） */
   :deep(.vue-flow__edge.selected .vue-flow__edge-path) {
     stroke: #00f0ff !important;
     stroke-width: 3 !important;
     stroke-opacity: 1 !important;
   }
 
+  /* 取消选中态 interaction 感应层的 12px 宽发光 (用户反馈"更宽的连续"多余视觉) */
   :deep(.vue-flow__edge.selected .vue-flow__edge-interaction) {
     stroke: #00f0ff;
-    stroke-width: 12;
-    stroke-opacity: 0.2;
+    stroke-width: 0;        /* 之前 12, 改为 0 完全隐藏 */
+    stroke-opacity: 0;      /* 0 透明 */
+    pointer-events: none;   /* 不再接收点击, 防止误操作 */
   }
 
   /* hover 态：70% 蓝过渡 */
