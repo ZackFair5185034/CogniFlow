@@ -389,8 +389,8 @@
             :pan-on-drag="false"
             :pan-on-scroll="true"
             :zoom-on-scroll="true"
-            :min-zoom="0.1"
-            :max-zoom="4"
+            :min-zoom="0.3"
+            :max-zoom="1.5"
             :nodes-draggable="false"
             :nodes-connectable="true"
             :elements-selectable="true"
@@ -788,10 +788,14 @@ const lastMousePos = ref({ x: 0, y: 0 })
 const globalMousePos = ref({ x: 0, y: 0 })
 
 // 复制粘贴
-/** 剪贴板 payload: 复制/剪切时把节点+关联边+鼠标位置一起记下 */
+/** 剪贴板 payload: 复制/剪切时把节点+关联边+鼠标位置一起记下
+ *
+ * P1-G (Phase 17.1): 改用 JSON 字符串而非结构化对象 — 100 节点 1 次 stringify 替代 100 次,
+ *                    粘贴时 1 次 parse 替代 100 次. 内存中存字符串避免 Vue 把节点数组做深代理.
+ */
 interface ClipboardPayload {
-  nodes: Node<RuleNodeData>[]
-  edges: Edge[]
+  nodesJson: string
+  edgesJson: string
   /** 复制/剪切时鼠标在浏览器视口的屏幕坐标 (event.clientX/Y) */
   mousePos: { x: number; y: number }
 }
@@ -1193,9 +1197,12 @@ function handleCopy(_event?: MouseEvent) {
   )
   // 参考点用 selection bbox 中心 (屏幕坐标), 粘贴时用 (当前鼠标 - bbox 中心) / zoom 算偏移
   // 不用鼠标位置是因快捷键触发时鼠标可能在画布外
+  // P1-G (Phase 17.1): 一次性 stringify 替代每节点独立 stringify+parse
+  // 旧: selected.map(n => JSON.parse(JSON.stringify(n))) → 100 节点 100 次 serialize+deserialize
+  // 新: 1 次 stringify 100 节点, 粘贴时 1 次 parse
   clipboard.value = {
-    nodes: selected.map((n: any) => JSON.parse(JSON.stringify(n))),
-    edges: relatedEdges.map((e: any) => JSON.parse(JSON.stringify(e))),
+    nodesJson: JSON.stringify(selected),
+    edgesJson: JSON.stringify(relatedEdges),
     mousePos: getSelectionBboxCenter()
   }
   clipboardMode.value = 'copy'
@@ -1214,8 +1221,8 @@ function handleCut(_event?: MouseEvent) {
     (e) => selectedIds.has(e.source) && selectedIds.has(e.target)
   )
   clipboard.value = {
-    nodes: selected.map((n: any) => JSON.parse(JSON.stringify(n))),
-    edges: relatedEdges.map((e: any) => JSON.parse(JSON.stringify(e))),
+    nodesJson: JSON.stringify(selected),
+    edgesJson: JSON.stringify(relatedEdges),
     mousePos: getSelectionBboxCenter()
   }
   clipboardMode.value = 'cut'
@@ -1230,12 +1237,20 @@ function handleCut(_event?: MouseEvent) {
 
 // 粘贴
 function handlePaste(event?: MouseEvent) {
-  if (!clipboard.value || clipboard.value.nodes.length === 0) {
+  if (!clipboard.value || clipboard.value.nodesJson == null) {
     ElMessage.warning('剪贴板为空')
     return
   }
 
-  const { nodes: srcNodes, edges: srcEdges, mousePos } = clipboard.value
+  // P1-G (Phase 17.1): 1 次 parse 100 节点, 替代逐节点 stringify+parse
+  const cp = clipboard.value
+  const srcNodes: any[] = JSON.parse(cp.nodesJson)
+  const srcEdges: any[] = JSON.parse(cp.edgesJson || '[]')
+  const mousePos = cp.mousePos
+  if (srcNodes.length === 0) {
+    ElMessage.warning('剪贴板为空')
+    return
+  }
 
   // 计算鼠标偏移 (屏幕坐标 → 画布坐标)
   // Figma 模式: 偏移 = (当前鼠标 - 复制时鼠标) / 缩放
@@ -1265,9 +1280,9 @@ function handlePaste(event?: MouseEvent) {
   const newNodes: Node<RuleNodeData>[] = srcNodes.map((n: any) => {
     const newNodeId = newId()
     idMap.set(n.id, newNodeId)
-    const cloned = JSON.parse(JSON.stringify(n))
+    // P1-G: srcNodes 已是 deep cloned JSON, 直接 mutate position + 补充选中态
     return {
-      ...cloned,
+      ...n,
       id: newNodeId,
       type: 'ruleNode',
       position: {
@@ -1279,7 +1294,7 @@ function handlePaste(event?: MouseEvent) {
       // 剪切粘贴: 原节点已删, 粘贴项 selected → 用户可立即拖到目标位置
       selected: true,
       data: {
-        ...(cloned.data || {}),
+        ...(n.data || {}),
         id: newNodeId,
         selected: true
       }
@@ -1319,13 +1334,17 @@ function handlePaste(event?: MouseEvent) {
  * VueFlow 在 onPointerUp 里先清空 userSelectionRect (line 219), 才 emit selectionEnd (line 222).
  * 到 selectionEnd 事件触发时, userSelectionRect.value 已经是 null.
  * 因此需要 watch userSelectionRect 把拖框过程中最后一帧的矩形缓存下来.
- * Vue watch 回调在微任务执行, onPointerUp 的同步链里 cachedSelectionRect 还保留着上一次 move 的矩形.
+ * Vue watch 回调在微任务执行, onPointerUp 的同步链里 lastUserSelectionRect 还保留着上一次 move 的矩形.
+ *
+ * P1-E (Phase 17.1): 存 plain 引用而非 ref + 浅复制.
+ * 旧: ref<...> + watch 60Hz 浅复制 + ref.set, 100 节点框选 5s = 300 次浅复制 + 300 次 ref 写入.
+ * 新: plain 变量存引用, 0 浅复制. 当前实现 cachedSelectionRect 只用于诊断, 实际逻辑不再读它.
  */
-const cachedSelectionRect = ref<{ x: number; y: number; width: number; height: number; startX?: number; startY?: number } | null>(null)
-
+let lastUserSelectionRect: { x: number; y: number; width: number; height: number; startX?: number; startY?: number } | null = null
 watch(userSelectionRect, (rect) => {
   if (rect) {
-    cachedSelectionRect.value = { ...rect } as any
+    // 不复制对象, 存引用 — handleSelectionEnd 同步链里读到的就是最后 move 帧的 rect
+    lastUserSelectionRect = rect as any
   }
 })
 
@@ -1334,7 +1353,7 @@ function handleSelectionStart() {
   isSelectionDragging.value = true
   isBatchDragging.value = true  // P0: 框选期间节流, handleNodesChange 立即 return
   store.setSelectionBoxActive(true) // LOD-1: 框选期间锁定 LOD
-  cachedSelectionRect.value = null
+  lastUserSelectionRect = null
 }
 
 // 框选结束 - 用 VueFlow 内部 getSelectedNodes (selectedNodeIds) 同步到 store.nodes[].selected.
@@ -1359,11 +1378,14 @@ function handleSelectionEnd() {
     }
   }
   if (changed) {
-    // 必须替换数组引用 — store.nodes 是 ref([...]), Vue 浅 watch 检测到新数组引用.
-    store.nodes = [...(store.nodes as any)] as any
+  // P0-B (Phase 17.1): triggerRef 替代数组引用重建
+    // 旧: store.nodes = [...store.nodes] → VueFlow useVModel 浅 watch 检测到引用变 → 整图 80 节点 vdom diff
+    // 新: 数组引用不变 → patchProps 浅比较过滤 → VueFlow 不重渲染
+    triggerRef(nodes)
   }
 
-  cachedSelectionRect.value = null
+  // P1-E (Phase 17.1): ref 删除, 改用 plain 变量 lastUserSelectionRect
+  lastUserSelectionRect = null
 }
 
 // 节点删除按钮点击
@@ -1578,10 +1600,16 @@ function handleNodeClick(event: any) {
 // 画布点击
 function handlePaneClick() {
   // 清除所有节点的选中态 (含 VueFlow 视觉 CSS)
-  for (const n of store.nodes as any[]) n.selected = false
+  let changed = false
+  for (const n of store.nodes as any[]) {
+    if (n.selected) {
+      n.selected = false
+      changed = true
+    }
+  }
   store.selectNode(null)
-  // 触发 VueFlow 同步选中视觉 (直接赋值替换引用, 跟 useCogniFlowDrag rAF 同模式)
-  store.nodes = [...(store.nodes as any)] as any
+  // P0-B (Phase 17.1): triggerRef 替代数组引用重建 (避免 VueFlow 整图 diff)
+  if (changed) triggerRef(nodes)
 }
 
 // 端口类型兼容性检查
@@ -1710,8 +1738,10 @@ function handleNodesChange(changes: any[]) {
   // 关键: nodes.value.find().position 赋值是 O(1) 属性写入，不替换数组引用。
   // triggerRef 仅通知 deps（父组件 render effect），但 patchProps 浅比较会过滤掉引用未变的情况。
   if (positionChanges.length > 0) {
+    // P0-D (Phase 17.1): O(1) Map 查询替代 O(N) Array.find
+    // drag-stop 多节点拖动 → positionChanges.length = K, 改前 K×N 次比较 → 改后 K 次 Map.get
     for (const c of positionChanges) {
-      const node = nodes.value.find(n => n.id === c.id)
+      const node = store.nodeById.get(c.id)
       if (node && c.position) {
         // 替换整个 position 对象（VueFlow 内部已存了完整 position 数据）
         node.position = c.position

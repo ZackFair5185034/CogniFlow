@@ -109,9 +109,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const isDragging = ref(false)
   /** 框选拖拽中 (同样锁定 LOD) */
   const isSelectionBoxActive = ref(false)
-  /** 用户主动展开配置的节点 ID 集合 (响应式 Set, 避免 markRaw 内层属性变更不触发响应) */
-  const configExpandedIds = ref<Set<string>>(new Set())
-
   // ---- Undo/Redo 栈 ----
   // Phase B 任务3: 混合 history (snapshot + move entry), 拖拽松手不再克隆整图
   // - snapshot: 完整克隆, 用于非拖拽操作 (创建/删除/连接/粘贴)
@@ -191,34 +188,44 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const hasNodes = computed(() => nodes.value.length > 0)
 
   /** 锁定期间的 LOD 缓存, drag 期间维持稳定 (避免切换抖动破坏 v-memo) */
-  const lodLevelMapCache = new Map<string, 0 | 1 | 2>()
+  const lodLevelMapCache = new Map<string, 0 | 1>()
 
   /**
-   * 基础 LOD 等级 map (Phase LOD-2 拆分): 仅依赖 zoom + 节点总数,
-   * 不再依赖 selectedNodeId / configExpandedIds.
-   * 选中切换 / 展开切换不再触发 N 大小 Map 重建 → drag-end 体感延迟消除.
+   * 基础 LOD 等级 map: 仅依赖 zoom + 节点总数.
    * 选中态 / 展开态 → 在 getLodLevel() 内做 O(1) 快速路径.
    *
-   * 0 = 极简 (仅标题), 1 = 节点壳 (含端口+摘要), 2 = 完整 (含配置区)
+   * 0 = 极简 (仅标题+图标+极小端口点)
+   * 1 = 完整 (标题+端口+摘要)
    * - 拖动中 / 框选拖拽中 → 锁定当前 LOD (走 lodLevelMapCache)
-   * - zoom < 0.3 → LOD 0
-   * - zoom < 0.7 或节点数 > 80 → LOD 1
-   * - 其他 → LOD 2
+   * - zoom < 0.5 → LOD 0
+   * - 其他 → LOD 1
+   *
+   * P0-A (Phase 17.1): 短路缓存 — 60Hz 缩放期间 baseLod 跨阈值才重建
+   * 缩放 200 节点 60fps 时 12000 ops/秒 Map 重建 → 跨阈值时一次性重建.
    */
-  const baseLodLevelMap = computed<Map<string, 0 | 1 | 2>>(() => {
-    const map = new Map<string, 0 | 1 | 2>()
+  let cachedBaseLodRef: { zoom: number; baseLod: 0 | 1; nodesRef: typeof nodes.value; isLodLocked: boolean } | null = null
+  let cachedBaseLodMap: Map<string, 0 | 1> = new Map()
+  const baseLodLevelMap = computed<Map<string, 0 | 1>>(() => {
     const zoom = viewportZoom.value
-    const count = nodes.value.length
     const isLodLocked = isDragging.value || isSelectionBoxActive.value
+    const baseLod: 0 | 1 = zoom < 0.5 ? 0 : 1
+    const nodesRef = nodes.value
 
-    let baseLod: 0 | 1 | 2
-    if (zoom < 0.3) baseLod = 0
-    else if (zoom < 0.7 || count > 80) baseLod = 1
-    else baseLod = 2
+    // 短路: 输入未变化 → 复用上次 Map
+    if (
+      cachedBaseLodRef &&
+      cachedBaseLodRef.zoom === zoom &&
+      cachedBaseLodRef.isLodLocked === isLodLocked &&
+      cachedBaseLodRef.nodesRef === nodesRef
+    ) {
+      return cachedBaseLodMap
+    }
 
-    for (const n of nodes.value) {
+    // 重建
+    const map = new Map<string, 0 | 1>()
+    for (const n of nodesRef) {
       if (isLodLocked) {
-        map.set(n.id, lodLevelMapCache.get(n.id) ?? baseLod)
+        map.set(n.id, (lodLevelMapCache.get(n.id) as 0 | 1 | undefined) ?? baseLod)
       } else {
         map.set(n.id, baseLod)
       }
@@ -229,6 +236,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       lodLevelMapCache.clear()
       for (const [k, v] of map) lodLevelMapCache.set(k, v)
     }
+    cachedBaseLodRef = { zoom, baseLod, nodesRef, isLodLocked }
+    cachedBaseLodMap = map
     return map
   })
 
@@ -236,9 +245,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const lodLevelMap = baseLodLevelMap
 
   /** O(1) 查询节点 LOD 等级 - 选中态/展开态走快速路径,不走 Map 重建 */
-  function getLodLevel(nodeId: string): 0 | 1 | 2 {
-    if (nodeId === selectedNodeId.value) return 2
-    if (configExpandedIds.value.has(nodeId)) return 2
+  function getLodLevel(nodeId: string): 0 | 1 {
+    // 选中态/展开态不再升到独立 LOD, 走 baseLodLevelMap (zoom 决定)
     return baseLodLevelMap.value.get(nodeId) ?? 1
   }
 
@@ -848,24 +856,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     isSelectionBoxActive.value = v
   }
 
-  /**
-   * 切换节点配置区展开状态 (LOD 2 显示配置).
-   * 维护 configExpandedIds (响应式 Set) 让 lodLevelMap 自动响应.
-   * - 初始 (set 内无此 id) → toggle 加入 set → LOD 2
-   * - 已在 set → toggle 移除 → LOD 1
-   */
-  function toggleConfigExpanded(nodeId: string) {
-    const next = new Set(configExpandedIds.value)
-    if (next.has(nodeId)) next.delete(nodeId)
-    else next.add(nodeId)
-    configExpandedIds.value = next
-    // 同步写回 n.data 用于持久化 (saveGraph 序列化)
-    const n = nodeById.value.get(nodeId)
-    if (n?.data) {
-      n.data.configExpanded = next.has(nodeId)
-    }
-  }
-
   // ============ 导出 ============
   return {
     // 状态
@@ -884,7 +874,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     viewportZoom,        // LOD
     isDragging,          // LOD 锁定
     isSelectionBoxActive,// LOD 锁定
-    configExpandedIds,   // LOD (展开状态)
 
     // 计算属性
     selectedNode,
@@ -947,7 +936,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     // LOD (Phase LOD-1)
     setViewportZoom,
     setDragging,
-    setSelectionBoxActive,
-    toggleConfigExpanded
+    setSelectionBoxActive
   }
 })

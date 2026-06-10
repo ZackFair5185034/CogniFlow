@@ -15,7 +15,7 @@
     :data-lod="lodLevel"
     @contextmenu.prevent="emit('contextmenu', $event)"
   >
-    <!-- ========== LOD 0/1/2 通用: 标题栏 ========== -->
+    <!-- ========== LOD 0/1 通用: 标题栏 ========== -->
     <div class="node-header">
       <div
         class="node-icon"
@@ -26,72 +26,49 @@
       <div class="node-title">
         <span class="node-label">{{ data.label || data.type }}</span>
       </div>
-      <!-- 展开/收起按钮 -->
-      <button
-        v-if="hasConfig && (lodLevel === 1 || lodLevel === 2)"
-        class="node-expand-btn"
-        :class="{ 'is-expanded': lodLevel === 2 }"
-        :title="lodLevel === 2 ? '收起配置' : '展开配置'"
-        @click.stop="handleExpandClick"
-      >
-        <span v-if="lodLevel === 2">×</span>
-        <span v-else>⚙</span>
-      </button>
     </div>
 
-    <!-- ========== LOD 1/2: 节点摘要 ========== -->
-    <div
-      v-if="lodLevel >= 1 && data.summaryText"
-      class="node-summary"
-    >
-      {{ data.summaryText }}
-    </div>
-
-    <!-- ========== LOD 1/2: 端口区域 ========== -->
-    <div
-      v-if="lodLevel >= 1 && ((data.inputs?.length || 0) > 0 || (data.outputs?.length || 0) > 0)"
-      class="node-ports"
-    >
+    <!-- ========== LOD 1: 节点摘要 + 端口区域 (LOD 0 隐藏) ========== -->
+    <template v-if="lodLevel >= 1">
+      <!-- 节点摘要 -->
       <div
-        v-for="input in data.inputs"
-        :key="'in-' + input.name"
-        class="port-item port-in"
+        v-if="data.summaryText"
+        class="node-summary"
       >
-        <Handle
-          :id="input.name"
-          type="target"
-          :position="Position.Left"
-          :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`, { 'is-connected': isInputConnected(input.name) }]"
-        />
-        <!-- LOD 2 才显示端口文字 -->
-        <span v-if="lodLevel >= 2" class="port-label">{{ input.label || input.name }}</span>
+        {{ data.summaryText }}
       </div>
-      <div
-        v-for="output in data.outputs"
-        :key="'out-' + output.name"
-        class="port-item port-out"
-      >
-        <span v-if="lodLevel >= 2" class="port-label">{{ output.label || output.name }}</span>
-        <Handle
-          :id="output.name"
-          type="source"
-          :position="Position.Right"
-          :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`, { 'is-connected': isOutputConnected(output.name) }]"
-        />
-      </div>
-    </div>
 
-    <!-- ========== LOD 2: 内联配置区 ========== -->
-    <div
-      v-if="lodLevel === 2 && hasConfig"
-      class="node-config"
-    >
-      <NodeConfigInline
-        :node-id="data.id"
-        :config-schema="configSchema"
-        :config="config"
-      />
-    </div>
+      <!-- 端口区域 -->
+      <div
+        v-if="(data.inputs?.length || 0) > 0 || (data.outputs?.length || 0) > 0"
+        class="node-ports"
+      >
+        <div
+          v-for="input in data.inputs"
+          :key="'in-' + input.name"
+          class="port-item port-in"
+        >
+          <Handle
+            :id="input.name"
+            type="target"
+            :position="Position.Left"
+            :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`, { 'is-connected': isInputConnected(input.name) }]"
+          />
+        </div>
+        <div
+          v-for="output in data.outputs"
+          :key="'out-' + output.name"
+          class="port-item port-out"
+        >
+          <Handle
+            :id="output.name"
+            type="source"
+            :position="Position.Right"
+            :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`, { 'is-connected': isOutputConnected(output.name) }]"
+          />
+        </div>
+      </div>
+    </template>
 
     <!-- 执行状态指示 (所有级别) -->
     <div
@@ -111,10 +88,9 @@
 /**
  * RuleNode - 节点壳 (Phase LOD-1)
  *
- * 三级 LOD 渲染:
- *   LOD 0 (zoom < 0.3): 仅标题 + 图标 + 极小端口点
- *   LOD 1 (默认):       节点壳 + 端口 + 摘要 (无配置区)
- *   LOD 2 (zoom >= 0.7): 完整节点 + 内联配置区 (替代右侧属性面板)
+ * 两级 LOD 渲染:
+ *   LOD 0 (zoom < 0.5): 仅标题 + 图标 (极小, 不可连边)
+ *   LOD 1 (zoom >= 0.5): 标题 + 端口 + 摘要 (默认)
  *
  * v-memo 依赖: [data.id, data.status, data.summaryText, data.category, lodLevel]
  * - 拖动时 4 个字段不变 → v-memo 命中 → 0 patch
@@ -124,8 +100,6 @@
 import { computed } from 'vue'
 import { Position, Handle } from '@vue-flow/core'
 import { useRuleEngineStore } from '@/stores/ruleEngine'
-import NodeConfigInline from './NodeConfigInline.vue'
-import type { ConfigSchemaProperty } from '@/types/api'
 
 defineOptions({ inheritAttrs: false })
 
@@ -146,16 +120,13 @@ interface NodeData {
   status?: string
   /** 摘要文本 — 由父组件在写入 summaryText 前预计算好 */
   summaryText?: string
-  /** 节点配置 (LOD 2 内联编辑器使用) */
-  config?: Record<string, unknown>
-  configSchema?: Record<string, ConfigSchemaProperty>
 }
 
 const props = defineProps<{
   data: NodeData
   selected?: boolean
-  /** LOD 等级 0/1/2 (由父组件 RuleCanvas 计算传入, 可选 — 内部会用 store 回退) */
-  lodLevel?: 0 | 1 | 2
+  /** LOD 等级 0/1 (由父组件 RuleCanvas 计算传入, 可选 — 内部会用 store 回退) */
+  lodLevel?: 0 | 1
 }>()
 
 const emit = defineEmits<{
@@ -180,26 +151,12 @@ const statusTitle = computed(() => {
 
 /**
  * LOD 等级: 优先使用 prop (父组件计算传入), 否则从 store 全局 map 查询.
- * 来自 store 时是响应式的 — 缩放切换 / 选中切换会触发重新计算.
+ * 来自 store 时是响应式的 — 缩放切换会触发重新计算.
  */
-const lodLevel = computed<0 | 1 | 2>(() => {
+const lodLevel = computed<0 | 1>(() => {
   if (props.lodLevel !== undefined) return props.lodLevel
   return store.getLodLevel(props.data.id)
 })
-
-/** 是否有可配置 schema (决定是否显示展开按钮 + 内联配置区) */
-const hasConfig = computed(() => {
-  const schema = props.data.configSchema
-  return !!schema && Object.keys(schema).length > 0
-})
-
-const configSchema = computed(() => props.data.configSchema ?? {})
-const config = computed(() => props.data.config ?? {})
-
-/** 展开按钮点击: 切换 configExpanded → 触发 LOD 2 */
-function handleExpandClick() {
-  store.toggleConfigExpanded(props.data.id)
-}
 
 // ============ Handle 连接状态 (store 全局索引 O(1) 查询) ============
 
@@ -243,6 +200,16 @@ function isOutputConnected(handleId: string): boolean {
 /* 拖动期间彻底关闭 transition,避免每帧补间触发样式重算 */
 .vue-flow__node.dragging .rule-node,
 .vue-flow__node.selected.dragging .rule-node {
+  transition: none !important;
+}
+
+/* P2-I (Phase 17.1): 节点状态切换瞬间禁用 transition
+   执行期 50 节点从 idle → running → success 时, transition 期间浏览器 schedule paint
+   ~3-5ms/帧. 选中态/拖动态走 .dragging/.selected 锁;
+   这里补一刀: data-status 变化时也立即生效, 不补间. */
+.rule-node[data-status='running'],
+.rule-node[data-status='success'],
+.rule-node[data-status='failed'] {
   transition: none !important;
 }
 
