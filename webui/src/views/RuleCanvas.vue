@@ -404,7 +404,7 @@
             @node-click="handleNodeClick"
             @pane-click="handlePaneClick"
             @connect="handleConnect"
-            @zoom="handleZoom"
+            @viewport-change="handleZoom"
             @nodes-change="handleNodesChange"
             @edges-change="handleEdgesChange"
             @node-context-menu="(e: NodeMouseEvent) => handleContextMenu(e.event as MouseEvent, e.node, 'node')"
@@ -1753,9 +1753,10 @@ function handleEdgesChange(changes: any[]) {
 
 // P1-2: 原 handlePan 死代码 (panX/panY 从未被消费) 已删除
 
-function handleZoom({ zoom }: { zoom: number; event: unknown }) {
+function handleZoom(viewport: { x: number; y: number; zoom: number }) {
   // P0-2: 缩放走 DOM textContent 直写, 不走模板响应式
   // 60Hz 触发不重渲染父组件, 仅一次 DOM 属性写入
+  const { zoom } = viewport
   const text = `${Math.round(zoom * 100)}%`
   if (text !== lastZoomText) {
     lastZoomText = text
@@ -1765,8 +1766,21 @@ function handleZoom({ zoom }: { zoom: number; event: unknown }) {
   }
   // 同步 zoomLevel ref (供 zoomIn/zoomOut/quickAddNode 读, 不参与响应式)
   zoomLevel.value = zoom
-  // LOD-1: 同步到 store, 触发 lodLevelMap 重新计算
-  store.setViewportZoom(zoom)
+  // LOD-1: 同步到 store, 触发 lodLevelMap 重新计算 (rAF 节流, 避免 60Hz 重建 80 entries Map)
+  scheduleViewportZoomUpdate(zoom)
+}
+
+/** rAF 节流: 累积 zoom 值, 在下次 rAF 回调里一次性写入 store, 避免 60Hz 触发 80 entries Map 重建 */
+let viewportZoomRafId = 0
+let pendingZoom = 1
+function scheduleViewportZoomUpdate(zoom: number) {
+  pendingZoom = zoom
+  if (!viewportZoomRafId) {
+    viewportZoomRafId = requestAnimationFrame(() => {
+      viewportZoomRafId = 0
+      store.setViewportZoom(pendingZoom)
+    })
+  }
 }
 
 function handleWheel(event: WheelEvent) {
