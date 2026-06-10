@@ -229,10 +229,11 @@ function isOutputConnected(handleId: string): boolean {
     inset 0 1px 0 rgba(255,255,255,0.05),
     0 2px 8px rgba(0,0,0,0.3);
   /* === GPU 合成层提示 (Tier 0 性能优化) ===
-     - contain: layout style paint  完全隔离子树对外部布局/绘制的影响
-     - will-change: transform        提示浏览器提前创建独立合成层
+     - contain: layout style  隔离子树对外部布局/样式影响 (去掉 paint! paint containment
+       等同 overflow:hidden, 会裁切超出节点壳的 Handle 圆 → 老大反馈"只能看到半个圆")
+     - will-change: transform  提示浏览器提前创建独立合成层
      - translateZ(0) + backface-visibility: hidden  兜底强制 layer,避免子像素抖动 */
-  contain: layout style paint;
+  contain: layout style;
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
