@@ -29,11 +29,10 @@
       </div>
     </div>
 
-    <!-- ========== LOD 1: 仅端口区域 (LOD 0 隐藏) ==========
-         Phase 17.1+: 移除节点摘要 summaryText — 老大反馈"还是乱",
-         LOD 1 只保留: 标题 + 类型图标 + 端口圆点 (清爽). -->
+    <!-- ========== LOD 1: 端口区域 + 端口名 (LOD 0 隐藏) ==========
+         Phase 17.1+: 显示端口名 label (老大反馈: 不知道连接点是什么意思)
+         紧凑显示: input 在 Handle 右侧, output 在 Handle 左侧 -->
     <template v-if="lodLevel >= 1">
-      <!-- 端口区域 -->
       <div
         v-if="(data.inputs?.length || 0) > 0 || (data.outputs?.length || 0) > 0"
         class="node-ports"
@@ -49,12 +48,22 @@
             :position="Position.Left"
             :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`, { 'is-connected': isInputConnected(input.name) }]"
           />
+          <span
+            v-if="input.label || input.name"
+            class="port-label"
+            :title="input.label || input.name"
+          >{{ input.label || input.name }}</span>
         </div>
         <div
           v-for="output in data.outputs"
           :key="'out-' + output.name"
           class="port-item port-out"
         >
+          <span
+            v-if="output.label || output.name"
+            class="port-label"
+            :title="output.label || output.name"
+          >{{ output.label || output.name }}</span>
           <Handle
             :id="output.name"
             type="source"
@@ -419,9 +428,20 @@ function isOutputConnected(handleId: string): boolean {
   position: relative;
 }
 
-/* 端口文字 label 也不应拦截 — 只有 Handle 本身需要交互 */
+/* 端口文字 label (Phase 17.1+: 显示端口名, 让用户知道连接点是什么)
+   - 紧凑字号 10px
+   - input: Handle 在左 label 在右 (默认顺序, 跟 flex 流向一致)
+   - output: label 在左 Handle 在右 (见模板, span 在前 Handle 在后) */
 .port-label {
-  pointer-events: none;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+  pointer-events: none;        // 不拦截 Handle 鼠标事件
+  font-family: 'JetBrains Mono', 'Menlo', monospace;  // 等宽字体让名字对齐
+  flex-shrink: 0;
 }
 
 /* 但 Handle 必须能接收事件 */
@@ -435,13 +455,6 @@ function isOutputConnected(handleId: string): boolean {
 
 .port-out {
   justify-content: flex-end;
-}
-
-.port-label {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 140px;
 }
 
 /* Handle (节点连接点) */
