@@ -233,7 +233,8 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
           const n = store.nodeById.get(primary.id) as any
           if (n) n.selected = true
         }
-        store.selectNode(primary.id)
+        // Phase 17.1+: 取消 store.selectNode (右侧面板不再需要 selectedNodeId 同步)
+        // selected 状态直接由 VueFlow 内部 useSelectedNodes + store.nodes[].selected 维护
         triggerRef(options.nodesRef)
       }
       store.resumeHistory()

@@ -1,7 +1,13 @@
 <template>
-  <div class="node-config-editor">
-    <!-- 节点头部: 标题 + 分类 -->
-    <header class="nce-header">
+  <div
+    class="node-config-editor"
+    :class="{ 'nce-inline': mode === 'inline' }"
+  >
+    <!-- 节点头部: 标题 + 分类 (inline 模式隐藏，节点壳已有) -->
+    <header
+      v-if="mode !== 'inline'"
+      class="nce-header"
+    >
       <div
         class="nce-icon"
         :class="nodeData?.category"
@@ -289,9 +295,17 @@ type NodeConfigValue = string | number | boolean | (string | number)[] | null
 
 // ============ Props ============
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   nodeId: string
-}>()
+  /**
+   * 渲染模式:
+   * - 'panel' (默认): 右侧属性面板风格 (有头部标题栏)
+   * - 'inline': 节点内嵌模式 (隐藏头部, 紧凑 padding, 适合 LOD 2 节点壳)
+   */
+  mode?: 'panel' | 'inline'
+}>(), {
+  mode: 'panel'
+})
 
 const store = useRuleEngineStore()
 
@@ -524,6 +538,89 @@ function updateConfig(key: string, value: string | number | boolean | null) {
   flex-direction: column;
   background: var(--bg-card);
   color: var(--text-primary);
+}
+
+/* ========== inline 模式 (节点内嵌 LOD 2) 紧凑样式 ==========
+   隐藏 panel 头部, padding 减半, 字号略小, 跟节点壳融为一体 */
+.node-config-editor.nce-inline {
+  background: transparent;
+  padding: 0;
+  font-size: 11px;
+
+  .nce-body {
+    padding: 0;
+    gap: 6px;
+  }
+
+  .nce-field {
+    gap: 2px;
+  }
+
+  .nce-field-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 1px;
+  }
+
+  .nce-field-control {
+    gap: 4px;
+  }
+
+  // 紧凑 element-plus 控件 (覆盖 :deep 样式)
+  :deep(.el-input__wrapper) {
+    padding: 1px 6px;
+    min-height: 22px;
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: none;
+  }
+  :deep(.el-input__inner) {
+    font-size: 11px;
+    line-height: 18px;
+  }
+  :deep(.el-textarea__inner) {
+    font-size: 11px;
+    padding: 4px 6px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+  :deep(.el-select__wrapper) {
+    padding: 1px 6px;
+    min-height: 22px;
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: none;
+  }
+  :deep(.el-input-number .el-input__wrapper) {
+    padding: 1px 6px;
+  }
+  :deep(.el-slider) {
+    margin: 4px 0;
+  }
+  :deep(.el-slider__runway) {
+    height: 3px;
+  }
+  :deep(.el-slider__bar) {
+    height: 3px;
+  }
+  :deep(.el-slider__button) {
+    width: 10px;
+    height: 10px;
+  }
+  :deep(.el-switch) {
+    --el-switch-on-color: var(--accent-blue);
+    --el-switch-off-color: rgba(255, 255, 255, 0.1);
+  }
+  :deep(.el-checkbox__label) {
+    font-size: 11px;
+  }
+  .nci-aux-btn,
+  .nce-aux-btn {
+    width: 18px;
+    height: 18px;
+  }
+  .slider-value {
+    font-size: 10px;
+    min-width: 28px;
+  }
 }
 
 .nce-header {

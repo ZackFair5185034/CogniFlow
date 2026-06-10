@@ -2,18 +2,19 @@
   <!--
     v-memo (Phase B + LOD-1): 拖拽时只让 wrapper transform 变化,
     节点壳内部 vdom 完全跳过 patch, 50 节点场景渲染开销从 O(N) 降到 O(1).
-    依赖选择依据: 拖动时 data.id/status/summaryText/category 都不变.
-    lodLevel 也在依赖里: 缩放切换时强制 patch 一次, 之后稳定.
+    依赖选择依据: 拖动时 data.id/status/category 都不变.
+    lodLevel 也在依赖里: 缩放/展开切换时强制 patch 一次, 之后稳定.
     selected 走 VueFlow wrapper 的 CSS class, 不需列入依赖.
   -->
   <div
-    v-memo="[data.id, data.status, data.summaryText, data.category, lodLevel]"
+    v-memo="[data.id, data.status, data.category, lodLevel]"
     v-bind="$attrs"
     class="rule-node"
     :class="[`category-${data.category}`, `lod-${lodLevel}`]"
     :data-status="data.status || 'idle'"
     :data-lod="lodLevel"
     @contextmenu.prevent="emit('contextmenu', $event)"
+    @dblclick.stop="emit('dblclick', $event)"
   >
     <!-- ========== LOD 0/1 通用: 标题栏 ========== -->
     <div class="node-header">
@@ -28,16 +29,10 @@
       </div>
     </div>
 
-    <!-- ========== LOD 1: 节点摘要 + 端口区域 (LOD 0 隐藏) ========== -->
+    <!-- ========== LOD 1: 仅端口区域 (LOD 0 隐藏) ==========
+         Phase 17.1+: 移除节点摘要 summaryText — 老大反馈"还是乱",
+         LOD 1 只保留: 标题 + 类型图标 + 端口圆点 (清爽). -->
     <template v-if="lodLevel >= 1">
-      <!-- 节点摘要 -->
-      <div
-        v-if="data.summaryText"
-        class="node-summary"
-      >
-        {{ data.summaryText }}
-      </div>
-
       <!-- 端口区域 -->
       <div
         v-if="(data.inputs?.length || 0) > 0 || (data.outputs?.length || 0) > 0"
@@ -81,25 +76,42 @@
         :title="statusTitle"
       />
     </div>
+
+    <!-- ========== LOD 2: 节点内嵌配置 (Phase 17.1+ 取代右侧面板) ========== -->
+    <div
+      v-if="lodLevel >= 2"
+      class="node-config-section"
+      @mousedown.stop
+      @click.stop
+      @dblclick.stop
+    >
+      <NodeConfigEditor
+        mode="inline"
+        :node-id="data.id"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 /**
- * RuleNode - 节点壳 (Phase LOD-1)
+ * RuleNode - 节点壳 (Phase LOD-2)
  *
- * 两级 LOD 渲染:
- *   LOD 0 (zoom < 0.5): 仅标题 + 图标 (极小, 不可连边)
- *   LOD 1 (zoom >= 0.5): 标题 + 端口 + 摘要 (默认)
+ * 三级 LOD 渲染:
+ *   LOD 0 (zoom < 0.5): 仅标题 + 类型图标 (极小, 不可连边)
+ *   LOD 1 (0.5 ≤ zoom < 1.0): 标题 + 类型图标 + 端口 (无摘要, 清爽)
+ *   LOD 2 (zoom ≥ 1.0 或双击展开): 完整内嵌配置 NodeConfigEditor
  *
- * v-memo 依赖: [data.id, data.status, data.summaryText, data.category, lodLevel]
- * - 拖动时 4 个字段不变 → v-memo 命中 → 0 patch
- * - lodLevel 在依赖里: 缩放切换时强制 patch 一次, 之后稳定
+ * v-memo 依赖: [data.id, data.status, data.category, lodLevel]
+ * - 拖动时所有字段不变 → v-memo 命中 → 0 patch
+ * - lodLevel 在依赖里: 缩放/展开切换时强制 patch 一次, 之后稳定
  * - selected 走 CSS (outline) 不触发组件更新
+ * - summaryText 已被移除 (Phase 17.1+), 不再是依赖
  */
 import { computed } from 'vue'
 import { Position, Handle } from '@vue-flow/core'
 import { useRuleEngineStore } from '@/stores/ruleEngine'
+import NodeConfigEditor from './NodeConfigEditor.vue'
 
 defineOptions({ inheritAttrs: false })
 
@@ -118,19 +130,22 @@ interface NodeData {
   inputs?: Port[]
   outputs?: Port[]
   status?: string
-  /** 摘要文本 — 由父组件在写入 summaryText 前预计算好 */
-  summaryText?: string
 }
 
 const props = defineProps<{
   data: NodeData
   selected?: boolean
-  /** LOD 等级 0/1 (由父组件 RuleCanvas 计算传入, 可选 — 内部会用 store 回退) */
-  lodLevel?: 0 | 1
+  /** LOD 等级 0/1/2 (由父组件 RuleCanvas 计算传入, 可选 — 内部会用 store 回退) */
+  lodLevel?: 0 | 1 | 2
 }>()
 
 const emit = defineEmits<{
   (e: 'contextmenu', event: MouseEvent): void
+  /**
+   * 双击节点 → 父组件 RuleCanvas 调 store.toggleNodeExpanded(id) 进入 LOD 2
+   * 用 .stop 阻止冒泡到 VueFlow, 避免触发框选/拖拽
+   */
+  (e: 'dblclick', event: MouseEvent): void
 }>()
 
 const store = useRuleEngineStore()
@@ -153,7 +168,7 @@ const statusTitle = computed(() => {
  * LOD 等级: 优先使用 prop (父组件计算传入), 否则从 store 全局 map 查询.
  * 来自 store 时是响应式的 — 缩放切换会触发重新计算.
  */
-const lodLevel = computed<0 | 1>(() => {
+const lodLevel = computed<0 | 1 | 2>(() => {
   if (props.lodLevel !== undefined) return props.lodLevel
   return store.getLodLevel(props.data.id)
 })
@@ -262,19 +277,34 @@ function isOutputConnected(handleId: string): boolean {
   }
   .node-icon svg { width: 10px; height: 10px; }
   .node-label { font-size: 11px; }
-  .node-summary { display: none; }
   .node-ports { display: none; }
-  .node-config { display: none; }
+  .node-config-section { display: none; }   // 极简模式隐藏配置
 }
 
-/* ========== LOD 2 完整模式 ========== */
+/* ========== LOD 2 完整模式 (Phase 17.1+: 节点内嵌 NodeConfigEditor 取代右侧面板) ========== */
 .rule-node.lod-2 {
   width: 280px;
 
-  .node-config {
+  .node-config-section {
     padding: 8px 10px;
     border-top: 1px solid rgba(255, 255, 255, 0.04);
     background: rgba(0, 0, 0, 0.12);
+    max-height: 320px;        // 防止节点太高遮住其他节点
+    overflow-y: auto;         // 配置项多时节点内滚动
+    // 滚动条样式 (跟节点暗色主题匹配)
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      &:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+    }
   }
 }
 
@@ -324,19 +354,7 @@ function isOutputConnected(handleId: string): boolean {
 .category-logic .node-icon { background: rgba(220, 79, 220, 0.15); color: #DC4FDC; }
 .category-output .node-icon { background: rgba(255, 76, 76, 0.15); color: #FF4C4C; }
 
-/* 节点摘要 */
-.node-summary {
-  padding: 4px 10px 6px;
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.55);
-  font-family: 'JetBrains Mono', monospace;
-  background: rgba(0, 0, 0, 0.15);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  contain: layout style;
-}
+/* 节点摘要 — Phase 17.1+ 已移除, 删死样式 */
 
 /* 节点悬停态 */
 .rule-node:hover {

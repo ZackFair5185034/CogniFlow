@@ -85,8 +85,15 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   /** 规则图边 - 同上原因用 shallowRef。 */
   const edges = shallowRef<Edge[]>([])
 
-  /** 选中的节点 ID */
-  const selectedNodeId = ref<string | null>(null)
+  /**
+   * 展开的节点 ID 集合 (LOD 2 节点内嵌配置)
+   *
+   * Phase 17.1+: 取代右侧 NodeConfigEditor 面板.
+   * - 双击节点 → 加入此 Set → 该节点 LOD 强制升到 2 (无视 zoom)
+   * - 再次双击 / 删除节点 / 点击空白 → 从 Set 移除 → 退回 zoom 决定的 LOD
+   * - 多节点可同时展开 (用户编辑 2 个节点时, 对比配置很常见)
+   */
+  const expandedNodeIds = shallowRef<Set<string>>(new Set())
 
   /** 变量列表 */
   const variables = ref<Variable[]>([])
@@ -123,12 +130,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const maxHistorySize = 20
 
   // ============ 计算属性 ============
-
-  /** 选中的节点对象 */
-  const selectedNode = computed((): Node<RuleNodeData> | null => {
-    const list: Node<RuleNodeData>[] = nodes.value
-    return list.find(n => n.id === selectedNodeId.value) ?? null
-  })
 
   /**
    * 全局已连接 handle 索引 (Phase B 任务2: 连接状态索引化)
@@ -188,46 +189,64 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const hasNodes = computed(() => nodes.value.length > 0)
 
   /** 锁定期间的 LOD 缓存, drag 期间维持稳定 (避免切换抖动破坏 v-memo) */
-  const lodLevelMapCache = new Map<string, 0 | 1>()
+  const lodLevelMapCache = new Map<string, 0 | 1 | 2>()
 
   /**
    * 基础 LOD 等级 map: 仅依赖 zoom + 节点总数.
    * 选中态 / 展开态 → 在 getLodLevel() 内做 O(1) 快速路径.
    *
    * 0 = 极简 (仅标题+图标+极小端口点)
-   * 1 = 完整 (标题+端口+摘要)
+   * 1 = 折叠 (标题+端口+摘要)
+   * 2 = 完整 (标题+端口+摘要+内嵌配置 NodeConfigEditor)
+   *   触发条件 (任一):
+   *   - expandedNodeIds 包含此节点 (用户双击展开)
+   *   - zoom >= 1.0 (默认缩放就展开, 让用户能直接看到完整表单)
+   *   注: zoom < 0.5 → 强制 LOD 0 (看不清任何细节, 极简优先)
    * - 拖动中 / 框选拖拽中 → 锁定当前 LOD (走 lodLevelMapCache)
-   * - zoom < 0.5 → LOD 0
-   * - 其他 → LOD 1
    *
    * P0-A (Phase 17.1): 短路缓存 — 60Hz 缩放期间 baseLod 跨阈值才重建
    * 缩放 200 节点 60fps 时 12000 ops/秒 Map 重建 → 跨阈值时一次性重建.
+   *
+   * P0-C (Phase 17.1+): 引入 LOD 2 — 节点内嵌配置 (取代右侧面板).
+   * 缓存键增加 expandedNodeIds.value 引用检测 — 展开集合变化时强制重建 (但仍是 O(N) 单次)
    */
-  let cachedBaseLodRef: { zoom: number; baseLod: 0 | 1; nodesRef: typeof nodes.value; isLodLocked: boolean } | null = null
-  let cachedBaseLodMap: Map<string, 0 | 1> = new Map()
-  const baseLodLevelMap = computed<Map<string, 0 | 1>>(() => {
+  let cachedBaseLodRef: { zoom: number; expandedRef: typeof expandedNodeIds.value; nodesRef: typeof nodes.value; isLodLocked: boolean } | null = null
+  let cachedBaseLodMap: Map<string, 0 | 1 | 2> = new Map()
+  const baseLodLevelMap = computed<Map<string, 0 | 1 | 2>>(() => {
     const zoom = viewportZoom.value
     const isLodLocked = isDragging.value || isSelectionBoxActive.value
-    const baseLod: 0 | 1 = zoom < 0.5 ? 0 : 1
+    const expandedRef = expandedNodeIds.value
     const nodesRef = nodes.value
+
+    // LOD 决策: zoom < 0.5 → 强制 0; 否则看 expanded
+    const autoLod: 1 | 2 = zoom < 0.5 ? 0 : (zoom >= 1.0 ? 2 : 1)
+    // 展开节点即使 zoom 不在 [1, ∞) 也升到 2 (用户主动展开意图)
+    // zoom < 0.5 仍强制 0 (看不清任何细节, 极简优先)
 
     // 短路: 输入未变化 → 复用上次 Map
     if (
       cachedBaseLodRef &&
       cachedBaseLodRef.zoom === zoom &&
       cachedBaseLodRef.isLodLocked === isLodLocked &&
-      cachedBaseLodRef.nodesRef === nodesRef
+      cachedBaseLodRef.nodesRef === nodesRef &&
+      cachedBaseLodRef.expandedRef === expandedRef
     ) {
       return cachedBaseLodMap
     }
 
     // 重建
-    const map = new Map<string, 0 | 1>()
+    const map = new Map<string, 0 | 1 | 2>()
     for (const n of nodesRef) {
       if (isLodLocked) {
-        map.set(n.id, (lodLevelMapCache.get(n.id) as 0 | 1 | undefined) ?? baseLod)
+        // 锁定时维持上次 LOD (避免拖动期间样式跳变)
+        const cached = lodLevelMapCache.get(n.id) as 0 | 1 | 2 | undefined
+        map.set(n.id, cached ?? autoLod)
+      } else if (zoom < 0.5) {
+        // zoom 太小时, 任何节点都强制 LOD 0 (展开节点也降级)
+        map.set(n.id, 0)
       } else {
-        map.set(n.id, baseLod)
+        // zoom >= 0.5: 展开节点 → 2; 其他 → autoLod
+        map.set(n.id, expandedRef.has(n.id) ? 2 : autoLod)
       }
     }
 
@@ -236,7 +255,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       lodLevelMapCache.clear()
       for (const [k, v] of map) lodLevelMapCache.set(k, v)
     }
-    cachedBaseLodRef = { zoom, baseLod, nodesRef, isLodLocked }
+    cachedBaseLodRef = { zoom, expandedRef, nodesRef, isLodLocked }
     cachedBaseLodMap = map
     return map
   })
@@ -244,9 +263,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   /** 保留旧 lodLevelMap 名称作为兼容导出 (RuleNode.vue 等仍可能引用) */
   const lodLevelMap = baseLodLevelMap
 
-  /** O(1) 查询节点 LOD 等级 - 选中态/展开态走快速路径,不走 Map 重建 */
-  function getLodLevel(nodeId: string): 0 | 1 {
-    // 选中态/展开态不再升到独立 LOD, 走 baseLodLevelMap (zoom 决定)
+  /** O(1) 查询节点 LOD 等级 */
+  function getLodLevel(nodeId: string): 0 | 1 | 2 {
     return baseLodLevelMap.value.get(nodeId) ?? 1
   }
 
@@ -464,9 +482,9 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         node.data.config = {} as Record<string, VariableDefaultValue>
       }
       node.data.config[key] = value
-      // 不再 triggerRef(nodes): RuleNode 不再渲染 config 值,
-      // 只有 NodeConfigEditor(右侧面板)消费它, 而右侧面板通过 computed
-      // 监听 selectedNode 引用, 不需要 triggerRef.
+      // 不再 triggerRef(nodes): RuleNode 不再渲染 config 值 (Phase 17.1+),
+      // 只有 NodeConfigEditor (节点内嵌 LOD 2) 消费它, 而 Editor 通过 computed
+      // 监听 store.nodeById.get(id) 引用, 不需要 triggerRef.
       // 去掉 triggerRef 避免了每次调参时 VueFlow 整图 diff.
     }
   }
@@ -545,8 +563,10 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   function removeNode(nodeId: string) {
     nodes.value = nodes.value.filter(n => n.id !== nodeId)
     edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
-    if (selectedNodeId.value === nodeId) {
-      selectedNodeId.value = null
+    // 同步清理展开状态
+    if (expandedNodeIds.value.has(nodeId)) {
+      expandedNodeIds.value.delete(nodeId)
+      triggerRef(expandedNodeIds)
     }
     saveHistory()
   }
@@ -563,15 +583,40 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     const idSet = new Set(nodeIds)
     nodes.value = nodes.value.filter(n => !idSet.has(n.id))
     edges.value = edges.value.filter(e => !idSet.has(e.source) && !idSet.has(e.target))
-    if (selectedNodeId.value && idSet.has(selectedNodeId.value)) {
-      selectedNodeId.value = null
+    // 同步清理展开状态
+    if (expandedNodeIds.value.size > 0) {
+      let changed = false
+      for (const id of idSet) {
+        if (expandedNodeIds.value.has(id)) {
+          expandedNodeIds.value.delete(id)
+          changed = true
+        }
+      }
+      if (changed) triggerRef(expandedNodeIds)
     }
     saveHistory()
   }
 
-  /** 选中节点 */
-  function selectNode(nodeId: string | null) {
-    selectedNodeId.value = nodeId
+  /**
+   * 切换节点 LOD 2 展开状态 (Phase 17.1+: 双击节点 / 再次双击 触发)
+   * - 已在 Set → 移除 (收回 LOD 1)
+   * - 未在 Set → 加入 (强制升到 LOD 2, 无视 zoom)
+   */
+  function toggleNodeExpanded(nodeId: string) {
+    if (expandedNodeIds.value.has(nodeId)) {
+      expandedNodeIds.value.delete(nodeId)
+    } else {
+      expandedNodeIds.value.add(nodeId)
+    }
+    triggerRef(expandedNodeIds)
+  }
+
+  /** 收起所有展开的节点 (点空白 / 切换画布选中时调用) */
+  function collapseAllExpanded() {
+    if (expandedNodeIds.value.size > 0) {
+      expandedNodeIds.value.clear()
+      triggerRef(expandedNodeIds)
+    }
   }
 
   // ============ 边操作 ============
@@ -863,7 +908,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     graphMeta,
     nodes,
     edges,
-    selectedNodeId,
+    expandedNodeIds,    // LOD 2 展开集合 (Phase 17.1+: 取代右侧面板)
     variables,
     availableModels,
     executionState,
@@ -876,7 +921,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     isSelectionBoxActive,// LOD 锁定
 
     // 计算属性
-    selectedNode,
     connectedHandleIndex,
     nodeById,  // Phase B 任务6
     canUndo,
@@ -898,7 +942,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     setNodesPositions,  // 路径 B: 自研拖动 drag-end 批量同步
     removeNode,
     removeNodes,        // Phase B 任务4
-    selectNode,
+    toggleNodeExpanded, // Phase 17.1+: 双击节点展开 LOD 2
+    collapseAllExpanded,// Phase 17.1+: 点空白收起所有展开
     isHandleConnected,  // Phase B 任务2
 
     // 边操作

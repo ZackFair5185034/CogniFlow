@@ -139,14 +139,6 @@
           <SvgIcon name="panel-left" />
         </el-button>
         <el-button
-          class="palette-toggle-btn"
-          :class="{ active: showPropertiesPanel }"
-          :title="showPropertiesPanel ? '收起属性面板' : '展开属性面板'"
-          @click="showPropertiesPanel = !showPropertiesPanel"
-        >
-          <SvgIcon name="panel-right" />
-        </el-button>
-        <el-button
           class="action-btn secondary"
           @click="handleValidate"
         >
@@ -407,6 +399,7 @@
             @viewport-change="handleZoom"
             @nodes-change="handleNodesChange"
             @edges-change="handleEdgesChange"
+            @node-double-click="handleNodeDoubleClick"
             @node-context-menu="(e: NodeMouseEvent) => handleContextMenu(e.event as MouseEvent, e.node, 'node')"
             @pane-context-menu="(e: MouseEvent) => handleContextMenu(e, null, 'pane')"
             @edge-context-menu="(e: EdgeMouseEvent) => handleContextMenu(e.event as MouseEvent, e.edge, 'edge')"
@@ -465,25 +458,6 @@
           />
         </div>
       </div>
-
-      <!-- 右侧属性面板 (Phase A: 选中节点配置编辑) -->
-      <aside
-        v-if="showPropertiesPanel"
-        class="properties-panel"
-      >
-        <NodeConfigEditor
-          v-if="selectedNode"
-          :key="selectedNode.id"
-          :node-id="selectedNode.id"
-        />
-        <div
-          v-else
-          class="properties-panel-empty"
-        >
-          <SvgIcon name="info" />
-          <p>选中节点以编辑配置</p>
-        </div>
-      </aside>
     </div>
 
     <!-- 执行日志面板 -->
@@ -655,7 +629,8 @@ import type { Node, Edge, NodeMouseEvent, EdgeMouseEvent } from '@vue-flow/core'
 // auto-import 的全局 const 在 template 中不被 TS 识别），需要显式 import
 import { SelectionMode } from '@vue-flow/core'
 import RuleNode from '@/components/rule-engine/RuleNode.vue'
-import NodeConfigEditor from '@/components/rule-engine/NodeConfigEditor.vue'
+// Phase 17.1+: NodeConfigEditor 已不再用于右侧面板, 改由 RuleNode LOD 2 内嵌使用,
+// RuleNode.vue 自行 import 该组件, RuleCanvas 不再 import.
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
@@ -691,7 +666,6 @@ const {
   variables,
   nodeDefinitions,
   graphMeta: graph,
-  selectedNode,
 } = storeToRefs(store)
 
 // 路径 B: 自研拖动接管 (需在 storeToRefs 之后调用，确保 nodes ref 可用)
@@ -767,7 +741,6 @@ const shouldShowMiniMap = computed(() => {
   // 用户手动 on/off 优先; 默认 (true) 时按 largeGraphMode 自动
   return showMiniMap.value && !largeGraphMode.value
 })
-const showPropertiesPanel = ref(true)  // 右侧属性面板 (Phase A)
 const snapGrid = ref(true)
 const showGrid = ref(true)
 const showExecutionPanel = ref(false)
@@ -1586,9 +1559,18 @@ function quickAddNode(nodeDef: NodeDefinition) {
   ElMessage.success(`已添加 ${nodeDef.label}`)
 }
 
-// 节点点击
+// 节点点击 (Phase 17.1+: 不再选节点进右侧面板, 仅做选中视觉同步 + 高亮)
+// 双击走 handleNodeDoubleClick 进入 LOD 2 内嵌配置
 function handleNodeClick(event: any) {
-  store.selectNode(event.node.id)
+  // 单击: 仅清空/保留 selected 状态, 真正的配置编辑靠双击
+  // 这样避免误点击打开/关闭右侧面板的视觉跳变
+  // (如果未来要支持"单击预览", 可在此处加 store.setSelectedId(event.node.id))
+}
+
+// 节点双击 → 切换 LOD 2 展开 (Phase 17.1+)
+function handleNodeDoubleClick(event: any) {
+  const nodeId = event?.node?.id
+  if (nodeId) store.toggleNodeExpanded(nodeId)
 }
 
 // 节点拖拽 (路径 B: 由 useCogniFlowDrag composable 完全接管)
@@ -1607,9 +1589,10 @@ function handlePaneClick() {
       changed = true
     }
   }
-  store.selectNode(null)
   // P0-B (Phase 17.1): triggerRef 替代数组引用重建 (避免 VueFlow 整图 diff)
   if (changed) triggerRef(nodes)
+  // Phase 17.1+: 点空白收起所有展开的节点 (用户切回画布视角的常见操作)
+  store.collapseAllExpanded()
 }
 
 // 端口类型兼容性检查
@@ -1763,10 +1746,18 @@ function handleNodesChange(changes: any[]) {
     store.edges = store.edges.filter((e: Edge) =>
       remainingIds.has(e.source) && remainingIds.has(e.target)
     ) as any
-    // Phase A: 同步清理选中节点 (否则右侧属性面板渲染已删节点的"幽灵")
+    // Phase 17.1+: 同步清理展开状态 (删除节点时, 它的 LOD 2 展开态也得收)
+    // 之前是清 selectedNodeId (右侧面板) — 现在是清 expandedNodeIds (内嵌配置)
     const removedIds = new Set(meaningful.filter(c => c.type === 'remove').map(c => c.id))
-    if (removedIds.has(store.selectedNodeId)) {
-      store.selectNode(null)
+    if (removedIds.size > 0 && store.expandedNodeIds.size > 0) {
+      let changed = false
+      for (const id of removedIds) {
+        if (store.expandedNodeIds.has(id)) {
+          store.expandedNodeIds.delete(id)
+          changed = true
+        }
+      }
+      if (changed) triggerRef(store.expandedNodeIds)
     }
   }
   store.nodes = newNodes as any
@@ -2435,55 +2426,8 @@ $panel-header-height: 44px;
   position: relative;
 }
 
-// 右侧属性面板 (Phase A)
-// - position: fixed 悬浮在画布之上，不占用画布宽度，
-//   原来作为 flex 子项占用 360px 宽度，导致右侧节点的 source handle
-//   被面板遮挡，用户无法点击 handle 进行连线。
-// - pointer-events: none 让面板区域不拦截鼠标事件，
-//   内部的 .node-config-editor 则恢复 pointer-events，保证配置编辑可用。
-//   这样即使用户不关面板，也能点到被面板物理位置遮盖的 handle。
-// - .properties-panel-empty 面板空态也不需要鼠标交互。
-.properties-panel {
-  position: fixed;
-  right: 0;
-  top: 44px;         // canvas-header 高度
-  bottom: 0;
-  width: 360px;
-  background: var(--bg-card, #1c1c26);
-  border-left: 1px solid var(--border-color, #2a2a38);
-  display: flex;
-  flex-direction: column;
-  z-index: 50;
-  overflow: hidden;
-  contain: layout style;
-  pointer-events: none;     // 面板不拦截鼠标，handle 能透传被点到
-}
-
-// NodeConfigEditor 恢复鼠标交互（表单控件、按钮等）
-.properties-panel :deep(.node-config-editor) {
-  pointer-events: auto;
-}
-
-.properties-panel-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--text-muted, #55556a);
-  font-size: 13px;
-  padding: 20px;
-  text-align: center;
-}
-
-.properties-panel-empty svg {
-  width: 36px;
-  height: 36px;
-  opacity: 0.4;
-}
-
 // 左侧节点面板 (折叠时整段隐藏 — 完全收纳)
+// Phase 17.1+: 删除了右侧 .properties-panel SCSS 块 (改用 RuleNode LOD 2 内嵌配置)
 .node-palette {
   width: $palette-width;
   background: #0e0e14;
@@ -3300,8 +3244,8 @@ $panel-header-height: 44px;
   }
 }
 
-// 右侧属性面板 (Phase A: 节点配置编辑) - 旧占位代码 (Phase 4.3 废弃后留下) 已清理
-// 新样式在 .canvas-body 后的 .properties-panel 块, 这里不再定义
+// Phase 17.1+: 删除了 .properties-panel 块 (改用 RuleNode LOD 2 内嵌配置)
+
 
 .panel-header {
   height: $panel-header-height;
