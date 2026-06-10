@@ -521,31 +521,40 @@
         </div>
 
         <div class="logs-list">
-          <div
-            v-for="(log, idx) in executionLogs"
-            :key="idx"
-            class="log-entry"
-            :class="log.level"
+          <!-- P1-H: 虚拟滚动 (vue-virtual-scroller RecycleScroller) —
+               1000+ 日志滚动 60fps, 仅渲染可视区域 + 上下 buffer -->
+          <RecycleScroller
+            v-if="executionLogs.length > 0"
+            class="logs-scroller"
+            :items="executionLogs"
+            :item-size="34"
+            v-slot="{ item, index }"
           >
-            <span class="log-time">{{ log.timestamp }}</span>
-            <span class="log-level-badge">{{ log.level.toUpperCase() }}</span>
-            <span
-              v-if="log.node_type"
-              class="log-node"
-            >{{ log.node_type }}</span>
-            <span class="log-message">{{ log.message }}</span>
-            <span
-              v-if="log.metrics && Object.keys(log.metrics).length > 0"
-              class="log-metrics"
-              :title="formatMetrics(log.metrics)"
-            >{{ formatMetrics(log.metrics) }}</span>
-            <span
-              v-if="log.duration_ms != null"
-              class="log-duration"
-            >{{ formatDuration(log.duration_ms) }}</span>
-          </div>
+            <div
+              :key="index"
+              class="log-entry"
+              :class="item.level"
+            >
+              <span class="log-time">{{ item.timestamp }}</span>
+              <span class="log-level-badge">{{ item.level.toUpperCase() }}</span>
+              <span
+                v-if="item.node_type"
+                class="log-node"
+              >{{ item.node_type }}</span>
+              <span class="log-message">{{ item.message }}</span>
+              <span
+                v-if="item.metrics && Object.keys(item.metrics).length > 0"
+                class="log-metrics"
+                :title="formatMetrics(item.metrics)"
+              >{{ formatMetrics(item.metrics) }}</span>
+              <span
+                v-if="item.duration_ms != null"
+                class="log-duration"
+              >{{ formatDuration(item.duration_ms) }}</span>
+            </div>
+          </RecycleScroller>
           <div
-            v-if="executionLogs.length === 0"
+            v-else
             class="no-logs"
           >
             暂无执行日志
@@ -635,6 +644,8 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
+import { RecycleScroller } from 'vue-virtual-scroller'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import { useCogniFlowDrag } from '@/composables/useCogniFlowDrag'
 
 const router = useRouter()
@@ -3573,6 +3584,8 @@ $panel-header-height: 44px;
   border-top: 1px solid #1e1e2e;
   z-index: 50;
   transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
 
   &:not(.expanded) {
     .execution-content { display: none; }
@@ -3648,8 +3661,10 @@ $panel-header-height: 44px;
 }
 
 .execution-content {
-  max-height: 200px;
-  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 执行进度条 */
@@ -3685,16 +3700,25 @@ $panel-header-height: 44px;
 }
 
 .logs-list {
-  padding: 8px 16px;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.logs-scroller {
+  width: 100%;
+  height: 100%;
 }
 
 .log-entry {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 0;
+  padding: 8px 16px;
   border-bottom: 1px solid #1a1a24;
   font-size: 12px;
+  height: 34px;
+  box-sizing: border-box;
 
   &:last-child { border-bottom: none; }
 
@@ -3748,7 +3772,7 @@ $panel-header-height: 44px;
 
 .no-logs {
   text-align: center;
-  padding: 20px;
+  padding: 20px 16px;
   color: #444;
   font-size: 13px;
 }
