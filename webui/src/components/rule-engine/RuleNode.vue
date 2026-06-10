@@ -468,6 +468,24 @@ function isOutputConnected(handleId: string): boolean {
   overflow: visible !important;
 }
 
+/* 关键: 让 handle 圆心在节点边缘外 1 半径 (5px), handle 整体在节点外露,
+   而不是 vue-flow 默认的 right: 0 + translate(50%, -50%) 圆心贴边 (半个圆被节点遮).
+   视觉: handle 完整可见, 不再"只能看到半个圆".
+   重要: vue-flow Handle 内部 inline 设了 left/right/transform (高优先级),
+          外部 CSS 改 left/right/transform !important 也无效 (computed 仍是 vue-flow 算的).
+          必须用 margin 偏移覆盖位置. */
+:deep(.vue-flow__handle-right) {
+  /* vue-flow 内部把 right handle left 设为 node.width - 10 = 270, 圆心贴节点右.
+     加 margin-right: -5px 让 handle 整体右移 5px (外溢到节点外 5px),
+     handle 完整在节点外, 圆心距节点右边缘 = 5px (1 半径). */
+  margin-right: -5px !important;
+  margin-left: 0 !important;
+}
+:deep(.vue-flow__handle-left) {
+  margin-left: -5px !important;
+  margin-right: 0 !important;
+}
+
 /* 显式确认 Handle 在有 connectable 标识时允许事件穿透。
    VueFlow 自带 CSS 中 .vue-flow__handle.connectable 设置 pointer-events: all，
    但 scoped :deep() 选择器优先级可能意外占优，此处重声明以确保交互性 */
