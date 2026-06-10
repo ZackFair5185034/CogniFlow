@@ -149,24 +149,59 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   // ============ 计算属性 ============
 
   /**
-   * 全局已连接 handle 索引 (Phase B 任务2: 连接状态索引化)
+   * 全局已连接 handle 索引 (Phase 17.2 P1-F: 增量维护)
    *
-   * 之前: 每个 RuleNode 内部 computed 扫描 store.edges, O(V*E) per frame
-   * 现在: store 全局计算一次, 节点 O(1) 查询
+   * 之前 (Phase B 任务2): computed 每次 edges.value 变化全量重建 Set
+   * 现在: 手动维护 _connectedHandleIndex Set, addEdge/removeEdge/loadGraph/undo/redo
+   *       显式 add/delete, 用 readonly() 暴露避免外部 mutate.
    *
    * key 格式: `${nodeId}:${handleId}:${direction}`, direction = 'source' | 'target'
    */
-  const connectedHandleIndex = computed<Set<string>>(() => {
-    const index = new Set<string>()
-    for (const e of edges.value) {
-      if (e.sourceHandle) {
-        index.add(`${e.source}:${e.sourceHandle}:source`)
-      }
-      if (e.targetHandle) {
-        index.add(`${e.target}:${e.targetHandle}:target`)
-      }
+  const _connectedHandleIndex = new Set<string>()
+  const _connectedHandleVersion = shallowRef(0)  // 触发 computed/下游依赖
+
+  /**
+   * 把一个 edge 的 source/target handle 加入索引
+   */
+  function _indexAddEdge(e: { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) {
+    if (e.sourceHandle) {
+      _connectedHandleIndex.add(`${e.source}:${e.sourceHandle}:source`)
     }
-    return index
+    if (e.targetHandle) {
+      _connectedHandleIndex.add(`${e.target}:${e.targetHandle}:target`)
+    }
+  }
+
+  /**
+   * 从索引中移除一个 edge 的 source/target handle
+   */
+  function _indexRemoveEdge(e: { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) {
+    if (e.sourceHandle) {
+      _connectedHandleIndex.delete(`${e.source}:${e.sourceHandle}:source`)
+    }
+    if (e.targetHandle) {
+      _connectedHandleIndex.delete(`${e.target}:${e.targetHandle}:target`)
+    }
+  }
+
+  /**
+   * 全量重建索引 (loadGraph / undo snapshot 路径调用)
+   */
+  function _indexRebuild() {
+    _connectedHandleIndex.clear()
+    for (const e of edges.value) {
+      _indexAddEdge(e)
+    }
+  }
+
+  /**
+   * 暴露的只读 connectedHandleIndex — computed 包装避免外部直接 mutate
+   * 但内部 _indexAddEdge/_indexRemoveEdge 仍然能改 _connectedHandleIndex
+   */
+  const connectedHandleIndex = computed<ReadonlySet<string>>(() => {
+    // 依赖 _connectedHandleVersion 触发响应式
+    void _connectedHandleVersion.value
+    return _connectedHandleIndex
   })
 
   /**
@@ -368,6 +403,9 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       animated: false,
       markerEnd: MarkerType.ArrowClosed
     }))
+    // P1-F: 全量重建 connectedHandleIndex
+    _indexRebuild()
+    triggerRef(_connectedHandleVersion)
 
     // 解析变量
     if (data.variables_json) {
@@ -599,7 +637,11 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     if (nodeIds.length === 0) return
     const idSet = new Set(nodeIds)
     nodes.value = nodes.value.filter(n => !idSet.has(n.id))
+    // P1-F: 先收集要删的 incident edges, 用于增量维护
+    const removedEdges = edges.value.filter(e => idSet.has(e.source) || idSet.has(e.target))
     edges.value = edges.value.filter(e => !idSet.has(e.source) && !idSet.has(e.target))
+    for (const e of removedEdges) _indexRemoveEdge(e)
+    triggerRef(_connectedHandleVersion)
     // 同步清理展开状态
     if (expandedNodeIds.value.size > 0) {
       let changed = false
@@ -644,7 +686,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     sourceHandle?: string | null; targetHandle?: string | null
   }) {
     // shallowRef 需重新赋值触发响应式（与 createNode 同问题）
-    edges.value = [...edges.value, {
+    const newEdge = {
       id: `edge_${Date.now()}`,
       source: connection.source,
       target: connection.target,
@@ -652,13 +694,21 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       targetHandle: connection.targetHandle ?? undefined,
       type: 'default',
       animated: false
-    }]
+    }
+    edges.value = [...edges.value, newEdge]
+    // P1-F: 增量维护 connectedHandleIndex
+    _indexAddEdge(newEdge)
+    triggerRef(_connectedHandleVersion)
     saveHistory()
   }
 
   /** 删除边 */
   function removeEdge(edgeId: string) {
+    const target = edges.value.find(e => e.id === edgeId)
     edges.value = edges.value.filter(e => e.id !== edgeId)
+    // P1-F: 增量维护 connectedHandleIndex
+    if (target) _indexRemoveEdge(target)
+    triggerRef(_connectedHandleVersion)
     saveHistory()
   }
 
@@ -668,7 +718,11 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   function removeEdges(edgeIds: string[]) {
     if (edgeIds.length === 0) return
     const idSet = new Set(edgeIds)
+    // P1-F: 先收集要删的边, 用于增量维护
+    const removed = edges.value.filter(e => idSet.has(e.id))
     edges.value = edges.value.filter(e => !idSet.has(e.id))
+    for (const e of removed) _indexRemoveEdge(e)
+    triggerRef(_connectedHandleVersion)
     saveHistory()
   }
 
@@ -777,6 +831,9 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     if (entry.type === 'snapshot') {
       nodes.value = JSON.parse(JSON.stringify(entry.nodes))
       edges.value = JSON.parse(JSON.stringify(entry.edges))
+      // P1-F: 整体替换 edges 后全量重建索引
+      _indexRebuild()
+      triggerRef(_connectedHandleVersion)
     } else if (entry.type === 'move') {
       // 单节点位置变更, 直接 mutate + triggerRef 避免整图重渲染
       const node = nodes.value.find(n => n.id === entry.nodeId)
