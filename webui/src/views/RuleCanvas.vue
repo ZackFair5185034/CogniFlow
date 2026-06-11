@@ -1369,22 +1369,28 @@ function handleSelectionStart(event: any) {
  * - 每次 selectedNodeIds.value 变更触发内部 computed/响应式链 (getSelectedNodes, connectionLookup)
  * - 80 节点 + 60Hz + 响应式调度 → 单帧 5-15ms 开销 → 明显卡顿
  *
- * 修复策略 (B 方案: 画框不卡):
+ * 修复策略 (B 方案: 画框不卡 + DOM 直接命中):
  * - @selection-start 触发时立即把 userSelectionRect.value = null
  *   → VueFlow Pane onPointerMove 第一行 `if (!userSelectionRect.value) return` → 不再 60Hz 跑 O(N)
  * - 我们自己画框 (customSelectionRect), mousemove 只更新 CSS 位置/尺寸
  * - @selection-end 触发时:
- *   1. 用 screenToFlowCoordinate 把容器坐标 (起点+终点) 转成画布坐标 (修 BUG-1)
- *   2. 自己 O(N) 扫一遍, 画布坐标系下做 nodeRect 相交判定 (partial 模式)
+ *   1. 用我们自己的 selectionStartPos (容器坐标) + lastMousePos (容器坐标) 算 finalRect
+ *   2. 直接遍历 .vue-flow__node[data-id] DOM 元素, getBoundingClientRect() 拿真实屏幕矩形
+ *      → 容器坐标系下做 AABB 比对 (不依赖 store.dimensions, 也不走画布坐标反变换)
  *   3. syncSelectionToStoreNodes(hitIds) 一次性写 store + 内部 GraphNode.selected, 数组引用不变
  *      → 0 vdom diff (修 BUG-4 + BUG-3 + BUG-7)
+ *
+ * 为什么不走 screenToFlowCoordinate (画布坐标) 路线:
+ * - 节点 store.dimensions 不一定被 vue-flow 内部回写, fallback 200x80 比真实 280x222 小
+ *   → 命中区域偏小, 用户必须拖更宽才能框中 (老大反馈: x 轴方向拖更宽才能选中)
+ * - DOM getBoundingClientRect() 拿的是 el.offsetWidth, 跟 vue-flow 内部 nodeToRect 同源
+ *   → 100% 准确, 避免浮点 zoom 反变换误差
  *
  * 坐标系说明:
  * - event.clientX/Y = 屏幕坐标
  * - flowContainer.getBoundingClientRect().{left,top} = 容器左上角的屏幕偏移
  * - 容器坐标 = screen - containerOffset (vue-flow 内部 userSelectionRect 用的就是容器坐标)
- * - screenToFlowCoordinate({x, y}) 把容器坐标转成画布坐标 (除 zoom 减 viewport offset)
- * - node.position / node.dimensions 都是画布坐标
+ * - customSelectionRect 写入 + AABB 比对都在容器坐标系 → 零坐标系转换
  */
 
 /** 框选起点 (mousedown 容器坐标) — 用于 mousemove/mouseup 计算 finalRect */
@@ -1429,33 +1435,35 @@ function handleSelectionEnd(event: any) {
     return
   }
 
-  // 用 screenToFlowCoordinate 把容器坐标转画布坐标, 自己写 O(N) 命中判定
-  // 优点: 不依赖 vue-flow 内部 pointToRendererPoint 行为, 升级 vue-flow 也不踩坑
-  const flowStart = screenToFlowCoordinate({ x: containerRect.x, y: containerRect.y })
-  const flowEnd = screenToFlowCoordinate({
-    x: containerRect.x + containerRect.width,
-    y: containerRect.y + containerRect.height
-  })
-  const flowRect = {
-    x: Math.min(flowStart.x, flowEnd.x),
-    y: Math.min(flowStart.y, flowEnd.y),
-    x2: Math.max(flowStart.x, flowEnd.x),
-    y2: Math.max(flowStart.y, flowEnd.y)
-  }
+  // 关键修复: 不依赖 store.nodes[].dimensions (Phase 17.5 诊断确认:
+  //   store.dimensions 不会从 vue-flow 内部回写, fallback 200x80 比真实 280x222 小
+  //   → 命中区域偏小, 用户必须拖更宽才能框中节点)
+  // 直接遍历 .vue-flow__node[data-id] DOM 元素, 用 getBoundingClientRect() 拿
+  // 真实屏幕位置 + 用元素 style.transform 读 computedPosition 画布坐标
+  // 全程都在容器坐标系下做 AABB 比对 (避免 zoom 反变换的浮点误差)
+  const container = flowContainer.value
+  if (!container) return
+  const cBounds = container.getBoundingClientRect()
+  const flowLeft   = containerRect.x
+  const flowTop    = containerRect.y
+  const flowRight  = containerRect.x + containerRect.width
+  const flowBottom = containerRect.y + containerRect.height
 
-  // partial 模式: 相交即命中
   const hitIds = new Set<string>()
-  for (const n of store.nodes as any[]) {
-    if (n.hidden) continue
-    if (n.selectable === false) continue
-    const w = n.dimensions?.width  ?? 200
-    const h = n.dimensions?.height ?? 80
-    const nx = n.position?.x ?? 0
-    const ny = n.position?.y ?? 0
-    // AABB 相交 (partial mode): node 右下角 > flowRect 左上 && node 左上角 < flowRect 右下
-    if (nx + w > flowRect.x && nx < flowRect.x2 &&
-        ny + h > flowRect.y && ny < flowRect.y2) {
-      hitIds.add(n.id)
+  const nodeEls = container.querySelectorAll<HTMLElement>('.vue-flow__node[data-id]')
+  for (const el of nodeEls) {
+    const id = el.getAttribute('data-id')
+    if (!id) continue
+    const r = el.getBoundingClientRect()
+    // 节点容器像素矩形
+    const cLeft = r.left   - cBounds.left
+    const cTop  = r.top    - cBounds.top
+    const cRight= r.right  - cBounds.left
+    const cBot  = r.bottom - cBounds.top
+    // AABB 相交 (partial 模式)
+    if (cLeft < flowRight && cRight > flowLeft &&
+        cTop  < flowBottom && cBot   > flowTop) {
+      hitIds.add(id)
     }
   }
 
