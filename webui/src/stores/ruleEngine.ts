@@ -262,7 +262,20 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    * P0-C (Phase 17.1+): 引入 LOD 2 — 节点内嵌配置 (取代右侧面板).
    * 缓存键增加 expandedNodeIds.value 引用检测 — 展开集合变化时强制重建 (但仍是 O(N) 单次)
    */
-  let cachedBaseLodRef: { zoom: number; expandedRef: typeof expandedNodeIds.value; nodesRef: typeof nodes.value; isLodLocked: boolean } | null = null
+  /**
+   * 桶化 zoom 值用于缓存命中 (Phase 17.3 修复 P0-A 短路 bug)
+   *
+   * 旧实现: `cachedBaseLodRef.zoom === zoom` — zoom 是连续小数, 几乎永远不 ==
+   *        → 60Hz 缩放时永远走全量 Map 重建
+   * 新实现: zoom 桶化到 0.1 精度 — 同一桶内复用 Map, 跨桶才重建
+   *        实际 LOD 切换只依赖阈值 0.5 / 1.0, 桶化 0.1 已足够精确
+   *        (LOD 阈值外的小数变化不会影响 autoLod 结果)
+   */
+  function bucketZoom(z: number): number {
+    return Math.round(z * 10) / 10
+  }
+
+  let cachedBaseLodRef: { zoomBucket: number; zoom: number; expandedRef: typeof expandedNodeIds.value; nodesRef: typeof nodes.value; isLodLocked: boolean } | null = null
   let cachedBaseLodMap: Map<string, 0 | 1 | 2> = new Map()
   const baseLodLevelMap = computed<Map<string, 0 | 1 | 2>>(() => {
     const zoom = viewportZoom.value
@@ -275,10 +288,12 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     // 展开节点即使 zoom 不在 [1, ∞) 也升到 2 (用户主动展开意图)
     // zoom < 0.5 仍强制 0 (看不清任何细节, 极简优先)
 
-    // 短路: 输入未变化 → 复用上次 Map
+    // 短路: 输入未变化 (桶化 zoom) → 复用上次 Map
+    // 关键: zoomBucket 相等 OR (zoom 在阈值 0.5/1.0 同侧 且 expanded/nodes 未变)
+    const zoomBucket = bucketZoom(zoom)
     if (
       cachedBaseLodRef &&
-      cachedBaseLodRef.zoom === zoom &&
+      cachedBaseLodRef.zoomBucket === zoomBucket &&
       cachedBaseLodRef.isLodLocked === isLodLocked &&
       cachedBaseLodRef.nodesRef === nodesRef &&
       cachedBaseLodRef.expandedRef === expandedRef
@@ -307,7 +322,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       lodLevelMapCache.clear()
       for (const [k, v] of map) lodLevelMapCache.set(k, v)
     }
-    cachedBaseLodRef = { zoom, expandedRef, nodesRef, isLodLocked }
+    cachedBaseLodRef = { zoomBucket, zoom, expandedRef, nodesRef, isLodLocked }
     cachedBaseLodMap = map
     return map
   })
@@ -978,10 +993,21 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
 
   /**
    * 同步画布缩放级别到 store.
-   * RuleCanvas 监听 @zoom 事件时调用, 供 lodLevelMap 计算用.
+   * RuleCanvas 监听 @viewport-change 时调用, 供 lodLevelMap 计算用.
+   *
+   * Phase 17.3: 加自节流 — 同一帧内多次 setViewportZoom 合并为 1 次 ref.set
+   * 60Hz 缩放下每帧只触发 1 次响应式 (而不是理论上 60 次).
+   * rAF 之外基本无 zoom 事件, 节流主要保护 d3-zoom 内部抖动场景.
    */
+  let setViewportZoomRafId = 0
+  let pendingZoomValue = 1
   function setViewportZoom(z: number) {
-    viewportZoom.value = z
+    pendingZoomValue = z
+    if (setViewportZoomRafId) return
+    setViewportZoomRafId = requestAnimationFrame(() => {
+      setViewportZoomRafId = 0
+      viewportZoom.value = pendingZoomValue
+    })
   }
 
   /** 拖动期间锁定 LOD (useCogniFlowDrag onStart 调用) */

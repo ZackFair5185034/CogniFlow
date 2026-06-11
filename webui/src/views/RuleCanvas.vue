@@ -1823,8 +1823,21 @@ function handleCanvasMouseDown(event: MouseEvent) {
   if (event.button === 1 || (event.button === 0 && event.altKey)) {
     isPanning.value = true
     lastMousePos.value = { x: event.clientX, y: event.clientY }
+    // Phase 17.3: 拖动期间直接改 transformationpane transform, 绕过 vue-flow
+    // 起点记下当前 viewport, mousemove 时算 dx/dy 累加, mouseup 时统一 setViewport
+    const vp = getViewport()
+    panStartViewport = { x: vp.x, y: vp.y, zoom: vp.zoom }
+    // 锁光标 (CSS 拖动)
+    document.body.style.cursor = 'grabbing'
+    event.preventDefault()
   }
 }
+
+/**
+ * 拖动起点 viewport 快照 — 用于 mousemove 时计算绝对 pan 位置
+ * (相对位移用 lastMousePos 即可, 但需要起点 viewport 才能算出最终 setViewport 值)
+ */
+let panStartViewport: { x: number; y: number; zoom: number } = { x: 0, y: 0, zoom: 1 }
 
 /** rAF 节流标志: 避免全选后拖拽时 mousemove 高频触发 setViewport 导致卡顿 */
 let panningRafId = 0
@@ -1843,8 +1856,15 @@ function handleCanvasMouseMove(event: MouseEvent) {
     if (!panningRafId) {
       panningRafId = requestAnimationFrame(() => {
         panningRafId = 0
-        const viewport = getViewport()
-        setViewport({ x: viewport.x + panAccum.x, y: viewport.y + panAccum.y, zoom: viewport.zoom })
+        // Phase 17.3: 直写 transformationpane transform 绕过 vue-flow
+        // 不调用 setViewport (不走 d3-zoom.transform → 'zoom' 事件 → 整响应式链)
+        // 拖动结束 (mouseup) 时再 setViewport 一次性同步 store
+        const tp = document.querySelector<HTMLElement>('.vue-flow__transformationpane')
+        if (tp) {
+          const newX = panStartViewport.x + panAccum.x
+          const newY = panStartViewport.y + panAccum.y
+          tp.style.transform = `translate(${newX}px, ${newY}px) scale(${panStartViewport.zoom})`
+        }
         panAccum.x = 0
         panAccum.y = 0
       })
@@ -1853,6 +1873,23 @@ function handleCanvasMouseMove(event: MouseEvent) {
 }
 
 function handleCanvasMouseUp() {
+  if (isPanning.value) {
+    // 拖动结束: 一次性 setViewport 同步 vue-flow 内部 viewport ref
+    // (Transform.vue 的 transform computed 才能拿到正确 viewport 值)
+    const tp = document.querySelector<HTMLElement>('.vue-flow__transformationpane')
+    if (tp) {
+      // 读当前实际 transform (被我们直写过), 解析 x/y
+      const match = tp.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)\s*scale\(([-\d.]+)\)/)
+      if (match) {
+        const x = parseFloat(match[1])
+        const y = parseFloat(match[2])
+        const zoom = parseFloat(match[3])
+        setViewport({ x, y, zoom })
+      }
+    }
+    // 释放光标
+    document.body.style.cursor = ''
+  }
   isPanning.value = false
   isResizingPanel.value = false
   // 清除可能残留的 rAF + 重置累积偏移, 避免鼠标抬起后还触发 setViewport
