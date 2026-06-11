@@ -356,6 +356,11 @@
         class="canvas-wrapper"
       >
         <!-- VueFlow 画布 -->
+        <!-- Phase 17.5 配置说明:
+             - selectionKeyCode=true → useKeyPress(true) 永真, 配合 panOnDrag=false → 空白拖拽=框选
+             - selectNodesOnDrag=false → 拖节点不动, 必须框选才能多选
+             - selectionMode=Partial → 框与节点相交即命中 (不用完全包含)
+             - 自绘框 (custom-selection-rect) + 延迟计算 (handleSelectionEnd 一次性算命中) -->
         <div
           ref="flowContainer"
           class="flow-container"
@@ -420,6 +425,20 @@
             <!-- 控制按钮 -->
             <Controls position="bottom-left" />
           </VueFlow>
+
+          <!-- Phase 17.5: 自绘框选矩形 (替代 VueFlow 内部 UserSelection) -->
+          <!-- 必须在 VueFlow 之外但同一 pane 容器内, 坐标 = 容器坐标 (减过 flowContainer.getBoundingClientRect 偏移),
+               与 vue-flow 内部 userSelectionRect 约定一致 → 自绘框视觉与命中区域完全重合 -->
+          <div
+            v-if="customSelectionRect"
+            class="custom-selection-rect"
+            :style="{
+              left: customSelectionRect.x + 'px',
+              top: customSelectionRect.y + 'px',
+              width: customSelectionRect.width + 'px',
+              height: customSelectionRect.height + 'px'
+            }"
+          />
 
           
           <!-- 空画布提示 -->
@@ -660,7 +679,6 @@ const {
   addSelectedNodes,
   addSelectedEdges,
   getNodes,
-  getSelectedNodes,
   findNode,
   applyNodeChanges: applyVueFlowNodeChanges,
   applyEdgeChanges: applyVueFlowEdgeChanges,
@@ -1312,64 +1330,165 @@ function handlePaste(event?: MouseEvent) {
   ElMessage.success(`已粘贴 ${newNodes.length} 个节点${newEdges.length > 0 ? `, ${newEdges.length} 条连线` : ''}`)
 }
 
-/**
- * cachedSelectionRect - 框选矩形缓存 (关键精度问题)
- *
- * VueFlow 在 onPointerUp 里先清空 userSelectionRect (line 219), 才 emit selectionEnd (line 222).
- * 到 selectionEnd 事件触发时, userSelectionRect.value 已经是 null.
- * 因此需要 watch userSelectionRect 把拖框过程中最后一帧的矩形缓存下来.
- * Vue watch 回调在微任务执行, onPointerUp 的同步链里 lastUserSelectionRect 还保留着上一次 move 的矩形.
- *
- * P1-E (Phase 17.1): 存 plain 引用而非 ref + 浅复制.
- * 旧: ref<...> + watch 60Hz 浅复制 + ref.set, 100 节点框选 5s = 300 次浅复制 + 300 次 ref 写入.
- * 新: plain 变量存引用, 0 浅复制. 当前实现 cachedSelectionRect 只用于诊断, 实际逻辑不再读它.
- */
-let lastUserSelectionRect: { x: number; y: number; width: number; height: number; startX?: number; startY?: number } | null = null
-watch(userSelectionRect, (rect) => {
-  if (rect) {
-    // 不复制对象, 存引用 — handleSelectionEnd 同步链里读到的就是最后 move 帧的 rect
-    lastUserSelectionRect = rect as any
-  }
-})
-
 // 框选开始 - 设 isBatchDragging 使 handleNodesChange 跳过所有 change (不再 60Hz × N 处理 select)
-function handleSelectionStart() {
+function handleSelectionStart(event: any) {
   isSelectionDragging.value = true
   isBatchDragging.value = true  // P0: 框选期间节流, handleNodesChange 立即 return
   store.setSelectionBoxActive(true) // LOD-1: 框选期间锁定 LOD
-  lastUserSelectionRect = null
+
+  // Phase 17.5 (修复版): 延迟计算 + 坐标系修正
+  // - 把 userSelectionRect 设 null → VueFlow Pane onPointerMove 第一行 return, 0 开销
+  // - 坐标转容器坐标系 (减 flowContainer.getBoundingClientRect 偏移),
+  //   与 vue-flow 内部 userSelectionRect 约定一致 → getNodesInside 不再偏移,
+  //   自绘框视觉位置与命中区域一致 (修 BUG-1 + BUG-2)
+  const bounds = flowContainer.value?.getBoundingClientRect()
+  const offsetX = bounds?.left ?? 0
+  const offsetY = bounds?.top ?? 0
+
+  if (event && event.clientX !== undefined) {
+    selectionStartPos = { x: event.clientX - offsetX, y: event.clientY - offsetY }  // 容器坐标
+  } else {
+    // fallback: 用 lastMousePos 或 0
+    const lp = lastMousePos.value
+    selectionStartPos = lp
+      ? { x: lp.x - offsetX, y: lp.y - offsetY }
+      : { x: 0, y: 0 }
+  }
+  // 关键: 把 userSelectionRect 设为 null, 阻止 VueFlow Pane onPointerMove 跑 getNodesInside
+  userSelectionRect.value = null
+  customSelectionRect.value = { x: selectionStartPos.x, y: selectionStartPos.y, width: 0, height: 0 }
 }
 
-// 框选结束 - 用 VueFlow 内部 getSelectedNodes (selectedNodeIds) 同步到 store.nodes[].selected.
-// 之前误加: 自己重做包围盒命中 (n.position + dimensions), 单位混用 (position 画布 + dimensions 屏幕 像素),
-//          导致框外擦边被选. VueFlow 内部 getNodesInside 的 paneRect 跟 nodeToRect 同方向混用,
-//          碰巧等价于画布空间, 实际命中结果是对的.
-function handleSelectionEnd() {
+/**
+ * Phase 17.5 (修复版): 框选延迟计算 + 坐标系修正 + 性能优化
+ *
+ * 老大反馈: 框选过程中会有卡顿感, 希望鼠标放开时才计算哪些节点被选中.
+ *
+ * 根因:
+ * - VueFlow Pane 组件的 onPointerMove 60Hz 调 getNodesInside + 设置 selectedNodeIds + emits.nodesChange
+ * - 每次 selectedNodeIds.value 变更触发内部 computed/响应式链 (getSelectedNodes, connectionLookup)
+ * - 80 节点 + 60Hz + 响应式调度 → 单帧 5-15ms 开销 → 明显卡顿
+ *
+ * 修复策略 (B 方案: 画框不卡):
+ * - @selection-start 触发时立即把 userSelectionRect.value = null
+ *   → VueFlow Pane onPointerMove 第一行 `if (!userSelectionRect.value) return` → 不再 60Hz 跑 O(N)
+ * - 我们自己画框 (customSelectionRect), mousemove 只更新 CSS 位置/尺寸
+ * - @selection-end 触发时:
+ *   1. 用 screenToFlowCoordinate 把容器坐标 (起点+终点) 转成画布坐标 (修 BUG-1)
+ *   2. 自己 O(N) 扫一遍, 画布坐标系下做 nodeRect 相交判定 (partial 模式)
+ *   3. syncSelectionToStoreNodes(hitIds) 一次性写 store + 内部 GraphNode.selected, 数组引用不变
+ *      → 0 vdom diff (修 BUG-4 + BUG-3 + BUG-7)
+ *
+ * 坐标系说明:
+ * - event.clientX/Y = 屏幕坐标
+ * - flowContainer.getBoundingClientRect().{left,top} = 容器左上角的屏幕偏移
+ * - 容器坐标 = screen - containerOffset (vue-flow 内部 userSelectionRect 用的就是容器坐标)
+ * - screenToFlowCoordinate({x, y}) 把容器坐标转成画布坐标 (除 zoom 减 viewport offset)
+ * - node.position / node.dimensions 都是画布坐标
+ */
+
+/** 框选起点 (mousedown 容器坐标) — 用于 mousemove/mouseup 计算 finalRect */
+let selectionStartPos: { x: number; y: number } | null = null
+
+/**
+ * 自绘框选矩形 — 替代 VueFlow 内部 UserSelection
+ * 用 reactive ref 而非 plain 变量, 因为模板要响应它的变化
+ * mousemove 60Hz 更新 x/y/width/height, 但只走 DOM style 不触发 vue-flow 内部响应式
+ * 坐标: 容器坐标 (与 vue-flow 内部 userSelectionRect 一致, 修 BUG-2)
+ */
+const customSelectionRect = ref<{ x: number; y: number; width: number; height: number } | null>(null)
+
+// 框选结束 - Phase 17.5 (修复版): 一次性算命中 + 同步 store + vue-flow 内部
+function handleSelectionEnd(event: any) {
   isSelectionDragging.value = false
   isBatchDragging.value = false  // P0: 恢复 nodes-change 处理
   store.setSelectionBoxActive(false) // LOD-1: 解除框选 LOD 锁定
 
-  // 把 VueFlow 内部 selectedNodeIds 同步到 store.nodes[].selected
-  // (复制 handleCopy/handleCut 依赖 store.nodes.filter(n => n.selected))
-  const selectedIds = new Set(getSelectedNodes.value.map((n: any) => n.id))
+  // 提取本帧需要的数据 + 重置状态
+  const start = selectionStartPos
+  const end = lastMousePos.value
+  selectionStartPos = null
+  customSelectionRect.value = null  // 隐藏自绘框
+
+  if (!start || !end) {
+    // 没起点 (不应该发生, 但兜底) — 清空选中
+    syncSelectionToStoreNodes(new Set())
+    return
+  }
+
+  // 容器坐标算 finalRect (屏幕坐标 - 容器偏移, 与 vue-flow 内部一致)
+  const containerRect = {
+    x: Math.min(start.x, end.x),
+    y: Math.min(start.y, end.y),
+    width: Math.abs(end.x - start.x),
+    height: Math.abs(end.y - start.y)
+  }
+
+  // 框选太小时跳过 (避免点击触发微抖动误选)
+  if (containerRect.width < 3 && containerRect.height < 3) {
+    return
+  }
+
+  // 用 screenToFlowCoordinate 把容器坐标转画布坐标, 自己写 O(N) 命中判定
+  // 优点: 不依赖 vue-flow 内部 pointToRendererPoint 行为, 升级 vue-flow 也不踩坑
+  const flowStart = screenToFlowCoordinate({ x: containerRect.x, y: containerRect.y })
+  const flowEnd = screenToFlowCoordinate({
+    x: containerRect.x + containerRect.width,
+    y: containerRect.y + containerRect.height
+  })
+  const flowRect = {
+    x: Math.min(flowStart.x, flowEnd.x),
+    y: Math.min(flowStart.y, flowEnd.y),
+    x2: Math.max(flowStart.x, flowEnd.x),
+    y2: Math.max(flowStart.y, flowEnd.y)
+  }
+
+  // partial 模式: 相交即命中
+  const hitIds = new Set<string>()
+  for (const n of store.nodes as any[]) {
+    if (n.hidden) continue
+    if (n.selectable === false) continue
+    const w = n.dimensions?.width  ?? 200
+    const h = n.dimensions?.height ?? 80
+    const nx = n.position?.x ?? 0
+    const ny = n.position?.y ?? 0
+    // AABB 相交 (partial mode): node 右下角 > flowRect 左上 && node 左上角 < flowRect 右下
+    if (nx + w > flowRect.x && nx < flowRect.x2 &&
+        ny + h > flowRect.y && ny < flowRect.y2) {
+      hitIds.add(n.id)
+    }
+  }
+
+  // 一次性同步: store + vue-flow 内部 GraphNode.selected, 0 vdom diff
+  syncSelectionToStoreNodes(hitIds)
+}
+
+/**
+ * 把 selectedIds 同步到 store.nodes[].selected + vue-flow 内部 GraphNode.selected
+ * (Phase 17.5 内部 helper, Phase 17.5 修复版: 一并写 vue-flow 内部节点, 不走 @nodes-change)
+ *
+ * - 原地变异 store.nodes[i].selected + 数组引用不变 → 0 vdom diff (修 BUG-4)
+ * - if (wasSelected !== shouldSelected) diff 写入 → 自动处理"取消旧的" (修 BUG-3)
+ * - 同时 findNode(id).selected 写 vue-flow 内部 GraphNode, 触发 .selected class 渲染
+ *   (vue-flow 节点 .selected 视觉由 NodeWrapper 读 GraphNode.selected 决定)
+ *   关键: 写内部 selected 不走 emit 链路, 0 触发 nodesChange
+ */
+function syncSelectionToStoreNodes(selectedIds: Set<string>) {
   let changed = false
   for (const n of store.nodes as any[]) {
     const wasSelected = !!n.selected
     const shouldSelected = selectedIds.has(n.id)
     if (wasSelected !== shouldSelected) {
       n.selected = shouldSelected
+      // 同步写 vue-flow 内部 GraphNode.selected (修 BUG-4 + 让 .selected class 渲染)
+      const flowNode = findNode(n.id) as any
+      if (flowNode) flowNode.selected = shouldSelected
       changed = true
     }
   }
   if (changed) {
-  // P0-B (Phase 17.1): triggerRef 替代数组引用重建
-    // 旧: store.nodes = [...store.nodes] → VueFlow useVModel 浅 watch 检测到引用变 → 整图 80 节点 vdom diff
-    // 新: 数组引用不变 → patchProps 浅比较过滤 → VueFlow 不重渲染
     triggerRef(nodes)
   }
-
-  // P1-E (Phase 17.1): ref 删除, 改用 plain 变量 lastUserSelectionRect
-  lastUserSelectionRect = null
 }
 
 // 节点删除按钮点击
@@ -1845,6 +1964,27 @@ let panningRafId = 0
 const panAccum = { x: 0, y: 0 }
 
 function handleCanvasMouseMove(event: MouseEvent) {
+  // Phase 17.5 (修复版): 框选期间更新自绘框 (mousemove 60Hz, 但只改 reactive rect, 0 响应式开销)
+  // 坐标: 转容器坐标 (减 flowContainer.getBoundingClientRect 偏移)
+  if (isSelectionDragging.value && selectionStartPos) {
+    const bounds = flowContainer.value?.getBoundingClientRect()
+    const offsetX = bounds?.left ?? 0
+    const offsetY = bounds?.top ?? 0
+    const cx = event.clientX - offsetX
+    const cy = event.clientY - offsetY
+    const sx = selectionStartPos.x
+    const sy = selectionStartPos.y
+    customSelectionRect.value = {
+      x: Math.min(sx, cx),
+      y: Math.min(sy, cy),
+      width: Math.abs(cx - sx),
+      height: Math.abs(cy - sy)
+    }
+    // 重要: 同步 lastMousePos (容器坐标), 供 handleSelectionEnd 算 finalRect
+    lastMousePos.value = { x: cx, y: cy }
+    return  // 不进 pan 分支
+  }
+
   if (isPanning.value) {
     const dx = event.clientX - lastMousePos.value.x
     const dy = event.clientY - lastMousePos.value.y
@@ -2979,6 +3119,20 @@ $panel-header-height: 44px;
   /* 只有 selection 模式（框选）才显示十字光标 */
   :deep(.vue-flow__pane.selection) {
     cursor: crosshair;
+  }
+
+  /* Phase 17.5: 自绘框选矩形样式 (替代 VueFlow 内部 UserSelection)
+   * 模仿 vue-flow__selection 视觉效果 — 浅蓝边 + 浅蓝半透填充
+   * position: absolute 让坐标相对 pane 容器, 与 clientX/clientY 对应 */
+  .custom-selection-rect {
+    position: absolute;
+    pointer-events: none;
+    z-index: 20;
+    border: 1px solid rgba(64, 158, 255, 0.8);
+    background: rgba(64, 158, 255, 0.08);
+    border-radius: 1px;
+    /* 0 transition, mousemove 60Hz 更新位置时无视觉延迟 */
+    will-change: left, top, width, height;
   }
 
   /* 隐藏选中后的包裹矩形框 */
