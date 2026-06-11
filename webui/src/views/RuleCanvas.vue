@@ -1856,14 +1856,13 @@ function handleCanvasMouseMove(event: MouseEvent) {
     if (!panningRafId) {
       panningRafId = requestAnimationFrame(() => {
         panningRafId = 0
-        // Phase 17.3: 直写 transformationpane transform 绕过 vue-flow
-        // 不调用 setViewport (不走 d3-zoom.transform → 'zoom' 事件 → 整响应式链)
-        // 拖动结束 (mouseup) 时再 setViewport 一次性同步 store
+        // Phase 17.3.1 (bug fix): 必须把这一帧的 dx/dy 累加到 panStartViewport!
+        // 否则每帧 rAF 都用同一个 panStartViewport + 单帧 panAccum → 永远写同一值 → 画布不动
         const tp = document.querySelector<HTMLElement>('.vue-flow__transformationpane')
         if (tp) {
-          const newX = panStartViewport.x + panAccum.x
-          const newY = panStartViewport.y + panAccum.y
-          tp.style.transform = `translate(${newX}px, ${newY}px) scale(${panStartViewport.zoom})`
+          panStartViewport.x += panAccum.x
+          panStartViewport.y += panAccum.y
+          tp.style.transform = `translate(${panStartViewport.x}px, ${panStartViewport.y}px) scale(${panStartViewport.zoom})`
         }
         panAccum.x = 0
         panAccum.y = 0
