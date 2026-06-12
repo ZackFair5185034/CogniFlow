@@ -432,6 +432,7 @@
           <div
             v-if="customSelectionRect"
             class="custom-selection-rect"
+            :class="{ additive: isAdditiveSelection }"
             :style="{
               left: customSelectionRect.x + 'px',
               top: customSelectionRect.y + 'px',
@@ -439,6 +440,18 @@
               height: customSelectionRect.height + 'px'
             }"
           />
+          <!-- Phase 18: 框选时模式角标 (让老大立刻知道是覆盖还是加选) -->
+          <div
+            v-if="customSelectionRect"
+            class="selection-mode-hint"
+            :class="{ additive: isAdditiveSelection }"
+            :style="{
+              left: (customSelectionRect.x + 4) + 'px',
+              top: (customSelectionRect.y - 22) + 'px'
+            }"
+          >
+            {{ isAdditiveSelection ? '➕ 加选 (Ctrl)' : '☐ 替换' }}
+          </div>
 
           
           <!-- 空画布提示 -->
@@ -1336,6 +1349,12 @@ function handleSelectionStart(event: any) {
   isBatchDragging.value = true  // P0: 框选期间节流, handleNodesChange 立即 return
   store.setSelectionBoxActive(true) // LOD-1: 框选期间锁定 LOD
 
+  // Phase 18: 锁定本次框选模式 (ctrlKey / metaKey = 增量加选)
+  // 在 mousedown 瞬间锁定, 避免拖动过程中松开/按下 Ctrl 导致行为跳变
+  // Mac 上 metaKey (Cmd) 等价 Ctrl, 一并处理
+  selectionAdditive = !!(event?.ctrlKey || event?.metaKey)
+  isAdditiveSelection.value = selectionAdditive  // 同步视图状态 (角标 + 自绘框颜色)
+
   // Phase 17.5 (修复版): 延迟计算 + 坐标系修正
   // - 把 userSelectionRect 设 null → VueFlow Pane onPointerMove 第一行 return, 0 开销
   // - 坐标转容器坐标系 (减 flowContainer.getBoundingClientRect 偏移),
@@ -1397,6 +1416,18 @@ function handleSelectionStart(event: any) {
 let selectionStartPos: { x: number; y: number } | null = null
 
 /**
+ * Phase 18: 框选模式 (覆盖 vs 加选)
+ * - 普通拖框 → 选中集合被新命中完全替换 (老大原行为)
+ * - Ctrl/Meta+拖框 → 保留旧选中, 把新命中并入 (增量加选)
+ *
+ * `selectionAdditive` 锁定 mousedown 瞬间的 Ctrl 状态, 决定最终行为
+ * `isAdditiveSelection` 是 reactive 视图状态, 在拖动期间实时跟随 Ctrl 键,
+ *   用来切换自绘框颜色 + 角标提示 (UX 反馈), 不影响最终行为
+ */
+let selectionAdditive = false
+const isAdditiveSelection = ref(false)
+
+/**
  * 自绘框选矩形 — 替代 VueFlow 内部 UserSelection
  * 用 reactive ref 而非 plain 变量, 因为模板要响应它的变化
  * mousemove 60Hz 更新 x/y/width/height, 但只走 DOM style 不触发 vue-flow 内部响应式
@@ -1413,7 +1444,10 @@ function handleSelectionEnd(event: any) {
   // 提取本帧需要的数据 + 重置状态
   const start = selectionStartPos
   const end = lastMousePos.value
+  const isAdditive = selectionAdditive  // 锁定 mousedown 那一刻的 Ctrl 状态
   selectionStartPos = null
+  selectionAdditive = false  // 重置, 下次框选前都是 false
+  isAdditiveSelection.value = false  // 重置视图状态
   customSelectionRect.value = null  // 隐藏自绘框
 
   if (!start || !end) {
@@ -1467,8 +1501,18 @@ function handleSelectionEnd(event: any) {
     }
   }
 
+  // Phase 18: 加选模式 = 保留旧选中, 合并新命中
+  // 普通模式 = 旧选中被新命中完全替换 (修 BUG-3: 未命中节点的反选)
+  let finalIds: Set<string> = hitIds
+  if (isAdditive) {
+    finalIds = new Set<string>(hitIds)
+    for (const n of store.nodes as any[]) {
+      if (n.selected) finalIds.add(n.id)
+    }
+  }
+
   // 一次性同步: store + vue-flow 内部 GraphNode.selected, 0 vdom diff
-  syncSelectionToStoreNodes(hitIds)
+  syncSelectionToStoreNodes(finalIds)
 }
 
 /**
@@ -1990,6 +2034,8 @@ function handleCanvasMouseMove(event: MouseEvent) {
     }
     // 重要: 同步 lastMousePos (容器坐标), 供 handleSelectionEnd 算 finalRect
     lastMousePos.value = { x: cx, y: cy }
+    // (Phase 18: isAdditiveSelection 不在 mousemove 里刷新 — 跟随 mousedown 锁定的 selectionAdditive,
+    //  与 macOS Finder / Windows Explorer 的加选行为一致: 拖动过程中切换 Ctrl 不会让行为跳变)
     return  // 不进 pan 分支
   }
 
@@ -3141,6 +3187,33 @@ $panel-header-height: 44px;
     border-radius: 1px;
     /* 0 transition, mousemove 60Hz 更新位置时无视觉延迟 */
     will-change: left, top, width, height;
+  }
+
+  /* Phase 18: 加选模式 — 绿色区分 (老大一眼能看出是加选) */
+  .custom-selection-rect.additive {
+    border: 1px solid rgba(0, 255, 136, 0.9);
+    background: rgba(0, 255, 136, 0.1);
+  }
+
+  /* Phase 18: 框选模式角标 (跟随自绘框左上角) */
+  .selection-mode-hint {
+    position: absolute;
+    z-index: 21;
+    pointer-events: none;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    color: #fff;
+    background: rgba(64, 158, 255, 0.85);
+    border-radius: 3px;
+    white-space: nowrap;
+    user-select: none;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .selection-mode-hint.additive {
+    background: rgba(0, 255, 136, 0.85);
+    color: #000;
   }
 
   /* 隐藏选中后的包裹矩形框 */
