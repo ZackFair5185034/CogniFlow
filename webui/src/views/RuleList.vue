@@ -6,7 +6,9 @@
         <h2>规则引擎</h2>
         <span class="subtitle">可视化规则流程编排与执行</span>
       </div>
+      <!-- 数据为空时,这里也保留一个新建按钮,方便操作 -->
       <button
+        v-if="!loading && graphs.length > 0"
         class="ui-btn ui-btn-primary"
         @click="showCreateDialog = true"
       >
@@ -23,6 +25,7 @@
         text="加载中..."
       />
 
+      <!-- 空状态:中间一个新建按钮 -->
       <div
         v-else-if="graphs.length === 0"
         class="empty-state"
@@ -41,109 +44,81 @@
         </button>
       </div>
 
+      <!-- 简洁行式列表 -->
       <div
         v-else
-        class="rules-grid"
+        class="rules-table"
       >
+        <!-- 表头 -->
+        <div class="rules-table-header">
+          <div class="col-name">名称</div>
+          <div class="col-desc">描述</div>
+          <div class="col-status">状态</div>
+          <div class="col-updated">更新时间</div>
+          <div class="col-actions">操作</div>
+        </div>
+
+        <!-- 行 -->
         <div
           v-for="graph in graphs"
           :key="graph.id"
-          class="rule-card"
-          :style="graph.thumbnail ? { backgroundImage: `url(${graph.thumbnail})` } : {}"
+          class="rules-table-row"
           @click="goToDesign(graph.id)"
         >
-          <!-- 无快照时的渐变背景 -->
+          <div class="col-name">
+            <span class="rule-name">{{ graph.name }}</span>
+            <span
+              v-if="graph.version"
+              class="rule-version"
+            >v{{ graph.version }}</span>
+          </div>
+          <div class="col-desc">
+            {{ graph.description || '—' }}
+          </div>
+          <div class="col-status">
+            <span
+              class="status-tag"
+              :class="graph.is_active ? 'active' : 'inactive'"
+            >
+              {{ graph.is_active ? '已激活' : '未激活' }}
+            </span>
+            <span
+              v-if="graph.cron_expression"
+              class="cron-tag"
+            >
+              <SvgIcon name="clock" />
+              {{ graph.cron_expression }}
+            </span>
+          </div>
+          <div class="col-updated">
+            {{ formatDate(graph.updated_at || '') }}
+          </div>
           <div
-            v-if="!graph.thumbnail"
-            class="card-placeholder-bg"
-          />
-
-          <!-- 快照遮罩 -->
-          <div class="card-snapshot-overlay" />
-
-          <!-- 卡片内容 -->
-          <div class="card-content">
-            <div class="card-header">
-              <div class="card-title">
-                <h3>{{ graph.name }}</h3>
-                <span
-                  v-if="graph.version"
-                  class="card-version"
-                >v{{ graph.version }}</span>
-              </div>
-              <div
-                class="card-actions"
-                @click.stop
-              >
-                <!-- 激活/停用开关 -->
-                <button
-                  class="action-btn"
-                  :class="{ active: graph.is_active }"
-                  :title="graph.is_active ? '停用规则' : '激活规则'"
-                  @click="toggleActive(graph)"
-                >
-                  <SvgIcon :name="graph.is_active ? 'pause' : 'play'" />
-                </button>
-                <button
-                  class="action-btn"
-                  title="编辑规则"
-                  @click="goToDesign(graph.id)"
-                >
-                  <SvgIcon name="edit" />
-                </button>
-                <button
-                  class="action-btn danger"
-                  title="删除规则"
-                  @click="handleDelete(graph)"
-                >
-                  <SvgIcon name="trash" />
-                </button>
-              </div>
-            </div>
-
-            <!-- 规则状态标签 -->
-            <div class="rule-status-tags">
-              <span
-                class="status-tag"
-                :class="graph.is_active ? 'active' : 'inactive'"
-              >
-                {{ graph.is_active ? '已激活' : '未激活' }}
-              </span>
-              <span
-                v-if="graph.cron_expression"
-                class="cron-tag"
-              >
-                <SvgIcon name="clock" />
-                {{ graph.cron_expression }}
-              </span>
-            </div>
-
-            <p class="card-desc">
-              {{ graph.description || '暂无描述' }}
-            </p>
-
-            <div class="card-footer">
-              <div class="card-meta">
-                <span
-                  v-if="graph.last_executed_at"
-                  class="meta-item"
-                >
-                  <SvgIcon name="clock" />
-                  {{ formatDate(graph.last_executed_at) }}
-                </span>
-                <span class="meta-item">
-                  <SvgIcon name="clock" />
-                  {{ formatDate(graph.updated_at || '') }}
-                </span>
-              </div>
-              <span
-                v-if="graph.thumbnail"
-                class="has-snapshot"
-              >
-                <SvgIcon name="image" />
-                快照
-              </span>
-            </div>
+            class="col-actions"
+            @click.stop
+          >
+            <button
+              class="action-btn"
+              :class="{ active: graph.is_active }"
+              :title="graph.is_active ? '停用规则' : '激活规则'"
+              @click="toggleActive(graph)"
+            >
+              <SvgIcon :name="graph.is_active ? 'pause' : 'play'" />
+            </button>
+            <button
+              class="action-btn"
+              title="编辑规则"
+              @click="goToDesign(graph.id)"
+            >
+              <SvgIcon name="edit" />
+            </button>
+            <button
+              class="action-btn danger"
+              title="删除规则"
+              @click="handleDelete(graph)"
+            >
+              <SvgIcon name="trash" />
+            </button>
           </div>
         </div>
       </div>
@@ -325,8 +300,8 @@ function formatDate(dateStr: string) {
   if (!dateStr) return '-'
   const date = new Date(dateStr)
   return date.toLocaleDateString('zh-CN', {
-    month: 'short',
-    day: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour: '2-digit',
     minute: '2-digit'
   })
@@ -376,10 +351,10 @@ function formatDate(dateStr: string) {
   color: var(--text-secondary);
 
   .empty-icon {
-    width: 100px;
-    height: 100px;
-    margin-bottom: 24px;
-    opacity: 0.2;
+    width: 80px;
+    height: 80px;
+    margin-bottom: 20px;
+    opacity: 0.25;
 
     svg {
       width: 100%;
@@ -389,230 +364,183 @@ function formatDate(dateStr: string) {
   }
 
   h3 {
-    font-size: 18px;
-    margin-bottom: 8px;
+    font-size: 16px;
+    margin-bottom: 6px;
   }
 
   p {
-    font-size: 14px;
-    margin-bottom: 24px;
+    font-size: 13px;
+    margin-bottom: 20px;
   }
 }
 
-.rules-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-  padding: 4px 2px 4px 2px;
-}
-
-.rule-card {
-  position: relative;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  min-height: 160px;
-
-  &:hover {
-    border-color: rgba(0, 240, 255, 0.35);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 240, 255, 0.12);
-  }
-}
-
-.card-placeholder-bg {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.04), rgba(0, 170, 136, 0.02));
-  z-index: 0;
-}
-
-.card-snapshot-overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.05) 0%,
-    rgba(0, 0, 0, 0.35) 50%,
-    rgba(0, 0, 0, 0.75) 100%
-  );
-  z-index: 1;
-}
-
-.card-content {
-  position: relative;
-  z-index: 2;
-  height: 100%;
+/* ===== 行式列表 ===== */
+.rules-table {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
-  padding: 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 10px;
+.rules-table-header,
+.rules-table-row {
+  display: grid;
+  grid-template-columns: 2fr 3fr 1.5fr 1.2fr 140px;
+  align-items: center;
+  padding: 12px 16px;
+  gap: 12px;
 }
 
-.card-title {
+.rules-table-header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rules-table-row {
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 13px;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.col-name {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  flex: 1;
 
-  h3 {
-    font-size: 15px;
-    font-weight: 600;
-    color: #fff;
-    line-height: 1.3;
+  .rule-name {
+    font-weight: 500;
+    color: var(--text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .card-version {
+  .rule-version {
     font-size: 10px;
-    padding: 2px 8px;
-    background: rgba(0, 240, 255, 0.2);
+    padding: 1px 6px;
+    background: rgba(0, 240, 255, 0.15);
     color: var(--accent-blue);
-    border-radius: 4px;
+    border-radius: 3px;
     font-family: 'JetBrains Mono', monospace;
     flex-shrink: 0;
   }
 }
 
-.card-actions {
+.col-desc {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.status-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  &.active {
+    background: rgba(0, 255, 136, 0.15);
+    color: var(--color-success);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+  }
+
+  &.inactive {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+  }
+}
+
+.cron-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 193, 7, 0.1);
+  color: #ffc107;
+  border: 1px solid rgba(255, 193, 7, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+
+  svg { width: 11px; height: 11px; }
+}
+
+.col-updated {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.col-actions {
   display: flex;
   gap: 4px;
+  justify-content: flex-end;
 
   .action-btn {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 6px;
-    color: #fff;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.2s;
-
-    svg {
-      width: 16px;
-      height: 16px;
-    }
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.2);
-    }
-
-    &.danger:hover {
-      background: rgba(255, 68, 102, 0.3);
-      border-color: rgba(255, 68, 102, 0.5);
-    }
-  }
-}
-
-.card-desc {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
-  line-height: 1.5;
-  margin-bottom: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.rule-status-tags {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-
-  .status-tag {
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 4px;
-    font-weight: 500;
-
-    &.active {
-      background: rgba(0, 255, 136, 0.15);
-      color: var(--color-success);
-      border: 1px solid rgba(0, 255, 136, 0.3);
-    }
-
-    &.inactive {
-      background: rgba(255, 255, 255, 0.05);
-      color: rgba(255, 255, 255, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-  }
-
-  .cron-tag {
-    font-size: 11px;
-    padding: 3px 8px;
-    border-radius: 4px;
-    background: rgba(255, 193, 7, 0.1);
-    color: #ffc107;
-    border: 1px solid rgba(255, 193, 7, 0.2);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-
-    svg { width: 12px; height: 12px; }
-  }
-}
-
-.card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.card-meta {
-  display: flex;
-  gap: 12px;
-
-  .meta-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
+    transition: all 0.15s;
 
     svg {
       width: 14px;
       height: 14px;
     }
+
+    &:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: var(--accent-blue);
+    }
+
+    &.active {
+      color: var(--color-success);
+      border-color: rgba(0, 255, 136, 0.4);
+    }
+
+    &.danger:hover {
+      background: rgba(255, 68, 102, 0.1);
+      border-color: rgba(255, 68, 102, 0.5);
+      color: var(--color-danger);
+    }
   }
 }
 
-.has-snapshot {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: rgba(0, 240, 255, 0.7);
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-}
-
-// 对话框
+/* ===== 对话框 ===== */
 .dialog-overlay {
   position: fixed;
   inset: 0;
@@ -778,5 +706,4 @@ function formatDate(dateStr: string) {
     color: var(--text-primary);
   }
 }
-
 </style>
