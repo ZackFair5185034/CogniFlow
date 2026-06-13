@@ -244,6 +244,22 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const lodLevelMapCache = new Map<string, 0 | 1 | 2>()
 
   /**
+   * 全局稳定的 LOD 等级 (Phase 19 C: hysteresis 状态机)
+   *
+   * 升档阈值: zoom ≥ 0.55 → LOD 1; zoom ≥ 1.05 → LOD 2
+   * 降档阈值: zoom < 0.45 → LOD 0; zoom < 0.95 → LOD 1
+   * 死区 [0.45, 0.55) / [0.95, 1.05): zoom 在这里反复扫不切 LOD
+   *   (zoom 0.5 附近扫动是浏览器滚轮缩放常见抖动源)
+   *
+   * 默认 LOD 1: zoom 起步 1.0, 第一次决策: 1.0 < 1.05 + ≥ 0.95 → 维持 1
+   *              (zoom 从 1.0 降下来才到 0.95, 升到 1.05 才升 LOD 2)
+   *
+   * expandedNodeIds 强制 LOD 2 不走 hysteresis (用户主动展开意图, 必须立即响应)
+   * isLodLocked 锁 LOD 时 currentLod 也不变 (拖动期不允许切换)
+   */
+  const currentGlobalLod = ref<0 | 1 | 2>(1)
+
+  /**
    * 基础 LOD 等级 map: 仅依赖 zoom + 节点总数.
    * 选中态 / 展开态 → 在 getLodLevel() 内做 O(1) 快速路径.
    *
@@ -275,7 +291,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     return Math.round(z * 10) / 10
   }
 
-  let cachedBaseLodRef: { zoomBucket: number; zoom: number; expandedRef: typeof expandedNodeIds.value; nodesRef: typeof nodes.value; isLodLocked: boolean } | null = null
+  let cachedBaseLodRef: { zoomBucket: number; zoom: number; expandedRef: typeof expandedNodeIds.value; nodesRef: typeof nodes.value; isLodLocked: boolean; globalLod: 0 | 1 | 2 } | null = null
   let cachedBaseLodMap: Map<string, 0 | 1 | 2> = new Map()
   const baseLodLevelMap = computed<Map<string, 0 | 1 | 2>>(() => {
     const zoom = viewportZoom.value
@@ -283,10 +299,36 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     const expandedRef = expandedNodeIds.value
     const nodesRef = nodes.value
 
-    // LOD 决策: zoom < 0.5 → 强制 0; 否则看 expanded
-    const autoLod: 1 | 2 = zoom < 0.5 ? 0 : (zoom >= 1.0 ? 2 : 1)
-    // 展开节点即使 zoom 不在 [1, ∞) 也升到 2 (用户主动展开意图)
-    // zoom < 0.5 仍强制 0 (看不清任何细节, 极简优先)
+    // ===== Phase 19 C: hysteresis 状态机 =====
+    // 升档阈值 = 阈值 + 0.05; 降档阈值 = 阈值 - 0.05
+    // 死区: zoom ∈ [0.45, 0.55) / [0.95, 1.05) 维持 currentGlobalLod
+    //
+    // 设计取舍:
+    // - 升档用更大阈值 (0.55/1.05): 用户主动缩放要让 LOD 跟得上
+    // - 降档用更小阈值 (0.45/0.95): 防止滚轮抖动立刻降级
+    //   (滚轮 deltaY 不连续, 在阈值附近反复扫是常见抖动源)
+    //
+    // 拖动期 isLodLocked 锁: 不算 hysteresis, currentGlobalLod 也不动
+    // expandedNodeIds 不影响全局: 单个节点展开不影响其他节点
+    if (!isLodLocked) {
+      const cur = currentGlobalLod.value
+      let next: 0 | 1 | 2 = cur
+      if (cur === 0) {
+        // LOD 0 → 1: zoom ≥ 0.55 升
+        if (zoom >= 0.55) next = 1
+      } else if (cur === 1) {
+        // LOD 1 → 2: zoom ≥ 1.05 升
+        if (zoom >= 1.05) next = 2
+        // LOD 1 → 0: zoom < 0.45 降
+        else if (zoom < 0.45) next = 0
+      } else {
+        // cur === 2
+        // LOD 2 → 1: zoom < 0.95 降
+        if (zoom < 0.95) next = 1
+      }
+      if (next !== cur) currentGlobalLod.value = next
+    }
+    const globalLod = currentGlobalLod.value
 
     // 短路: 输入未变化 (桶化 zoom) → 复用上次 Map
     // 关键: zoomBucket 相等 OR (zoom 在阈值 0.5/1.0 同侧 且 expanded/nodes 未变)
@@ -296,24 +338,26 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       cachedBaseLodRef.zoomBucket === zoomBucket &&
       cachedBaseLodRef.isLodLocked === isLodLocked &&
       cachedBaseLodRef.nodesRef === nodesRef &&
-      cachedBaseLodRef.expandedRef === expandedRef
+      cachedBaseLodRef.expandedRef === expandedRef &&
+      cachedBaseLodRef.globalLod === globalLod
     ) {
       return cachedBaseLodMap
     }
 
-    // 重建
+    // 重建 — 全部节点用 globalLod (除了展开节点强制 LOD 2)
     const map = new Map<string, 0 | 1 | 2>()
     for (const n of nodesRef) {
       if (isLodLocked) {
         // 锁定时维持上次 LOD (避免拖动期间样式跳变)
         const cached = lodLevelMapCache.get(n.id) as 0 | 1 | 2 | undefined
-        map.set(n.id, cached ?? autoLod)
-      } else if (zoom < 0.5) {
+        map.set(n.id, cached ?? globalLod)
+      } else if (zoom < 0.45) {
         // zoom 太小时, 任何节点都强制 LOD 0 (展开节点也降级)
+        // 注: hysteresis 的 LOD 0 区是 zoom < 0.45, 这里跟它对齐
         map.set(n.id, 0)
       } else {
-        // zoom >= 0.5: 展开节点 → 2; 其他 → autoLod
-        map.set(n.id, expandedRef.has(n.id) ? 2 : autoLod)
+        // zoom ≥ 0.45: 展开节点 → 2; 其他 → globalLod
+        map.set(n.id, expandedRef.has(n.id) ? 2 : globalLod)
       }
     }
 
