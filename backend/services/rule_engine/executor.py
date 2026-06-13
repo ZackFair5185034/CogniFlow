@@ -439,6 +439,24 @@ class RuleGraphExecutor:
         except CycleError:
             raise
 
+        # ============ Phase 19.1: Branch 分流支持 ============
+        # 预扫: 收集所有 Branch 节点的输出边, 按 sourceHandle ("true"/"false") 分组
+        # 执行时根据 Branch 节点 result["branch"] 决定跳过分支
+        # 不重算拓扑 (一次性 Kahn 排序保持), 只在执行层跳过
+        branch_outputs: Dict[str, Dict[str, List[str]]] = {}
+        for edge in edges:
+            src = edge.get("source")
+            src_handle = edge.get("sourceHandle") or edge.get("source_handle")
+            tgt = edge.get("target")
+            if not src or not tgt or not src_handle:
+                continue
+            node_type = (nodes.get(src, {}).get("data", {}) or {}).get("type") or nodes.get(src, {}).get("type")
+            if node_type == "branch":
+                branch_outputs.setdefault(src, {"true": [], "false": []})
+                if src_handle in ("true", "false"):
+                    branch_outputs[src][src_handle].append(tgt)
+        skipped_node_ids: Set[str] = set()
+
         # 创建执行上下文
         context = ExecutionContext(
             execution_id=execution_id,
@@ -493,8 +511,8 @@ class RuleGraphExecutor:
                     levels
                 )
 
-                # 并行执行当前层
-                await self._execute_level(level, context)
+                # 并行执行当前层 (传 skipped_set 让 _execute_level 分流)
+                await self._execute_level(level, context, skipped_node_ids, branch_outputs)
 
             # 全部完成
             result = {
@@ -518,20 +536,76 @@ class RuleGraphExecutor:
     async def _execute_level(
         self,
         level: List[str],
-        context: ExecutionContext
+        context: ExecutionContext,
+        skipped_node_ids: Set[str] = None,
+        branch_outputs: Dict[str, Dict[str, List[str]]] = None,
     ):
-        """执行同一层的所有节点（并行）。"""
+        """执行同一层的所有节点（并行）。
+
+        Args:
+            level: 当前层节点 ID 列表
+            context: 执行上下文
+            skipped_node_ids: 已被 Branch 分流跳过的节点 ID 集合 (Phase 19.1)
+            branch_outputs: Branch 节点输出边索引 {branch_id: {"true": [...], "false": [...]}}
+        """
+        # Phase 19.1: 默认空集合, 兼容直接调用 (单测, 内部测试)
+        if skipped_node_ids is None:
+            skipped_node_ids = set()
+        if branch_outputs is None:
+            branch_outputs = {}
+
+        # 跳过被 branch 跳过的节点
+        executable = [nid for nid in level if nid not in skipped_node_ids]
+        skipped_in_level = [nid for nid in level if nid in skipped_node_ids]
+
+        # 先标记 skipped 节点
+        for nid in skipped_in_level:
+            context.set_node_status(nid, "skipped")
+            # 写 NodeExecutionLog
+            node = context.config.get("nodes", {}).get(nid, {})
+            node_type = (node.get("data", {}) or {}).get("type") or node.get("type") or "unknown"
+            await self._save_node_log(
+                execution_id=context.execution_id,
+                node_id=nid,
+                node_type=node_type,
+                status="skipped",
+                duration_ms=0,
+                error_message="Branch 分流未走该分支",
+                metrics={},
+            )
+
+        if not executable:
+            return
+
         tasks = [
             self._execute_node(node_id, context)
-            for node_id in level
+            for node_id in executable
         ]
-
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # 检查是否有失败
-        for node_id, result in zip(level, results):
+        for node_id, result in zip(executable, results):
             if isinstance(result, Exception):
                 context.set_node_status(node_id, "failed")
+
+        # Phase 19.1: Branch 节点完成后, 标记未走分支的下游节点为 skipped
+        # 在 _execute_node 完成后 (已写 context.node_results), 扫描可执行节点
+        for node_id in executable:
+            node = context.config.get("nodes", {}).get(node_id, {})
+            node_type = (node.get("data", {}) or {}).get("type") or node.get("type")
+            if node_type != "branch":
+                continue
+            if node_id not in branch_outputs:
+                continue
+            result = context.get_node_result(node_id, "branch")
+            if result not in ("true", "false"):
+                # branch 字段缺失或异常值, 不跳过 (保守: 都跑)
+                continue
+            # 未走的那条 output 边 target 加入 skipped
+            not_taken = "true" if result == "false" else "false"
+            for tgt in branch_outputs[node_id].get(not_taken, []):
+                if tgt not in skipped_node_ids:
+                    skipped_node_ids.add(tgt)
 
     async def _execute_node(
         self,

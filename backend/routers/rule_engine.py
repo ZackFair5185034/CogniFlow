@@ -2,6 +2,7 @@
 """规则引擎 API 路由 - 提供规则图的 CRUD 和执行接口。"""
 import secrets
 from typing import Optional
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
 from sqlalchemy.orm import Session
 
@@ -347,14 +348,47 @@ async def execute_graph(
     from backend.services.rule_engine.websocket_manager import rule_ws_manager
 
     async def run_execution():
+        # Phase 19.1: 异常处理 — execution 状态永远从 pending 转走
+        # 之前 background_tasks 吞异常, execution record 卡 pending
+        from backend.services.rule_engine.executor import RuleGraphExecutor
+        from backend.services.rule_engine.exceptions import ValidationError, ExecutorError, CycleError
+        from backend.database import ExecutionHistory
+        from sqlalchemy.orm import Session
+        import traceback
         ex = RuleGraphExecutor(db, ws_manager=rule_ws_manager)
-        result = await ex.execute(
-            graph_data=graph_data,
-            execution_id=execution_id,
-            trigger_type=trigger.trigger_type,
-            trigger_data=trigger.trigger_data,
-        )
-        return result
+        try:
+            result = await ex.execute(
+                graph_data=graph_data,
+                execution_id=execution_id,
+                trigger_type=trigger.trigger_type,
+                trigger_data=trigger.trigger_data,
+            )
+            return result
+        except (ValidationError, ExecutorError, CycleError) as e:
+            # 业务异常: 标记 failed
+            try:
+                rec = db.query(ExecutionHistory).filter(ExecutionHistory.id == execution_id).first()
+                if rec:
+                    rec.status = "failed"
+                    rec.end_time = datetime.now()
+                    rec.error = str(e)
+                    db.commit()
+            except Exception:
+                db.rollback()
+            return {"status": "failed", "error": str(e)}
+        except Exception as e:
+            # 未知异常: 同样标记 failed, 保留 traceback 给日志
+            tb = traceback.format_exc()
+            try:
+                rec = db.query(ExecutionHistory).filter(ExecutionHistory.id == execution_id).first()
+                if rec:
+                    rec.status = "failed"
+                    rec.end_time = datetime.now()
+                    rec.error = f"{type(e).__name__}: {str(e)}\n{tb[:500]}"
+                    db.commit()
+            except Exception:
+                db.rollback()
+            return {"status": "failed", "error": str(e)}
 
     background_tasks.add_task(run_execution)
 
