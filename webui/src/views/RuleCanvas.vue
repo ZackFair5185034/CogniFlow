@@ -687,6 +687,8 @@ const {
   getViewport,
   addSelectedNodes,
   addSelectedEdges,
+  removeSelectedNodes,   // Phase 19.7+: 配合 addSelectedNodes 走 VueFlow 官方 diff 链路
+  getSelectedNodes,      // Phase 19.7+: 算 toAdd/toRemove diff 用
   getNodes,
   findNode,
   applyNodeChanges: applyVueFlowNodeChanges,
