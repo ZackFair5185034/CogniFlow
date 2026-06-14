@@ -127,30 +127,6 @@
             <SvgIcon name="minimap" />
           </el-button>
         </div>
-
-        <div class="tool-divider" />
-
-        <!-- Phase 19.4+: LOD 1 显示模式切换 (简洁端口 ↔ 全部 element) -->
-        <div class="tool-group">
-          <el-button
-            class="icon-btn display-mode-btn"
-            :class="{ active: displayMode === 'all' }"
-            title="展开全部节点 (LOD 1 全部 element: 端口+配置+inputs/outputs)"
-            @click="setDisplayMode('all')"
-          >
-            <SvgIcon name="expand-all" />
-            <span class="btn-label">展开</span>
-          </el-button>
-          <el-button
-            class="icon-btn display-mode-btn"
-            :class="{ active: displayMode === 'collapsed' }"
-            title="折叠全部节点 (LOD 1 简洁端口: 只显示端口和标题)"
-            @click="setDisplayMode('collapsed')"
-          >
-            <SvgIcon name="collapse-all" />
-            <span class="btn-label">折叠</span>
-          </el-button>
-        </div>
       </div>
 
       <div class="header-right">
@@ -795,20 +771,6 @@ const executing = ref(false)
 const showPalette = ref(true)
 const showMiniMap = ref(true)
 
-// Phase 19.4+: LOD 1 显示模式 (简洁端口 ↔ 全部 element)
-// - all: 全部节点 280px 全展开 (默认, 端口+配置+inputs/outputs)
-// - collapsed: 全部节点 200px 折叠 (只显示端口和标题)
-// 不持久化 (Phase 19.4 暂不持久; 后续可加 localStorage)
-const displayMode = ref<'all' | 'collapsed'>('all')
-function setDisplayMode(mode: 'all' | 'collapsed') {
-  displayMode.value = mode
-  if (mode === 'all') {
-    store.collapseAllExpanded()  // 全部 clear expandedNodeIds -> 全展开
-  } else {
-    store.expandAll()            // 全部 add expandedNodeIds -> 全折叠
-  }
-}
-
 // Phase B 任务5: 大图渲染降级
 const LARGE_GRAPH_NODE_THRESHOLD = 80
 const HUGE_GRAPH_NODE_THRESHOLD = 200
@@ -1238,7 +1200,26 @@ function handleCopy(_event?: MouseEvent) {
   // 关键: 从 store.nodes 过滤 selected. 用 getNodes.value 是 VueFlow 内部 ref,
   // shallowRef 内层 mutation (selected = true) 不会传播到 VueFlow 内部,
   // 用 store.nodes 才是数据源, 反映用户当前选择
-  const selected = (store.nodes as any[]).filter((n) => n.selected)
+  let selected = (store.nodes as any[]).filter((n) => n.selected)
+  // Phase 19.5+ fix: 右键菜单触发时, 节点/边不一定被 selected.
+  // 若 contextMenu.target 是 node/edge, 且不在 selected 集合中,
+  // 临时把 target 节点(或 target 边)加入 selected 再复制 (Figma 行为).
+  if (selected.length === 0 && contextMenu.target) {
+    if (contextMenu.targetType === 'node') {
+      const targetId = (contextMenu.target as any).id
+      const targetNode = (store.nodes as any[]).find((n) => n.id === targetId)
+      if (targetNode) selected = [targetNode]
+    } else if (contextMenu.targetType === 'edge') {
+      // 边不能单独复制 (要 node), 但可加入 selected 集合, 让用户明确意图
+      const targetId = (contextMenu.target as any).id
+      addSelectedEdges([contextMenu.target as any])
+      selected = (store.nodes as any[]).filter((n) => n.selected)
+      if (selected.length === 0) {
+        ElMessage.warning('边的复制需要先选中关联节点')
+        return
+      }
+    }
+  }
   if (selected.length === 0) {
     ElMessage.warning('请先选择要复制的节点')
     return
@@ -1264,7 +1245,15 @@ function handleCopy(_event?: MouseEvent) {
 
 // 剪切
 function handleCut(_event?: MouseEvent) {
-  const selected = (store.nodes as any[]).filter((n) => n.selected)
+  let selected = (store.nodes as any[]).filter((n) => n.selected)
+  // Phase 19.5+ fix: 右键菜单触发的剪切, 同样用 contextMenu.target fallback
+  if (selected.length === 0 && contextMenu.target) {
+    if (contextMenu.targetType === 'node') {
+      const targetId = (contextMenu.target as any).id
+      const targetNode = (store.nodes as any[]).find((n) => n.id === targetId)
+      if (targetNode) selected = [targetNode]
+    }
+  }
   if (selected.length === 0) {
     ElMessage.warning('请先选择要剪切的节点')
     return
@@ -3549,18 +3538,6 @@ $panel-header-height: 44px;
 
     .btn-label {
       color: #e0e0e8;
-    }
-
-    // Phase 19.4+: 显示模式按钮 (展开/折叠)
-    &.display-mode-btn {
-      min-width: 64px;
-      padding: 0 8px;
-      gap: 4px;
-      font-size: 11px;
-      .btn-label {
-        font-size: 11px;
-        line-height: 1;
-      }
     }
 
     &:hover {

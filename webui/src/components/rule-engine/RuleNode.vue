@@ -28,6 +28,16 @@
       <div class="node-title">
         <span class="node-label">{{ data.label || data.type }}</span>
       </div>
+      <!-- Phase 19.5+: 单节点折叠/展开按钮 (替代工具栏全局按钮) -->
+      <button
+        v-if="lodLevel >= 1"
+        class="node-collapse-btn"
+        :title="isCollapsed ? '展开节点' : '折叠节点 (隐藏内嵌配置)'"
+        @click.stop="toggleSelf"
+        @dblclick.stop
+      >
+        <SvgIcon :name="isCollapsed ? 'expand-all' : 'collapse-all'" />
+      </button>
     </div>
 
     <!-- ========== LOD 1: 端口区域 + 端口名 (LOD 0 隐藏) ==========
@@ -202,6 +212,11 @@ const isCollapsed = computed<boolean>(() => {
   return store.expandedNodeIds.has(props.data.id)
 })
 
+// Phase 19.5+: 节点自身折叠/展开 (节点右上角按钮)
+function toggleSelf() {
+  store.toggleNodeExpanded(props.data.id)
+}
+
 // ============ Handle 连接状态 (store 全局索引 O(1) 查询) ============
 
 function isInputConnected(handleId: string): boolean {
@@ -353,6 +368,39 @@ function isOutputConnected(handleId: string): boolean {
   overflow: hidden;
   text-overflow: ellipsis;
   display: block;
+}
+
+// Phase 19.5+: 节点右上角折叠/展开按钮
+.node-collapse-btn {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  color: #c0c0c8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  &:hover {
+    background: rgba(0, 240, 255, 0.15);
+    border-color: var(--accent-blue, #00f0FF);
+    color: #00f0FF;
+  }
+
+  &:active {
+    transform: scale(0.92);
+  }
 }
 
 /* 分类头部渐变 */
