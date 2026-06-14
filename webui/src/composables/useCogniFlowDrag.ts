@@ -142,7 +142,7 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     zoomRef = options.getZoom()
     const src = event.sourceEvent as MouseEvent
 
-    let allEls: HTMLElement[]
+    let allEls: HTMLElement[] = []
     if (el.classList.contains('selected')) {
       allEls = Array.from(document.querySelectorAll<HTMLElement>('.vue-flow__node.selected'))
     } else {
@@ -164,6 +164,15 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
           if (additive) {
             // 加选: 追加 target 到当前选中集合
             options.addSelectedNodes([targetFlowNode])
+            // DRAG-1 修复: 加选分支后, 把当前所有 VueFlow 选中节点也加到 allEls
+            //   让整组一起拖动 (与 macOS Finder / Windows Explorer 一致)
+            //   旧代码: allEls = [el] → 只拖 target, 已选中节点不跟随
+            //   修复: allEls = [target el, ...当前所有 .selected 的 DOM]
+            const currentlySelected = options.getSelectedNodes()
+            for (const n of currentlySelected) {
+              const eel = document.querySelector<HTMLElement>(`.vue-flow__node[data-id="${n.id}"]`)
+              if (eel) allEls.push(eel)
+            }
           } else {
             // 替换: 清空 + 只选 target
             const currentlySelected = options.getSelectedNodes()
@@ -174,9 +183,8 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
           }
         }
       }
-      allEls = [el]
+      if (allEls.length === 0 || !allEls.includes(el)) allEls.push(el)
     }
-    if (!allEls.includes(el)) allEls.push(el)
 
     ctx = {
       startMouse: { x: src.clientX, y: src.clientY },

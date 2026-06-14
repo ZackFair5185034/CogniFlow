@@ -395,6 +395,7 @@
             :only-render-visible-elements="true"
             :select-nodes-on-drag="false"
             :selection-key-code="true"
+            :multi-selection-key-code="['Control', 'Meta', 'Shift']"
             :selection-mode="SelectionMode.Partial"
             :connection-radius="20"
             :is-valid-connection="isValidConnection"
@@ -801,7 +802,11 @@ const zoomLevelEl = ref<HTMLElement | null>(null)
 // 缓存当前显示值, 避免重复设置相同内容触发无谓的 DOM write
 let lastZoomText = '100%'
 const isPanning = ref(false)
-const lastMousePos = ref({ x: 0, y: 0 })
+// BUG-CFL-3 修复: lastMousePos 拆成两个 ref, 避免 pan (屏幕坐标) 与 框选 (容器坐标) 写入冲突
+// - panLastScreen: pan mousemove 用, 跟 screenX/Y 配对 (dx = event.clientX - panLastScreen.x)
+// - selectionLastContainer: 框选 mousemove 用, 跟 selectionStartPos (容器坐标) 配对算 finalRect
+let panLastScreen = { x: 0, y: 0 }
+let selectionLastContainer = { x: 0, y: 0 }
 /** 全局鼠标位置: 任何 mousemove 都更新, 用于快捷键 Ctrl+V 拿鼠标坐标 (KeyboardEvent 没 clientX/Y) */
 const globalMousePos = ref({ x: 0, y: 0 })
 
@@ -1364,11 +1369,11 @@ function handleSelectionStart(event: any) {
   isBatchDragging.value = true  // P0: 框选期间节流, handleNodesChange 立即 return
   store.setSelectionBoxActive(true) // LOD-1: 框选期间锁定 LOD
 
-  // Phase 19.6+: 锁定本次框选模式 (Ctrl/Meta/Shift = 增量加选)
-  // 用 useKeyPress ref (multiselectKeyPressed) 而非 event.ctrlKey —
-  // 因为 PointerEvent.ctrlKey 可能在 touch/pen 输入时为 false, 但键盘状态 ref 始终准确
-  // 与 vue-flow 内部 useKeyPress('Control') 走同源数据, 加选行为一致
-  selectionAdditive = multiSelectKeyPressed.value
+  // Phase 19.7+: 锁定本次框选模式 (Ctrl/Meta/Shift = 增量加选)
+  // 直接读 PointerEvent 修饰键, 不再用自挂 keydown/keyup ref
+  // (BUG-CFL-2: 两套状态分裂消除; mousedown 瞬间的 PointerEvent 是同源数据, 无需 ref 缓冲)
+  const src = event as (PointerEvent | MouseEvent | undefined)
+  selectionAdditive = !!(src && (src.ctrlKey || src.metaKey || src.shiftKey))
   isAdditiveSelection.value = selectionAdditive  // 同步视图状态 (角标 + 自绘框颜色)
 
   // Phase 17.5 (修复版): 延迟计算 + 坐标系修正
@@ -1383,9 +1388,10 @@ function handleSelectionStart(event: any) {
   if (event && event.clientX !== undefined) {
     selectionStartPos = { x: event.clientX - offsetX, y: event.clientY - offsetY }  // 容器坐标
   } else {
-    // fallback: 用 lastMousePos 或 0
-    const lp = lastMousePos.value
-    selectionStartPos = lp
+    // BUG-CFL-3 修复: fallback 用 globalMousePos (屏幕坐标) 转容器坐标, 不再用 lastMousePos
+    //   lastMousePos 已拆, 这里是 selectionStartPos 初始化, 走 globalMousePos 拿屏幕坐标更安全
+    const lp = globalMousePos.value
+    selectionStartPos = (lp.x || lp.y)
       ? { x: lp.x - offsetX, y: lp.y - offsetY }
       : { x: 0, y: 0 }
   }
@@ -1443,33 +1449,9 @@ let selectionStartPos: { x: number; y: number } | null = null
 let selectionAdditive = false
 const isAdditiveSelection = ref(false)
 
-/**
- * Phase 19.6+: 多选键状态检测 (与 vue-flow 内部 useKeyPress('Control') 同源)
- * - mousedown 瞬间读这个 ref 决定 selectionAdditive
- * - 之前用 event.ctrlKey 不可靠 (touch/pen 输入不触发 KeyboardEvent)
- * - 现在与 vue-flow 内部 multiSelectKeyPressed 走同源数据, 加选行为完全一致
- *
- * 不引 @vueuse/core 外部依赖 (避免打包变大) — 手写 keydown/keyup 监听,
- * 用 ref 同步按键状态, onMounted/onBeforeUnmount 生命周期管理.
- */
-const multiSelectKeyPressed = ref(false)
-function onKeyDown(e: KeyboardEvent) {
-  if (e.ctrlKey || e.metaKey || e.shiftKey) multiSelectKeyPressed.value = true
-}
-function onKeyUp(e: KeyboardEvent) {
-  if (!e.ctrlKey && !e.metaKey && !e.shiftKey) multiSelectKeyPressed.value = false
-}
-onMounted(() => {
-  window.addEventListener('keydown', onKeyDown)
-  window.addEventListener('keyup', onKeyUp)
-  // 注意: blur 时清零, 避免窗口失焦后状态残留
-  window.addEventListener('blur', onKeyUp)
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKeyDown)
-  window.removeEventListener('keyup', onKeyUp)
-  window.removeEventListener('blur', onKeyUp)
-})
+// Phase 19.7+: 删 multiSelectKeyPressed ref + keydown/keyup 监听
+//   (BUG-CFL-2: 消除两套状态分裂, 直接读 PointerEvent 修饰键更可靠)
+//   (顺带修复原 blur 事件类型隐患: onKeyUp 期望 KeyboardEvent, blur 是 FocusEvent)
 
 /**
  * 自绘框选矩形 — 替代 VueFlow 内部 UserSelection
@@ -1487,16 +1469,17 @@ function handleSelectionEnd(event: any) {
 
   // 提取本帧需要的数据 + 重置状态
   const start = selectionStartPos
-  const end = lastMousePos.value
+  // BUG-CFL-3 修复: 读 selectionLastContainer (容器坐标) 而非 lastMousePos (混坐标)
+  const end = selectionLastContainer
   const isAdditive = selectionAdditive  // 锁定 mousedown 那一刻的 Ctrl 状态
   selectionStartPos = null
   selectionAdditive = false  // 重置, 下次框选前都是 false
   isAdditiveSelection.value = false  // 重置视图状态
   customSelectionRect.value = null  // 隐藏自绘框
 
+  // BUG-CFL-5 修复: 兜底分支不应动选中 — 用户意图是"框选未发生", 应保留旧选中
+  // (旧代码无条件 syncSelectionToStoreNodes(new Set()) 会清空选中, 与桌面应用约定不符)
   if (!start || !end) {
-    // 没起点 (不应该发生, 但兜底) — 清空选中
-    syncSelectionToStoreNodes(new Set())
     return
   }
 
@@ -1508,8 +1491,13 @@ function handleSelectionEnd(event: any) {
     height: Math.abs(end.y - start.y)
   }
 
-  // 框选太小时跳过 (避免点击触发微抖动误选)
+  // 框选太小时处理
+  // BUG-CFL-4 修复: 微小框选 (<3px) 普通模式清空选中, 加选模式保留旧选中
+  // (旧代码直接 return, 既不清空也不保留, 与 macOS Finder 行为不符)
   if (containerRect.width < 3 && containerRect.height < 3) {
+    if (!isAdditive) {
+      syncSelectionToStoreNodes(new Set())
+    }
     return
   }
 
@@ -2041,7 +2029,7 @@ function handleWheel(event: WheelEvent) {
 function handleCanvasMouseDown(event: MouseEvent) {
   if (event.button === 1 || (event.button === 0 && event.altKey)) {
     isPanning.value = true
-    lastMousePos.value = { x: event.clientX, y: event.clientY }
+    panLastScreen = { x: event.clientX, y: event.clientY }
     // Phase 17.3: 拖动期间直接改 transformationpane transform, 绕过 vue-flow
     // 起点记下当前 viewport, mousemove 时算 dx/dy 累加, mouseup 时统一 setViewport
     const vp = getViewport()
@@ -2080,17 +2068,18 @@ function handleCanvasMouseMove(event: MouseEvent) {
       width: Math.abs(cx - sx),
       height: Math.abs(cy - sy)
     }
-    // 重要: 同步 lastMousePos (容器坐标), 供 handleSelectionEnd 算 finalRect
-    lastMousePos.value = { x: cx, y: cy }
+    // 重要: 同步 selectionLastContainer (容器坐标), 供 handleSelectionEnd 算 finalRect
+    // BUG-CFL-3 修复: 不再污染全局 lastMousePos (避免与 pan 分支屏幕坐标冲突)
+    selectionLastContainer = { x: cx, y: cy }
     // (Phase 18: isAdditiveSelection 不在 mousemove 里刷新 — 跟随 mousedown 锁定的 selectionAdditive,
     //  与 macOS Finder / Windows Explorer 的加选行为一致: 拖动过程中切换 Ctrl 不会让行为跳变)
     return  // 不进 pan 分支
   }
 
   if (isPanning.value) {
-    const dx = event.clientX - lastMousePos.value.x
-    const dy = event.clientY - lastMousePos.value.y
-    lastMousePos.value = { x: event.clientX, y: event.clientY }
+    const dx = event.clientX - panLastScreen.x
+    const dy = event.clientY - panLastScreen.y
+    panLastScreen = { x: event.clientX, y: event.clientY }
     panAccum.x += dx
     panAccum.y += dy
     // rAF 节流: 累积所有 mousemove 的偏移, 在一次 rAF 回调里批量消费,
