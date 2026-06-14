@@ -241,7 +241,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const hasNodes = computed(() => nodes.value.length > 0)
 
   /** 锁定期间的 LOD 缓存, drag 期间维持稳定 (避免切换抖动破坏 v-memo) */
-  const lodLevelMapCache = new Map<string, 0 | 1 | 2>()
+  const lodLevelMapCache = new Map<string, 0 | 1>()
 
   /**
    * 全局稳定的 LOD 等级 (Phase 19 C: hysteresis 状态机)
@@ -257,7 +257,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    * expandedNodeIds 强制 LOD 2 不走 hysteresis (用户主动展开意图, 必须立即响应)
    * isLodLocked 锁 LOD 时 currentLod 也不变 (拖动期不允许切换)
    */
-  const currentGlobalLod = ref<0 | 1 | 2>(1)
+  const currentGlobalLod = ref<0 | 1>(1)
 
   /**
    * 基础 LOD 等级 map: 仅依赖 zoom + 节点总数.
@@ -291,9 +291,9 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     return Math.round(z * 10) / 10
   }
 
-  let cachedBaseLodRef: { zoomBucket: number; zoom: number; expandedRef: typeof expandedNodeIds.value; nodesRef: typeof nodes.value; isLodLocked: boolean; globalLod: 0 | 1 | 2 } | null = null
-  let cachedBaseLodMap: Map<string, 0 | 1 | 2> = new Map()
-  const baseLodLevelMap = computed<Map<string, 0 | 1 | 2>>(() => {
+  let cachedBaseLodRef: { zoomBucket: number; zoom: number; expandedRef: typeof expandedNodeIds.value; nodesRef: typeof nodes.value; isLodLocked: boolean; globalLod: 0 | 1 } | null = null
+  let cachedBaseLodMap: Map<string, 0 | 1> = new Map()
+  const baseLodLevelMap = computed<Map<string, 0 | 1>>(() => {
     const zoom = viewportZoom.value
     const isLodLocked = isDragging.value || isSelectionBoxActive.value
     const expandedRef = expandedNodeIds.value
@@ -312,19 +312,14 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     // expandedNodeIds 不影响全局: 单个节点展开不影响其他节点
     if (!isLodLocked) {
       const cur = currentGlobalLod.value
-      let next: 0 | 1 | 2 = cur
+      let next: 0 | 1 = cur
       if (cur === 0) {
-        // LOD 0 → 1: zoom ≥ 0.55 升
-        if (zoom >= 0.55) next = 1
-      } else if (cur === 1) {
-        // LOD 1 → 2: zoom ≥ 1.05 升
-        if (zoom >= 1.05) next = 2
-        // LOD 1 → 0: zoom < 0.45 降
-        else if (zoom < 0.45) next = 0
+        // LOD 0 → 1: zoom ≥ 0.80 升
+        if (zoom >= 0.80) next = 1
       } else {
-        // cur === 2
-        // LOD 2 → 1: zoom < 0.95 降
-        if (zoom < 0.95) next = 1
+        // cur === 1
+        // LOD 1 → 0: zoom < 0.65 降 (死区 0.65~0.80 维持 LOD 1)
+        if (zoom < 0.65) next = 0
       }
       if (next !== cur) currentGlobalLod.value = next
     }
@@ -345,19 +340,16 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
 
     // 重建 — 全部节点用 globalLod (除了展开节点强制 LOD 2)
-    const map = new Map<string, 0 | 1 | 2>()
+    const map = new Map<string, 0 | 1>()
     for (const n of nodesRef) {
       if (isLodLocked) {
         // 锁定时维持上次 LOD (避免拖动期间样式跳变)
-        const cached = lodLevelMapCache.get(n.id) as 0 | 1 | 2 | undefined
+        const cached = lodLevelMapCache.get(n.id) as 0 | 1 | undefined
         map.set(n.id, cached ?? globalLod)
-      } else if (zoom < 0.45) {
-        // zoom 太小时, 任何节点都强制 LOD 0 (展开节点也降级)
-        // 注: hysteresis 的 LOD 0 区是 zoom < 0.45, 这里跟它对齐
-        map.set(n.id, 0)
       } else {
-        // zoom ≥ 0.45: 展开节点 → 2; 其他 → globalLod
-        map.set(n.id, expandedRef.has(n.id) ? 2 : globalLod)
+        // 两级 LOD: 展开不影响 baseLod (CSS-only .expanded 修饰符负责)
+        // 拖动期 isLodLocked 锁在前面已处理
+        map.set(n.id, globalLod)
       }
     }
 
@@ -375,7 +367,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const lodLevelMap = baseLodLevelMap
 
   /** O(1) 查询节点 LOD 等级 */
-  function getLodLevel(nodeId: string): 0 | 1 | 2 {
+  function getLodLevel(nodeId: string): 0 | 1 {
     return baseLodLevelMap.value.get(nodeId) ?? 1
   }
 

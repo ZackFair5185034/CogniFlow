@@ -7,12 +7,13 @@
     selected 走 VueFlow wrapper 的 CSS class, 不需列入依赖.
   -->
   <div
-    v-memo="[data.id, data.status, data.category, lodLevel]"
+    v-memo="[data.id, data.status, data.category, lodLevel, isExpanded]"
     v-bind="$attrs"
     class="rule-node"
-    :class="[`category-${data.category}`, `lod-${lodLevel}`]"
+    :class="[`category-${data.category}`, `lod-${lodLevel}`, { expanded: isExpanded }]"
     :data-status="data.status || 'idle'"
     :data-lod="lodLevel"
+    :data-expanded="isExpanded ? 'true' : 'false'"
     @contextmenu.prevent="emit('contextmenu', $event)"
     @dblclick.stop="emit('dblclick', $event)"
   >
@@ -86,9 +87,9 @@
       />
     </div>
 
-    <!-- ========== LOD 2: 节点内嵌配置 (Phase 17.1+ 取代右侧面板) ========== -->
+    <!-- ========== 节点内嵌配置 (Phase 19.2+: 仅 expanded 时显示) ========== -->
     <div
-      v-if="lodLevel >= 2"
+      v-if="isExpanded"
       class="node-config-section"
       @mousedown.stop
       @click.stop
@@ -177,9 +178,17 @@ const statusTitle = computed(() => {
  * LOD 等级: 优先使用 prop (父组件计算传入), 否则从 store 全局 map 查询.
  * 来自 store 时是响应式的 — 缩放切换会触发重新计算.
  */
-const lodLevel = computed<0 | 1 | 2>(() => {
+const lodLevel = computed<0 | 1>(() => {
   if (props.lodLevel !== undefined) return props.lodLevel
   return store.getLodLevel(props.data.id)
+})
+
+/**
+ * 节点是否处于展开状态 (双击触发的内嵌配置可见状态).
+ * 独立于 LOD 0/1 — 展开节点在 zoom 0.7 时配置也可显示 (壳体能容纳的前提下).
+ */
+const isExpanded = computed<boolean>(() => {
+  return store.expandedNodeIds.has(props.data.id)
 })
 
 // ============ Handle 连接状态 (store 全局索引 O(1) 查询) ============
@@ -290,8 +299,14 @@ function isOutputConnected(handleId: string): boolean {
   .node-config-section { display: none; }   // 极简模式隐藏配置
 }
 
-/* ========== LOD 2 完整模式 (Phase 17.1+: 节点内嵌 NodeConfigEditor 取代右侧面板) ========== */
-.rule-node.lod-2 {
+/* ========== 展开修饰符 (Phase 19.2+: expanded 节点加宽 + 配置可见) ========== */
+/*
+ * 适用范围: 仅 LOD 1 节点展开有意义 (LOD 0 壳体太小, 装不下配置)
+ * 实现: lod-1.expanded 同时命中时, 加宽到 280px + 显示配置区
+ * 设计取舍: 展开不强制锁定 zoom, 用户在 0.7 缩放 + 双击展开, 也能看到配置
+ *           (壳体本身被 zoom 物理放大, 内容仍可读)
+ */
+.rule-node.lod-1.expanded {
   width: 280px;
 
   .node-config-section {
