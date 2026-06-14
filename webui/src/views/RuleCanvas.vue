@@ -830,8 +830,10 @@ const contextMenu = reactive({
 })
 
 // Phase 19.6+: 右键菜单按 selected 决定 (废弃 target 概念)
+// Phase 19.7+ 修复: 读 VueFlow 内部 getSelectedNodes, 不再读 store.nodes[i].selected
+//   (shallowRef 死路, 永远 falsy, 导致菜单永远不显示"复制 N 项"等)
 const contextSelectedCount = computed(() => {
-  return (store.nodes as any[]).filter(n => n.selected).length
+  return (getSelectedNodes.value as any[]).length
 })
 const hasClipboard = computed(() => !!clipboard.value?.nodesJson)
 
@@ -1207,7 +1209,9 @@ function getSelectionBboxCenter(): { x: number; y: number } {
 // 复制
 function handleCopy(_event?: MouseEvent) {
   // Phase 19.6+: 右键菜单按 selected 决定, 不再用 contextMenu.target fallback
-  const selected = (store.nodes as any[]).filter((n) => n.selected)
+  // Phase 19.7+ 修复: 读 VueFlow 内部 getSelectedNodes (flowNode.selected),
+  //   不再读 store.nodes[i].selected (shallowRef 死路)
+  const selected = getSelectedNodes.value as any[]
   if (selected.length === 0) {
     ElMessage.warning('请先选择要复制的节点')
     return
@@ -1234,7 +1238,8 @@ function handleCopy(_event?: MouseEvent) {
 // 剪切
 function handleCut(_event?: MouseEvent) {
   // Phase 19.6+: 右键菜单按 selected 决定
-  const selected = (store.nodes as any[]).filter((n) => n.selected)
+  // Phase 19.7+ 修复: 读 VueFlow 内部 getSelectedNodes (同上 handleCopy)
+  const selected = getSelectedNodes.value as any[]
   if (selected.length === 0) {
     ElMessage.warning('请先选择要剪切的节点')
     return
@@ -1337,8 +1342,10 @@ function handlePaste(event?: MouseEvent) {
 
   // shallowRef 数组必须重新赋值触发响应式
   // 取消选中所有原节点, 只保留粘贴项 selected: true
-  for (const n of store.nodes as any[]) {
-    n.selected = false
+  // Phase 19.7+ 修复: 走 VueFlow 官方 removeSelectedNodes, 不再 mutate store.nodes[i].selected
+  const previouslySelected = getSelectedNodes.value as any[]
+  if (previouslySelected.length > 0) {
+    removeSelectedNodes(previouslySelected)
   }
   store.nodes = [...store.nodes, ...newNodes]
   store.edges = [...(store.edges as Edge[]), ...newEdges]
@@ -1540,15 +1547,20 @@ function handleSelectionEnd(event: any) {
 
   // Phase 18: 加选模式 = 保留旧选中, 合并新命中
   // 普通模式 = 旧选中被新命中完全替换 (修 BUG-3: 未命中节点的反选)
+  //
+  // Phase 19.7+ 修复: 旧选中读 VueFlow 内部 getSelectedNodes (flowNode.selected),
+  //   不再读 store.nodes[i].selected (shallowRef 死路, 永远 falsy).
+  //   视觉 selected class 走 VueFlow, 旧选中数据源也必须从 VueFlow 拿 — 单一数据源原则
   let finalIds: Set<string> = hitIds
   if (isAdditive) {
     finalIds = new Set<string>(hitIds)
-    for (const n of store.nodes as any[]) {
-      if (n.selected) finalIds.add(n.id)
+    const currentlySelected = getSelectedNodes.value as any[]
+    for (const n of currentlySelected) {
+      finalIds.add(n.id)
     }
   }
 
-  // 一次性同步: store + vue-flow 内部 GraphNode.selected, 0 vdom diff
+  // 一次性同步: vue-flow 内部 GraphNode.selected (走 addSelectedNodes/removeSelectedNodes 官方 diff)
   syncSelectionToStoreNodes(finalIds)
 }
 
@@ -1589,8 +1601,9 @@ function handleNodeDelete(nodeId: string) {
 
 // 删除选中
 function handleDelete() {
-  const vfNodes = getNodes.value as any[]
-  const selectedNodes = vfNodes.filter((n) => n.selected)
+  // Phase 19.7+ 修复: 直接用 getSelectedNodes, 不再走 getNodes().filter(n.selected)
+  //   (vfNodes.selected 走的是 reactive flowNode.selected, 应该也行, 但跟其它分支统一语义)
+  const selectedNodes = getSelectedNodes.value as any[]
   const selectedEdges = edges.value.filter((e: any) => e.selected)
 
   if (selectedNodes.length === 0 && selectedEdges.length === 0) return
@@ -1802,15 +1815,12 @@ function handleNodeDoubleClick(event: any) {
 // 画布点击
 function handlePaneClick() {
   // 清除所有节点的选中态 (含 VueFlow 视觉 CSS)
-  let changed = false
-  for (const n of store.nodes as any[]) {
-    if (n.selected) {
-      n.selected = false
-      changed = true
-    }
+  // Phase 19.7+ 修复: 走 VueFlow 官方 removeSelectedNodes, 不再 mutate store.nodes[i].selected
+  //   (shallowRef 死路, 改 store 视觉不更新)
+  const currentlySelected = getSelectedNodes.value as any[]
+  if (currentlySelected.length > 0) {
+    removeSelectedNodes(currentlySelected)
   }
-  // P0-B (Phase 17.1): triggerRef 替代数组引用重建 (避免 VueFlow 整图 diff)
-  if (changed) triggerRef(nodes)
   // Phase 17.1+: 点空白收起所有展开的节点 (用户切回画布视角的常见操作)
   store.collapseAllExpanded()
 }
