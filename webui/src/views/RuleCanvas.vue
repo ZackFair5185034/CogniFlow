@@ -603,39 +603,35 @@
       :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
       @contextmenu.prevent
     >
-      <template v-if="contextMenu.targetType === 'node'">
+      <!-- Phase 19.6+: 菜单按 selected 决定, 不按 target
+           - selectedCount > 0 -> 复制/剪切/删除 N 项 (作用在选中集)
+           - selectedCount === 0 -> 只显示 粘贴/全选
+           - target 概念废弃: 右键节点/边/空白 都看 selected 集合 -->
+      <template v-if="contextSelectedCount > 0">
         <div
           class="context-menu-item"
           @click="handleContextAction('copy', $event)"
         >
-          <SvgIcon name="copy" /> 复制
+          <SvgIcon name="copy" /> 复制 {{ contextSelectedCount }} 项
         </div>
         <div
           class="context-menu-item"
           @click="handleContextAction('cut', $event)"
         >
-          <SvgIcon name="cut" /> 剪切
+          <SvgIcon name="cut" /> 剪切 {{ contextSelectedCount }} 项
         </div>
         <div
           class="context-menu-item danger"
           @click="handleContextAction('delete', $event)"
         >
-          <SvgIcon name="delete" /> 删除
-        </div>
-        <div class="context-menu-divider" />
-      </template>
-      <template v-if="contextMenu.targetType === 'edge'">
-        <div
-          class="context-menu-item danger"
-          @click="handleContextAction('delete', $event)"
-        >
-          <SvgIcon name="delete" /> 删除连线
+          <SvgIcon name="delete" /> 删除 {{ contextSelectedCount }} 项
         </div>
         <div class="context-menu-divider" />
       </template>
       <div
         class="context-menu-item"
-        @click="handleContextAction('paste', $event)"
+        :class="{ disabled: !hasClipboard }"
+        @click="hasClipboard && handleContextAction('paste', $event)"
       >
         <SvgIcon name="paste" /> 粘贴
       </div>
@@ -661,7 +657,7 @@
 
 <script setup lang="ts">
 import { throttle } from 'lodash-es'
-import { triggerRef, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, triggerRef, watch } from 'vue'
 import { useRuleEngineStore, type RuleNodeData, type NodeDefinition } from '@/stores/ruleEngine'
 import { storeToRefs } from 'pinia'
 import { ruleEngineApi } from '@/api'
@@ -720,6 +716,11 @@ useCogniFlowDrag({
     const flowNode = findNode(id) as any
     return flowNode
   },
+  // Phase 19.7+: 选中状态全部走 VueFlow 官方 API, 不要直接 mutate flowNode.selected
+  //   (VueFlow 内部管理 flowNode.selected reactive 状态 + DOM .selected class 联动)
+  addSelectedNodes,
+  removeSelectedNodes,
+  getSelectedNodes: () => getSelectedNodes.value as any[],
   onStart: () => {
     isNodeDragging.value = true
     isBatchDragging.value = true   // 拖动期间节流 handleNodesChange
@@ -825,6 +826,12 @@ const contextMenu = reactive({
   target: null as unknown,
   targetType: null as 'node' | 'edge' | 'pane' | null
 })
+
+// Phase 19.6+: 右键菜单按 selected 决定 (废弃 target 概念)
+const contextSelectedCount = computed(() => {
+  return (store.nodes as any[]).filter(n => n.selected).length
+})
+const hasClipboard = computed(() => !!clipboard.value?.nodesJson)
 
 // 执行日志面板高度
 const panelHeight = ref(200)
@@ -1197,29 +1204,8 @@ function getSelectionBboxCenter(): { x: number; y: number } {
 
 // 复制
 function handleCopy(_event?: MouseEvent) {
-  // 关键: 从 store.nodes 过滤 selected. 用 getNodes.value 是 VueFlow 内部 ref,
-  // shallowRef 内层 mutation (selected = true) 不会传播到 VueFlow 内部,
-  // 用 store.nodes 才是数据源, 反映用户当前选择
-  let selected = (store.nodes as any[]).filter((n) => n.selected)
-  // Phase 19.5+ fix: 右键菜单触发时, 节点/边不一定被 selected.
-  // 若 contextMenu.target 是 node/edge, 且不在 selected 集合中,
-  // 临时把 target 节点(或 target 边)加入 selected 再复制 (Figma 行为).
-  if (selected.length === 0 && contextMenu.target) {
-    if (contextMenu.targetType === 'node') {
-      const targetId = (contextMenu.target as any).id
-      const targetNode = (store.nodes as any[]).find((n) => n.id === targetId)
-      if (targetNode) selected = [targetNode]
-    } else if (contextMenu.targetType === 'edge') {
-      // 边不能单独复制 (要 node), 但可加入 selected 集合, 让用户明确意图
-      const targetId = (contextMenu.target as any).id
-      addSelectedEdges([contextMenu.target as any])
-      selected = (store.nodes as any[]).filter((n) => n.selected)
-      if (selected.length === 0) {
-        ElMessage.warning('边的复制需要先选中关联节点')
-        return
-      }
-    }
-  }
+  // Phase 19.6+: 右键菜单按 selected 决定, 不再用 contextMenu.target fallback
+  const selected = (store.nodes as any[]).filter((n) => n.selected)
   if (selected.length === 0) {
     ElMessage.warning('请先选择要复制的节点')
     return
@@ -1245,15 +1231,8 @@ function handleCopy(_event?: MouseEvent) {
 
 // 剪切
 function handleCut(_event?: MouseEvent) {
-  let selected = (store.nodes as any[]).filter((n) => n.selected)
-  // Phase 19.5+ fix: 右键菜单触发的剪切, 同样用 contextMenu.target fallback
-  if (selected.length === 0 && contextMenu.target) {
-    if (contextMenu.targetType === 'node') {
-      const targetId = (contextMenu.target as any).id
-      const targetNode = (store.nodes as any[]).find((n) => n.id === targetId)
-      if (targetNode) selected = [targetNode]
-    }
-  }
+  // Phase 19.6+: 右键菜单按 selected 决定
+  const selected = (store.nodes as any[]).filter((n) => n.selected)
   if (selected.length === 0) {
     ElMessage.warning('请先选择要剪切的节点')
     return
@@ -1376,10 +1355,11 @@ function handleSelectionStart(event: any) {
   isBatchDragging.value = true  // P0: 框选期间节流, handleNodesChange 立即 return
   store.setSelectionBoxActive(true) // LOD-1: 框选期间锁定 LOD
 
-  // Phase 18: 锁定本次框选模式 (ctrlKey / metaKey = 增量加选)
-  // 在 mousedown 瞬间锁定, 避免拖动过程中松开/按下 Ctrl 导致行为跳变
-  // Mac 上 metaKey (Cmd) 等价 Ctrl, 一并处理
-  selectionAdditive = !!(event?.ctrlKey || event?.metaKey)
+  // Phase 19.6+: 锁定本次框选模式 (Ctrl/Meta/Shift = 增量加选)
+  // 用 useKeyPress ref (multiselectKeyPressed) 而非 event.ctrlKey —
+  // 因为 PointerEvent.ctrlKey 可能在 touch/pen 输入时为 false, 但键盘状态 ref 始终准确
+  // 与 vue-flow 内部 useKeyPress('Control') 走同源数据, 加选行为一致
+  selectionAdditive = multiSelectKeyPressed.value
   isAdditiveSelection.value = selectionAdditive  // 同步视图状态 (角标 + 自绘框颜色)
 
   // Phase 17.5 (修复版): 延迟计算 + 坐标系修正
@@ -1453,6 +1433,34 @@ let selectionStartPos: { x: number; y: number } | null = null
  */
 let selectionAdditive = false
 const isAdditiveSelection = ref(false)
+
+/**
+ * Phase 19.6+: 多选键状态检测 (与 vue-flow 内部 useKeyPress('Control') 同源)
+ * - mousedown 瞬间读这个 ref 决定 selectionAdditive
+ * - 之前用 event.ctrlKey 不可靠 (touch/pen 输入不触发 KeyboardEvent)
+ * - 现在与 vue-flow 内部 multiSelectKeyPressed 走同源数据, 加选行为完全一致
+ *
+ * 不引 @vueuse/core 外部依赖 (避免打包变大) — 手写 keydown/keyup 监听,
+ * 用 ref 同步按键状态, onMounted/onBeforeUnmount 生命周期管理.
+ */
+const multiSelectKeyPressed = ref(false)
+function onKeyDown(e: KeyboardEvent) {
+  if (e.ctrlKey || e.metaKey || e.shiftKey) multiSelectKeyPressed.value = true
+}
+function onKeyUp(e: KeyboardEvent) {
+  if (!e.ctrlKey && !e.metaKey && !e.shiftKey) multiSelectKeyPressed.value = false
+}
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keyup', onKeyUp)
+  // 注意: blur 时清零, 避免窗口失焦后状态残留
+  window.addEventListener('blur', onKeyUp)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keyup', onKeyUp)
+  window.removeEventListener('blur', onKeyUp)
+})
 
 /**
  * 自绘框选矩形 — 替代 VueFlow 内部 UserSelection
@@ -1543,31 +1551,32 @@ function handleSelectionEnd(event: any) {
 }
 
 /**
- * 把 selectedIds 同步到 store.nodes[].selected + vue-flow 内部 GraphNode.selected
- * (Phase 17.5 内部 helper, Phase 17.5 修复版: 一并写 vue-flow 内部节点, 不走 @nodes-change)
+ * 把 selectedIds 同步到 vue-flow 内部 GraphNode.selected
+ * (Phase 19.7+ 重构: 走 addSelectedNodes/removeSelectedNodes 官方 API, 不再 mutate)
  *
- * - 原地变异 store.nodes[i].selected + 数组引用不变 → 0 vdom diff (修 BUG-4)
- * - if (wasSelected !== shouldSelected) diff 写入 → 自动处理"取消旧的" (修 BUG-3)
- * - 同时 findNode(id).selected 写 vue-flow 内部 GraphNode, 触发 .selected class 渲染
- *   (vue-flow 节点 .selected 视觉由 NodeWrapper 读 GraphNode.selected 决定)
- *   关键: 写内部 selected 不走 emit 链路, 0 触发 nodesChange
+ * - Phase 17.5 旧版: 同时改 store.nodes[i].selected (shallowRef 死路) + flowNode.selected (直接 mutate)
+ *   → 老大反馈 BUG: 框选加选 Ctrl+点 A 时 A 被取消 (shallowRef 属性变化不触发响应式,
+ *   addSelectedNodes 链路被切, 部分节点 selected class 没刷新)
+ * - 新版: 走 VueFlow 官方 diff 语义 — 算 toAdd/toRemove → add/remove
+ *   VueFlow 内部维护 flowNode.selected reactive 状态 + DOM .selected class 联动
+ *   store.nodes[i].selected 不再维护 (因为它压根不参与显示)
  */
 function syncSelectionToStoreNodes(selectedIds: Set<string>) {
-  let changed = false
-  for (const n of store.nodes as any[]) {
-    const wasSelected = !!n.selected
-    const shouldSelected = selectedIds.has(n.id)
-    if (wasSelected !== shouldSelected) {
-      n.selected = shouldSelected
-      // 同步写 vue-flow 内部 GraphNode.selected (修 BUG-4 + 让 .selected class 渲染)
-      const flowNode = findNode(n.id) as any
-      if (flowNode) flowNode.selected = shouldSelected
-      changed = true
+  const currentlySelected = getSelectedNodes.value as any[]
+  const currentlySelectedIds = new Set(currentlySelected.map((n) => n.id))
+  const toAdd: any[] = []
+  const toRemove: any[] = []
+  for (const n of currentlySelected) {
+    if (!selectedIds.has(n.id)) toRemove.push(n)
+  }
+  for (const id of selectedIds) {
+    if (!currentlySelectedIds.has(id)) {
+      const flowNode = findNode(id) as any
+      if (flowNode) toAdd.push(flowNode)
     }
   }
-  if (changed) {
-    triggerRef(nodes)
-  }
+  if (toRemove.length > 0) removeSelectedNodes(toRemove)
+  if (toAdd.length > 0) addSelectedNodes(toAdd)
 }
 
 // 节点删除按钮点击

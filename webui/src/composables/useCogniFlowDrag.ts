@@ -40,6 +40,11 @@ export interface UseCogniFlowDragOptions {
   getZoom: () => number
   /** 从 useVueFlow().findNode(id) 拿 VueFlow 内部 reactive GraphNode, 改它 .position 触发 getEdges */
   findFlowNode: (id: string) => any
+  /** VueFlow 选中 API (Phase 19.7+): 所有选中状态走这个, 不要直接 mutate flowNode.selected */
+  addSelectedNodes: (nodes: any[]) => void
+  removeSelectedNodes: (nodes: any[]) => void
+  /** 当前所有已选中的 GraphNode (来自 useVueFlow().getSelectedNodes) */
+  getSelectedNodes: () => any[]
   onStart?: () => void
   onEnd?: () => void
 }
@@ -141,6 +146,34 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     if (el.classList.contains('selected')) {
       allEls = Array.from(document.querySelectorAll<HTMLElement>('.vue-flow__node.selected'))
     } else {
+      // Phase 19.7+: 拖拽未选中节点 → 把 el 加入 selected (老大反馈: 拖拽不选中是 BUG)
+      // 兼容修饰键: 按住 Ctrl/Meta/Shift = 增量 (保留原选中)
+      // 不按 = 替换 (只保留被拖节点)
+      //
+      // 关键: 全部走 VueFlow addSelectedNodes/removeSelectedNodes 官方 API,
+      //   VueFlow 内部同步 flowNode.selected (reactive) + DOM .selected class.
+      //   不要再直接 mutate flowNode.selected — 那是内部状态, 改了不触发 VueFlow 联动.
+      //   也别 mutate store.nodes[i].selected — shallowRef 不追踪属性变化, 死路.
+      const additive = (event.sourceEvent as MouseEvent).ctrlKey
+        || (event.sourceEvent as MouseEvent).metaKey
+        || (event.sourceEvent as MouseEvent).shiftKey
+      const targetId = el.dataset.id
+      if (targetId) {
+        const targetFlowNode = options.findFlowNode(targetId)
+        if (targetFlowNode) {
+          if (additive) {
+            // 加选: 追加 target 到当前选中集合
+            options.addSelectedNodes([targetFlowNode])
+          } else {
+            // 替换: 清空 + 只选 target
+            const currentlySelected = options.getSelectedNodes()
+            if (currentlySelected.length > 0) {
+              options.removeSelectedNodes(currentlySelected)
+            }
+            options.addSelectedNodes([targetFlowNode])
+          }
+        }
+      }
       allEls = [el]
     }
     if (!allEls.includes(el)) allEls.push(el)
@@ -239,19 +272,27 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
       const primary = ctx.allDragged[0]
       if (primary) {
         const isMulti = src.ctrlKey || src.metaKey
-        if (isMulti) {
-          // Ctrl+click: 切换当前节点选中态, 其他不变
-          const n = store.nodeById.get(primary.id) as any
-          if (n) n.selected = !n.selected
-        } else {
-          // 普通点击: 全部取消选中, 只选中当前
-          for (const n of store.nodes as any) n.selected = false
-          const n = store.nodeById.get(primary.id) as any
-          if (n) n.selected = true
+        const targetFlowNode = options.findFlowNode(primary.id)
+        if (targetFlowNode) {
+          if (isMulti) {
+            // Ctrl+click: 切换当前节点选中态
+            // VueFlow 没有 toggle 语义, 我们手动判断: 已选则移除, 未选则添加
+            const currentlySelected = options.getSelectedNodes()
+            const isAlreadySelected = currentlySelected.some((n: any) => n.id === primary.id)
+            if (isAlreadySelected) {
+              options.removeSelectedNodes([targetFlowNode])
+            } else {
+              options.addSelectedNodes([targetFlowNode])
+            }
+          } else {
+            // 普通点击: 全部取消选中, 只选中当前
+            const currentlySelected = options.getSelectedNodes()
+            if (currentlySelected.length > 0) {
+              options.removeSelectedNodes(currentlySelected)
+            }
+            options.addSelectedNodes([targetFlowNode])
+          }
         }
-        // Phase 17.1+: 取消 store.selectNode (右侧面板不再需要 selectedNodeId 同步)
-        // selected 状态直接由 VueFlow 内部 useSelectedNodes + store.nodes[].selected 维护
-        triggerRef(options.nodesRef)
       }
       store.resumeHistory()
       options.onEnd?.()
