@@ -721,6 +721,20 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
   }
 
+  /**
+   * 折叠全部 (Phase 19.4+ 显示模式按钮)
+   * - 全部节点加进 expandedNodeIds (反语义: 表示"已折叠")
+   * - 配 setDisplayMode 用: 一次 set 全图折叠
+   * 性能: shallowRef Set 一次性 add 所有 + 一次 triggerRef
+   */
+  function expandAll() {
+    const allIds: string[] = []
+    for (const n of nodes.value) allIds.push(n.id)
+    if (allIds.length === 0) return
+    const next = new Set(allIds)
+    expandedNodeIds.value = next
+  }
+
   // ============ 边操作 ============
 
   /** 添加边 */
@@ -1091,6 +1105,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     removeNodes,        // Phase B 任务4
     toggleNodeExpanded, // Phase 17.1+: 双击节点展开 LOD 2
     collapseAllExpanded,// Phase 17.1+: 点空白收起所有展开
+    expandAll,          // Phase 19.4+: 工具栏"全部折叠"按钮
     isHandleConnected,  // Phase B 任务2
 
     // 边操作

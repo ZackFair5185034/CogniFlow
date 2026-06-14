@@ -127,6 +127,30 @@
             <SvgIcon name="minimap" />
           </el-button>
         </div>
+
+        <div class="tool-divider" />
+
+        <!-- Phase 19.4+: LOD 1 显示模式切换 (简洁端口 ↔ 全部 element) -->
+        <div class="tool-group">
+          <el-button
+            class="icon-btn display-mode-btn"
+            :class="{ active: displayMode === 'all' }"
+            title="展开全部节点 (LOD 1 全部 element: 端口+配置+inputs/outputs)"
+            @click="setDisplayMode('all')"
+          >
+            <SvgIcon name="expand-all" />
+            <span class="btn-label">展开</span>
+          </el-button>
+          <el-button
+            class="icon-btn display-mode-btn"
+            :class="{ active: displayMode === 'collapsed' }"
+            title="折叠全部节点 (LOD 1 简洁端口: 只显示端口和标题)"
+            @click="setDisplayMode('collapsed')"
+          >
+            <SvgIcon name="collapse-all" />
+            <span class="btn-label">折叠</span>
+          </el-button>
+        </div>
       </div>
 
       <div class="header-right">
@@ -770,6 +794,20 @@ const thumbnailInflight = ref(false)
 const executing = ref(false)
 const showPalette = ref(true)
 const showMiniMap = ref(true)
+
+// Phase 19.4+: LOD 1 显示模式 (简洁端口 ↔ 全部 element)
+// - all: 全部节点 280px 全展开 (默认, 端口+配置+inputs/outputs)
+// - collapsed: 全部节点 200px 折叠 (只显示端口和标题)
+// 不持久化 (Phase 19.4 暂不持久; 后续可加 localStorage)
+const displayMode = ref<'all' | 'collapsed'>('all')
+function setDisplayMode(mode: 'all' | 'collapsed') {
+  displayMode.value = mode
+  if (mode === 'all') {
+    store.collapseAllExpanded()  // 全部 clear expandedNodeIds -> 全展开
+  } else {
+    store.expandAll()            // 全部 add expandedNodeIds -> 全折叠
+  }
+}
 
 // Phase B 任务5: 大图渲染降级
 const LARGE_GRAPH_NODE_THRESHOLD = 80
@@ -3511,6 +3549,18 @@ $panel-header-height: 44px;
 
     .btn-label {
       color: #e0e0e8;
+    }
+
+    // Phase 19.4+: 显示模式按钮 (展开/折叠)
+    &.display-mode-btn {
+      min-width: 64px;
+      padding: 0 8px;
+      gap: 4px;
+      font-size: 11px;
+      .btn-label {
+        font-size: 11px;
+        line-height: 1;
+      }
     }
 
     &:hover {
