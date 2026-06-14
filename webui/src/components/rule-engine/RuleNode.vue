@@ -87,7 +87,7 @@
       />
     </div>
 
-    <!-- ========== 节点内嵌配置 (Phase 19.2+: 仅 expanded 时显示) ========== -->
+    <!-- ========== 节点内嵌配置 (Phase 19.3+: 默认全展开显示, 双击折叠到 200px) ========== -->
     <div
       v-if="isExpanded"
       class="node-config-section"
@@ -184,11 +184,13 @@ const lodLevel = computed<0 | 1>(() => {
 })
 
 /**
- * 节点是否处于展开状态 (双击触发的内嵌配置可见状态).
- * 独立于 LOD 0/1 — 展开节点在 zoom 0.7 时配置也可显示 (壳体能容纳的前提下).
+ * 节点是否处于"全展开"状态 (端口+配置+标题都显示, 280px 宽).
+ * 语义 (Phase 19.3+): 默认全展开, 双击 -> 折叠到 200px (只保留标题+端口, 隐藏配置).
+ * 反转历史: Phase 17.1~19.2 是默认折叠+双击展开, Phase 19.3 老大拍板默认展开.
  */
 const isExpanded = computed<boolean>(() => {
-  return store.expandedNodeIds.has(props.data.id)
+  // expandedNodeIds 集合保留 API 名字, 但语义反转为"折叠中的节点"
+  return !store.expandedNodeIds.has(props.data.id)
 })
 
 // ============ Handle 连接状态 (store 全局索引 O(1) 查询) ============
@@ -210,7 +212,7 @@ function isOutputConnected(handleId: string): boolean {
   background: linear-gradient(180deg, #2d2d30 0%, #252528 100%);
   border: 1px solid #404044;
   border-radius: 6px;
-  width: 200px;
+  width: 280px;  /* Phase 19.3+: LOD 1 默认 280px 全展开 (端口+配置+标题) */
   font-size: 12px;
   color: #e0e0e0;
   position: relative;
@@ -299,36 +301,18 @@ function isOutputConnected(handleId: string): boolean {
   .node-config-section { display: none; }   // 极简模式隐藏配置
 }
 
-/* ========== 展开修饰符 (Phase 19.2+: expanded 节点加宽 + 配置可见) ========== */
+/* ========== 折叠修饰符 (Phase 19.3+: expanded 类 = 折叠态) ========== */
 /*
- * 适用范围: 仅 LOD 1 节点展开有意义 (LOD 0 壳体太小, 装不下配置)
- * 实现: lod-1.expanded 同时命中时, 加宽到 280px + 显示配置区
- * 设计取舍: 展开不强制锁定 zoom, 用户在 0.7 缩放 + 双击展开, 也能看到配置
- *           (壳体本身被 zoom 物理放大, 内容仍可读)
+ * 默认 LOD 1 节点 280px 全展开 (端口+配置+标题).
+ * 双击 -> 节点加进 expandedNodeIds -> .expanded 修饰符激活 -> 折叠到 200px (隐藏配置).
+ * 设计取舍: 折叠态保留端口, 用户仍能继续接线.
+ *           节点壳宽度变化 (200px <-> 280px) 走 v-memo, 拖动期 0 性能损失.
  */
 .rule-node.lod-1.expanded {
-  width: 280px;
+  width: 200px;
 
   .node-config-section {
-    padding: 8px 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.04);
-    background: rgba(0, 0, 0, 0.12);
-    max-height: 320px;        // 防止节点太高遮住其他节点
-    overflow-y: auto;         // 配置项多时节点内滚动
-    // 滚动条样式 (跟节点暗色主题匹配)
-    &::-webkit-scrollbar {
-      width: 6px;
-    }
-    &::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    &::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 3px;
-      &:hover {
-        background: rgba(255, 255, 255, 0.2);
-      }
-    }
+    display: none;  // 折叠态强制隐藏配置区
   }
 }
 
@@ -416,6 +400,22 @@ function isOutputConnected(handleId: string): boolean {
     inset 0 1px 0 rgba(255,165,0,0.12),
     0 0 0 1px rgba(255,165,0,0.3),
     0 0 14px rgba(255,165,0,0.2);
+}
+
+/* ========== 节点内嵌配置区 (Phase 19.3+: 默认显示, 折叠态 hidden) ========== */
+.node-config-section {
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.12);
+  max-height: 320px;        // 防止节点太高遮住其他节点
+  overflow-y: auto;         // 配置项多时节点内滚动
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    &:hover { background: rgba(255, 255, 255, 0.2); }
+  }
 }
 
 /* 端口区域 */

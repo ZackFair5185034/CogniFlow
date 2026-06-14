@@ -244,40 +244,32 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const lodLevelMapCache = new Map<string, 0 | 1>()
 
   /**
-   * 全局稳定的 LOD 等级 (Phase 19 C: hysteresis 状态机)
-   *
-   * 升档阈值: zoom ≥ 0.55 → LOD 1; zoom ≥ 1.05 → LOD 2
-   * 降档阈值: zoom < 0.45 → LOD 0; zoom < 0.95 → LOD 1
-   * 死区 [0.45, 0.55) / [0.95, 1.05): zoom 在这里反复扫不切 LOD
-   *   (zoom 0.5 附近扫动是浏览器滚轮缩放常见抖动源)
-   *
-   * 默认 LOD 1: zoom 起步 1.0, 第一次决策: 1.0 < 1.05 + ≥ 0.95 → 维持 1
-   *              (zoom 从 1.0 降下来才到 0.95, 升到 1.05 才升 LOD 2)
-   *
-   * expandedNodeIds 强制 LOD 2 不走 hysteresis (用户主动展开意图, 必须立即响应)
-   * isLodLocked 锁 LOD 时 currentLod 也不变 (拖动期不允许切换)
-   */
-  const currentGlobalLod = ref<0 | 1>(1)
+   /**
+    * 全局稳定的 LOD 等级 (Phase 19.3+: 单阈值两级)
+    * - 升档 LOD 0 → 1: zoom ≥ 0.65
+    * - 降档 LOD 1 → 0: zoom < 0.65
+    * - 默认 LOD 1 (zoom 1.0 起步)
+    * - 死区已删 (Phase 19.3 老大拍板, v-memo + computed 短路缓存已防抖动)
+    *
+    * 历史: Phase 19 C 曾用 hysteresis 死区 [0.65, 0.80), Phase 19.3 简化为单阈值 0.65.
+    */
+   const currentGlobalLod = ref<0 | 1>(1)
 
-  /**
-   * 基础 LOD 等级 map: 仅依赖 zoom + 节点总数.
-   * 选中态 / 展开态 → 在 getLodLevel() 内做 O(1) 快速路径.
-   *
-   * 0 = 极简 (仅标题+图标+极小端口点)
-   * 1 = 折叠 (标题+端口+摘要)
-   * 2 = 完整 (标题+端口+摘要+内嵌配置 NodeConfigEditor)
-   *   触发条件 (任一):
-   *   - expandedNodeIds 包含此节点 (用户双击展开)
-   *   - zoom >= 1.0 (默认缩放就展开, 让用户能直接看到完整表单)
-   *   注: zoom < 0.5 → 强制 LOD 0 (看不清任何细节, 极简优先)
-   * - 拖动中 / 框选拖拽中 → 锁定当前 LOD (走 lodLevelMapCache)
-   *
-   * P0-A (Phase 17.1): 短路缓存 — 60Hz 缩放期间 baseLod 跨阈值才重建
-   * 缩放 200 节点 60fps 时 12000 ops/秒 Map 重建 → 跨阈值时一次性重建.
-   *
-   * P0-C (Phase 17.1+): 引入 LOD 2 — 节点内嵌配置 (取代右侧面板).
-   * 缓存键增加 expandedNodeIds.value 引用检测 — 展开集合变化时强制重建 (但仍是 O(N) 单次)
-   */
+   /**
+    * 基础 LOD 等级 map: 仅依赖 zoom + 节点总数.
+    * 选中态 / 折叠态 → CSS-only .expanded 修饰符负责, 不影响 baseLod.
+    *
+    * 0 = 极简 (120px, 仅标题+图标, 端口隐藏)
+    * 1 = 完整 (280px, 标题+端口+内嵌配置 NodeConfigEditor, 默认全展开)
+    *   双击节点 -> 折叠到 200px (.expanded 修饰符激活, 配置区 hidden)
+    *
+    * - 拖动中 / 框选拖拽中 → 锁定当前 LOD (走 lodLevelMapCache)
+    * - 折叠态 (CSS .expanded) 独立于 LOD 等级, 不影响 zoom 决策
+    *
+    * P0-A (Phase 17.1): 短路缓存 — 60Hz 缩放期间 baseLod 跨阈值才重建.
+    * P0-C (Phase 17.1+): 内嵌配置 (取代右侧面板).
+    * P0-D (Phase 19.3): expandedNodeIds 含义反转 = "已折叠节点".
+    */
   /**
    * 桶化 zoom 值用于缓存命中 (Phase 17.3 修复 P0-A 短路 bug)
    *
@@ -299,28 +291,19 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     const expandedRef = expandedNodeIds.value
     const nodesRef = nodes.value
 
-    // ===== Phase 19 C: hysteresis 状态机 =====
-    // 升档阈值 = 阈值 + 0.05; 降档阈值 = 阈值 - 0.05
-    // 死区: zoom ∈ [0.45, 0.55) / [0.95, 1.05) 维持 currentGlobalLod
+    // ===== Phase 19.3: 单阈值两级 LOD, 无死区 =====
+    // LOD 0 → 1: zoom ≥ 0.65
+    // LOD 1 → 0: zoom < 0.65
     //
-    // 设计取舍:
-    // - 升档用更大阈值 (0.55/1.05): 用户主动缩放要让 LOD 跟得上
-    // - 降档用更小阈值 (0.45/0.95): 防止滚轮抖动立刻降级
-    //   (滚轮 deltaY 不连续, 在阈值附近反复扫是常见抖动源)
-    //
-    // 拖动期 isLodLocked 锁: 不算 hysteresis, currentGlobalLod 也不动
-    // expandedNodeIds 不影响全局: 单个节点展开不影响其他节点
+    // 历史: Phase 19.2 曾用死区 [0.65, 0.80) 防抖动
+    //       老大拍板去掉中间档后, 单阈值更简洁
+    // 抖动源已由 v-memo + computed 缓存 (Phase 17.3 P0-A 短路) 解决
+    //       无需 hysteresis 死区
     if (!isLodLocked) {
       const cur = currentGlobalLod.value
       let next: 0 | 1 = cur
-      if (cur === 0) {
-        // LOD 0 → 1: zoom ≥ 0.80 升
-        if (zoom >= 0.80) next = 1
-      } else {
-        // cur === 1
-        // LOD 1 → 0: zoom < 0.65 降 (死区 0.65~0.80 维持 LOD 1)
-        if (zoom < 0.65) next = 0
-      }
+      if (cur === 0 && zoom >= 0.65) next = 1
+      else if (cur === 1 && zoom < 0.65) next = 0
       if (next !== cur) currentGlobalLod.value = next
     }
     const globalLod = currentGlobalLod.value
@@ -358,7 +341,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       lodLevelMapCache.clear()
       for (const [k, v] of map) lodLevelMapCache.set(k, v)
     }
-    cachedBaseLodRef = { zoomBucket, zoom, expandedRef, nodesRef, isLodLocked }
+    cachedBaseLodRef = { zoomBucket, zoom, expandedRef, nodesRef, isLodLocked, globalLod }
     cachedBaseLodMap = map
     return map
   })
@@ -708,9 +691,13 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   }
 
   /**
-   * 切换节点 LOD 2 展开状态 (Phase 17.1+: 双击节点 / 再次双击 触发)
-   * - 已在 Set → 移除 (收回 LOD 1)
-   * - 未在 Set → 加入 (强制升到 LOD 2, 无视 zoom)
+   * 切换节点折叠状态 (Phase 19.3+: 语义反转)
+   * - expandedNodeIds 集合名字保留, 但含义改为"已折叠节点" (双击加入 = 折叠)
+   * - 默认 LOD 1 节点 280px 全展开 (端口+配置+标题)
+   * - 双击节点 -> 加入 expandedNodeIds -> .expanded 修饰符激活 -> 折叠到 200px (隐藏配置)
+   * - 再次双击 -> 移除 -> 回到全展开
+   *
+   * 历史: Phase 17.1~19.2 是 "未展开"→"展开" 语义, Phase 19.3 老大拍板反转默认.
    */
   function toggleNodeExpanded(nodeId: string) {
     if (expandedNodeIds.value.has(nodeId)) {
@@ -721,7 +708,12 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     triggerRef(expandedNodeIds)
   }
 
-  /** 收起所有展开的节点 (点空白 / 切换画布选中时调用) */
+  /**
+   * 折叠状态清理 (Phase 19.3+: 语义反转)
+   * - 旧语义: clear expandedNodeIds -> 所有节点回折叠 (Phase 19.2)
+   * - 新语义: clear expandedNodeIds -> 所有节点回全展开 (Phase 19.3+, 默认 280px)
+   * 适用场景: 画布空白点击 / 切换图 / "全展开" 工具按钮 (一键回到默认全展开)
+   */
   function collapseAllExpanded() {
     if (expandedNodeIds.value.size > 0) {
       expandedNodeIds.value.clear()
