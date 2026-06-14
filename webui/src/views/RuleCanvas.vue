@@ -1801,15 +1801,21 @@ function handleNodeDoubleClick(event: any) {
 // 拖动期间 0 次响应式写入, drag-end 一次性 setNodesPositions + recordMoveHistory.
 
 // 画布点击
-function handlePaneClick() {
-  // 清除所有节点的选中态 (含 VueFlow 视觉 CSS)
-  // Phase 19.7+ 修复: 走 VueFlow 官方 removeSelectedNodes, 不再 mutate store.nodes[i].selected
-  //   (shallowRef 死路, 改 store 视觉不更新)
-  const currentlySelected = getSelectedNodes.value as any[]
-  if (currentlySelected.length > 0) {
-    removeSelectedNodes(currentlySelected)
+function handlePaneClick(event: MouseEvent) {
+  // Phase 19.7+ 修复: 加选状态 (Ctrl/Meta/Shift 按下) 不清空旧选中
+  //   与 Pane.onClick fork 守卫同语义: 业务侧是 paneClick 真实接收方, 守卫放这里
+  //   之前无条件清空导致"Ctrl+点空白仍清空" BUG
+  const isAdditive = event && (event.ctrlKey || event.metaKey || event.shiftKey)
+  if (!isAdditive) {
+    // Phase 19.7+ 修复: 走 VueFlow 官方 removeSelectedNodes, 不再 mutate store.nodes[i].selected
+    //   (shallowRef 死路, 改 store 视觉不更新)
+    const currentlySelected = getSelectedNodes.value as any[]
+    if (currentlySelected.length > 0) {
+      removeSelectedNodes(currentlySelected)
+    }
   }
   // Phase 17.1+: 点空白收起所有展开的节点 (用户切回画布视角的常见操作)
+  // 加选模式下也收起展开, 不影响选中态, UX 仍然合理
   store.collapseAllExpanded()
 }
 
