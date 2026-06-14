@@ -283,15 +283,23 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
         const targetFlowNode = options.findFlowNode(primary.id)
         if (targetFlowNode) {
           if (isMulti) {
-            // Ctrl+click: 切换当前节点选中态
-            // VueFlow 没有 toggle 语义, 我们手动判断: 已选则移除, 未选则添加
-            const currentlySelected = options.getSelectedNodes()
-            const isAlreadySelected = currentlySelected.some((n: any) => n.id === primary.id)
-            if (isAlreadySelected) {
-              options.removeSelectedNodes([targetFlowNode])
-            } else {
-              options.addSelectedNodes([targetFlowNode])
-            }
+            // Ctrl+click: 加选 (不 toggle)
+            //
+            // 旧版 "toggle" 语义跟 onDragStart 重复处理选中 → 状态跳变:
+            // 1. onDragStart (Phase 19.7+ DRAG-1 修复) 已对未选中节点 addSelectedNodes
+            // 2. 用户鼠标不移动, 走 isClick 分支
+            // 3. onDragEnd "toggle" 把刚加的节点又移除 (A 仍 selected, toggle 移除)
+            //
+            // 桌面应用约定 (macOS Finder / Windows Explorer):
+            // - Ctrl+点未选中节点 → 加选
+            // - Ctrl+点已选中节点 → 保留 (不 toggle, 让 mousedown 期间的"加入选中"语义保持)
+            // - 取消选中靠 Esc / 点击空白 / Backspace
+            //
+            // 注意: onDragStart 阶段如果走的是 line 146 (A 已选) 分支,
+            //   啥都没做, 选中态保持原状 — 这里也不需要 toggle
+            // 如果走的是 line 148 (additive 加选) 分支,
+            //   已 addSelectedNodes([A]) — 这里保持不变
+            options.addSelectedNodes([targetFlowNode])
           } else {
             // 普通点击: 全部取消选中, 只选中当前
             const currentlySelected = options.getSelectedNodes()
