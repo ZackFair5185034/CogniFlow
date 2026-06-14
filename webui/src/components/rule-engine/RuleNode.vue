@@ -10,10 +10,10 @@
     v-memo="[data.id, data.status, data.category, lodLevel, isExpanded]"
     v-bind="$attrs"
     class="rule-node"
-    :class="[`category-${data.category}`, `lod-${lodLevel}`, { expanded: isExpanded }]"
+    :class="[`category-${data.category}`, `lod-${lodLevel}`, { expanded: isCollapsed }]"
     :data-status="data.status || 'idle'"
     :data-lod="lodLevel"
-    :data-expanded="isExpanded ? 'true' : 'false'"
+    :data-expanded="isCollapsed ? 'true' : 'false'"
     @contextmenu.prevent="emit('contextmenu', $event)"
     @dblclick.stop="emit('dblclick', $event)"
   >
@@ -191,6 +191,15 @@ const lodLevel = computed<0 | 1>(() => {
 const isExpanded = computed<boolean>(() => {
   // expandedNodeIds 集合保留 API 名字, 但语义反转为"折叠中的节点"
   return !store.expandedNodeIds.has(props.data.id)
+})
+
+/**
+ * 节点是否处于"折叠"状态 (双击触发的, 配置区 hidden, 200px 宽).
+ * 这是 .expanded CSS 修饰符的开关 — CSS 期望折叠态 = 激活 .expanded class.
+ * isExpanded 和 isCollapsed 必须严格互补, 避免 CSS 误用.
+ */
+const isCollapsed = computed<boolean>(() => {
+  return store.expandedNodeIds.has(props.data.id)
 })
 
 // ============ Handle 连接状态 (store 全局索引 O(1) 查询) ============
