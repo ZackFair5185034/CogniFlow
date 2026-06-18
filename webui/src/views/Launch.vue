@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-info">
-        <h2>模型测试</h2>
+        <h2 class="cf-gradient-text text-2xl font-semibold">模型测试</h2>
         <span class="subtitle">图片/视频检测</span>
       </div>
       <!-- 模式切换 Tab -->
@@ -1494,11 +1494,7 @@ onUnmounted(() => {
 }
 
 .header-info h2 {
-  @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-blue));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  // cf-gradient-text 已抽到 uno.config.ts
 }
 
 /* Tab 切换 */

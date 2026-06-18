@@ -10,7 +10,7 @@
         返回列表
       </button>
       <div class="atlas-info">
-        <h2>{{ atlas?.name }}</h2>
+        <h2 class="cf-gradient-text text-xl font-semibold truncate">{{ atlas?.name }}</h2>
         <span
           v-if="atlas?.description"
           class="atlas-desc"
@@ -1233,11 +1233,7 @@ onUnmounted(() => {
 }
 
 .atlas-info h2 {
-  @apply text-xl font-semibold truncate;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-blue));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  // cf-gradient-text + text-xl font-semibold truncate 已上移到 class
 }
 
 .atlas-desc {

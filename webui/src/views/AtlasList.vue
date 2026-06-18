@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-info">
-        <h2>图集管理</h2>
+        <h2 class="cf-gradient-text text-2xl font-semibold">图集管理</h2>
         <span class="subtitle">管理训练数据集</span>
       </div>
       <button
@@ -337,11 +337,7 @@ onMounted(loadAtlases)
 }
 
 .header-info h2 {
-  @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-blue));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  // cf-gradient-text + text-2xl font-semibold 已上移到 class
 }
 
 .header-info .subtitle {

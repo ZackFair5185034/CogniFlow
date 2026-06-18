@@ -47,6 +47,8 @@ export default defineConfig({
     'cf-text-secondary': 'text-[var(--text-secondary)]',
     'cf-font-mono': 'font-[var(--font-family-mono)]',
     'cf-font-bold': 'font-bold',
+    // 文字渐变（仅 A 类：--text-primary → --accent-blue，其它渐变属业务专属不进 shortcut）
+    'cf-gradient-text': 'bg-[linear-gradient(90deg,var(--text-primary),var(--accent-blue))] [-webkit-background-clip:text] [background-clip:text] [-webkit-text-fill-color:transparent]',
 
     // === 状态 ===
     'cf-badge': 'px-2 py-0.5 text-[10px] font-[var(--font-family-mono)] rounded-[4px] border border-[var(--border-color)] text-[var(--text-muted)] uppercase tracking-wider',

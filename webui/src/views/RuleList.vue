@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-info">
-        <h2>规则引擎</h2>
+        <h2 class="cf-gradient-text text-2xl font-semibold">规则引擎</h2>
         <span class="subtitle">可视化规则流程编排与执行</span>
       </div>
       <!-- 数据为空时,这里也保留一个新建按钮,方便操作 -->
@@ -326,11 +326,7 @@ function formatDate(dateStr: string) {
 }
 
 .header-info h2 {
-  @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-blue));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  // cf-gradient-text + text-2xl font-semibold 已上移到 class
 }
 
 .header-info .subtitle {
