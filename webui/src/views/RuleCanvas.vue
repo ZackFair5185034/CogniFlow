@@ -607,7 +607,10 @@
       <!-- Phase 19.6+: 菜单按 selected 决定, 不按 target
            - selectedCount > 0 -> 复制/剪切/删除 N 项 (作用在选中集)
            - selectedCount === 0 -> 只显示 粘贴/全选
-           - target 概念废弃: 右键节点/边/空白 都看 selected 集合 -->
+           - target 概念废弃: 右键节点/边/空白 都看 selected 集合
+           - icon 映射 (2026-06-18 Phase 19.7+):
+               复制 -> copy, 剪切 -> edit (凑合), 删除 -> trash,
+               粘贴 -> upload (箭头入 = 粘贴入), 全选 -> check-square -->
       <template v-if="contextSelectedCount > 0">
         <div
           class="context-menu-item"
@@ -619,13 +622,13 @@
           class="context-menu-item"
           @click="handleContextAction('cut', $event)"
         >
-          <SvgIcon name="cut" /> 剪切 {{ contextSelectedCount }} 项
+          <SvgIcon name="edit" /> 剪切 {{ contextSelectedCount }} 项
         </div>
         <div
           class="context-menu-item danger"
           @click="handleContextAction('delete', $event)"
         >
-          <SvgIcon name="delete" /> 删除 {{ contextSelectedCount }} 项
+          <SvgIcon name="trash" /> 删除 {{ contextSelectedCount }} 项
         </div>
         <div class="context-menu-divider" />
       </template>
@@ -634,13 +637,13 @@
         :class="{ disabled: !hasClipboard }"
         @click="hasClipboard && handleContextAction('paste', $event)"
       >
-        <SvgIcon name="paste" /> 粘贴
+        <SvgIcon name="upload" /> 粘贴
       </div>
       <div
         class="context-menu-item"
         @click="handleContextAction('selectAll')"
       >
-        <SvgIcon name="select" /> 全选
+        <SvgIcon name="check-square" /> 全选
       </div>
     </div>
 
