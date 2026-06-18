@@ -154,6 +154,24 @@
 
 **修法**：要么改 `Training.vue` 删 pulse 和发光，要么改设计文档认可装饰。**禁止文档和代码长期打架**。
 
+### 3.3b 违规 3b：同名 `@keyframes` 多文件重复定义（**已摸排，暂不修**）
+
+**症状**：4 个 view 文件各自定义 `@keyframes dialogIn`，**且动效参数不一致**：
+- `Annotate.vue:1593` — `scale(0.95) translateY(-10px)` / 0.2s
+- `Annotate.vue:1703` — 同上 / **0.15s**
+- `AtlasDetail.vue:1707` — `scale(0.95)`（无 translateY）/ 0.3s
+- `ModelList.vue:1150` — `scale(0.95) translateY(20px)` / 0.3s
+- `AtlasList.vue:422` — 同 ModelList / 0.3s
+
+**为什么重复**：`_animations.scss:19` 已经有全局 `@keyframes dialogIn`（= Annotate 版本），但因为它是**全局**与 **scoped keyframe 同名**，Vue scoped 加 `[data-v-xxx]` 后缀变成 `dialogIn-xxx` 各文件**不冲突**，所以各自重写没人发现。**全局的 dialogIn 是死代码**。
+
+**为什么不修（老大 2026-06-18 拍板 C）**：
+- 3 种动效语义不同，强行合并有视觉回归
+- 拆 3 个语义名（`dialogIn-top/bottom/scale`）会让"过渡态"反而变多，违反"砍过渡态"哲学
+- 收益低（5 行 SCSS），风险高（5 处 animation 引用改名）
+
+**留作 TODO**：如果以后真要做，建议**全项目统一定一个**（最常用的是 `scale(0.95) translateY(20px)` —— 3 个 view 在用），删其余 4 个 keyframe 块。
+
 ### 3.4 违规 4：EP 主题样式**散落在 view 文件**
 
 **症状**：`.vue` 文件用 `:deep(.el-input__wrapper) { ... }` 改 EP 组件样式，逻辑上属于全局 EP 主题。
