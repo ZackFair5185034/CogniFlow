@@ -30,35 +30,9 @@ withDefaults(defineProps<{
 </script>
 
 <style lang="scss" scoped>
-.cf-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.cf-loading--overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(13, 13, 20, 0.85);
-  z-index: 100;
-}
-
-.cf-loading__container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-/* 认知循环 — 旋转圆环 */
-.cf-loading__ring {
-  border-radius: 50%;
-  border-style: solid;
-  border-color: var(--border-color);
-  border-top-color: var(--accent-blue);
-  animation: spin 0.8s linear infinite;
-}
-
+// UNOCSS-EXCEPTION: 4) 后代选择器修饰子元素
+// 尺寸变体只能靠后代选择器 (.cf-loading--small .cf-loading__ring)，utility 表达不了
+// @keyframes spin 复用 src/style/_animations.scss:31，不重复定义
 .cf-loading--small .cf-loading__ring {
   width: 16px;
   height: 16px;
@@ -75,13 +49,6 @@ withDefaults(defineProps<{
   width: 32px;
   height: 32px;
   border-width: 3px;
-}
-
-/* 文字 */
-.cf-loading__text {
-  font-size: 13px;
-  color: var(--text-secondary);
-  white-space: nowrap;
 }
 
 .cf-loading--small .cf-loading__text {

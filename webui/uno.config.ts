@@ -62,7 +62,13 @@ export default defineConfig({
     'cf-toolbar': 'flex justify-between items-center',
     'cf-content-area': 'flex flex-1 overflow-hidden',
     'cf-panel': 'flex flex-col flex-shrink-0 bg-[var(--bg-secondary)] border-[var(--border-color)]',
-    'cf-loading': 'absolute inset-0 flex flex-col items-center justify-center',
+    'cf-loading': 'flex items-center justify-center',
+    'cf-loading--overlay': 'absolute inset-0 bg-[rgba(13,13,20,0.85)] z-[100]',
+    'cf-loading__container': 'flex flex-col items-center gap-3',
+    // 旋转圆环 — utility 能表达的写 shortcut，尺寸变体留 SCSS
+    // 0.8s duration UnoCSS animate-spin 默认 1s，这里用 [0.8s] 覆盖
+    'cf-loading__ring': 'rounded-full border-solid border border-[var(--border-color)] border-t-[var(--accent-blue)] animate-[spin_0.8s_linear_infinite]',
+    'cf-loading__text': 'text-[13px] text-[var(--text-secondary)] whitespace-nowrap',
     'cf-empty': 'flex flex-col items-center justify-center py-15 px-5 text-center',
     'cf-scroll-y': 'overflow-y-auto',
     'cf-scrollbar': '[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[var(--border-color)] [&::-webkit-scrollbar-thumb]:rounded',
