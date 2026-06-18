@@ -1,7 +1,6 @@
 <template>
   <div
-    class="flex flex-col gap-5"
-    style="position: relative; min-height: 400px;"
+    class="flex flex-col gap-5 relative min-h-[400px]"
   >
     <LoadingSpinner
       v-if="loading"

@@ -422,7 +422,7 @@
               ref="importFileInput"
               type="file"
               accept=".json,application/json"
-              style="display: none"
+              class="hidden"
               @change="onImportFileSelected"
             >
           </div>
