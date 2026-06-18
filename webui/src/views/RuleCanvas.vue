@@ -610,7 +610,8 @@
            - target 概念废弃: 右键节点/边/空白 都看 selected 集合
            - icon 映射 (2026-06-18 Phase 19.7+):
                复制 -> copy, 剪切 -> edit (凑合), 删除 -> trash,
-               粘贴 -> upload (箭头入 = 粘贴入), 全选 -> check-square -->
+               粘贴 -> paste (新增 paste.svg: 贴板+向下箭头),
+               全选 -> check-square -->
       <template v-if="contextSelectedCount > 0">
         <div
           class="context-menu-item"
@@ -637,7 +638,7 @@
         :class="{ disabled: !hasClipboard }"
         @click="hasClipboard && handleContextAction('paste', $event)"
       >
-        <SvgIcon name="upload" /> 粘贴
+        <SvgIcon name="paste" /> 粘贴
       </div>
       <div
         class="context-menu-item"
