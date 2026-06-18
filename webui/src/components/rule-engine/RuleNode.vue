@@ -155,8 +155,8 @@ interface NodeData {
 const props = defineProps<{
   data: NodeData
   selected?: boolean
-  /** LOD 等级 0/1/2 (由父组件 RuleCanvas 计算传入, 可选 — 内部会用 store 回退) */
-  lodLevel?: 0 | 1 | 2
+  /** LOD 等级 0/1 (由父组件 RuleCanvas 计算传入, 可选 — 内部会用 store 回退) */
+  lodLevel?: 0 | 1
 }>()
 
 const emit = defineEmits<{
@@ -190,6 +190,7 @@ const statusTitle = computed(() => {
  */
 const lodLevel = computed<0 | 1>(() => {
   if (props.lodLevel !== undefined) return props.lodLevel
+  // Phase 19.7+: 选中状态走 VueFlow 官方 API (selectedNodeIds), 不再从 store 读
   return store.getLodLevel(props.data.id)
 })
 

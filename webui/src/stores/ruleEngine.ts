@@ -722,6 +722,17 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   }
 
   /**
+   * 同步展开状态 (Phase 19.7+: 修复外部 triggerRef(store.expandedNodeIds) 类型错)
+   * - 原因: Pinia setup store 暴露 expandedNodeIds 是 Set<string> (已 unwrap)
+   *        外部拿不到原 shallowRef, 无法直接 triggerRef
+   * - 调用场景: nodes 删除时清理已折叠集合里的悬空 id, 再 triggerRef 通知
+   * - 行为: 在外部 mutate Set 之后调用, 强制组件 watch 重新计算
+   */
+  function syncExpandedNodeIds() {
+    triggerRef(expandedNodeIds)
+  }
+
+  /**
    * 折叠全部 (Phase 19.4+ 显示模式按钮)
    * - 全部节点加进 expandedNodeIds (反语义: 表示"已折叠")
    * - 配 setDisplayMode 用: 一次 set 全图折叠
@@ -1105,6 +1116,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     removeNodes,        // Phase B 任务4
     toggleNodeExpanded, // Phase 17.1+: 双击节点展开 LOD 2
     collapseAllExpanded,// Phase 17.1+: 点空白收起所有展开
+    syncExpandedNodeIds,// Phase 19.7+: 外部 Set mutate 后通知响应式
     expandAll,          // Phase 19.4+: 工具栏"全部折叠"按钮
     isHandleConnected,  // Phase B 任务2
 

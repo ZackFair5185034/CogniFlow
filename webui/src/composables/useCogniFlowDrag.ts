@@ -13,7 +13,7 @@
  *   mousedown 时 event.target.closest('.vue-flow__node[data-id]') 找目标节点.
  */
 
-import { onBeforeUnmount, onMounted, nextTick, triggerRef, type Ref } from 'vue'
+import { onBeforeUnmount, onMounted, nextTick, type Ref } from 'vue'
 import { select as d3Select } from 'd3-selection'
 import { drag as d3Drag, type D3DragEvent } from 'd3-drag'
 import { useRuleEngineStore, type RuleNodeData } from '@/stores/ruleEngine'

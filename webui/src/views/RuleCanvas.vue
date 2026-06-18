@@ -658,7 +658,7 @@
 
 <script setup lang="ts">
 import { throttle } from 'lodash-es'
-import { onBeforeUnmount, onMounted, ref, triggerRef, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, triggerRef } from 'vue'
 import { useRuleEngineStore, type RuleNodeData, type NodeDefinition } from '@/stores/ruleEngine'
 import { storeToRefs } from 'pinia'
 import { ruleEngineApi } from '@/api'
@@ -690,7 +690,6 @@ const {
   addSelectedEdges,
   removeSelectedNodes,   // Phase 19.7+: 配合 addSelectedNodes 走 VueFlow 官方 diff 链路
   getSelectedNodes,      // Phase 19.7+: 算 toAdd/toRemove diff 用
-  getNodes,
   findNode,
   applyNodeChanges: applyVueFlowNodeChanges,
   applyEdgeChanges: applyVueFlowEdgeChanges,
@@ -792,7 +791,6 @@ const showGrid = ref(true)
 const showExecutionPanel = ref(false)
 const flowContainer = ref<HTMLElement | null>(null)
 const vueFlowRef = ref<any>(null)
-const canvasWrapper = ref<HTMLElement | null>(null)
 const isNodeDragging = ref(false)
 // zoomLevel: 仅作为内部值供 zoomIn/zoomOut/quickAddNode 读取, 不参与响应式
 // 模板显示走 zoomLevelEl.textContent (DOM 直写), 见 P0-2
@@ -1462,7 +1460,7 @@ const isAdditiveSelection = ref(false)
 const customSelectionRect = ref<{ x: number; y: number; width: number; height: number } | null>(null)
 
 // 框选结束 - Phase 17.5 (修复版): 一次性算命中 + 同步 store + vue-flow 内部
-function handleSelectionEnd(event: any) {
+function handleSelectionEnd(_event: any) {
   isSelectionDragging.value = false
   isBatchDragging.value = false  // P0: 恢复 nodes-change 处理
   store.setSelectionBoxActive(false) // LOD-1: 解除框选 LOD 锁定
@@ -1782,7 +1780,7 @@ function quickAddNode(nodeDef: NodeDefinition) {
 
 // 节点点击 (Phase 17.1+: 不再选节点进右侧面板, 仅做选中视觉同步 + 高亮)
 // 双击走 handleNodeDoubleClick 进入 LOD 2 内嵌配置
-function handleNodeClick(event: any) {
+function handleNodeClick(_event: any) {
   // 单击: 仅清空/保留 selected 状态, 真正的配置编辑靠双击
   // 这样避免误点击打开/关闭右侧面板的视觉跳变
   // (如果未来要支持"单击预览", 可在此处加 store.setSelectedId(event.node.id))
@@ -1981,7 +1979,7 @@ function handleNodesChange(changes: any[]) {
           changed = true
         }
       }
-      if (changed) triggerRef(store.expandedNodeIds)
+      if (changed) store.syncExpandedNodeIds()
     }
   }
   store.nodes = newNodes as any

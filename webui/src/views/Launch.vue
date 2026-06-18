@@ -787,7 +787,6 @@ interface Detection {
 }
 const consoleExpanded = ref(false)
 const consoleEntries = ref<ConsoleEntry[]>([])
-const consoleBodyRef = ref<HTMLDivElement | null>(null)
 let nextEntryId = 0
 
 const addConsoleEntry = (source: ConsoleEntry['source'], summary: string, data: unknown, frameId?: number) => {
