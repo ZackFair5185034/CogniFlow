@@ -609,8 +609,8 @@
            - selectedCount === 0 -> 只显示 粘贴/全选
            - target 概念废弃: 右键节点/边/空白 都看 selected 集合
            - icon 映射 (2026-06-18 Phase 19.7+):
-               复制 -> copy, 剪切 -> edit (凑合), 删除 -> trash,
-               粘贴 -> paste (新增 paste.svg: 贴板+向下箭头),
+               复制 -> copy, 剪切 -> cut (新增 cut.svg: 剪刀),
+               删除 -> trash, 粘贴 -> paste (新增 paste.svg: 贴板+向下箭头),
                全选 -> check-square -->
       <template v-if="contextSelectedCount > 0">
         <div
@@ -623,7 +623,7 @@
           class="context-menu-item"
           @click="handleContextAction('cut', $event)"
         >
-          <SvgIcon name="edit" /> 剪切 {{ contextSelectedCount }} 项
+          <SvgIcon name="cut" /> 剪切 {{ contextSelectedCount }} 项
         </div>
         <div
           class="context-menu-item danger"
