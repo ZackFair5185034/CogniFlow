@@ -12,7 +12,8 @@
  *   _animations.scss       — @keyframes 功能动画
  *   _element-plus-vars.scss — Element Plus CSS 变量主题
  *   _element-plus.scss     — Element Plus 全局样式覆盖
- *   _common.scss           — 公共 UI 组件（.ui-btn / .ui-card 等）
+ *   _element-plus.scss     — Element Plus 全局样式覆盖
+ *   （已废弃）_common.scss — 公共 UI 组件（.ui-btn / .ui-card 等），2026-06-18 全部迁到 uno.config.ts shortcut
  */
 
 // ===== 模块导入（按依赖顺序）=====
@@ -20,7 +21,13 @@
 @use 'animations';
 @use 'element-plus-vars';
 @use 'element-plus';
-@use 'common';
+
+// === UNOCSS-EXCEPTION: 4) 伪元素 ::placeholder ===
+// .ui-input 的 placeholder 颜色在 uno.config.ts shortcut 里表达不了（UnoCSS 不支持伪元素 selector）
+// 此处用全局重置兜底，覆盖所有 .ui-input 子元素的 placeholder
+.ui-input::placeholder {
+  color: var(--text-muted);
+}
 
 // ===== 基础重置 =====
 * {

@@ -17,53 +17,40 @@ export default defineConfig({
     transformerVariantGroup(),
   ],
   shortcuts: {
-    // === 按钮系统（平面、小圆角、无发光）===
-    'cf-btn': 'px-4 py-2 rounded-[6px] border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] text-sm font-medium cursor-pointer transition-all duration-150 hover:bg-[var(--bg-hover)] hover:border-[var(--text-muted)]',
-    'cf-btn-primary': 'px-4 py-2 rounded-[6px] border border-[var(--accent-blue)] bg-[var(--accent-blue)] text-white text-sm font-medium cursor-pointer transition-all duration-150 hover:bg-[var(--accent-blue-hover)]',
-    'cf-btn-small': 'px-2.5 py-1.5 text-xs rounded-[4px] border border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-primary)] cursor-pointer transition-all duration-150 hover:bg-[var(--bg-hover)]',
-    'cf-btn-icon': 'w-9 h-9 flex items-center justify-center bg-transparent border-none text-[var(--text-muted)] cursor-pointer rounded-[6px] transition-all duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)]',
+    // === 按钮系统（来源 _common.scss .ui-btn 系列）===
+    // 全局基础样式：13px / 500 / 6px 圆角 / 8px-16px padding / 1px border
+    // 注：UnoCSS shortcut 不支持类名递归引用，每个变体必须独立写完整 utility
+    'ui-btn': 'inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-[13px] font-medium leading-[1.4] cursor-pointer transition-all duration-150 hover:bg-[var(--bg-hover)] hover:border-[var(--text-muted)]',
+    'ui-btn-primary': 'inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-medium leading-[1.4] cursor-pointer transition-all duration-150 bg-[var(--accent-blue)] text-white border border-[var(--accent-blue)] hover:bg-[var(--accent-blue-hover)] hover:border-[var(--accent-blue-hover)]',
+    'ui-btn-success': 'inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-medium leading-[1.4] cursor-pointer transition-all duration-150 bg-[var(--color-success)] text-white border border-[var(--color-success)] hover:bg-[#16a34a] hover:border-[#16a34a]',
+    'ui-btn-danger': 'inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-medium leading-[1.4] cursor-pointer transition-all duration-150 bg-[var(--color-danger)] text-white border border-[var(--color-danger)] hover:bg-[#dc2626] hover:border-[#dc2626]',
+    'ui-btn-small': 'inline-flex items-center justify-center gap-1.5 px-2.5 py-1 text-xs bg-[var(--bg-card)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] cursor-pointer transition-all duration-150 hover:bg-[var(--bg-hover)]',
+    'ui-btn-xs': 'inline-flex items-center justify-center gap-1.5 px-2 py-0.5 text-[11px] rounded-sm bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] cursor-pointer transition-all duration-150 hover:bg-[var(--bg-hover)]',
+    'ui-btn-icon': 'w-[34px] h-[34px] flex items-center justify-center bg-transparent border-none rounded-md text-[var(--text-secondary)] cursor-pointer transition-all duration-150 hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]',
 
-    // === 卡片系统 ===
-    'cf-card': 'bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[8px]',
-    'cf-card-header': 'flex items-center gap-3 px-5 py-4 border-b border-[var(--border-color)]',
-    'cf-card-content': 'p-5',
+    // === 卡片系统（来源 _common.scss .ui-card 系列）===
+    'ui-card': 'bg-[var(--bg-card)] border border-[var(--border-color)] rounded-lg overflow-hidden',
+    'ui-card-header': 'flex items-center gap-3 px-5 py-4 border-b border-[var(--border-color)]',
+    'ui-card-content': 'p-5',
 
-    // === 布局 ===
-    'cf-flex': 'flex',
-    'cf-flex-col': 'flex flex-col',
-    'cf-items-center': 'items-center',
-    'cf-justify-center': 'justify-center',
-    'cf-justify-between': 'justify-between',
-    'cf-gap-2': 'gap-2',
-    'cf-gap-3': 'gap-3',
-    'cf-gap-4': 'gap-4',
-    'cf-gap-6': 'gap-6',
+    // === 标签系统（来源 _common.scss .ui-tag 系列）===
+    'ui-tag': 'inline-flex items-center px-2 py-0.5 rounded-sm text-[11px] font-medium leading-[1.5]',
+    'ui-tag-blue': 'inline-flex items-center px-2 py-0.5 rounded-sm text-[11px] font-medium leading-[1.5] bg-[var(--color-info-bg)] text-[var(--accent-blue)]',
+    'ui-tag-green': 'inline-flex items-center px-2 py-0.5 rounded-sm text-[11px] font-medium leading-[1.5] bg-[var(--color-success-bg)] text-[var(--color-success)]',
+    'ui-tag-yellow': 'inline-flex items-center px-2 py-0.5 rounded-sm text-[11px] font-medium leading-[1.5] bg-[var(--color-warning-bg)] text-[var(--color-warning)]',
+    'ui-tag-red': 'inline-flex items-center px-2 py-0.5 rounded-sm text-[11px] font-medium leading-[1.5] bg-[var(--color-danger-bg)] text-[var(--color-danger)]',
 
-    // === 文字 ===
-    'cf-text-xs': 'text-xs',
-    'cf-text-sm': 'text-sm',
-    'cf-text-lg': 'text-lg font-semibold',
-    'cf-text-muted': 'text-[var(--text-muted)]',
-    'cf-text-secondary': 'text-[var(--text-secondary)]',
-    'cf-font-mono': 'font-[var(--font-family-mono)]',
-    'cf-font-bold': 'font-bold',
-    // 文字渐变（仅 A 类：--text-primary → --accent-blue，其它渐变属业务专属不进 shortcut）
-    'cf-gradient-text': 'bg-[linear-gradient(90deg,var(--text-primary),var(--accent-blue))] [-webkit-background-clip:text] [background-clip:text] [-webkit-text-fill-color:transparent]',
+    // === 输入系统（来源 _common.scss .ui-input 系列）===
+    // 注：placeholder 颜色留 SCSS 块处理（UNOCSS-EXCEPTION: 4 伪元素）
+    'ui-input': 'w-full px-3.5 py-2.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-md text-[var(--text-primary)] text-[13px] transition-colors duration-150 focus:outline-none focus:border-[var(--accent-blue)]',
 
-    // === 状态 ===
-    'cf-badge': 'px-2 py-0.5 text-[10px] font-[var(--font-family-mono)] rounded-[4px] border border-[var(--border-color)] text-[var(--text-muted)] uppercase tracking-wider',
+    // === 徽章系统（来源 _common.scss .ui-badge 系列）===
+    'ui-badge': 'px-2 py-0.5 font-[var(--font-family-mono)] text-[10px] text-[var(--text-muted)] tracking-wider bg-[var(--bg-secondary)] rounded-sm border border-[var(--border-color)]',
 
-    // === 输入 ===
-    'cf-input': 'w-full px-3.5 py-2.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-[6px] text-[var(--text-primary)] text-sm outline-none focus:border-[var(--accent-blue)] transition-colors',
+    // === 滚动条系统（来源 _common.scss .ui-scrollbar 系列）===
+    'ui-scrollbar': 'scrollbar-thin [scrollbar-color:var(--border-color)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[var(--border-color)] [&::-webkit-scrollbar-thumb]:rounded',
 
-    // === 项目通用组件样式 ===
-    'cf-page-header': 'flex justify-between items-center gap-4 flex-shrink-0',
-    'cf-dialog-overlay': 'fixed inset-0 bg-black/70 flex items-center justify-center z-[1000]',
-    'cf-dialog-panel': 'bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[8px] w-full max-w-[450px]',
-    'cf-table-wrapper': 'w-full overflow-x-auto min-w-0',
-    'cf-toolbar': 'flex justify-between items-center',
-    'cf-content-area': 'flex flex-1 overflow-hidden',
-    'cf-panel': 'flex flex-col flex-shrink-0 bg-[var(--bg-secondary)] border-[var(--border-color)]',
+    // === LoadingSpinner 子元素（已加，保留） ===
     'cf-loading': 'flex items-center justify-center',
     'cf-loading--overlay': 'absolute inset-0 bg-[rgba(13,13,20,0.85)] z-[100]',
     'cf-loading__container': 'flex flex-col items-center gap-3',
@@ -71,9 +58,9 @@ export default defineConfig({
     // 0.8s duration UnoCSS animate-spin 默认 1s，这里用 [0.8s] 覆盖
     'cf-loading__ring': 'rounded-full border-solid border border-[var(--border-color)] border-t-[var(--accent-blue)] animate-[spin_0.8s_linear_infinite]',
     'cf-loading__text': 'text-[13px] text-[var(--text-secondary)] whitespace-nowrap',
-    'cf-empty': 'flex flex-col items-center justify-center py-15 px-5 text-center',
-    'cf-scroll-y': 'overflow-y-auto',
-    'cf-scrollbar': '[&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-[var(--border-color)] [&::-webkit-scrollbar-thumb]:rounded',
+
+    // === 文字渐变（保留：6 view header 实际在用） ===
+    'cf-gradient-text': 'bg-[linear-gradient(90deg,var(--text-primary),var(--accent-blue))] [-webkit-background-clip:text] [background-clip:text] [-webkit-text-fill-color:transparent]',
   },
   theme: {
     borderRadius: {
