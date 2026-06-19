@@ -141,6 +141,12 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     | { type: 'snapshot'; nodes: GraphNode[]; edges: GraphEdge[] }
     | { type: 'move'; nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }
     | { type: 'groupMove'; moves: Array<{ nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }> }
+    // PERF-5 修复 (2026-06-19): 边增删也走增量 history entry, 不再 snapshot 整图
+    //   addEdge/removeEdge 是高频操作 (用户拖线/删线), 之前 saveHistory() 序列化 200 节点图
+    //   ~0.5-1ms, 累积明显. 现在只存 1 条边的快照, undo/redo 反向操作即可.
+    | { type: 'addEdge'; edge: GraphEdge }
+    | { type: 'removeEdge'; edge: GraphEdge }
+    | { type: 'removeEdges'; edges: GraphEdge[] }
   >>([])
   const historyIndex = ref(-1)
   const isHistoryPaused = ref(false)
@@ -862,7 +868,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     // P1-F: 增量维护 connectedHandleIndex
     _indexAddEdge(newEdge)
     triggerRef(_connectedHandleVersion)
-    saveHistory()
+    // PERF-5 (2026-06-19): 走增量 history, 不再 saveHistory() 整图快照
+    _recordEdgeAddHistory(newEdge)
   }
 
   /** 删除边 */
@@ -872,7 +879,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     // P1-F: 增量维护 connectedHandleIndex
     if (target) _indexRemoveEdge(target)
     triggerRef(_connectedHandleVersion)
-    saveHistory()
+    // PERF-5 (2026-06-19): 走增量 history
+    if (target) _recordEdgeRemoveHistory(target)
   }
 
   /**
@@ -886,7 +894,44 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     edges.value = edges.value.filter(e => !idSet.has(e.id))
     for (const e of removed) _indexRemoveEdge(e)
     triggerRef(_connectedHandleVersion)
-    saveHistory()
+    // PERF-5 (2026-06-19): 走批量增量 history
+    if (removed.length > 0) _recordEdgesRemoveHistory(removed)
+  }
+
+  /**
+   * PERF-5 (2026-06-19): 增量 history 辅助 - 边增/删
+   * 替代 saveHistory() 整图 snapshot, 100+ 节点高频边操作累计省 0.5-1ms/次
+   */
+  function _recordEdgeAddHistory(edge: GraphEdge) {
+    if (isHistoryPaused.value) return
+    historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+    historyStack.value.push({ type: 'addEdge', edge: { ...edge } })
+    historyIndex.value = historyStack.value.length - 1
+    if (historyStack.value.length > maxHistorySize) {
+      historyStack.value.shift()
+      historyIndex.value--
+    }
+  }
+  function _recordEdgeRemoveHistory(edge: GraphEdge) {
+    if (isHistoryPaused.value) return
+    historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+    historyStack.value.push({ type: 'removeEdge', edge: { ...edge } })
+    historyIndex.value = historyStack.value.length - 1
+    if (historyStack.value.length > maxHistorySize) {
+      historyStack.value.shift()
+      historyIndex.value--
+    }
+  }
+  function _recordEdgesRemoveHistory(removedEdges: GraphEdge[]) {
+    if (isHistoryPaused.value) return
+    if (removedEdges.length === 0) return
+    historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+    historyStack.value.push({ type: 'removeEdges', edges: removedEdges.map(e => ({ ...e })) })
+    historyIndex.value = historyStack.value.length - 1
+    if (historyStack.value.length > maxHistorySize) {
+      historyStack.value.shift()
+      historyIndex.value--
+    }
   }
 
   // ============ Undo/Redo ============
@@ -1003,6 +1048,40 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         node.position = { ...targetPos }
         triggerRef(nodes)
       }
+    } else if (entry.type === 'addEdge') {
+      // PERF-5 (2026-06-19): 增量边历史
+      // undo 撤销添加 → removeEdge; redo 重新添加 → addEdge
+      // 注意: 这里需要走 addEdge/removeEdge 自身, 不绕过 _indexAddEdge/_indexRemoveEdge
+      // 避免索引不同步. 但 _recordEdgeAddHistory/Remove 会再 push 历史, 所以这里直接 mutate
+      if (direction === 'undo') {
+        edges.value = edges.value.filter(e => e.id !== entry.edge.id)
+        _indexRemoveEdge(entry.edge)
+      } else {
+        edges.value = [...edges.value, entry.edge]
+        _indexAddEdge(entry.edge)
+      }
+      triggerRef(_connectedHandleVersion)
+    } else if (entry.type === 'removeEdge') {
+      // undo 撤销删除 → 加回; redo 重新删除 → 删
+      if (direction === 'undo') {
+        edges.value = [...edges.value, entry.edge]
+        _indexAddEdge(entry.edge)
+      } else {
+        edges.value = edges.value.filter(e => e.id !== entry.edge.id)
+        _indexRemoveEdge(entry.edge)
+      }
+      triggerRef(_connectedHandleVersion)
+    } else if (entry.type === 'removeEdges') {
+      // 批量: undo 全加回, redo 全删
+      if (direction === 'undo') {
+        edges.value = [...edges.value, ...entry.edges]
+        for (const e of entry.edges) _indexAddEdge(e)
+      } else {
+        const idSet = new Set(entry.edges.map(e => e.id))
+        edges.value = edges.value.filter(e => !idSet.has(e.id))
+        for (const e of entry.edges) _indexRemoveEdge(e)
+      }
+      triggerRef(_connectedHandleVersion)
     } else {
       // groupMove: 批量还原
       // 调用 setNodesPositions 把所有节点归位 (recordHistory=false 避免污染 history stack)
