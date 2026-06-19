@@ -271,12 +271,27 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    *       连接拖拽时高频调用变成 O(E) per call.
    * 现在: store 全局 Map, O(1) 查询.
    */
+  /**
+   * PERF-1 修复 (2026-06-19): 节点 ID → node O(1) 查找
+   *   之前是 computed, 每次 nodes.value 重新赋值都全量 O(N) 重建
+   *   (createNode/removeNode/handlePaste/undo/redo/saveGraph/loadGraph/handleNodesChange)
+   *   100 节点场景 ~0.05ms 看似小, 高频操作 (快速粘贴/撤销) 会累积
+   * 改 lazy 增量: 维护 _nodeByIdMap + _nodeByIdDirty flag, 读取时按需重建
+   *   重建只在 (a) 首次访问 (b) flag dirty 时触发, 命中时返回同 Map 引用 (Vue computed 缓存)
+   *   dirty 由 _nodeByIdMarkDirty() 在所有 mutation 站点调用
+   */
+  const _nodeByIdMap = new Map<string, Node<RuleNodeData>>()
+  let _nodeByIdDirty = true
+  function _nodeByIdMarkDirty() { _nodeByIdDirty = true }
   const nodeById = computed<Map<string, Node<RuleNodeData>>>(() => {
-    const map = new Map<string, Node<RuleNodeData>>()
-    for (const n of nodes.value) {
-      map.set(n.id, n)
+    if (_nodeByIdDirty) {
+      _nodeByIdMap.clear()
+      for (const n of nodes.value) {
+        _nodeByIdMap.set(n.id, n)
+      }
+      _nodeByIdDirty = false
     }
-    return map
+    return _nodeByIdMap
   })
 
   /** 是否可以撤销 */
@@ -498,6 +513,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         } as RuleNodeData
       })
     })
+    _nodeByIdMarkDirty()  // PERF-1: loadGraph 全量加载后失效 nodeById cache
 
     // 解析边
     edges.value = (data.edges ?? []).map((e: GraphEdge) => ({
@@ -627,6 +643,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     // 之前直接 push() 会让节点"进了 store 但不渲染"（拖拽/双击添加都不显示）
     // markRaw 防止 Vue 对 n.data 建深代理（节点体里 el-* 控件的响应式由组件内部自管）
     nodes.value = [...nodes.value, markRaw(newNode)]
+    _nodeByIdMarkDirty()  // PERF-1: 节点增, nodeById map 失效
     saveHistory()
     return true
   }
@@ -727,6 +744,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    */
   function removeNode(nodeId: string) {
     nodes.value = nodes.value.filter(n => n.id !== nodeId)
+    _nodeByIdMarkDirty()  // PERF-1: 节点删
     edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
     // 同步清理展开状态
     if (expandedNodeIds.value.has(nodeId)) {
@@ -747,6 +765,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     if (nodeIds.length === 0) return
     const idSet = new Set(nodeIds)
     nodes.value = nodes.value.filter(n => !idSet.has(n.id))
+    _nodeByIdMarkDirty()  // PERF-1: 节点批量删
     // P1-F: 先收集要删的 incident edges, 用于增量维护
     const removedEdges = edges.value.filter(e => idSet.has(e.source) || idSet.has(e.target))
     edges.value = edges.value.filter(e => !idSet.has(e.source) && !idSet.has(e.target))
@@ -971,6 +990,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   ) {
     if (entry.type === 'snapshot') {
       nodes.value = JSON.parse(JSON.stringify(entry.nodes))
+      _nodeByIdMarkDirty()  // PERF-1: snapshot 重建
       edges.value = JSON.parse(JSON.stringify(entry.edges))
       // P1-F: 整体替换 edges 后全量重建索引
       _indexRebuild()
