@@ -4,6 +4,7 @@
 """
 import asyncio
 import json
+import logging
 import re
 import time
 from collections import defaultdict
@@ -14,6 +15,9 @@ from backend.database import ExecutionHistory, NodeExecutionLog
 from .exceptions import CycleError, ExecutorError, ValidationError
 from .nodes.base import BaseExecutor, ExecutionContext, NodeStatus
 from .registry import NodeRegistry, get_registry
+
+# BE-P0-2 (2026-06-19): 用于 finally cleanup 失败时降级告警, 不掩盖主结果
+logger = logging.getLogger(__name__)
 
 
 class RuleGraphExecutor:
@@ -654,6 +658,8 @@ class RuleGraphExecutor:
         status = "failed"
         error_msg = None
         outputs = None
+        # BE-P0-2 (2026-06-19): executor 提前 None 化, finally cleanup 安全
+        executor = None
 
         try:
             # 解析输入数据
@@ -725,7 +731,10 @@ class RuleGraphExecutor:
             )
 
         except Exception as e:
-            error_msg = str(e)
+            # BE-P0-2 修复 (2026-06-19): 异常对象连同 traceback 一并写入 status
+            #   WS 推送完整堆栈, 便于排查 (之前只存 str(e), 丢上下文)
+            import traceback
+            error_msg = f"{str(e)}\n{traceback.format_exc()}"
             status = "failed"
             context.set_node_status(node_id, "failed")
             await self._broadcast_node_failed(context.execution_id, node_id, error_msg)
@@ -740,6 +749,23 @@ class RuleGraphExecutor:
             ) from e
 
         finally:
+            # BE-P0-2 修复 (2026-06-19): 节点级资源清理
+            #   若 executor 实现了 async cleanup() / close() 钩子, 必调 (finally 兜底)
+            #   用于释放模型句柄、临时帧缓冲、GPU 显存等
+            if executor is not None:
+                cleanup = getattr(executor, "cleanup", None) or getattr(executor, "close", None)
+                if cleanup is not None:
+                    try:
+                        result = cleanup()
+                        if hasattr(result, "__await__"):
+                            await result
+                    except Exception as cleanup_err:
+                        # cleanup 失败不掩盖主结果, 只记录
+                        logger.warning(
+                            "节点 %s 资源清理失败: %s",
+                            node_id, cleanup_err,
+                            exc_info=True,
+                        )
             # 计算耗时并保存执行日志
             elapsed_ms = int((time.monotonic() - start_time) * 1000)
             metrics = self._compute_metrics(outputs or {})
