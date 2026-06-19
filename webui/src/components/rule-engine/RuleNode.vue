@@ -7,13 +7,15 @@
     selected 走 VueFlow wrapper 的 CSS class, 不需列入依赖.
   -->
   <div
-    v-memo="[data.id, data.status, data.category, lodLevel, isExpanded]"
+    v-memo="[data.id, data.status, data.category, lodLevel, isExpanded, hasMissingRequired, isDisabled]"
     v-bind="$attrs"
     class="rule-node"
-    :class="[`category-${data.category}`, `lod-${lodLevel}`, { expanded: isCollapsed }]"
+    :class="[`category-${data.category}`, `lod-${lodLevel}`, { expanded: isCollapsed, 'missing-required': hasMissingRequired, 'is-disabled': isDisabled }]"
     :data-status="data.status || 'idle'"
     :data-lod="lodLevel"
     :data-expanded="isCollapsed ? 'true' : 'false'"
+    :data-missing-required="hasMissingRequired ? 'true' : 'false'"
+    :data-disabled="isDisabled ? 'true' : 'false'"
     @contextmenu.prevent="emit('contextmenu', $event)"
     @dblclick.stop="emit('dblclick', $event)"
   >
@@ -27,6 +29,12 @@
       </div>
       <div class="node-title">
         <span class="node-label">{{ data.label || data.type }}</span>
+        <!-- P1-1 (2026-06-19): 必填端口未连警告 (LOD 1+) -->
+        <span
+          v-if="hasMissingRequired && lodLevel >= 1"
+          class="missing-required-badge"
+          :title="missingRequiredTitle"
+        >⚠ {{ missingRequiredHandles.length }}</span>
       </div>
       <!-- Phase 19.5+: 单节点折叠/展开按钮 (替代工具栏全局按钮) -->
       <button
@@ -52,18 +60,26 @@
           v-for="input in data.inputs"
           :key="'in-' + input.name"
           class="port-item port-in"
+          :class="{ 'is-missing-required': input.required && !isInputConnected(input.name) }"
         >
           <Handle
             :id="input.name"
             type="target"
             :position="Position.Left"
-            :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`, { 'is-connected': isInputConnected(input.name) }]"
+            :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`, { 'is-connected': isInputConnected(input.name), 'is-missing-required': input.required && !isInputConnected(input.name) }]"
           />
           <span
             v-if="input.label || input.name"
             class="port-label"
             :title="input.label || input.name"
-          >{{ input.label || input.name }}</span>
+          >
+            {{ input.label || input.name }}
+            <!-- P1-1 (2026-06-19): 必填端口加 * -->
+            <span
+              v-if="input.required"
+              class="required-marker"
+            >*</span>
+          </span>
         </div>
         <div
           v-for="output in data.outputs"
@@ -139,6 +155,8 @@ interface Port {
   name: string
   label?: string
   type: string
+  /** P1-1 (2026-06-19): 端口是否必填, 未连时显示 ⚠️ */
+  required?: boolean
 }
 
 interface NodeData {
@@ -150,6 +168,8 @@ interface NodeData {
   inputs?: Port[]
   outputs?: Port[]
   status?: string
+  /** P2-A (2026-06-19): 节点是否禁用 (执行时跳过) */
+  disabled?: boolean
 }
 
 const props = defineProps<{
@@ -227,6 +247,41 @@ function isInputConnected(handleId: string): boolean {
 function isOutputConnected(handleId: string): boolean {
   return store.isHandleConnected(props.data.id, handleId, 'source')
 }
+
+// ============ P1-1 (2026-06-19): 未连必填端口检测 ============
+
+/**
+ * 必填输入端口的 handle id 列表 (未连时)
+ * 触发器节点通常无 input ports, 不参与校验
+ */
+const missingRequiredHandles = computed<string[]>(() => {
+  if (!props.data.inputs) return []
+  const missing: string[] = []
+  for (const input of props.data.inputs) {
+    if (input.required && !isInputConnected(input.name)) {
+      missing.push(input.name)
+    }
+  }
+  return missing
+})
+
+/** 节点是否有缺失必填输入端口 */
+const hasMissingRequired = computed(() => missingRequiredHandles.value.length > 0)
+
+/** 节点标题旁 ⚠️ tooltip 详情 */
+const missingRequiredTitle = computed(() => {
+  if (!hasMissingRequired.value) return ''
+  return `缺失必填输入端口: ${missingRequiredHandles.value.join(', ')}`
+})
+
+// ============ P2-A (2026-06-19): 节点禁用状态 ============
+
+/** 节点是否处于禁用态 (执行时被跳过) */
+const isDisabled = computed(() => {
+  // 双数据源: data.disabled (持久化) 或 store.disabledNodeIds (UI 即时)
+  if (props.data.disabled === true) return true
+  return store.isNodeDisabled(props.data.id)
+})
 </script>
 
 <style scoped lang="scss">
@@ -255,6 +310,12 @@ function isOutputConnected(handleId: string): boolean {
   transform: translateZ(0);
   backface-visibility: hidden;
   overflow: visible !important;
+  /* ========== 2026-06-19: 节点默认 cursor ==========
+     Vue Flow 默认给 .vue-flow__node 设了 cursor: grab,
+     但我们 2026-06-19 限制了拖动只在 .node-header 触发,
+     因此节点的"非标题栏"区域不应再显示 grab, 否则误导用户.
+     此处显式覆盖回 default, 标题栏 .node-header 单独设 grab. */
+  cursor: default;
 }
 
 /* 拖动期间彻底关闭 transition,避免每帧补间触发样式重算 */
@@ -280,6 +341,8 @@ function isOutputConnected(handleId: string): boolean {
   gap: 8px;
   padding: 6px 10px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
+  /* 2026-06-19: 标题栏 cursor 用 default, 用户明确反馈不喜欢小手样式 */
+  cursor: default;
 }
 
 /* 展开按钮 (LOD 1 提示) */
@@ -303,6 +366,22 @@ function isOutputConnected(handleId: string): boolean {
     border-color: rgba(0, 240, 255, 0.3);
     color: #00f0ff;
   }
+}
+
+/* ========== 2026-06-19: 端口区 cursor ==========
+     端口区本身不参与拖动, 但因内嵌 Handle 的 crosshair,
+     鼠标进入 .node-ports 应保持 default. */
+.node-ports {
+  cursor: default;
+}
+
+/* ========== 2026-06-19: 配置区 cursor ==========
+     内嵌配置 (LOD 2) 的输入控件需要 text 样式,
+     但因为 .node-config-section 的 mousedown 已 .stop 阻止冒泡,
+     不会触发拖动, cursor 自然继承 .rule-node 的 default.
+     这里加 cursor: text 让用户明确知道这是输入区. */
+.node-config-section {
+  cursor: text;
 }
 
 /* ========== LOD 0 极简模式 ========== */
@@ -548,6 +627,22 @@ function isOutputConnected(handleId: string): boolean {
   cursor: crosshair;
 }
 
+/* ========== P2-B (2026-06-19): 端口吸附高亮 ==========
+   全局开关: 当用户在拖连线时, 所有 handles 放大 + 发光
+   .is-connecting 由 RuleCanvas 加到 .vue-flow 容器 */
+:deep(.vue-flow.is-connecting) .vue-flow__handle.connectable {
+  width: 14px !important;
+  height: 14px !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.4), 0 0 12px rgba(0, 240, 255, 0.6);
+  animation: handle-pulse 1s ease-in-out infinite;
+}
+
+@keyframes handle-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.4), 0 0 12px rgba(0, 240, 255, 0.6); }
+  50% { box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.7), 0 0 18px rgba(0, 240, 255, 0.9); }
+}
+
 :deep(.vue-flow__handle.type-image) { border-color: #4CFF4C; }
 :deep(.vue-flow__handle.type-bbox) { border-color: #00f0FF; }
 :deep(.vue-flow__handle.type-model) { border-color: #FFA500; }
@@ -558,6 +653,80 @@ function isOutputConnected(handleId: string): boolean {
 
 :deep(.vue-flow__handle.is-connected) {
   background: currentColor;
+}
+
+/* ========== P1-1 (2026-06-19): 未连必填端口视觉提示 ========== */
+
+/* 必填端口的 * 标记 */
+.required-marker {
+  color: #ff5252;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+/* 必填未连的 handle: 红框 + 呼吸光晕 */
+:deep(.vue-flow__handle.is-missing-required) {
+  border-color: #ff5252 !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 2px rgba(255, 82, 82, 0.25), 0 0 8px rgba(255, 82, 82, 0.6);
+  animation: required-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes required-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 82, 82, 0.25), 0 0 8px rgba(255, 82, 82, 0.6); }
+  50% { box-shadow: 0 0 0 3px rgba(255, 82, 82, 0.4), 0 0 14px rgba(255, 82, 82, 0.9); }
+}
+
+/* 节点标题旁的 ⚠️ 徽标 */
+.missing-required-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(255, 82, 82, 0.15);
+  border: 1px solid rgba(255, 82, 82, 0.4);
+  color: #ff5252;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: help;
+  flex-shrink: 0;
+}
+
+/* 节点整体: 有缺失必填时标题栏轻微红色提示 */
+.rule-node.missing-required .node-header {
+  background: linear-gradient(90deg, rgba(255, 82, 82, 0.12), rgba(255, 82, 82, 0.04));
+}
+
+/* 拖动期间 Vue Flow 默认 .vue-flow__node.dragging 会设 grabbing, 同样覆盖为 default
+   (用户 2026-06-19 反馈不喜欢任何小手样式, 拖动期间保持普通箭头) */
+:deep(.vue-flow__node.dragging),
+:deep(.vue-flow__node.dragging) .rule-node {
+  cursor: default !important;
+}
+
+/* ========== P2-A (2026-06-19): 节点禁用样式 ========== */
+.rule-node.is-disabled {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+  border-style: dashed;
+  /* 阻止 hover 抬升感, 让"已禁用"更明显 */
+  transition: opacity 0.15s ease;
+}
+
+.rule-node.is-disabled:hover {
+  opacity: 0.6;
+  border-color: #888;
+  box-shadow: none;
+}
+
+/* 禁用节点标题旁加 [已禁用] 标识 */
+.rule-node.is-disabled .node-label::after {
+  content: ' ⏸';
+  color: #888;
+  font-size: 10px;
+  margin-left: 4px;
 }
 
 /* 状态指示器 */

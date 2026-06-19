@@ -461,6 +461,16 @@ class RuleGraphExecutor:
                     branch_outputs[src][src_handle].append(tgt)
         skipped_node_ids: Set[str] = set()
 
+        # P2-A (2026-06-19): 预扫描, 把禁用节点 (data.disabled === true) 加入 skipped
+        #   这些节点及所有依赖它们的下游节点也会被跳过 (因为入度永不为 0 → 不加入层)
+        #   简化处理: 仅直接跳过禁用节点自身 + 拓扑下沉标记
+        disabled_ids = set()
+        for node_id, node in nodes.items():
+            node_data = (node.get("data") or {})
+            if node_data.get("disabled") is True:
+                disabled_ids.add(node_id)
+        skipped_node_ids.update(disabled_ids)
+
         # 创建执行上下文
         context = ExecutionContext(
             execution_id=execution_id,

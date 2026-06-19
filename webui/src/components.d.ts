@@ -14,6 +14,7 @@ declare module 'vue' {
     Controls: typeof import('@vue-flow/controls')['Controls']
     ElButton: typeof import('element-plus')['ElButton']
     ElCheckbox: typeof import('element-plus')['ElCheckbox']
+    ElDialog: typeof import('element-plus')['ElDialog']
     ElDropdown: typeof import('element-plus')['ElDropdown']
     ElDropdownItem: typeof import('element-plus')['ElDropdownItem']
     ElDropdownMenu: typeof import('element-plus')['ElDropdownMenu']

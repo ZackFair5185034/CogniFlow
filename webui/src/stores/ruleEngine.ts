@@ -66,6 +66,17 @@ export interface ExecutionState {
 
 // ============ Store 定义 ============
 
+/**
+ * 对齐模式 (P1-2 2026-06-19)
+ * - 'left' / 'right' / 'top' / 'bottom': 对齐到边界
+ * - 'h-center' / 'v-center': 居中
+ * - 'distribute-h' / 'distribute-v': 等距分布 (至少 3 个节点)
+ */
+export type AlignMode =
+  | 'left' | 'right' | 'top' | 'bottom'
+  | 'h-center' | 'v-center'
+  | 'distribute-h' | 'distribute-v'
+
 export const useRuleEngineStore = defineStore('ruleEngine', () => {
   // ============ 状态 ============
 
@@ -151,6 +162,11 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const historyIndex = ref(-1)
   const isHistoryPaused = ref(false)
   const maxHistorySize = 20
+
+  // P0-2 (2026-06-19): 最近一次成功保存对应的 history 索引.
+  //   dirty = (historyIndex !== lastSavedHistoryIndex), 配合 beforeunload 提示 + 草稿自动保存.
+  //   比"对比 nodes JSON 字符串"更便宜 — history 索引变化即可, 不必序列化.
+  const lastSavedHistoryIndex = ref(-1)
 
   // ============ 计算属性 ============
 
@@ -305,6 +321,11 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
 
   /** 是否可以重做 */
   const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
+
+  // P0-2 (2026-06-19): 当前是否有未保存改动
+  //   -1 表示从未保存过 (新图); 否则比较 historyIndex
+  //   loadGraph 后也会重置 lastSavedHistoryIndex, 此时历史里有初始 snapshot, 视为干净
+  const isDirty = computed(() => historyIndex.value !== lastSavedHistoryIndex.value)
 
   /** 是否有节点 */
   const hasNodes = computed(() => nodes.value.length > 0)
@@ -536,6 +557,16 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     _indexRebuild()
     triggerRef(_connectedHandleVersion)
 
+    // P2-A (2026-06-19): 从节点 data.disabled 恢复禁用状态
+    const disabledIds = new Set<string>()
+    for (const n of (data.nodes ?? []) as GraphNode[]) {
+      const nodeData = (n as any).data ?? {}
+      if (nodeData.disabled === true) {
+        disabledIds.add(n.id)
+      }
+    }
+    disabledNodeIds.value = disabledIds
+
     // 解析变量
     if (data.variables_json) {
       try {
@@ -567,6 +598,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
 
     saveHistory()
+    // P0-2 (2026-06-19): loadGraph 后当前状态视为干净 (loaded == saved)
+    lastSavedHistoryIndex.value = historyIndex.value
     return data
   }
 
@@ -599,7 +632,11 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         id: n.id,
         type: n.data?.type ?? 'unknown',
         position: n.position,
-        data: n.data
+        data: {
+          ...n.data,
+          // P2-A (2026-06-19): 把禁用状态持久化到 data.disabled
+          disabled: disabledNodeIds.value.has(n.id),
+        }
       }))),
       edges_json: JSON.stringify(edges.value.map(e => ({
         id: e.id,
@@ -612,6 +649,269 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     })
 
     saveHistory()
+    // P0-2 (2026-06-19): 保存成功后, 标记当前 history 位置为"已保存"
+    lastSavedHistoryIndex.value = historyIndex.value
+  }
+
+  // ============ 草稿 (P0-2 2026-06-19) ============
+
+  /**
+   * 把当前节点/边/变量序列化到 localStorage 草稿槽.
+   * 5s 防抖由调用方控制 (RuleCanvas mounted 启 setInterval).
+   * 失败容错: localStorage 满 / 不可用时静默吞异常, 不影响主流程.
+   */
+  function saveDraftToLocalStorage(graphId: number): boolean {
+    try {
+      const payload = {
+        nodes: nodes.value,
+        edges: edges.value,
+        variables: variables.value,
+        graphName: graphMeta.value?.name,
+        // 不存 lastSavedHistoryIndex — 它与具体 historyStack 状态耦合,
+        // 重载后 historyStack 是新的 (loadGraph 重置), dirty 判定靠 hash 比较
+        savedAt: Date.now(),
+      }
+      localStorage.setItem(`cogniflow:rule-graph:${graphId}:draft`, JSON.stringify(payload))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * 读取指定图的 localStorage 草稿, 不存在或解析失败返回 null.
+   */
+  function loadDraftFromLocalStorage(graphId: number): {
+    nodes: Node<RuleNodeData>[]; edges: Edge[]; variables: Variable[]
+    graphName?: string; savedAt: number
+  } | null {
+    try {
+      const raw = localStorage.getItem(`cogniflow:rule-graph:${graphId}:draft`)
+      if (!raw) return null
+      const payload = JSON.parse(raw)
+      // 简易校验: 至少要有 nodes 数组
+      if (!Array.isArray(payload.nodes)) return null
+      return payload
+    } catch {
+      return null
+    }
+  }
+
+  /** 保存成功后清掉 localStorage 草稿 (已无意义) */
+  function clearLocalStorageDraft(graphId: number): void {
+    try {
+      localStorage.removeItem(`cogniflow:rule-graph:${graphId}:draft`)
+    } catch {
+      // 静默
+    }
+  }
+
+  // ============ 导入导出 JSON (P1-3 2026-06-19) ============
+
+  /**
+   * 导出当前图为 JSON 字符串。
+   * 包含字段: graphName, nodes, edges, variables, exportedAt, version
+   * 节点/边经过裁剪, 仅保留业务字段 (剔除 VueFlow 内部 cache)
+   */
+  function exportToJSON(): string {
+    const payload = {
+      graphName: graphMeta.value?.name || 'untitled',
+      graphDescription: graphMeta.value?.description,
+      nodes: nodes.value.map((n) => ({
+        id: n.id,
+        type: n.data?.type ?? 'unknown',
+        position: { x: n.position.x, y: n.position.y },
+        data: n.data,
+      })),
+      edges: edges.value.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        source_handle: e.sourceHandle,
+        target_handle: e.targetHandle,
+      })),
+      variables: variables.value,
+      exportedAt: new Date().toISOString(),
+      version: '1.0.0',
+    }
+    return JSON.stringify(payload, null, 2)
+  }
+
+  /**
+   * 从 JSON 字符串导入, 替换当前 graph 状态。
+   * @returns 导入的图名称, 用于 UI 提示
+   * @throws JSON 解析失败 / 字段缺失
+   */
+  function importFromJSON(text: string): string {
+    const payload = JSON.parse(text)
+    if (!Array.isArray(payload.nodes) || !Array.isArray(payload.edges)) {
+      throw new Error('JSON 格式无效：缺少 nodes/edges 数组')
+    }
+    // 替换 state (与 loadGraph 路径一致)
+    nodes.value = payload.nodes.map((n: any) =>
+      markRaw({
+        id: n.id,
+        type: 'ruleNode',
+        position: n.position ?? { x: 0, y: 0 },
+        data: {
+          ...(n.data ?? {}),
+          type: n.type ?? n.data?.type ?? 'unknown',
+          id: n.id,
+        } as RuleNodeData,
+      })
+    )
+    _nodeByIdMarkDirty()
+    edges.value = payload.edges.map((e: any) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.source_handle ?? e.sourceHandle,
+      targetHandle: e.target_handle ?? e.targetHandle,
+      type: 'default',
+      animated: false,
+      markerEnd: MarkerType.ArrowClosed,
+    }))
+    _indexRebuild()
+    triggerRef(_connectedHandleVersion)
+    variables.value = Array.isArray(payload.variables) ? payload.variables : []
+    if (graphMeta.value && payload.graphName) {
+      graphMeta.value = { ...graphMeta.value, name: payload.graphName }
+    }
+    saveHistory()
+    return payload.graphName || 'untitled'
+  }
+
+  /**
+   * 复制当前图为新图 (另存为)。
+   * @param newName 新图名称
+   * @returns 新图 ID
+   */
+  async function duplicateAsNewGraph(newName?: string): Promise<number> {
+    const name = newName || `${graphMeta.value?.name || 'untitled'} (副本)`
+    const res = await ruleEngineApi.createGraph({
+      name,
+      description: graphMeta.value?.description || undefined,
+      nodes_json: JSON.stringify(nodes.value.map((n) => ({
+        id: n.id,
+        type: n.data?.type ?? 'unknown',
+        position: n.position,
+        data: n.data,
+      }))),
+      edges_json: JSON.stringify(edges.value.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        source_handle: e.sourceHandle,
+        target_handle: e.targetHandle,
+      }))),
+      variables_json: JSON.stringify(
+        variables.value.reduce((acc: Record<string, any>, v) => {
+          acc[v.name] = {
+            type: v.type,
+            defaultValue: v.defaultValue ?? null,
+            description: v.description || '',
+          }
+          return acc
+        }, {})
+      ),
+    })
+    return (res.data as any).id as number
+  }
+
+  // ============ 自动布局 (P2-C 2026-06-19) ============
+
+  /**
+   * 简单 DAG 自动布局 (Sugiyama-lite):
+   * 1. Kahn 拓扑分层
+   * 2. 同层节点沿 X 轴均匀分布
+   * 3. 不同层沿 Y 轴递增
+   *
+   * 不依赖 dagre/elk, 100% 本地实现, 0 网络依赖.
+   */
+  function autoLayoutGraph(options?: {
+    nodeSpacing?: number
+    levelSpacing?: number
+    startX?: number
+    startY?: number
+  }): Array<{ id: string; position: { x: number; y: number } }> {
+    const NODE_W = options?.nodeSpacing ?? 320
+    const LEVEL_H = options?.levelSpacing ?? 180
+    const startX = options?.startX ?? 100
+    const startY = options?.startY ?? 100
+
+    const nodeArr = nodes.value
+    if (nodeArr.length === 0) return []
+
+    const adj = new Map<string, string[]>()
+    const inDeg = new Map<string, number>()
+    for (const n of nodeArr) {
+      adj.set(n.id, [])
+      inDeg.set(n.id, 0)
+    }
+    for (const e of edges.value) {
+      if (adj.has(e.source) && adj.has(e.target)) {
+        adj.get(e.source)!.push(e.target)
+        inDeg.set(e.target, (inDeg.get(e.target) ?? 0) + 1)
+      }
+    }
+
+    const levels: string[][] = []
+    const remaining = new Map(inDeg)
+    const placed = new Set<string>()
+    while (placed.size < nodeArr.length) {
+      const layer: string[] = []
+      for (const [id, d] of remaining) {
+        if (d === 0) layer.push(id)
+      }
+      if (layer.length === 0) {
+        // 容错: 把剩余节点丢到最后一层 (避免死循环)
+        for (const [id] of remaining) layer.push(id)
+      }
+      // 稳定排序: 按当前 y 升序 (保留用户上下顺序)
+      layer.sort((a, b) => {
+        const na = nodeArr.find((n) => n.id === a)
+        const nb = nodeArr.find((n) => n.id === b)
+        return (na?.position.y ?? 0) - (nb?.position.y ?? 0)
+      })
+      levels.push(layer)
+      for (const id of layer) {
+        placed.add(id)
+        remaining.delete(id)
+        for (const t of adj.get(id) ?? []) {
+          if (remaining.has(t)) {
+            remaining.set(t, remaining.get(t)! - 1)
+          }
+        }
+      }
+    }
+
+    const maxLevelWidth = Math.max(...levels.map((l) => l.length)) * NODE_W
+    const updates: Array<{ id: string; position: { x: number; y: number } }> = []
+    for (let li = 0; li < levels.length; li++) {
+      const layer = levels[li]
+      const layerWidth = layer.length * NODE_W
+      const offsetX = startX + (maxLevelWidth - layerWidth) / 2
+      layer.forEach((id, idx) => {
+        updates.push({
+          id,
+          position: {
+            x: offsetX + idx * NODE_W,
+            y: startY + li * LEVEL_H,
+          },
+        })
+      })
+    }
+    return updates
+  }
+
+  /**
+   * 应用自动布局: 计算 + 写入 store (进 history 可撤销)
+   */
+  function applyAutoLayout(): number {
+    const updates = autoLayoutGraph()
+    if (updates.length === 0) return 0
+    setNodesPositions(updates, true, false, false)
+    return updates.length
   }
 
   // ============ 节点操作 ============
@@ -809,6 +1109,40 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     triggerRef(expandedNodeIds)
   }
 
+  // ============ 节点禁用 (P2-A 2026-06-19) ============
+
+  /**
+   * 禁用节点集合. 禁用的节点执行时被跳过 (后端 executor 已支持 skipped 机制).
+   * 视觉: RuleNode.vue 检测 is-disabled 类, 半透明 + 灰边.
+   * 用途: 调试时暂存某个节点 (类似断点), 或长期下线某逻辑分支.
+   */
+  const disabledNodeIds = shallowRef<Set<string>>(new Set())
+
+  /** O(1) 查询节点是否禁用 */
+  function isNodeDisabled(nodeId: string): boolean {
+    return disabledNodeIds.value.has(nodeId)
+  }
+
+  /** 切换节点禁用状态 */
+  function toggleNodeDisabled(nodeId: string): boolean {
+    const next = new Set(disabledNodeIds.value)
+    let nowDisabled: boolean
+    if (next.has(nodeId)) {
+      next.delete(nodeId)
+      nowDisabled = false
+    } else {
+      next.add(nodeId)
+      nowDisabled = true
+    }
+    disabledNodeIds.value = next
+    return nowDisabled
+  }
+
+  /** 序列化: 把禁用状态附加到节点的 data.disabled (持久化) */
+  // 注: 后端执行时不需要 disabled 字段, 它从 node.data.disabled 读取
+  //   但前端 disabledNodeIds 是 UI 状态, 需同步到 data 才能持久化
+  // 已在 saveGraph() 中通过 nodes.value.map 自动序列化 data 字段
+
   /**
    * 折叠状态清理 (Phase 19.3+: 语义反转)
    * - 旧语义: clear expandedNodeIds -> 所有节点回折叠 (Phase 19.2)
@@ -853,7 +1187,18 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   function addEdge(connection: {
     source: string; target: string
     sourceHandle?: string | null; targetHandle?: string | null
-  }) {
+  }): boolean {
+    // P0-1 (2026-06-19): 拒绝自循环边 (前端兜底，与后端 graph_manager.validate_graph 保持一致)
+    if (connection.source === connection.target) return false
+    // P0-1 (2026-06-19): 拒绝重复边 (同 source/target/handles)
+    // 后端 validate_graph 也会拦截, 但前端先挡能给用户即时反馈
+    const dup = edges.value.some((e) =>
+      e.source === connection.source &&
+      e.target === connection.target &&
+      (e.sourceHandle ?? null) === (connection.sourceHandle ?? null) &&
+      (e.targetHandle ?? null) === (connection.targetHandle ?? null)
+    )
+    if (dup) return false
     // shallowRef 需重新赋值触发响应式（与 createNode 同问题）
     const newEdge = {
       id: `edge_${Date.now()}`,
@@ -870,6 +1215,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     triggerRef(_connectedHandleVersion)
     // PERF-5 (2026-06-19): 走增量 history, 不再 saveHistory() 整图快照
     _recordEdgeAddHistory(newEdge)
+    return true
   }
 
   /** 删除边 */
@@ -898,10 +1244,148 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     if (removed.length > 0) _recordEdgesRemoveHistory(removed)
   }
 
-  /**
-   * PERF-5 (2026-06-19): 增量 history 辅助 - 边增/删
-   * 替代 saveHistory() 整图 snapshot, 100+ 节点高频边操作累计省 0.5-1ms/次
-   */
+  // ============ 节点对齐 (P1-2 2026-06-19) ============
+
+/**
+ * 对齐选中节点。
+ *
+ * @param mode 对齐模式
+ * @param selectedFlowNodes 选中的 VueFlow GraphNode 数组 (从 useVueFlow().getSelectedNodes 取)
+ * @param screenToFlowCoordinate 屏幕坐标 → 画布坐标转换函数 (避免 store 依赖 useVueFlow)
+ * @returns 移动的节点数, 0 表示无需调整 (单选/无选)
+ *
+ * 实现细节:
+ * - 用 DOM getBoundingClientRect 拿真实屏幕尺寸 (不同 LOD 宽度不同)
+ * - screenToFlowCoordinate 转回画布坐标 (对齐后写入 store.position)
+ * - 走 setNodesPositions 批量同步 + recordMoveHistory=true (对齐是可撤销单位)
+ */
+function _alignSelectedNodesImpl(
+  mode: AlignMode,
+  selectedFlowNodes: Array<{ id: string; position: { x: number; y: number } }>,
+  screenToFlowCoordinate: (pt: { x: number; y: number }) => { x: number; y: number }
+): number {
+  if (selectedFlowNodes.length < 2) return 0
+  const ids = selectedFlowNodes.map((n) => n.id)
+
+  // 收集每个节点的 [flowX, flowY, flowW, flowH]
+  interface Box { id: string; x: number; y: number; w: number; h: number }
+  const boxes: Box[] = []
+  for (const n of selectedFlowNodes) {
+    const el = document.querySelector<HTMLElement>(`.vue-flow__node[data-id="${n.id}"]`)
+    if (!el) continue
+    const r = el.getBoundingClientRect()
+    const tl = screenToFlowCoordinate({ x: r.left, y: r.top })
+    const br = screenToFlowCoordinate({ x: r.right, y: r.bottom })
+    boxes.push({
+      id: n.id,
+      x: tl.x,
+      y: tl.y,
+      w: br.x - tl.x,
+      h: br.y - tl.y,
+    })
+  }
+  if (boxes.length < 2) return 0
+
+  // 计算参考值
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const b of boxes) {
+    if (b.x < minX) minX = b.x
+    if (b.y < minY) minY = b.y
+    if (b.x + b.w > maxX) maxX = b.x + b.w
+    if (b.y + b.h > maxY) maxY = b.y + b.h
+  }
+  const midX = (minX + maxX) / 2
+  const midY = (minY + maxY) / 2
+
+  // 计算每个节点的新位置
+  const updates: Array<{ id: string; position: { x: number; y: number } }> = []
+  for (const b of boxes) {
+    let nx = b.x
+    let ny = b.y
+    switch (mode) {
+      case 'left':
+        nx = minX
+        break
+      case 'right':
+        nx = maxX - b.w
+        break
+      case 'top':
+        ny = minY
+        break
+      case 'bottom':
+        ny = maxY - b.h
+        break
+      case 'h-center':
+        nx = midX - b.w / 2
+        break
+      case 'v-center':
+        ny = midY - b.h / 2
+        break
+      case 'distribute-h': {
+        // 等距分布: 按当前 x 排序, 第一/最后位置不变, 中间节点均分间距
+        // 至少 3 个才有意义
+        if (boxes.length < 3) break
+        const sorted = [...boxes].sort((a, b) => a.x - b.x)
+        const first = sorted[0]
+        const last = sorted[sorted.length - 1]
+        const span = (last.x + last.w / 2) - (first.x + first.w / 2)
+        const step = span / (sorted.length - 1)
+        const idx = sorted.findIndex((s) => s.id === b.id)
+        if (idx > 0 && idx < sorted.length - 1) {
+          nx = (first.x + first.w / 2) + step * idx - b.w / 2
+        }
+        break
+      }
+      case 'distribute-v': {
+        if (boxes.length < 3) break
+        const sorted = [...boxes].sort((a, b) => a.y - b.y)
+        const first = sorted[0]
+        const last = sorted[sorted.length - 1]
+        const span = (last.y + last.h / 2) - (first.y + first.h / 2)
+        const step = span / (sorted.length - 1)
+        const idx = sorted.findIndex((s) => s.id === b.id)
+        if (idx > 0 && idx < sorted.length - 1) {
+          ny = (first.y + first.h / 2) + step * idx - b.h / 2
+        }
+        break
+      }
+    }
+    if (nx !== b.x || ny !== b.y) {
+      updates.push({ id: b.id, position: { x: nx, y: ny } })
+    }
+  }
+  void ids  // 避免 unused
+  if (updates.length === 0) return 0
+
+  // 走 setNodesPositions 批量同步 (recordMoveHistory=true, 但用 groupMove 一次撤销)
+  setNodesPositions(updates, true, false, false)
+  return updates.length
+}
+
+/**
+ * 对齐选中节点的 store action 入口 (供 RuleCanvas 调用)
+ * @param mode 对齐模式
+ * @param screenToFlowCoordinate 画布坐标转换函数
+ */
+function alignSelectedNodes(
+  mode: AlignMode,
+  screenToFlowCoordinate: (pt: { x: number; y: number }) => { x: number; y: number }
+): number {
+  // selectedFlowNodes 通过外部传入 — store 不直接依赖 useVueFlow
+  // 调用方: const selected = getSelectedNodes.value; store.alignSelectedNodes(mode, ...)
+  // 这里通过全局缓存 selected 节点 (避免循环依赖)
+  const selected = _getSelectedNodesFn ? _getSelectedNodesFn() : []
+  return _alignSelectedNodesImpl(mode, selected, screenToFlowCoordinate)
+}
+
+/**
+ * P1-2 (2026-06-19): store 不直接依赖 useVueFlow, 但 alignSelectedNodes 需要 selected 节点.
+ * RuleCanvas 在 onMounted 时注入回调 (避免 store → composable 反向依赖)
+ */
+let _getSelectedNodesFn: (() => Array<{ id: string; position: { x: number; y: number } }>) | null = null
+function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
+  _getSelectedNodesFn = fn
+}
   function _recordEdgeAddHistory(edge: GraphEdge) {
     if (isHistoryPaused.value) return
     historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
@@ -1273,6 +1757,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     nodeById,  // Phase B 任务6
     canUndo,
     canRedo,
+    isDirty,           // P0-2 (2026-06-19): 是否有未保存改动
     hasNodes,
     nodeDefinitionsByCategory,
     lodLevelMap,         // LOD
@@ -1285,6 +1770,20 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     loadGraph,
     saveGraph,
 
+    // 草稿 (P0-2)
+    saveDraftToLocalStorage,
+    loadDraftFromLocalStorage,
+    clearLocalStorageDraft,
+
+    // 导入导出 (P1-3)
+    exportToJSON,
+    importFromJSON,
+    duplicateAsNewGraph,
+
+    // 自动布局 (P2-C)
+    autoLayoutGraph,
+    applyAutoLayout,
+
     // 节点操作
     createNode,
     updateNodeConfig,
@@ -1296,6 +1795,11 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     syncExpandedNodeIds,// Phase 19.7+: 外部 Set mutate 后通知响应式
     expandAll,          // Phase 19.4+: 工具栏"全部折叠"按钮
     isHandleConnected,  // Phase B 任务2
+
+    // 节点禁用 (P2-A)
+    disabledNodeIds,
+    isNodeDisabled,
+    toggleNodeDisabled,
 
     // 边操作
     addEdge,
@@ -1316,6 +1820,10 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     removeVariable,
     updateVariable,
     getVariable,
+
+    // 节点对齐 (P1-2)
+    alignSelectedNodes,
+    setSelectedNodesGetter,
 
     // 执行管理
     setExecutionStatus,

@@ -187,6 +187,33 @@ class GraphManager:
         edge_sources = {edge["source"] for edge in edges}
         edge_targets = {edge["target"] for edge in edges}
 
+        # P0-1 (2026-06-19): 拒绝自循环边 (source == target)
+        # 历史: 之前没拒绝, 自循环边会让 Kahn 拓扑 in_degree 永不为 0, 触发误导性 "循环依赖" 错误
+        self_loops = [
+            edge["id"] for edge in edges
+            if edge.get("source") and edge["source"] == edge.get("target")
+        ]
+        if self_loops:
+            return False, f"存在自循环边（source == target）: {', '.join(self_loops)}"
+
+        # P0-1 (2026-06-19): 拒绝重复边 (同 source+target+source_handle+target_handle)
+        # 重复边会让下游节点被多次触发, 且端口 is-connected 状态不能区分多条
+        seen_edges: set = set()
+        duplicate_edges = []
+        for edge in edges:
+            key = (
+                edge.get("source"),
+                edge.get("target"),
+                edge.get("source_handle") or edge.get("sourceHandle"),
+                edge.get("target_handle") or edge.get("targetHandle"),
+            )
+            if key in seen_edges:
+                duplicate_edges.append(edge.get("id", str(key)))
+            else:
+                seen_edges.add(key)
+        if duplicate_edges:
+            return False, f"存在重复边（同 source+target+handles）: {', '.join(duplicate_edges)}"
+
         # 兼容两种节点 type 字段位置：
         # - 后端测试/直存格式：node.type 在顶层（值为具体节点类型）
         # - VueFlow 前端格式：node.type="ruleNode"（节点种类），实际类型在 node.data.type
@@ -233,6 +260,32 @@ class GraphManager:
         # 如果所有没有输入边的节点都不是触发器，则图无效
         if nodes_without_inputs and not trigger_nodes.intersection(nodes_without_inputs):
             return False, "规则图没有起始触发器节点"
+
+        # P1-1 (2026-06-19): 检查必填输入端口是否都已连接
+        # 构建 (node_id, target_handle) → 边存在 索引
+        target_handle_pairs = set()
+        for edge in edges:
+            target_handle_pairs.add((edge.get("target"), edge.get("target_handle") or edge.get("targetHandle")))
+
+        missing_required = []
+        for node in nodes:
+            node_id = node["id"]
+            # 兼容两种字段位置: front-end data.inputs vs backend defn.inputs
+            input_ports = (node.get("data") or {}).get("inputs") or node.get("inputs") or {}
+            # 前端是 list[dict], 后端是 dict[name, PortDefinition], 统一为可迭代
+            if isinstance(input_ports, dict):
+                items = [(k, v) for k, v in input_ports.items()]
+            else:
+                items = [(p.get("name"), p) for p in input_ports]
+            for port_name, port in items:
+                required = (port or {}).get("required", False)
+                if required and (node_id, port_name) not in target_handle_pairs:
+                    missing_required.append(f"{node_id}.{port_name}")
+
+        if missing_required:
+            return False, f"必填输入端口未连接: {', '.join(missing_required[:10])}" + (
+                f" 等 {len(missing_required)} 个" if len(missing_required) > 10 else ""
+            )
 
         return True, None
 

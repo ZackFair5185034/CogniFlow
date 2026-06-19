@@ -3,12 +3,14 @@
   class="rule-canvas-fullscreen"
   :class="{ 'large-graph-mode': largeGraphMode, 'huge-graph-mode': hugeGraphMode }"
 >
-    <!-- 顶部工具栏 -->
+    <!-- 顶部工具栏 (2026-06-19 重设计: 视觉层级 + 分组清晰度) -->
     <header class="canvas-header">
+      <!-- ========== 左侧: 身份区 ========== -->
       <div class="header-left">
         <button
-          class="icon-btn back-btn"
+          class="tb-icon-btn back-btn"
           title="返回规则列表"
+          aria-label="返回规则列表"
           @click="goBack"
         >
           <SvgIcon name="back" />
@@ -19,41 +21,198 @@
             type="text"
             class="rule-name-input"
             placeholder="规则名称..."
+            aria-label="规则名称"
             @blur="handleNameChange"
             @keyup.enter="handleNameChange"
           />
           <span
             class="rule-status-badge"
             :class="{ active: graph?.is_active }"
+            :title="graph?.is_active ? '规则图已激活' : '规则图未激活'"
           >
+            <span class="status-dot" />
             {{ graph?.is_active ? '运行中' : '已停止' }}
           </span>
         </div>
       </div>
 
+      <!-- ========== 中部: 编辑工具区 ========== -->
       <div class="header-center">
-        <div class="tool-group">
-          <el-button
-            class="icon-btn"
+        <!-- 组 1: 历史 (Undo / Redo) -->
+        <div class="tb-group">
+          <button
+            class="tb-icon-btn"
             :disabled="!canUndo"
             title="撤销 (Ctrl+Z)"
+            aria-label="撤销"
             @click="store.undo()"
           >
             <SvgIcon name="undo" />
-          </el-button>
-          <el-button
-            class="icon-btn"
+          </button>
+          <button
+            class="tb-icon-btn"
             :disabled="!canRedo"
             title="重做 (Ctrl+Y)"
+            aria-label="重做"
             @click="store.redo()"
           >
             <SvgIcon name="redo" />
-          </el-button>
+          </button>
         </div>
 
-        <div class="tool-divider" />
+        <div class="tb-divider" />
 
-        <!-- WebSocket 连接状态 -->
+        <!-- 组 2: 视图控制 (缩放 / 网格 / 吸附 / 小地图 / 自动布局) -->
+        <div class="tb-group">
+          <button
+            class="tb-icon-btn"
+            title="缩小"
+            aria-label="缩小"
+            @click="zoomOut"
+          >
+            <SvgIcon name="zoom-out" />
+          </button>
+          <span
+            ref="zoomLevelEl"
+            class="zoom-level"
+            title="当前缩放"
+          >100%</span>
+          <button
+            class="tb-icon-btn"
+            title="放大"
+            aria-label="放大"
+            @click="zoomIn"
+          >
+            <SvgIcon name="zoom-in" />
+          </button>
+          <button
+            class="tb-icon-btn"
+            title="适应画布"
+            aria-label="适应画布"
+            @click="() => fitView()"
+          >
+            <SvgIcon name="fit-view" />
+          </button>
+          <div class="tb-divider tb-divider-thin" />
+          <button
+            class="tb-icon-btn"
+            :class="{ active: showGrid }"
+            title="显示网格"
+            aria-label="显示网格"
+            @click="showGrid = !showGrid"
+          >
+            <SvgIcon name="grid" />
+          </button>
+          <button
+            class="tb-icon-btn"
+            :class="{ active: snapGrid }"
+            title="网格吸附"
+            aria-label="网格吸附"
+            @click="snapGrid = !snapGrid"
+          >
+            <SvgIcon name="snap" />
+          </button>
+          <button
+            class="tb-icon-btn"
+            :class="{ active: showMiniMap }"
+            title="小地图"
+            aria-label="小地图"
+            @click="showMiniMap = !showMiniMap"
+          >
+            <SvgIcon name="minimap" />
+          </button>
+          <button
+            class="tb-icon-btn"
+            :disabled="!hasNodes"
+            title="一键自动布局 (拓扑分层 + 均匀分布)"
+            aria-label="自动布局"
+            @click="handleAutoLayout"
+          >
+            <SvgIcon name="layout" />
+          </button>
+        </div>
+
+        <div class="tb-divider" />
+
+        <!-- 组 3: 节点对齐 / 等距分布 (≥2 选中时启用) -->
+        <div class="tb-group">
+          <button
+            class="tb-icon-btn"
+            title="左对齐"
+            aria-label="左对齐"
+            :disabled="!canAlign"
+            @click="handleAlign('left')"
+          >
+            <SvgIcon name="align-left" />
+          </button>
+          <button
+            class="tb-icon-btn"
+            title="水平居中"
+            aria-label="水平居中"
+            :disabled="!canAlign"
+            @click="handleAlign('h-center')"
+          >
+            <SvgIcon name="align-h-center" />
+          </button>
+          <button
+            class="tb-icon-btn"
+            title="右对齐"
+            aria-label="右对齐"
+            :disabled="!canAlign"
+            @click="handleAlign('right')"
+          >
+            <SvgIcon name="align-right" />
+          </button>
+          <div class="tb-divider tb-divider-thin" />
+          <button
+            class="tb-icon-btn"
+            title="顶对齐"
+            aria-label="顶对齐"
+            :disabled="!canAlign"
+            @click="handleAlign('top')"
+          >
+            <SvgIcon name="align-top" />
+          </button>
+          <button
+            class="tb-icon-btn"
+            title="垂直居中"
+            aria-label="垂直居中"
+            :disabled="!canAlign"
+            @click="handleAlign('v-center')"
+          >
+            <SvgIcon name="align-v-center" />
+          </button>
+          <button
+            class="tb-icon-btn"
+            title="底对齐"
+            aria-label="底对齐"
+            :disabled="!canAlign"
+            @click="handleAlign('bottom')"
+          >
+            <SvgIcon name="align-bottom" />
+          </button>
+          <div class="tb-divider tb-divider-thin" />
+          <button
+            class="tb-icon-btn"
+            title="水平等距 (≥3)"
+            aria-label="水平等距"
+            :disabled="!canDistribute"
+            @click="handleAlign('distribute-h')"
+          >
+            <SvgIcon name="distribute-h" />
+          </button>
+          <button
+            class="tb-icon-btn"
+            title="垂直等距 (≥3)"
+            aria-label="垂直等距"
+            :disabled="!canDistribute"
+            @click="handleAlign('distribute-v')"
+          >
+            <SvgIcon name="distribute-v" />
+          </button>
+        </div>
+
+        <!-- WebSocket 连接状态 (紧凑型, 放最右) -->
         <div
           class="ws-status"
           :class="{ connected: wsConnected }"
@@ -62,105 +221,102 @@
           <span class="ws-dot" />
           <span class="ws-label">{{ wsConnected ? '已连接' : '未连接' }}</span>
         </div>
-
-        <div class="tool-divider" />
-
-        <div class="tool-group">
-          <el-button
-            class="icon-btn"
-            title="放大"
-            @click="zoomIn"
-          >
-            <SvgIcon name="zoom-in" />
-          </el-button>
-          <!--
-            缩放比例: DOM 直写 (不走 Vue 响应式) - @zoom 每帧触发,
-            走 ref 会触发整个父组件 re-render, 50-60Hz 缩放会爆调度
-            缩放比例只是顶部工具栏一个 span 文本, 用 ref + textContent 直写
-            完全够用, 跳过 Vue 调度
-          -->
-          <span
-            ref="zoomLevelEl"
-            class="zoom-level"
-          >100%</span>
-          <el-button
-            class="icon-btn"
-            title="缩小"
-            @click="zoomOut"
-          >
-            <SvgIcon name="zoom-out" />
-          </el-button>
-          <el-button
-            class="icon-btn"
-            title="适应画布"
-            @click="() => fitView()"
-          >
-            <SvgIcon name="fit-view" />
-          </el-button>
-        </div>
-
-        <div class="tool-divider" />
-
-        <div class="tool-group">
-          <el-button
-            class="icon-btn"
-            :class="{ active: showGrid }"
-            title="显示网格"
-            @click="showGrid = !showGrid"
-          >
-            <SvgIcon name="grid" />
-          </el-button>
-          <el-button
-            class="icon-btn"
-            :class="{ active: snapGrid }"
-            title="网格吸附"
-            @click="snapGrid = !snapGrid"
-          >
-            <SvgIcon name="snap" />
-          </el-button>
-          <el-button
-            class="icon-btn"
-            :class="{ active: showMiniMap }"
-            title="小地图"
-            @click="showMiniMap = !showMiniMap"
-          >
-            <SvgIcon name="minimap" />
-          </el-button>
-        </div>
       </div>
 
+      <!-- ========== 右侧: 操作区 (主操作最右, 最显眼) ========== -->
       <div class="header-right">
-        <el-button
-          class="palette-toggle-btn"
+        <button
+          class="tb-icon-btn palette-toggle-btn"
           :class="{ active: showPalette }"
           :title="showPalette ? '收起节点面板' : '展开节点面板'"
+          aria-label="切换节点面板"
           @click="showPalette = !showPalette"
         >
           <SvgIcon name="panel-left" />
-        </el-button>
-        <el-button
-          class="action-btn secondary"
-          @click="handleValidate"
-        >
-          <SvgIcon name="check" />
-          校验
-        </el-button>
-        <el-button
-          class="action-btn secondary"
-          :disabled="saving"
-          @click="handleSave"
-        >
-          <SvgIcon name="save" />
-          {{ saving ? '保存中...' : '保存' }}
-        </el-button>
-        <el-button
-          class="action-btn primary"
-          :disabled="executing || !hasNodes"
-          @click="handleExecute"
-        >
-          <SvgIcon name="play" />
-          {{ executing ? '执行中...' : '执行' }}
-        </el-button>
+        </button>
+
+        <div class="tb-divider" />
+
+        <!-- 二级操作: 导入/导出/复制 -->
+        <div class="header-right-secondary">
+          <button
+            class="tb-text-btn"
+            title="从 JSON 文件导入"
+            aria-label="导入"
+            @click="triggerImport"
+          >
+            <SvgIcon name="upload" />
+            <span>导入</span>
+          </button>
+          <input
+            ref="importFileInput"
+            type="file"
+            accept=".json,application/json"
+            style="display: none"
+            @change="handleImportFile"
+          >
+          <button
+            class="tb-text-btn"
+            title="导出当前图为 JSON 文件"
+            aria-label="导出"
+            @click="handleExport"
+          >
+            <SvgIcon name="download" />
+            <span>导出</span>
+          </button>
+          <button
+            class="tb-text-btn"
+            title="复制为新规则图"
+            aria-label="复制为新"
+            @click="handleDuplicateAsNew"
+          >
+            <SvgIcon name="copy" />
+            <span>复制为新</span>
+          </button>
+          <button
+            class="tb-text-btn"
+            title="校验规则图"
+            aria-label="校验"
+            @click="handleValidate"
+          >
+            <SvgIcon name="check" />
+            <span>校验</span>
+          </button>
+        </div>
+
+        <div class="tb-divider" />
+
+        <!-- 主操作: 保存 + 执行 (执行最右, accent 渐变) -->
+        <div class="header-right-primary">
+          <button
+            class="tb-text-btn tb-text-btn--save"
+            :disabled="saving"
+            :title="saving ? '保存中...' : '保存 (Ctrl+S)'"
+            aria-label="保存"
+            @click="handleSave"
+          >
+            <SvgIcon v-if="!saving" name="save" />
+            <span v-if="!saving">保存</span>
+            <span v-else class="loading-text">
+              <span class="loading-spinner" />
+              保存中
+            </span>
+          </button>
+          <button
+            class="tb-text-btn tb-text-btn--execute"
+            :disabled="executing || !hasNodes"
+            :title="executing ? '执行中...' : '执行规则图 (Enter)'"
+            aria-label="执行"
+            @click="handleExecute"
+          >
+            <SvgIcon v-if="!executing" name="play" />
+            <span v-if="!executing">执行</span>
+            <span v-else class="loading-text">
+              <span class="loading-spinner" />
+              执行中
+            </span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -399,9 +555,12 @@
             :selection-mode="SelectionMode.Partial"
             :connection-radius="20"
             :is-valid-connection="isValidConnection"
+            :class="{ 'is-connecting': isConnecting }"
             @node-click="handleNodeClick"
             @pane-click="handlePaneClick"
             @connect="handleConnect"
+            @connect-start="handleConnectStart"
+            @connect-end="handleConnectEnd"
             @viewport-change="handleZoom"
             @nodes-change="handleNodesChange"
             @edges-change="handleEdgesChange"
@@ -520,6 +679,15 @@
           >{{ executionStatusText }}</span>
         </div>
         <div class="execution-actions">
+          <!-- P2-D (2026-06-19): 历史回放按钮 -->
+          <el-button
+            v-if="showExecutionPanel"
+            class="icon-btn small"
+            title="历史执行回放"
+            @click.stop="showReplayDialog = true"
+          >
+            <SvgIcon name="history" />
+          </el-button>
           <el-button
             v-if="showExecutionPanel"
             class="icon-btn small"
@@ -632,6 +800,14 @@
           <SvgIcon name="trash" /> 删除 {{ contextSelectedCount }} 项
         </div>
         <div class="context-menu-divider" />
+        <!-- P2-A (2026-06-19): 节点禁用/启用 -->
+        <div
+          class="context-menu-item"
+          @click="handleContextAction('toggleDisabled', $event)"
+        >
+          <SvgIcon name="pause" />
+          {{ hasDisabledSelected ? '启用' : '禁用' }} {{ contextSelectedCount }} 项
+        </div>
       </template>
       <div
         class="context-menu-item"
@@ -657,13 +833,96 @@
     />
 
     <!-- 变量绑定菜单已废弃: 节点内嵌 📎 按钮接管 (RuleNode.vue:218 activeVarMenu) -->
+
+    <!-- P2-D (2026-06-19): 执行历史回放对话框 -->
+    <el-dialog
+      v-model="showReplayDialog"
+      title="执行历史回放"
+      width="700px"
+      :close-on-click-modal="false"
+      @open="loadHistory"
+    >
+      <div v-if="!selectedExecution" class="replay-list">
+        <div v-if="historyLoading" class="replay-loading">加载中...</div>
+        <div v-else-if="historyList.length === 0" class="replay-empty">
+          暂无执行历史
+        </div>
+        <div
+          v-for="exec in historyList"
+          :key="exec.id"
+          class="replay-item"
+          @click="selectExecutionForReplay(exec)"
+        >
+          <div class="replay-item-header">
+            <span class="replay-item-id">#{{ exec.id }}</span>
+            <span
+              class="replay-status-badge"
+              :class="exec.status"
+            >{{ exec.status }}</span>
+            <span class="replay-trigger">{{ exec.trigger_type }}</span>
+          </div>
+          <div class="replay-item-time">
+            {{ formatTime(exec.start_time) }}
+            <span v-if="exec.end_time"> → {{ formatTime(exec.end_time) }}</span>
+          </div>
+          <div v-if="exec.error" class="replay-item-error">{{ exec.error }}</div>
+        </div>
+      </div>
+      <div v-else class="replay-detail">
+        <div class="replay-detail-header">
+          <el-button
+            class="ui-btn ui-btn-small"
+            @click="selectedExecution = null"
+          >
+            ← 返回列表
+          </el-button>
+          <span class="replay-detail-title">
+            执行 #{{ selectedExecution.execution.id }} ·
+            <span :class="'replay-status-badge ' + selectedExecution.execution.status">
+              {{ selectedExecution.execution.status }}
+            </span>
+          </span>
+        </div>
+        <div v-if="replayLoading" class="replay-loading">加载节点日志...</div>
+        <div v-else class="replay-logs">
+          <div
+            v-for="(log, idx) in selectedExecution.logs"
+            :key="idx"
+            class="replay-log-row"
+          >
+            <span class="replay-log-index">{{ idx + 1 }}</span>
+            <span
+              class="replay-log-status"
+              :class="log.status"
+            >{{ log.status }}</span>
+            <span class="replay-log-node">{{ log.node_type }}</span>
+            <span class="replay-log-time">{{ formatTime(log.start_time) }}</span>
+            <span v-if="log.duration_ms != null" class="replay-log-duration">
+              {{ log.duration_ms }}ms
+            </span>
+            <span v-if="log.error_message" class="replay-log-error">
+              {{ log.error_message }}
+            </span>
+          </div>
+          <div v-if="selectedExecution.logs.length === 0" class="replay-empty">
+            该执行无节点日志
+          </div>
+        </div>
+        <div class="replay-tip">
+          节点已按本次执行状态高亮（5秒后自动清除）
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="closeReplay">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { throttle, debounce } from 'lodash-es'
 import { nextTick, onBeforeUnmount, onMounted, ref, triggerRef } from 'vue'
-import { useRuleEngineStore, type RuleNodeData, type NodeDefinition } from '@/stores/ruleEngine'
+import { useRuleEngineStore, type RuleNodeData, type NodeDefinition, type AlignMode } from '@/stores/ruleEngine'
 import { storeToRefs } from 'pinia'
 import { ruleEngineApi } from '@/api'
 import type { Node, Edge, NodeMouseEvent, EdgeMouseEvent } from '@vue-flow/core'
@@ -711,6 +970,10 @@ const {
   nodeDefinitions,
   graphMeta: graph,
 } = storeToRefs(store)
+
+// P1-2 (2026-06-19): 把 selected 节点 getter 注入 store, 让 alignSelectedNodes 能拿到选中集合
+//   避免 store → useVueFlow 反向依赖
+store.setSelectedNodesGetter(() => getSelectedNodes.value as any[])
 
 // 路径 B: 自研拖动接管 (需在 storeToRefs 之后调用，确保 nodes ref 可用)
 useCogniFlowDrag({
@@ -816,6 +1079,10 @@ const globalMousePos = ref({ x: 0, y: 0 })
 //   (之前匿名箭头函数 addEventListener, 卸载时引用不一致导致 listener 泄漏)
 let trackGlobalMousePos: ((e: MouseEvent) => void) | null = null
 
+// P0-2 (2026-06-19): 草稿自动保存定时器 / beforeunload 句柄
+let draftAutosaveTimer: number | null = null
+let trackBeforeUnload: ((e: BeforeUnloadEvent) => string | undefined) | null = null
+
 // 复制粘贴
 /** 剪贴板 payload: 复制/剪切时把节点+关联边+鼠标位置一起记下
  *
@@ -851,6 +1118,13 @@ const contextSelectedCount = computed(() => {
   return (getSelectedNodes.value as any[]).length
 })
 const hasClipboard = computed(() => !!clipboard.value?.nodesJson)
+
+// P2-A (2026-06-19): 选中节点中是否有已禁用的 (用于菜单文本动态切换)
+const hasDisabledSelected = computed(() => {
+  const sel = getSelectedNodes.value as any[]
+  if (sel.length === 0) return false
+  return sel.some((n) => store.isNodeDisabled(n.id))
+})
 
 // 执行日志面板高度
 const panelHeight = ref(200)
@@ -960,6 +1234,94 @@ function toggleCategory(name: string) {
 
 // 快速添加
 const quickAddNodes = computed(() => nodeDefinitions.value.slice(0, 4))
+
+// P1-2 (2026-06-19): 对齐按钮可用性 (≥2 选中可对齐, ≥3 选中可等距分布)
+const canAlign = computed(() => (getSelectedNodes.value as any[]).length >= 2)
+const canDistribute = computed(() => (getSelectedNodes.value as any[]).length >= 3)
+
+function handleAlign(mode: AlignMode) {
+  const moved = store.alignSelectedNodes(mode, screenToFlowCoordinate)
+  if (moved === 0) {
+    ElMessage.info('无可对齐的选中节点（需 ≥2 个）')
+  }
+}
+
+// P2-C (2026-06-19): 一键自动布局
+function handleAutoLayout() {
+  const moved = store.applyAutoLayout()
+  if (moved === 0) {
+    ElMessage.warning('画布无节点')
+  } else {
+    ElMessage.success(`已自动布局 ${moved} 个节点`)
+    // 布局后自动 fitView 让用户看到全貌
+    setTimeout(() => fitView({ duration: 300, padding: 0.15 }), 50)
+  }
+}
+
+// ============ P1-3 (2026-06-19): 导入导出 + 复制为新 ============
+
+const importFileInput = ref<HTMLInputElement | null>(null)
+
+function triggerImport() {
+  importFileInput.value?.click()
+}
+
+async function handleImportFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''  // 清空, 允许同名文件再次触发
+  if (!file) return
+  try {
+    const text = await file.text()
+    const name = store.importFromJSON(text)
+    graphName.value = name
+    ElMessage.success(`已导入: ${name}`)
+  } catch (err: any) {
+    console.error('导入失败:', err)
+    ElMessage.error(`导入失败: ${err?.message || '未知错误'}`)
+  }
+}
+
+function handleExport() {
+  try {
+    const json = store.exportToJSON()
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const safeName = (store.graphMeta?.name || 'rule-graph').replace(/[^\w一-龥-]/g, '_')
+    a.href = url
+    a.download = `${safeName}-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('已导出为 JSON 文件')
+  } catch (err: any) {
+    console.error('导出失败:', err)
+    ElMessage.error(`导出失败: ${err?.message || '未知错误'}`)
+  }
+}
+
+async function handleDuplicateAsNew() {
+  try {
+    const { value: name } = await ElMessageBox.prompt(
+      '请输入新规则图名称',
+      '复制为新规则图',
+      {
+        inputPlaceholder: '新图名称',
+        inputValue: `${store.graphMeta?.name || 'untitled'} (副本)`,
+        confirmButtonText: '创建',
+        cancelButtonText: '取消',
+      }
+    )
+    const newId = await store.duplicateAsNewGraph(name)
+    ElMessage.success(`已创建新规则图 #${newId}`)
+    // 跳转到新图
+    router.push(`/rule-engine/${newId}`)
+  } catch {
+    // 用户取消
+  }
+}
 
 // 执行状态文本
 const executionStatusText = computed(() => ({
@@ -1188,6 +1550,13 @@ function handleKeyDown(event: KeyboardEvent) {
     handlePaste()
     return
   }
+  // P0-3 (2026-06-19): Ctrl+D 复制选中 (不删原件, 与 Figma / PowerPoint 一致)
+  //   流程: 复制到剪贴板 + 立即粘贴 → 用户看到复制结果, 原节点保留
+  if (isCtrl && event.key === 'd') {
+    event.preventDefault()
+    handleDuplicate()
+    return
+  }
   if (isCtrl && event.key === 'z' && !event.shiftKey) {
     event.preventDefault()
     store.undo()
@@ -1209,6 +1578,65 @@ function handleKeyDown(event: KeyboardEvent) {
     addSelectedNodes(nodes.value as any)
     return
   }
+  // P0-3 (2026-06-19): 方向键微调选中节点位置 (1px / Shift+10px)
+  //   与 PowerPoint / Figma 习惯一致: 单步 1px, Shift 大步 10px
+  //   走 recordMoveHistory 单条 move entry (不进 groupMove — groupMove 假设多节点独立位置变化,
+  //   但单键一次微调产生 1 条 history 也够用)
+  if (
+    event.key === 'ArrowUp' || event.key === 'ArrowDown' ||
+    event.key === 'ArrowLeft' || event.key === 'ArrowRight'
+  ) {
+    event.preventDefault()
+    handleNudge(event.key, event.shiftKey)
+    return
+  }
+}
+
+/**
+ * P0-3 (2026-06-19): Ctrl+D 复制选中节点 (不删原件)
+ * 复用 handleCopy + handlePaste, 但绕过剪贴板副作用 (ElMessage 提示)
+ */
+function handleDuplicate() {
+  const selected = getSelectedNodes.value as any[]
+  if (selected.length === 0) {
+    ElMessage.warning('请先选择要复制的节点')
+    return
+  }
+  // 复用 copy 流程 (含 edges 关联复制)
+  handleCopy()
+  // 粘贴后立即清空剪贴板, 避免 Ctrl+V 重复触发
+  // (handlePaste 内部对 cut 模式才清, copy 模式保留; 这里手动清, 避免误重复)
+  const beforeNodesCount = store.nodes.length
+  handlePaste()
+  // handleCopy 写入的 clipboard 留到下次用户显式 Ctrl+V 用
+  // 但若想"Ctrl+D 之后 clipboard 仍是用户的"也可不清 — 保留与 PowerPoint 一致
+  void beforeNodesCount  // 静默 unused
+}
+
+/**
+ * P0-3 (2026-06-19): 方向键微调选中节点位置
+ * @param key 方向键名 ArrowUp/Down/Left/Right
+ * @param bigStep 是否 Shift (10px vs 1px)
+ */
+function handleNudge(key: string, bigStep: boolean) {
+  const selected = getSelectedNodes.value as any[]
+  if (selected.length === 0) return
+  const step = bigStep ? 10 : 1
+  let dx = 0
+  let dy = 0
+  if (key === 'ArrowUp') dy = -step
+  else if (key === 'ArrowDown') dy = step
+  else if (key === 'ArrowLeft') dx = -step
+  else if (key === 'ArrowRight') dx = step
+
+  // 走 setNodesPositions 批量同步, 复用拖动结束的轻量路径
+  // recordMoveHistory=false: 方向键微调频繁, 不进 history (用户预期: 微调是即时反馈, 不是撤销单位)
+  const updates = selected.map((n) => ({
+    id: n.id,
+    position: { x: n.position.x + dx, y: n.position.y + dy },
+  }))
+  store.setNodesPositions(updates, false, false, true)  // recordHistory=false, rawWrite=true
+  // rawWrite=true 走 toRaw 路径, 0 watcher 调度, 60Hz 连按也无压力
 }
 
 /**
@@ -1747,6 +2175,23 @@ function handleContextAction(action: string, event?: MouseEvent) {
       addSelectedNodes(nodes.value as any)
       hideContextMenu()
       break
+    case 'toggleDisabled':
+      // P2-A (2026-06-19): 切换选中节点的禁用状态
+      //   如果有任一未禁用 → 全部禁用；否则全部启用 (PowerPoint "Lock" 风格)
+      const sel = getSelectedNodes.value as any[]
+      const anyEnabled = sel.some((n) => !store.isNodeDisabled(n.id))
+      sel.forEach((n) => {
+        const shouldDisable = anyEnabled
+        const isCurrentlyDisabled = store.isNodeDisabled(n.id)
+        if (shouldDisable && !isCurrentlyDisabled) {
+          store.toggleNodeDisabled(n.id)
+        } else if (!shouldDisable && isCurrentlyDisabled) {
+          store.toggleNodeDisabled(n.id)
+        }
+      })
+      ElMessage.success(anyEnabled ? `已禁用 ${sel.length} 个节点` : `已启用 ${sel.length} 个节点`)
+      hideContextMenu()
+      break
   }
 }
 
@@ -1797,6 +2242,58 @@ onMounted(async () => {
     globalMousePos.value = { x: e.clientX, y: e.clientY }
   }
   window.addEventListener('mousemove', trackGlobalMousePos)
+
+  // P0-2 (2026-06-19): localStorage 草稿恢复对话框
+  //   加载完图后, 若存在草稿, 弹 ElMessageBox 让用户选择"恢复草稿 / 放弃"
+  //   恢复时把 store.nodes/edges/variables 直接替换并 triggerRef, saveHistory 一条 snapshot
+  try {
+    const draft = store.loadDraftFromLocalStorage(graphId.value)
+    if (draft && draft.nodes && draft.nodes.length > 0) {
+      const ageMs = Date.now() - (draft.savedAt || 0)
+      const ageMin = Math.round(ageMs / 60000)
+      const ageText = ageMin < 1 ? '刚刚' : `${ageMin} 分钟前`
+      try {
+        await ElMessageBox.confirm(
+          `检测到 ${ageText} 的未保存草稿 (${draft.nodes.length} 节点, ${draft.edges?.length || 0} 边)。是否恢复？`,
+          '恢复草稿',
+          { confirmButtonText: '恢复', cancelButtonText: '放弃', type: 'warning' }
+        )
+        // 用户选恢复: 替换 store 状态
+        store.nodes = draft.nodes as any
+        store.edges = (draft.edges || []) as any
+        if (draft.variables) store.variables = draft.variables as any
+        // P0-2: 重建 connectedHandleIndex + nodeById dirty 标记
+        // 复用 loadGraph 内的重建逻辑, 但这里 store 没有提供独立 API, 简单 trigger 即可
+        triggerRef(nodes)
+        store.saveHistory()
+        ElMessage.success(`已恢复 ${ageText} 的草稿`)
+      } catch {
+        // 用户选放弃 — 清掉草稿
+        store.clearLocalStorageDraft(graphId.value)
+      }
+    }
+  } catch (err) {
+    console.error('草稿恢复检查失败:', err)
+  }
+
+  // P0-2 (2026-06-19): 启动定时草稿 (每 5s, 仅在 dirty 时写 localStorage)
+  draftAutosaveTimer = window.setInterval(() => {
+    if (store.isDirty) {
+      store.saveDraftToLocalStorage(graphId.value)
+    }
+  }, 5000)
+
+  // P0-2 (2026-06-19): beforeunload 拦截未保存
+  trackBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (store.isDirty) {
+      // 浏览器规范: 需 preventDefault + returnValue 才能弹原生确认框
+      e.preventDefault()
+      e.returnValue = '有未保存的改动，确定离开？'
+      return e.returnValue
+    }
+    return undefined
+  }
+  window.addEventListener('beforeunload', trackBeforeUnload)
 })
 
 onBeforeUnmount(() => {
@@ -1804,6 +2301,15 @@ onBeforeUnmount(() => {
   if (trackGlobalMousePos) {
     window.removeEventListener('mousemove', trackGlobalMousePos)
     trackGlobalMousePos = null
+  }
+  // P0-2 (2026-06-19): 清理定时草稿 + beforeunload
+  if (draftAutosaveTimer) {
+    clearInterval(draftAutosaveTimer)
+    draftAutosaveTimer = null
+  }
+  if (trackBeforeUnload) {
+    window.removeEventListener('beforeunload', trackBeforeUnload)
+    trackBeforeUnload = null
   }
   panelResizeCleanup.value?.()
 })
@@ -2002,7 +2508,24 @@ function handleConnect(params: any) {
     sourceHandle: params.sourceHandle,
     targetHandle: params.targetHandle
   }
-  store.addEdge(edge)
+  // P0-1 (2026-06-19): addEdge 返回 boolean, 重复边 / 自循环时给用户即时提示
+  const added = store.addEdge(edge)
+  if (!added) {
+    ElMessage.warning('该连接已存在或无效')
+  }
+}
+
+// P2-B (2026-06-19): 端口吸附高亮 — 拖连线期间高亮所有 handles
+//   监听 VueFlow 的 connect-start / connect-end 事件, 切换 isConnecting ref
+//   .is-connecting CSS class 让所有 .vue-flow__handle 放大 + 发光
+const isConnecting = ref(false)
+
+function handleConnectStart(_event: any) {
+  isConnecting.value = true
+}
+
+function handleConnectEnd(_event: any) {
+  isConnecting.value = false
 }
 
 // 框选拖拽标志: 框选拖拽期间过滤 select changes (避免每帧全量替换 store.nodes)
@@ -2452,6 +2975,83 @@ async function handleExecute() {
 function clearLogs() {
   store.clearExecution()
 }
+
+// ============ P2-D (2026-06-19): 执行历史回放 ============
+
+const showReplayDialog = ref(false)
+const historyList = ref<Array<{
+  id: number
+  graph_id: number
+  status: string
+  trigger_type: string
+  start_time: string
+  end_time?: string
+  error?: string
+}>>([])
+const historyLoading = ref(false)
+const selectedExecution = ref<{
+  execution: any
+  logs: Array<{
+    node_id: string
+    node_type: string
+    status: string
+    start_time: string
+    end_time?: string
+    duration_ms?: number
+    error_message?: string
+    metrics?: Record<string, number>
+  }>
+} | null>(null)
+const replayLoading = ref(false)
+
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    const res = await ruleEngineApi.listExecutions(graphId.value, 50)
+    historyList.value = (res.data as any[]) || []
+  } catch (err) {
+    console.error('加载历史失败:', err)
+    ElMessage.error('加载执行历史失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function selectExecutionForReplay(exec: any) {
+  replayLoading.value = true
+  try {
+    const res = await ruleEngineApi.getExecutionLogs(exec.id)
+    selectedExecution.value = {
+      execution: exec,
+      logs: (res.data as any[]) || [],
+    }
+    applyReplayToCanvas(selectedExecution.value.logs)
+  } catch (err) {
+    console.error('加载执行日志失败:', err)
+    ElMessage.error('加载执行日志失败')
+  } finally {
+    replayLoading.value = false
+  }
+}
+
+/**
+ * 把回放的节点状态写到 store (前端走 setNodeExecutionState)
+ * 不影响数据, 仅高亮节点边框色 (复用现有的 running/success/failed/timeout 视觉)
+ */
+function applyReplayToCanvas(logs: Array<{ node_id: string; status: string }>) {
+  store.clearExecution()
+  for (const log of logs) {
+    store.setNodeExecutionState(log.node_id, log.status)
+  }
+  // 5 秒后清空回放高亮, 让用户回到编辑态
+  setTimeout(() => store.clearExecution(), 5000)
+}
+
+function closeReplay() {
+  showReplayDialog.value = false
+  selectedExecution.value = null
+  store.clearExecution()
+}
 </script>
 
 <style scoped lang="scss">
@@ -2521,18 +3121,28 @@ $panel-header-height: 44px;
   }
 }
 
-// 顶部工具栏
+// =====================================================================
+// 顶部工具栏 (2026-06-19 重设计: Dark Mode + 视觉层级 + 8dp 间距系统)
+// 设计依据: ui-ux-pro-max 推荐 Dark Mode (OLED) / Inter / Code dark
+// 视觉层级:
+//   1. 主操作 (执行) — 强调色 (Code dark + Run green) 渐变背景, 最右
+//   2. 次操作 (保存) — 中性背景 + 边框, 与执行同高
+//   3. 二级操作 (导入/导出/复制为新/校验) — 文字 + 图标
+//   4. 工具操作 (缩放/对齐/历史) — 仅图标, hover 浅灰背景
+// =====================================================================
 .canvas-header {
-  height: $header-height;
-  background: linear-gradient(180deg, #0f0f18 0%, #0a0a10 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  height: 48px;
+  background: linear-gradient(180deg, #0d0d14 0%, #08080d 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
+  padding: 0 16px;
   flex-shrink: 0;
   z-index: 100;
+  gap: 16px;
 
+  // 三段式 flex 布局: 左(身份) | 中(编辑, 占主) | 右(操作)
   .header-left,
   .header-center,
   .header-right {
@@ -2541,27 +3151,34 @@ $panel-header-height: 44px;
     gap: 8px;
   }
 
-  .header-left {
-    flex: 0 0 auto;
-    min-width: 0;
-  }
+  .header-left { flex: 0 0 auto; min-width: 0; }
   .header-center {
     flex: 1 1 auto;
     min-width: 0;
     justify-content: center;
+    gap: 4px;  // 组间由 divider 分隔, 组内紧凑
   }
   .header-right {
     flex: 0 0 auto;
     min-width: 0;
     gap: 8px;
   }
+
+  // 子分组容器: 编辑操作按功能聚合
+  .header-right-secondary,
+  .header-right-primary {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
 }
 
+// 左侧: 规则名称 + 状态徽章
 .rule-name-section {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-left: 10px;
+  gap: 10px;
+  margin-left: 8px;
   flex-shrink: 0;
   max-width: 100%;
   overflow: hidden;
@@ -2570,12 +3187,14 @@ $panel-header-height: 44px;
 
 .rule-name-input {
   background: transparent;
-  padding: 4px 10px;
-  border-radius: 5px;
-  color: #d0d0e0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: #e8e8f0;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.2px;
   min-width: 140px;
+  max-width: 240px;
   white-space: nowrap;
   transition: all 0.15s ease;
 
@@ -2587,143 +3206,316 @@ $panel-header-height: 44px;
   &:focus {
     outline: none;
     border-color: var(--accent-blue);
-    background: rgba(0, 240, 255, 0.04);
+    background: rgba(0, 240, 255, 0.05);
   }
 }
 
+// 状态徽章 (运行中/已停止) - 紧凑 + 状态点
 .rule-status-badge {
-  padding: 2px 8px;
-  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
   font-size: 10px;
-  font-weight: 500;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #666;
-  letter-spacing: 0.3px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #888;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #555;
+    transition: all 0.2s ease;
+  }
 
   &.active {
-    background: rgba(0, 255, 136, 0.06);
-    border-color: rgba(0, 255, 136, 0.2);
-    color: var(--color-success);
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: #22c55e;
+    .status-dot {
+      background: #22c55e;
+      box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+      animation: status-pulse 2s ease-in-out infinite;
+    }
   }
 }
 
-.tool-group {
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 2px 4px;
-  border-radius: 6px;
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(34, 197, 94, 0.6); }
+  50% { box-shadow: 0 0 10px rgba(34, 197, 94, 0.9); }
 }
 
-.tool-divider {
+// 工具栏分组容器 (历史/视图/对齐)
+.tb-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+}
+
+// 工具栏分隔条 (组间)
+.tb-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+// 组内细分隔 (更细)
+.tb-divider-thin {
   width: 1px;
   height: 16px;
-  background: rgba(255, 255, 255, 0.06);
-  margin: 0 4px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 0 2px;
 }
 
+// 缩放比例显示
 .zoom-level {
   font-size: 11px;
-  color: #666;
-  min-width: 36px;
+  color: #999;
+  font-weight: 500;
+  min-width: 42px;
   text-align: center;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', 'Menlo', monospace;
+  user-select: none;
+  letter-spacing: 0.5px;
 }
 
+// WebSocket 状态 (放最右, 紧凑)
 .ws-status {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border-radius: 10px;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 10px;
-  color: #555;
+  font-weight: 500;
+  color: #666;
 
   .ws-dot {
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #444;
-    transition: background 0.3s;
+    background: #555;
+    transition: all 0.3s ease;
   }
 
   .ws-label {
     font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.3px;
   }
 
   &.connected {
-    color: var(--color-success);
+    color: #22c55e;
     .ws-dot {
-      background: var(--color-success);
-      box-shadow: 0 0 6px rgba(0, 255, 136, 0.6);
+      background: #22c55e;
+      box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
     }
   }
 }
 
-// 按钮样式
-.icon-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
+// =====================================================================
+// 工具栏按钮系统 (重设计)
+// tb-icon-btn: 32x32 方形, 仅图标, 工具类
+// tb-text-btn: 32 高, 图标 + 文字, 操作类
+// =====================================================================
+.tb-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 5px;
-  color: #666;
+  border-radius: 6px;
+  color: #8888a0;
   cursor: pointer;
-  transition: all 0.15s ease;
-
-  :deep(button) {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: inherit;
-  }
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
 
   svg {
-    width: 15px;
-    height: 15px;
+    width: 16px;
+    height: 16px;
+  }
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    color: #e8e8f0;
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    transform: scale(0.92);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(0, 240, 255, 0.4);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  // 激活态 (toggle 类按钮: 网格/吸附/小地图/面板)
+  &.active {
+    background: rgba(0, 240, 255, 0.12);
+    color: #00f0ff;
+    box-shadow: inset 0 0 0 1px rgba(0, 240, 255, 0.3);
+  }
+}
+
+// tb-text-btn: 图标 + 文字, 用于次级/主操作
+.tb-text-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #b0b0c0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+  white-space: nowrap;
+
+  svg {
+    width: 14px;
+    height: 14px;
   }
 
   &:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.06);
-    color: #c0c0d0;
+    color: #e8e8f0;
   }
 
   &:active:not(:disabled) {
-    background: rgba(255, 255, 255, 0.08);
-    transform: scale(0.92);
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(0, 240, 255, 0.4);
+    outline-offset: 1px;
   }
 
   &:disabled {
-    opacity: 0.2;
+    opacity: 0.4;
     cursor: not-allowed;
   }
 
-  &.active {
-    background: rgba(0, 240, 255, 0.1);
-    color: var(--accent-blue);
+  // Loading 状态
+  .loading-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
 
-  &.small {
-    width: 24px;
-    height: 24px;
+  .loading-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: tb-spin 0.7s linear infinite;
+  }
+}
 
-    svg { width: 13px; height: 13px; }
+@keyframes tb-spin {
+  to { transform: rotate(360deg); }
+}
+
+// 保存按钮 (次主操作)
+.tb-text-btn--save {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #d0d0e0;
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #fff;
+  }
+}
+
+// 执行按钮 (主操作) — accent 渐变 + 阴影 + 微脉冲 (吸引注意)
+.tb-text-btn--execute {
+  background: linear-gradient(135deg, #00f0ff 0%, #22c55e 100%);
+  border: 1px solid rgba(0, 240, 255, 0.4);
+  color: #060610;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 0 18px;
+  box-shadow:
+    0 0 0 1px rgba(0, 240, 255, 0.15),
+    0 4px 16px rgba(0, 240, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1af5ff 0%, #4ade80 100%);
+    color: #000;
+    box-shadow:
+      0 0 0 1px rgba(0, 240, 255, 0.3),
+      0 6px 20px rgba(0, 240, 255, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+    box-shadow:
+      0 0 0 1px rgba(0, 240, 255, 0.2),
+      0 2px 8px rgba(0, 240, 255, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  &:disabled {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.3);
+    box-shadow: none;
+  }
+}
+
+// 返回按钮 (左侧, 特殊背景)
+.back-btn {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  color: #8888a0 !important;
+
+  &:hover:not(:disabled) {
+    background: rgba(0, 240, 255, 0.08) !important;
+    border-color: rgba(0, 240, 255, 0.25) !important;
+    color: #00f0ff !important;
+  }
+}
+
+// 面板切换按钮 (active 态)
+.palette-toggle-btn {
+  &.active {
+    background: rgba(0, 240, 255, 0.12);
+    color: #00f0ff;
+    box-shadow: inset 0 0 0 1px rgba(0, 240, 255, 0.3);
   }
 }
 
@@ -2747,86 +3539,7 @@ $panel-header-height: 44px;
   }
 }
 
-.action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 16px;
-  height: 30px;
-  border: none;
-  border-radius: 5px;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.4px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-  flex-shrink: 0;
-
-  :deep(button) {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    width: 100%;
-    height: 100%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: inherit;
-    color: inherit;
-    font-size: inherit;
-    font-weight: inherit;
-    letter-spacing: inherit;
-    white-space: inherit;
-  }
-
-  svg {
-    width: 14px;
-    height: 14px;
-    flex-shrink: 0;
-  }
-
-  &:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
-
-  &.secondary {
-    background: rgba(255, 255, 255, 0.06);
-    color: #8888a8;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-
-    &:hover:not(:disabled) {
-      background: rgba(255, 255, 255, 0.09);
-      color: #c0c0d0;
-      border-color: rgba(255, 255, 255, 0.12);
-    }
-
-    &:active:not(:disabled) {
-      background: rgba(255, 255, 255, 0.05);
-    }
-  }
-
-  &.primary {
-    background: var(--accent-blue);
-    color: #060610;
-    font-weight: 600;
-    border: 1px solid rgba(0, 240, 255, 0.3);
-    box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
-
-    &:hover:not(:disabled) {
-      background: #1af5ff;
-      box-shadow: 0 0 18px rgba(0, 240, 255, 0.3);
-    }
-
-    &:active:not(:disabled) {
-      background: #00d8e8;
-      box-shadow: 0 0 8px rgba(0, 240, 255, 0.15);
-    }
-  }
-}
+// .action-btn 已废弃 (2026-06-19 改用 .tb-text-btn) — 保留 placeholder 防冲突
 
 // 主体区域
 .canvas-body {
@@ -2868,50 +3581,52 @@ $panel-header-height: 44px;
   }
 }
 
-// 工具栏 panel-left 折叠按钮 (32x32，比普通 icon-btn 略大)
-.palette-toggle-btn {
-  width: 32px !important;
-  height: 32px !important;
-  margin-right: 4px !important;
-  background: transparent !important;
-  border: 1px solid transparent !important;
-  border-radius: 6px !important;
-  color: #888 !important;
-  padding: 0 !important;
-  display: flex !important;
+// .palette-toggle-btn / .back-btn 旧样式已合并到上方 .tb-icon-btn 中
+// 2026-06-19 重设计后, 基础宽度/高度由 .tb-icon-btn 提供, 此处不再重复
+
+// =====================================================================
+// 通用 icon-btn / icon-btn.small (执行面板等其他位置复用)
+// 2026-06-19: 工具栏改用 .tb-icon-btn, 这里保留旧 .icon-btn 兼容执行面板按钮
+// =====================================================================
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: #8888a0;
   cursor: pointer;
   transition: all 0.15s ease;
-
-  :deep(button) {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: inherit;
-  }
+  flex-shrink: 0;
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
   }
 
-  &:hover {
-    background: rgba(0, 240, 255, 0.06) !important;
-    color: #00f0ff !important;
-    border-color: rgba(0, 240, 255, 0.2) !important;
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e8e8f0;
   }
 
-  &.active {
-    background: rgba(0, 240, 255, 0.1) !important;
-    color: #00f0ff !important;
-    border-color: rgba(0, 240, 255, 0.3) !important;
+  &:active:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(0.92);
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  &.small {
+    width: 22px;
+    height: 22px;
+
+    svg { width: 12px; height: 12px; }
   }
 }
 
@@ -4362,6 +5077,76 @@ $panel-header-height: 44px;
    :has() 选择器需要 Chrome 105+ / Safari 15.4+ / Firefox 121+ */
 .rule-canvas-fullscreen:has(.vue-flow__node.dragging) .vue-flow__edges {
   pointer-events: none;
+}
+
+/* ========== P2-D (2026-06-19): 执行历史回放对话框 ========== */
+.replay-list { max-height: 480px; overflow-y: auto; }
+.replay-loading, .replay-empty { padding: 32px; text-align: center; color: #888; font-size: 13px; }
+.replay-item {
+  padding: 12px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.replay-item:hover { background: rgba(0, 240, 255, 0.08); border-color: rgba(0, 240, 255, 0.3); }
+.replay-item-header { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; color: #e0e0e8; }
+.replay-item-id { color: #888; font-family: 'JetBrains Mono', monospace; }
+.replay-status-badge {
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.replay-status-badge.completed, .replay-status-badge.success { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
+.replay-status-badge.failed { background: rgba(255, 76, 76, 0.15); color: #ff4c4c; }
+.replay-status-badge.running { background: rgba(0, 240, 255, 0.15); color: #00f0ff; }
+.replay-status-badge.pending { background: rgba(255, 255, 255, 0.06); color: #888; }
+.replay-status-badge.cancelled { background: rgba(255, 165, 0, 0.15); color: #ffa500; }
+.replay-trigger { margin-left: auto; font-size: 11px; color: #888; text-transform: uppercase; }
+.replay-item-time { margin-top: 4px; font-size: 12px; color: #aaa; font-family: 'JetBrains Mono', monospace; }
+.replay-item-error { margin-top: 4px; font-size: 11px; color: #ff4c4c; }
+.replay-detail-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.replay-detail-title { font-size: 14px; font-weight: 600; color: #e0e0e8; }
+.replay-logs { max-height: 400px; overflow-y: auto; }
+.replay-log-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-family: 'JetBrains Mono', monospace;
+}
+.replay-log-index { color: #555; min-width: 20px; }
+.replay-log-status {
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.replay-log-status.completed, .replay-log-status.success { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
+.replay-log-status.failed { background: rgba(255, 76, 76, 0.15); color: #ff4c4c; }
+.replay-log-status.skipped { background: rgba(255, 255, 255, 0.06); color: #888; }
+.replay-log-status.running { background: rgba(0, 240, 255, 0.15); color: #00f0ff; }
+.replay-log-status.timeout { background: rgba(255, 165, 0, 0.15); color: #ffa500; }
+.replay-log-node { min-width: 120px; color: #c0c0d0; }
+.replay-log-time { color: #888; }
+.replay-log-duration { color: #888; min-width: 60px; }
+.replay-log-error { color: #ff4c4c; margin-left: auto; }
+.replay-tip {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 4px;
+  font-size: 12px;
+  color: #00f0ff;
 }
 
 </style>

@@ -239,7 +239,7 @@ export const ruleEngineApi = {
     trigger_data?: object
   }) => api.post('/rule-engine/execute', data),
 
-  // 执行历史
+  // 执行历史 (P2-D 2026-06-19: 复用于回放对话框)
   listExecutions: (graphId?: number, limit?: number) =>
     api.get('/rule-engine/executions', { params: { graph_id: graphId, limit } }),
   getExecution: (id: number) => api.get(`/rule-engine/executions/${id}`),

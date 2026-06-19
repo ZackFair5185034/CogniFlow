@@ -113,6 +113,7 @@ class NodeRegistry:
                         "type": port.type,
                         "label": port.name,
                         "description": port.description,
+                        "required": port.required,  # P1-1 (2026-06-19): 前端必填未连提示需要此字段
                     }
                     for name, port in defn.inputs.items()
                 ],
@@ -160,6 +161,7 @@ class NodeRegistry:
                     "type": port.type,
                     "label": port.name,
                     "description": port.description,
+                    "required": port.required,  # P1-1 (2026-06-19): 与 get_definitions 保持一致
                 }
                 for name, port in defn.inputs.items()
             ],

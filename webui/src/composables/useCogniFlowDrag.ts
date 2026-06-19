@@ -91,16 +91,15 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
         if (!target) return false
         const nodeEl = target.closest<HTMLElement>('.vue-flow__node[data-id]')
         if (!nodeEl) return false
-        // 排除交互元素 (连线/编辑/展开按钮等):
-        // - .nodrag: VueFlow 标准拖拽排除 class (Handle 默认携带)
-        // - .vue-flow__handle: 连接点本身
-        // - .vue-flow__edge: 边上的交互元素
-        // - .node-collapse-btn / .node-expand-btn: 节点内配置展开/折叠按钮
+        // 限制拖动只在 .node-header (标题栏) 触发 (2026-06-19 优化)
+        //   旧实现: 整个节点都可拖, 但用户体感"只有标题栏能拖", cursor 也不对 (进入节点就是 grab)
+        //   新实现: 严格只在标题栏启动拖动, 节点其余区域 (端口/配置/状态) 不参与拖动
+        //   配合 RuleNode.vue 的分区 cursor, 用户鼠标样式与可交互区一致
+        if (!target.closest('.node-header')) return false
+        // 排除交互元素 (按钮等):
+        // - .node-collapse-btn / .node-expand-btn: 标题栏内的折叠/展开按钮
         //   (d3-drag 会劫持 click 事件, 必须从 mousedown 起就放行,
         //   否则按钮 @click 不触发)
-        if (target.closest('.nodrag')) return false
-        if (target.closest('.vue-flow__handle')) return false
-        if (target.closest('.vue-flow__edge')) return false
         if (target.closest('.node-collapse-btn')) return false
         if (target.closest('.node-expand-btn')) return false
         // 把 nodeEl 存到 sourceEvent 供 start/drag/end 阶段读取
@@ -143,6 +142,24 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
 
     zoomRef = options.getZoom()
     const src = event.sourceEvent as MouseEvent
+
+    // 2026-06-19: 拖动也能选中节点 (用户反馈)
+    //   旧实现依赖 VueFlow 内部 click, 但 d3-drag 在 mousedown 时 preventDefault
+    //   会阻止 click 事件, 导致拖动节点永远不被选中.
+    //   现在在 onDragStart 立即更新选中, 仅处理"无修饰键 + 节点未选中"
+    //   的场景, 避免与 VueFlow click 处理 Ctrl 修饰键时冲突 (toggle 正确性).
+    const additive = src.ctrlKey || src.metaKey || src.shiftKey
+    const alreadySelected = el.classList.contains('selected')
+    if (!additive && !alreadySelected) {
+      const targetFlowNode = options.findFlowNode(id)
+      if (targetFlowNode) {
+        const currentlySelected = options.getSelectedNodes()
+        if (currentlySelected.length > 0) {
+          options.removeSelectedNodes(currentlySelected)
+        }
+        options.addSelectedNodes([targetFlowNode])
+      }
+    }
 
     let allEls: HTMLElement[] = []
     if (el.classList.contains('selected')) {
