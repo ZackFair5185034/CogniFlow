@@ -2213,7 +2213,9 @@ function startPanelResize(e: MouseEvent) {
 }
 
 // 保存
-async function handleSave() {
+async function handleSave(): Promise<boolean> {
+  // BUG-8 修复 (2026-06-19): 返回 boolean 让调用方 (handleExecute) 判断是否继续
+  //   之前仅打 toast, handleExecute 不管成功失败都跑, 服务端可能读到旧数据
   saving.value = true
   try {
     await store.saveGraph()
@@ -2233,9 +2235,11 @@ async function handleSave() {
       })
     }
     ElMessage.success('保存成功')
+    return true
   } catch (err) {
     console.error('保存失败:', err)
     ElMessage.error('保存失败')
+    return false
   } finally {
     saving.value = false
   }
@@ -2348,7 +2352,13 @@ async function handleValidate() {
 
 // 执行
 async function handleExecute() {
-  await handleSave()
+  // BUG-8 修复 (2026-06-19): 检查 handleSave 返回值, 失败时中断执行
+  //   之前保存失败仍继续, 服务端读到旧数据执行出诡异结果
+  const saved = await handleSave()
+  if (!saved) {
+    ElMessage.warning('保存失败, 已取消本次执行')
+    return
+  }
 
   executing.value = true
   store.setExecutionStatus('running')
