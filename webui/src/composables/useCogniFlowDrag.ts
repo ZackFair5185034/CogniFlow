@@ -277,24 +277,9 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     //   - onDragEnd 处理真实点击 (distance > 0)
     //   - handleNodeClick 处理合成事件 (distance=0) 或 VueFlow 内部 onClick 路径
     if (isClick) {
-      const primary = ctx.allDragged[0]
-      if (primary) {
-        // 调试日志 (2026-06-18 临时): 跟踪 Ctrl+点 n1 为什么 n0 消失
-        const selectedBefore = options.getSelectedNodes().map((n: any) => n.id)
-        const isMulti = src.ctrlKey || src.metaKey
-        // 2026-06-18: 选中逻辑完全交给 @node-click 事件 (RuleCanvas.vue handleNodeClick)
-        //   onDragEnd isClick 分支只做"isClick=true 时不进入拖动结束 store 写回"
-        //   真正的 addSelectedNodes/removeSelectedNodes 在 @node-click 走 VueFlow 官方 API
-        //   避免: d3-drag onDragStart 选中 + NodeWrapper useDrag onClick 选中 + handleNodeClick
-        //         三路选中互相冲突导致 n0/n1 互相取消
-        ;(window as any).__cfDebug = {
-          phase: 'onDragEnd.isClick.skipped',
-          primary: primary.id,
-          isMulti,
-          selectedBefore,
-          message: '选中交给 @node-click, onDragEnd 不动 selected',
-        }
-      }
+      // BUG-6 修复 (2026-06-19): 删除调试对象 window.__cfDebug 残留
+      //   选中语义已完全交给 VueFlow NodeWrapper.onSelectNode + @node-click (见 RuleCanvas.vue handleNodeClick)
+      //   拖动期不写 selected, 拖动结束 isClick=true 早返回也不写 selected — 状态干净
       store.resumeHistory()
       options.onEnd?.()
       ctx = null
