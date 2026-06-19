@@ -160,6 +160,11 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const _connectedHandleIndex = new Set<string>()
   const _connectedHandleVersion = shallowRef(0)  // 触发 computed/下游依赖
 
+  // FIX (BUG-4 2026-06-19): 节点配置变更的响应式信号
+  // 之前 updateNodeConfig 不 trigger, NodeConfigEditor (LOD 2 内嵌) 的 computed 链断裂.
+  // 现在用独立 configVersion shallowRef, 精确触发 Editor, 不影响 VueFlow 整图 diff.
+  const _configVersion = shallowRef(0)
+
   /**
    * 把一个 edge 的 source/target handle 加入索引
    */
@@ -559,10 +564,15 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   }
 
   /**
-   * 更新节点配置 - 内部 mutate + 手动 triggerRef。
-   * 之前用 `node.data = {...}` 整体重建引用，触发 VueFlow diff 整节点。
-   * 改为 mutate 内部 config 字段后 triggerRef，避免节点重渲染，
-   * 仅触发布局（widget 自身 reactivity）。
+   * 更新节点配置 - 内部 mutate + 触发 _configVersion（精确信号）.
+   *
+   * FIX (BUG-4 2026-06-19): 之前不再 triggerRef(nodes) 后,
+   * NodeConfigEditor (LOD 2 内嵌) 通过 store.nodeById.get(id) 取引用,
+   * 但 shallowRef nodes 不变 → Editor computed 不重算 → 折叠再展开后看到旧值.
+   *
+   * 现在用 _configVersion shallowRef 单独精确触发:
+   * - NodeConfigEditor 的 computed 加 `_configVersion.value` 依赖 → Editor 实时刷新
+   * - 不 triggerRef(nodes) → VueFlow 不会做整图 diff（保持拖拽性能）
    */
   function updateNodeConfig(nodeId: string, key: string, value: VariableDefaultValue) {
     const node = nodes.value.find(n => n.id === nodeId)
@@ -571,10 +581,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         node.data.config = {} as Record<string, VariableDefaultValue>
       }
       node.data.config[key] = value
-      // 不再 triggerRef(nodes): RuleNode 不再渲染 config 值 (Phase 17.1+),
-      // 只有 NodeConfigEditor (节点内嵌 LOD 2) 消费它, 而 Editor 通过 computed
-      // 监听 store.nodeById.get(id) 引用, 不需要 triggerRef.
-      // 去掉 triggerRef 避免了每次调参时 VueFlow 整图 diff.
+      // 精确触发: NodeConfigEditor 依赖 _configVersion, 不扩散到 VueFlow 整图 diff
+      _configVersion.value++
     }
   }
 
@@ -870,32 +878,29 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   function undo() {
     if (!canUndo.value) return
     historyIndex.value--
-    applyHistoryEntry(historyStack.value[historyIndex.value])
+    applyHistoryEntry(historyStack.value[historyIndex.value], 'undo')
   }
 
   /** 重做 */
   function redo() {
     if (!canRedo.value) return
     historyIndex.value++
-    applyHistoryEntry(historyStack.value[historyIndex.value])
+    applyHistoryEntry(historyStack.value[historyIndex.value], 'redo')
   }
 
   /**
    * 应用一个 history entry
-   * - snapshot: 还原整图
-   * - move: 只改单节点 position
-   * - groupMove: 批量改多节点 position (setNodesPositions 写入, GROUP 拖动 1 entry)
+   * - snapshot: 还原整图 (undo/redo 方向无关, 都是恢复到该 entry 状态)
+   * - move: undo 回到 from, redo 调到 to
+   * - groupMove: undo 回到各自 from, redo 调到各自 to
    *
-   * undo/redo 复用 applyHistoryEntry: 通过 moveIndex 指针区分"还原方向"——
-   *   entry.from = 还原目标 (undo 时) / entry.to = 还原目标 (redo 时)
-   *   简化方案: 调用方传 toCurrent 标志, 这里根据 historyIndex 与 entry 在 stack 中位置
-   *   关系判断方向.
-   *
-   *   实际实现: setNodesPositions 写 history 时是 "from -> to" (拖动结果),
-   *   undo 时希望回到 from (恢复原位置), redo 时希望到 to.
-   *   通过 setNodesPositions 反向传 updates 即可, 见 undo/redo 函数.
+   * FIX (BUG-1 2026-06-19): 之前永远用 from, 导致 redo 永远回不到拖动终点.
+   * 现在通过 direction 参数区分 undo/redo, undo 用 from, redo 用 to.
    */
-  function applyHistoryEntry(entry: typeof historyStack.value[number]) {
+  function applyHistoryEntry(
+    entry: typeof historyStack.value[number],
+    direction: 'undo' | 'redo',
+  ) {
     if (entry.type === 'snapshot') {
       nodes.value = JSON.parse(JSON.stringify(entry.nodes))
       edges.value = JSON.parse(JSON.stringify(entry.edges))
@@ -904,15 +909,19 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       triggerRef(_connectedHandleVersion)
     } else if (entry.type === 'move') {
       // 单节点位置变更, 直接 mutate + triggerRef 避免整图重渲染
+      const targetPos = direction === 'undo' ? entry.from : entry.to
       const node = nodes.value.find(n => n.id === entry.nodeId)
       if (node) {
-        node.position = { ...entry.from }  // undo 回到 from; redo 调到 to
+        node.position = { ...targetPos }
         triggerRef(nodes)
       }
     } else {
       // groupMove: 批量还原
       // 调用 setNodesPositions 把所有节点归位 (recordHistory=false 避免污染 history stack)
-      const updates = entry.moves.map(m => ({ id: m.nodeId, position: { ...m.from } }))
+      const updates = entry.moves.map(m => ({
+        id: m.nodeId,
+        position: { ...(direction === 'undo' ? m.from : m.to) },
+      }))
       setNodesPositions(updates, false)
     }
   }
@@ -1101,6 +1110,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     nodeDefinitionsByCategory,
     lodLevelMap,         // LOD
     getLodLevel,         // LOD
+    configVersion: _configVersion,  // FIX (BUG-4 2026-06-19): 暴露给 NodeConfigEditor 作 computed 依赖
 
     // 数据加载
     fetchNodeDefinitions,

@@ -311,7 +311,13 @@ const store = useRuleEngineStore()
 
 // ============ 从 store 读取该节点数据 ============
 
+// FIX (BUG-4 2026-06-19): 节点配置变更响应式信号
+// store.configVersion 是 shallowRef 暴露的精确触发器,
+// 当 updateNodeConfig 内部 mutate 后会 _configVersion.value++,
+// Editor 的 nodeData computed 读它建立响应式依赖, 折叠再展开不丢值.
 const nodeData = computed((): RuleNodeData | null => {
+  // 显式读取 configVersion 建立响应式依赖 (Pinia 自动解包, 读到 number)
+  void store.configVersion
   const node = store.nodeById.get(props.nodeId)
   return (node?.data as RuleNodeData) ?? null
 })

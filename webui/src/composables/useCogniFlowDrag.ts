@@ -95,11 +95,13 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
         // - .nodrag: VueFlow 标准拖拽排除 class (Handle 默认携带)
         // - .vue-flow__handle: 连接点本身
         // - .vue-flow__edge: 边上的交互元素
-        // - .node-expand-btn: 节点内配置展开按钮 (d3-drag 会劫持 click 事件,
-        //   必须从 mousedown 起就放行, 否则按钮 @click 不触发)
+        // - .node-collapse-btn / .node-expand-btn: 节点内配置展开/折叠按钮
+        //   (d3-drag 会劫持 click 事件, 必须从 mousedown 起就放行,
+        //   否则按钮 @click 不触发)
         if (target.closest('.nodrag')) return false
         if (target.closest('.vue-flow__handle')) return false
         if (target.closest('.vue-flow__edge')) return false
+        if (target.closest('.node-collapse-btn')) return false
         if (target.closest('.node-expand-btn')) return false
         // 把 nodeEl 存到 sourceEvent 供 start/drag/end 阶段读取
         ;(event as any).__cfNodeEl = nodeEl
@@ -162,25 +164,20 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
         const targetFlowNode = options.findFlowNode(targetId)
         if (targetFlowNode) {
           if (additive) {
-            // 加选: 追加 target 到当前选中集合
-            options.addSelectedNodes([targetFlowNode])
             // DRAG-1 修复: 加选分支后, 把当前所有 VueFlow 选中节点也加到 allEls
             //   让整组一起拖动 (与 macOS Finder / Windows Explorer 一致)
-            //   旧代码: allEls = [el] → 只拖 target, 已选中节点不跟随
-            //   修复: allEls = [target el, ...当前所有 .selected 的 DOM]
+            // 关键 (2026-06-18 BUG 修复): 不在这里调 addSelectedNodes!
+            //   原因: VueFlow 内部 NodeWrapper useDrag 在 mouseup 阶段还会触发
+            //   addSelectedNodes/removeSelectedNodes, 跟 onDragStart 重复处理选中
+            //   → 状态跳变 (Ctrl+点已选节点 会被 toggle 掉)
+            //   正解: onDragStart 只收集 allEls (联动拖动), 选中由 handleNodeClick 处理
             const currentlySelected = options.getSelectedNodes()
             for (const n of currentlySelected) {
               const eel = document.querySelector<HTMLElement>(`.vue-flow__node[data-id="${n.id}"]`)
               if (eel) allEls.push(eel)
             }
-          } else {
-            // 替换: 清空 + 只选 target
-            const currentlySelected = options.getSelectedNodes()
-            if (currentlySelected.length > 0) {
-              options.removeSelectedNodes(currentlySelected)
-            }
-            options.addSelectedNodes([targetFlowNode])
           }
+          // non-additive 分支也不调 removeSelectedNodes: 同上理由, 让 handleNodeClick 处理
         }
       }
       if (allEls.length === 0 || !allEls.includes(el)) allEls.push(el)
@@ -276,38 +273,26 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     const dyScreen = src.clientY - ctx.startMouse.y
 
     // === 点击检测 (非拖动) ===
+    // 2026-06-18: 选中入口统一在 onDragEnd isClick 分支 + handleNodeClick 兜底
+    //   - onDragEnd 处理真实点击 (distance > 0)
+    //   - handleNodeClick 处理合成事件 (distance=0) 或 VueFlow 内部 onClick 路径
     if (isClick) {
       const primary = ctx.allDragged[0]
       if (primary) {
+        // 调试日志 (2026-06-18 临时): 跟踪 Ctrl+点 n1 为什么 n0 消失
+        const selectedBefore = options.getSelectedNodes().map((n: any) => n.id)
         const isMulti = src.ctrlKey || src.metaKey
-        const targetFlowNode = options.findFlowNode(primary.id)
-        if (targetFlowNode) {
-          if (isMulti) {
-            // Ctrl+click: 加选 (不 toggle)
-            //
-            // 旧版 "toggle" 语义跟 onDragStart 重复处理选中 → 状态跳变:
-            // 1. onDragStart (Phase 19.7+ DRAG-1 修复) 已对未选中节点 addSelectedNodes
-            // 2. 用户鼠标不移动, 走 isClick 分支
-            // 3. onDragEnd "toggle" 把刚加的节点又移除 (A 仍 selected, toggle 移除)
-            //
-            // 桌面应用约定 (macOS Finder / Windows Explorer):
-            // - Ctrl+点未选中节点 → 加选
-            // - Ctrl+点已选中节点 → 保留 (不 toggle, 让 mousedown 期间的"加入选中"语义保持)
-            // - 取消选中靠 Esc / 点击空白 / Backspace
-            //
-            // 注意: onDragStart 阶段如果走的是 line 146 (A 已选) 分支,
-            //   啥都没做, 选中态保持原状 — 这里也不需要 toggle
-            // 如果走的是 line 148 (additive 加选) 分支,
-            //   已 addSelectedNodes([A]) — 这里保持不变
-            options.addSelectedNodes([targetFlowNode])
-          } else {
-            // 普通点击: 全部取消选中, 只选中当前
-            const currentlySelected = options.getSelectedNodes()
-            if (currentlySelected.length > 0) {
-              options.removeSelectedNodes(currentlySelected)
-            }
-            options.addSelectedNodes([targetFlowNode])
-          }
+        // 2026-06-18: 选中逻辑完全交给 @node-click 事件 (RuleCanvas.vue handleNodeClick)
+        //   onDragEnd isClick 分支只做"isClick=true 时不进入拖动结束 store 写回"
+        //   真正的 addSelectedNodes/removeSelectedNodes 在 @node-click 走 VueFlow 官方 API
+        //   避免: d3-drag onDragStart 选中 + NodeWrapper useDrag onClick 选中 + handleNodeClick
+        //         三路选中互相冲突导致 n0/n1 互相取消
+        ;(window as any).__cfDebug = {
+          phase: 'onDragEnd.isClick.skipped',
+          primary: primary.id,
+          isMulti,
+          selectedBefore,
+          message: '选中交给 @node-click, onDragEnd 不动 selected',
         }
       }
       store.resumeHistory()
