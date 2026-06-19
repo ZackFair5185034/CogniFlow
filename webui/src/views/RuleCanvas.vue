@@ -1239,15 +1239,55 @@ function handleCopy(_event?: MouseEvent) {
   // 参考点用 selection bbox 中心 (屏幕坐标), 粘贴时用 (当前鼠标 - bbox 中心) / zoom 算偏移
   // 不用鼠标位置是因快捷键触发时鼠标可能在画布外
   // P1-G (Phase 17.1): 一次性 stringify 替代每节点独立 stringify+parse
-  // 旧: selected.map(n => JSON.parse(JSON.stringify(n))) → 100 节点 100 次 serialize+deserialize
-  // 新: 1 次 stringify 100 节点, 粘贴时 1 次 parse
+  // PERF-6 修复 (2026-06-19): 字段裁剪, 100 节点复制省 ~1-2ms
+  //   之前 JSON.stringify(selected) 序列化整个 VueFlow GraphNode, 包含大量内部字段
+  //   (dragging/dimensions/handleBounds/internals/computedPosition/...),
+  //   粘贴时 (handlePaste) 只用 id/position/data, 其它都是浪费.
+  //   走 pickBusinessFields 提业务字段 + 边字段裁剪 (source/target/type/id 4 个够用)
   clipboard.value = {
-    nodesJson: JSON.stringify(selected),
-    edgesJson: JSON.stringify(relatedEdges),
+    nodesJson: JSON.stringify(selected.map(pickBusinessFields)),
+    edgesJson: JSON.stringify(relatedEdges.map((e: any) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: e.type,
+      data: e.data,
+      label: e.label,
+      animated: e.animated,
+      style: e.style,
+    }))),
     mousePos: getSelectionBboxCenter()
   }
   clipboardMode.value = 'copy'
   ElMessage.success(`已复制 ${selected.length} 个节点`)
+}
+
+/**
+ * PERF-6 (2026-06-19): 提取 GraphNode 业务字段, 剔除 VueFlow 内部 cache
+ * (dragging/dimensions/handleBounds/internals/computedPosition/parentNode/selected
+ *  /events/... 都不参与粘贴重建, 留着只增序列化体积 + CPU)
+ *
+ * 粘贴端 (handlePaste) 只读 id/position/data, 其它字段可省略.
+ * 选留字段: id/type/position/data/label/style/width/height/sourcePosition/targetPosition
+ *  → 覆盖视觉/业务重建所需, 同时排除所有 _-prefixed 内部字段
+ */
+function pickBusinessFields(n: any) {
+  return {
+    id: n.id,
+    type: n.type,
+    position: n.position,
+    data: n.data,
+    label: n.label,
+    style: n.style,
+    width: n.width,
+    height: n.height,
+    sourcePosition: n.sourcePosition,
+    targetPosition: n.targetPosition,
+    // 业务可选字段
+    parentNode: n.parentNode,
+    extent: n.extent,
+    expandParent: n.expandParent,
+  }
 }
 
 // 剪切
