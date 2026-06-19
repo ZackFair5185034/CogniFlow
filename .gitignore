@@ -134,6 +134,8 @@ node_modules
 **/.rtk/
 **/.codegraph/
 .superpowers/
+# oh-my-claudecode skill plugin 输出 (非项目资产, ENG-P0-2 2026-06-19)
+docs/superpowers/
 
 # Brainstorm / debug screenshots
 brainstorm-*.png
