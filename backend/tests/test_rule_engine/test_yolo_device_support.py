@@ -30,7 +30,8 @@ class TestInferenceYoloDeviceParam:
     """inference_yolo 必须支持 device 参数。"""
 
     def test_signature_accepts_device(self):
-        from backend.routers.yolo_training import inference_yolo
+        # BE-P0-1 (2026-06-19): 推理函数迁到 services.inference_service
+        from backend.services.inference_service import inference_yolo
         sig = inspect.signature(inference_yolo)
         assert "device" in sig.parameters
         assert sig.parameters["device"].default == "cpu"
@@ -43,12 +44,13 @@ class TestInferenceYoloDeviceParam:
         （如 CUDA 不可用）。修复后改用 Ultralytics 原生 device= 关键字参数，
         既不修改 cached 实例，也不会吞错。
         """
-        from backend.routers import yolo_training
+        # BE-P0-1 (2026-06-19): 推理函数迁到 services.inference_service
+        from backend.services import inference_service
         mock_model = MagicMock()
         mock_model.return_value = []
 
-        yolo_training.inference_yolo(mock_model, "/tmp/x.jpg",
-                                     conf_threshold=0.5, device="cuda:0")
+        inference_service.inference_yolo(mock_model, "/tmp/x.jpg",
+                                          conf_threshold=0.5, device="cuda:0")
 
         # 不应再调用 model.to() —— 防止永久修改 cached 实例
         mock_model.to.assert_not_called()
@@ -57,12 +59,13 @@ class TestInferenceYoloDeviceParam:
 
     def test_device_auto_skips_to_call(self):
         """device='auto' 时不显式调用 model.to()，让 Ultralytics 自动选择。"""
-        from backend.routers import yolo_training
+        # BE-P0-1 (2026-06-19): 推理函数迁到 services.inference_service
+        from backend.services import inference_service
         mock_model = MagicMock()
         mock_model.return_value = []
 
-        yolo_training.inference_yolo(mock_model, "/tmp/x.jpg",
-                                     conf_threshold=0.5, device="auto")
+        inference_service.inference_yolo(mock_model, "/tmp/x.jpg",
+                                          conf_threshold=0.5, device="auto")
 
         mock_model.to.assert_not_called()
         mock_model.assert_called_with("/tmp/x.jpg", conf=0.5, device=None)

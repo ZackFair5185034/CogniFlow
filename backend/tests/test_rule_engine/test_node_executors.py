@@ -444,8 +444,8 @@ class TestYOLOModelNode:
         from backend.services.rule_engine.nodes.detection_nodes import YOLOModelNode
         node = YOLOModelNode()
         node.config = {"params": {"model_path": "/models/yolov8n.pt"}}
-        with patch('backend.routers.yolo_training.load_yolo_model') as mock_load, \
-             patch('backend.routers.yolo_training.inference_yolo') as mock_infer:
+        with patch('backend.services.rule_engine.nodes.detection_nodes.load_yolo_model') as mock_load, \
+             patch('backend.services.rule_engine.nodes.detection_nodes.inference_yolo') as mock_infer:
             mock_infer.return_value = {
                 "detections": [{"bbox": [0, 0, 10, 10], "confidence": 0.9, "class_id": 0, "class_name": "person"}],
             }
@@ -458,8 +458,8 @@ class TestYOLOModelNode:
         from backend.services.rule_engine.nodes.detection_nodes import YOLOModelNode
         node = YOLOModelNode()
         node.config = {"params": {"model_path": "/models/yolov8n.pt"}}
-        with patch('backend.routers.yolo_training.load_yolo_model') as mock_load, \
-             patch('backend.routers.yolo_training.inference_yolo') as mock_infer:
+        with patch('backend.services.rule_engine.nodes.detection_nodes.load_yolo_model') as mock_load, \
+             patch('backend.services.rule_engine.nodes.detection_nodes.inference_yolo') as mock_infer:
             mock_infer.return_value = {
                 "detections": [{"bbox": [0, 0, 10, 10], "confidence": 0.9, "class_id": 0, "class_name": "person"}],
             }
@@ -474,8 +474,8 @@ class TestYOLOModelNode:
         node1 = YOLOModelNode(node_id="node_a", config={"params": {"model_path": "/models/yolo.pt"}})
         node2 = YOLOModelNode(node_id="node_b", config={"params": {"model_path": "/models/yolo.pt"}})
 
-        with patch('backend.routers.yolo_training.load_yolo_model') as mock_load, \
-             patch('backend.routers.yolo_training.inference_yolo') as mock_infer:
+        with patch('backend.services.rule_engine.nodes.detection_nodes.load_yolo_model') as mock_load, \
+             patch('backend.services.rule_engine.nodes.detection_nodes.inference_yolo') as mock_infer:
             mock_model = MagicMock()
             mock_load.return_value = mock_model
             mock_infer.return_value = {"detections": []}
@@ -575,8 +575,8 @@ class TestObjectDetectorNode:
         node = ObjectDetectorNode()
         node.config = {"params": {"model_path": "/models/yolo.pt"}}
 
-        with patch('backend.routers.yolo_training.load_yolo_model') as mock_load, \
-             patch('backend.routers.yolo_training.inference_yolo') as mock_infer:
+        with patch('backend.services.rule_engine.nodes.detection_nodes.load_yolo_model') as mock_load, \
+             patch('backend.services.rule_engine.nodes.detection_nodes.inference_yolo') as mock_infer:
             mock_infer.return_value = {
                 "detections": [
                     {"bbox": [0, 0, 10, 10], "confidence": 0.9, "class_id": 0, "class_name": "person"},
@@ -691,8 +691,8 @@ class TestYOLOTriggerNode:
         node = YOLOTriggerNode()
         node.config = {"params": {"model_path": "/models/yolo.pt", "min_confidence": 0.5}}
 
-        with patch('backend.routers.yolo_training.load_yolo_model') as mock_load, \
-             patch('backend.routers.yolo_training.inference_yolo') as mock_infer:
+        with patch('backend.services.rule_engine.nodes.detection_nodes.load_yolo_model') as mock_load, \
+             patch('backend.services.rule_engine.nodes.detection_nodes.inference_yolo') as mock_infer:
             mock_infer.return_value = {
                 "detections": [{"bbox": [0, 0, 10, 10], "confidence": 0.9, "class_name": "person"}],
             }
@@ -1261,8 +1261,8 @@ class TestDetectionToFilterPipeline:
         yolo = YOLOModelNode()
         yolo.config = {"params": {"model_path": "/models/yolo.pt"}}
 
-        with patch('backend.routers.yolo_training.load_yolo_model'), \
-             patch('backend.routers.yolo_training.inference_yolo') as mock_infer:
+        with patch('backend.services.rule_engine.nodes.detection_nodes.load_yolo_model'), \
+             patch('backend.services.rule_engine.nodes.detection_nodes.inference_yolo') as mock_infer:
             mock_infer.return_value = {
                 "detections": [
                     {"bbox": [0, 0, 10, 10], "confidence": 0.95, "class_id": 0, "class_name": "person"},
@@ -1388,8 +1388,8 @@ class TestPreprocessAndDetect:
         yolo.config = {"params": {"model_path": "/models/yolo.pt"}}
 
         with patch('backend.services.rule_engine.model_cache.ModelCache.get_or_load') as mock_load, \
-             patch('backend.routers.yolo_training.load_yolo_model'), \
-             patch('backend.routers.yolo_training.inference_yolo') as mock_infer:
+             patch('backend.services.rule_engine.nodes.detection_nodes.load_yolo_model'), \
+             patch('backend.services.rule_engine.nodes.detection_nodes.inference_yolo') as mock_infer:
             mock_infer.return_value = {
                 "detections": [{"bbox": [0, 0, 10, 10], "confidence": 0.9, "class_id": 0, "class_name": "person"}],
             }

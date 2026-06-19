@@ -16,6 +16,10 @@ from backend.services.rule_engine.models import (
     NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
 )
 from backend.services.rule_engine.model_cache import ModelCache
+# BE-P0-1 修复 (2026-06-19): 之前 3 处函数内 from backend.routers.yolo_training import
+#   load_yolo_model, inference_yolo (依赖方向反了). 现走 services.inference_service
+#   (services 内部同层, 不再依赖 routers)
+from backend.services.inference_service import load_yolo_model, inference_yolo
 from .base import BaseExecutor
 
 logger = logging.getLogger(__name__)
@@ -187,7 +191,7 @@ class YOLOModelNode(BaseExecutor):
                 return {"error": f"模型 {model_id} 未找到或无模型文件"}
 
             # 通过缓存加载模型（设备作为 cache key 一部分，避免跨设备误用）
-            from backend.routers.yolo_training import load_yolo_model, inference_yolo
+            # BE-P0-1 (2026-06-19): 顶部已 import, 删除函数内延迟 import (依赖方向修正)
 
             cache_key = f"yolo:{model_path}:{device}"
             cache = ModelCache.get_instance()
@@ -363,7 +367,7 @@ class YOLOTriggerNode(BaseExecutor):
 
                     if image_path:
                         # 通过缓存加载模型并执行检测
-                        from backend.routers.yolo_training import load_yolo_model, inference_yolo
+                        # BE-P0-1 (2026-06-19): 顶部已 import, 删除函数内延迟 import (依赖方向修正)
 
                         # 获取模型路径
                         if not model_path and model_id:
@@ -544,7 +548,7 @@ class ObjectDetectorNode(BaseExecutor):
             if not image_path:
                 return {"error": "图片路径为空"}
 
-            from backend.routers.yolo_training import load_yolo_model, inference_yolo
+            # BE-P0-1 (2026-06-19): 顶部已 import, 删除函数内延迟 import (依赖方向修正)
 
             cache_key = f"yolo:{model_path}"
             cache = ModelCache.get_instance()

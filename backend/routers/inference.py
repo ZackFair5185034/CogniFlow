@@ -136,7 +136,7 @@ async def detect_image(
         shutil.copyfileobj(file.file, buffer)
 
     try:
-        from backend.routers.yolo_training import load_yolo_model, inference_yolo
+        from backend.services.inference_service import load_yolo_model, inference_yolo
         import cv2
         import numpy as np
 
@@ -486,7 +486,7 @@ def process_video_stream_background(
     3. ws_stream.py 推送协程：从 frame_buffer 取数据 → WebSocket 推送给前端
     """
     import cv2
-    from backend.routers.yolo_training import load_yolo_model
+    from backend.services.inference_service import load_yolo_model
 
     if stream_job_manager.get_job_frame_buffer(job_id) is None:
         return
@@ -833,7 +833,7 @@ async def rerun_inference_job(
         }
     else:
         # 图片：重新执行 detect_image 逻辑（只返回原图，画框由前端负责）
-        from backend.routers.yolo_training import load_yolo_model, inference_yolo
+        from backend.services.inference_service import load_yolo_model, inference_yolo
 
         # 从 model.metrics 提取 class_names（ONNX/OpenVINO fallback）
         _img_class_names = None
