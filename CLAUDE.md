@@ -663,136 +663,43 @@ pnpm lint:fix       # ESLint 自动修复
 
 ## 8. 文档规范
 
-### 8.1 文档类型
+> **ENG-P0-1 修复 (2026-06-19)**: 之前 §8 要求"所有文档用 HTML"违反 §6 + 实际现状
+> (全 docs/*-md/*.md). 改写为 MD 版, 与 §6 目录约定一致.
 
-项目文档按用途分为五类，每类有明确的定位和编写要求：
+### 8.1 文档类型与目录
+
+项目文档按用途分为五类（与 §6 一致）：
 
 | 类型 | 目录 | 用途 | 示例 |
 |------|------|------|------|
-| **用户文档** | `docs/guides/` | 面向最终用户的操作手册 | 功能使用、配置说明 |
-| **开发文档** | `docs/dev/` | 面向开发者的技术参考 | API 文档、架构说明 |
-| **计划文档** | `docs/plans/` | 迭代计划和待办清单 | 规则引擎迭代计划、待办清单 |
-| **研究文档** | `docs/research/` | 探索性文档 | 技术调研、方案对比 |
-| **归档文档** | `docs/archives/` | 历史版本保留 | 旧版本说明 |
+| **用户文档** | `docs/guides-md/` | 面向最终用户的操作手册 | 功能使用、配置说明 |
+| **开发文档** | `docs/dev-md/` | 面向开发者的技术参考 | 节点手册、API 文档 |
+| **计划文档** | `docs/plans-md/` | 迭代计划和待办清单 | 规则引擎迭代计划 |
+| **研究文档** | `docs/research-md/` | 探索性文档 | 技术调研、方案对比 |
+| **归档文档** | `docs/archives-md/` | 已完成阶段归档 | 旧版本说明 |
 
-**README.md 除外**，所有文档一律使用 **HTML** 编写，禁止使用 Markdown。
+> 总览索引：`docs/research-md/rule-engine-index.md`（项目入口，含阶段规划、节点清单、状态评估）
+> HTML → MD 转换器（仅历史保留）：`scripts/docs/html_to_md.py`
+> 直接编辑 MD：2026-06-03 起 HTML 源已清空，新文档直接编辑 MD 文件
 
-**原因：** Markdown 在复杂布局、样式控制和嵌入交互内容时能力有限，HTML 可提供更精细的控制和一致性。
+### 8.2 编写规范
 
-### 8.2 HTML 文档编写规范
+- **格式**：所有文档使用 **Markdown** 编写（`README.md` 除外，README 仍 MD）
+- **编码**：UTF-8，文件头可加 `<!-- -*- coding: utf-8 -*- -->` 注释
+- **目录约定**：见 §6
+- **命名**：中文标题 + 英文文件名均可，建议 kebab-case（例：`rule-engine-overview.md`）
+- **语言**：技术术语保留英文，注释/说明用中文
+- **commit 规范**：Git commit message 使用 `docs:` 前缀
 
-**文件组织：**
-```
-docs/
-├── css/
-│   └── main.css          # 文档全局样式（必须）
-├── guides/               # 用户文档
-├── dev/                  # 开发文档
-├── plans/                # 计划文档
-├── research/             # 研究文档
-├── archives/            # 归档文档
-└── 文档中心.html        # 文档首页入口
-```
-
-**文件命名：**
-- 使用 kebab-case 小写字母 + 连字符（例：`user-guide.html`、`api-reference.html`）
-- 避免使用中文文件名
-- 每个文档目录下应有 `index.html` 作为入口
-
-**HTML 文档头部结构：**
-```html
-<!-- -*- coding: utf-8 -*- -->
-<!--
-  功能名称 - 功能简述
-
-  文档用途说明，包含适用读者、前置条件。
--->
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>功能名称 - CogniFlow 文档</title>
-  <link rel="stylesheet" href="../css/main.css">
-</head>
-<body>
-  <div class="doc-container">
-    <!-- 文档内容 -->
-  </div>
-</body>
-</html>
-```
-
-**内容结构规范：**
-
-每个 HTML 文档应按以下层级组织内容：
-
-1. **文档标题**（`.doc-title`）— 文档主标题，仅一个
-2. **文档副标题**（`.doc-subtitle`）— 文档目的和范围说明
-3. **章节**（`.doc-section`）— 按逻辑划分的内容区块
-4. **章节标题**（`.doc-section-title`）— 章节小标题
-5. **段落、列表、表格、代码块**— 具体内容
-
-**禁止事项：**
-- 禁止使用内联 `style` 属性，所有样式必须在 `docs/css/main.css` 中定义
-- 禁止使用 `<font>`、`<center>` 等废弃标签
-- 禁止使用表格做布局（仅用于展示结构化数据）
-- 禁止在文档中硬编码颜色值，统一使用 CSS 变量
-
-**可复用样式类（定义在 `docs/css/main.css`）：**
-
-| 类名 | 用途 |
-|------|------|
-| `.doc-container` | 文档主体容器，居中，最大宽度 900px |
-| `.doc-title` | 文档主标题，渐变色文字 |
-| `.doc-subtitle` | 文档副标题，次要文字色 |
-| `.doc-section` | 内容章节区块，margin-bottom: 32px |
-| `.doc-section-title` | 章节标题，青色下划线分隔 |
-| `.doc-table` | 表格，全宽，深色主题 |
-| `.doc-code` / `.doc-code-block` | 代码块，等宽字体，深色背景 |
-| `.doc-list` | 无序列表，青色圆点前缀 |
-| `.doc-badge` | 徽章，mono 字体，青色边框 |
-| `.doc-divider` | 水平分割线 |
-
-### 8.3 样式编写规范
-
-**文件：`docs/css/main.css`**
-
-- 文件头部包含中文注释说明文件用途
-- 所有颜色使用 CSS 变量，禁止硬编码十六进制值
-- 选择器尽量简短，避免三层以上的嵌套
-- 响应式布局使用相对单位（em、rem、%），避免固定像素值
-
-**CSS 变量命名约定（docs 专用）：**
-```css
-/* 文档专用变量放在 [data-doc] 作用域下 */
-[data-doc] {
-  --doc-bg-primary: #0a0a0f;
-  --doc-text-primary: #ffffff;
-  --doc-accent: #00f0ff;
-}
-```
-
-### 8.4 编写流程
-
-1. **规划** — 确定文档属于哪类（用户/开发/设计/研究），决定放在哪个目录
-2. **编写** — 按 8.2 的头部结构创建 HTML 文件，引用 `docs/css/main.css`
-3. **自审** — 检查是否有内联样式、硬编码颜色、废弃标签
-4. **更新入口** — 如有必要，更新对应目录的 `index.html` 添加链接
-5. **提交** — Git commit message 使用 `docs:` 前缀
-
-### 8.5 评审清单
+### 8.3 评审清单
 
 提交文档前逐项检查：
 
-- [ ] 文件放在正确目录（guides/dev/plans/research/archives）
-- [ ] 使用 `.html` 扩展名，非 `.md`
-- [ ] 头部包含中文注释说明文档用途
-- [ ] 引用了 `docs/css/main.css`
-- [ ] 无内联 `style` 属性
-- [ ] 无硬编码十六进制颜色值
-- [ ] 无废弃 HTML 标签
-- [ ] 有对应的 `index.html` 入口链接（若是子文档）
+- [ ] 文件放在正确目录（`*-md/` 子目录）
+- [ ] 使用 `.md` 扩展名
+- [ ] 内部交叉引用使用相对路径
+- [ ] 中文注释完整（不依赖代码自解释）
+- [ ] commit message 用 `docs:` 前缀
 
 ## 9. 许可证
 
