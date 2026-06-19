@@ -1782,12 +1782,39 @@ function quickAddNode(nodeDef: NodeDefinition) {
   ElMessage.success(`已添加 ${nodeDef.label}`)
 }
 
-// 节点点击 (Phase 17.1+: 不再选节点进右侧面板, 仅做选中视觉同步 + 高亮)
-// 双击走 handleNodeDoubleClick 进入 LOD 2 内嵌配置
+// 节点点击 (Phase 19.7+ 还原: 选中完全交给 VueFlow 内部处理)
+//
+// BUG 根因 (2026-06-19 复盘):
+// - VueFlow NodeWrapper 节点的 onClick 处理器 (`onSelectNode`) 已经先一步调
+//   内部 `handleNodeClick` (utils/node.ts:34-54) 完成 addSelectedNodes / removeSelectedNodes
+//   (按 multiSelectionKeyCode + multiSelectionActive 状态做 toggle / 替换)
+// - 然后才 emit 'click' 事件 → 触发我们这里的 @node-click 监听器
+// - 若我们再调一次 addSelectedNodes/removeSelectedNodes, 会**反向覆盖** VueFlow 刚做对的选中
+//   → 表现为: Ctrl+点未选 B → 瞬间变 [A,B] 又被我们移除 B → 最终 [A] (错)
+//             Ctrl+点已选 B → 瞬间变 [A] 又被我们加回 B → 最终 [A,B] (错)
+//
+// 修复: 不在这里动选中。选中由 VueFlow NodeWrapper.onSelectNode 全权处理
+//   (它读 multiSelectionKeyCode=['Control','Meta','Shift'] 做 toggle, 见
+//    Pane.vue:71-73 watch multiSelectKeyPressed → multiSelectionActive.value)
+//
+// 我们这里只挂载 LOD 同步 / 状态调试,不动 selectedNodeIds / flowNode.selected。
 function handleNodeClick(_event: any) {
-  // 单击: 仅清空/保留 selected 状态, 真正的配置编辑靠双击
-  // 这样避免误点击打开/关闭右侧面板的视觉跳变
-  // (如果未来要支持"单击预览", 可在此处加 store.setSelectedId(event.node.id))
+  // (临时) 调试钩子: DevTools 控制台可直接看 @node-click 触发后 VueFlow 内部态
+  // - additive 反映 Ctrl/Meta/Shift 修饰键
+  // - currentSelectedIds 来自 VueFlow getSelectedNodes, 是 NodeWrapper.onSelectNode
+  //   处理完后的最终结果(也是 DOM .selected class 的来源)
+  const src = _event?.event as MouseEvent | undefined
+  const additive = !!(src && (src.ctrlKey || src.metaKey || src.shiftKey))
+  const currentSelectedIds = (getSelectedNodes.value as any[]).map((n: any) => n.id)
+  ;(window as any).__cfNodeClick = {
+    nodeId: _event?.node?.id,
+    additive,
+    ctrlKey: src?.ctrlKey,
+    metaKey: src?.metaKey,
+    shiftKey: src?.shiftKey,
+    currentSelectedIds,
+  }
+  // 不再调 addSelectedNodes / removeSelectedNodes — VueFlow 内部已处理完
 }
 
 // 节点双击 → 切换 LOD 2 展开 (Phase 17.1+)
