@@ -661,7 +661,7 @@
 </template>
 
 <script setup lang="ts">
-import { throttle } from 'lodash-es'
+import { throttle, debounce } from 'lodash-es'
 import { nextTick, onBeforeUnmount, onMounted, ref, triggerRef } from 'vue'
 import { useRuleEngineStore, type RuleNodeData, type NodeDefinition } from '@/stores/ruleEngine'
 import { storeToRefs } from 'pinia'
@@ -883,6 +883,12 @@ const nodeCategories = computed(() => [
 
 // 节点搜索
 const nodeSearchQuery = ref('')
+// PERF-7 (2026-06-19): debounced 副本, 150ms 静默后才更新, 减少中间态过滤重算
+const debouncedNodeSearchQuery = ref('')
+const _syncSearchDebounced = debounce((v: string) => {
+  debouncedNodeSearchQuery.value = v
+}, 150)
+watch(nodeSearchQuery, (v) => _syncSearchDebounced(v))
 
 // 端口类型过滤：'' 表示全部；常用类型列出按钮，长尾类型通过文本搜索触达
 const portTypeFilter = ref<Set<string>>(new Set())
@@ -915,7 +921,11 @@ function matchesPortType(node: NodeDefinition): boolean {
 }
 
 const filteredCategories = computed(() => {
-  const query = nodeSearchQuery.value.trim().toLowerCase()
+  // PERF-7 修复 (2026-06-19): nodeSearchQuery 加 150ms debounce
+  //   之前每次按键触发 computed 重算 (遍历所有 nodeDefinitions 过滤),
+  //   快速打字时 (e.g. 50ms/键) 多次中间态重算, 100+ 节点定义场景下卡顿
+  //   现在 debouncedNodeSearchQuery 在用户停手 150ms 后才更新, 减少中间态
+  const query = debouncedNodeSearchQuery.value.trim().toLowerCase()
   const hasFilter = query || portTypeFilter.value.size > 0
   if (!hasFilter) {
     return nodeCategories.value
