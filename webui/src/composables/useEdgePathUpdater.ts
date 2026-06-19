@@ -89,8 +89,9 @@ export function useEdgePathUpdater() {
     void _zoom
 
     // 记录每个拖动节点 dragStart 时的 position
+    // PERF-4 修复 (2026-06-19): O(N) store.nodes.find → O(1) store.nodeById.get
     for (const id of draggedNodeIds) {
-      const node = store.nodes.find(n => n.id === id)
+      const node = store.nodeById.get(id)
       if (node) startPositions.set(id, { x: node.position.x, y: node.position.y })
     }
 
@@ -113,8 +114,9 @@ export function useEdgePathUpdater() {
 
       // 算 handle 在节点内的逻辑偏移 (= 端点逻辑坐标 - 节点 position)
       // 节点移动时这个偏移不变
-      const sourceNode = sourceMoving ? store.nodes.find(n => n.id === edge.source) : null
-      const targetNode = targetMoving ? store.nodes.find(n => n.id === edge.target) : null
+      // PERF-4 修复 (2026-06-19): O(N) store.nodes.find → O(1) store.nodeById.get
+      const sourceNode = sourceMoving ? store.nodeById.get(edge.source) : null
+      const targetNode = targetMoving ? store.nodeById.get(edge.target) : null
 
       const sourceHandleOffsetX = sourceNode ? sourceX - sourceNode.position.x : 0
       const sourceHandleOffsetY = sourceNode ? sourceY - sourceNode.position.y : 0
