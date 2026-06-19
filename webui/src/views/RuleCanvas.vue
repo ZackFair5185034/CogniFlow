@@ -662,7 +662,7 @@
 
 <script setup lang="ts">
 import { throttle } from 'lodash-es'
-import { onBeforeUnmount, onMounted, ref, triggerRef } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, triggerRef } from 'vue'
 import { useRuleEngineStore, type RuleNodeData, type NodeDefinition } from '@/stores/ruleEngine'
 import { storeToRefs } from 'pinia'
 import { ruleEngineApi } from '@/api'
@@ -1356,6 +1356,21 @@ function handlePaste(event?: MouseEvent) {
   }
   store.nodes = [...store.nodes, ...newNodes]
   store.edges = [...(store.edges as Edge[]), ...newEdges]
+
+  // BUG-2 修复 (2026-06-19): VueFlow 选中态由内部 selectedNodeIds 管理,
+  //   写 flowNode.selected / data.selected 已废 (shallowRef + markRaw 也不会触发 DOM .selected class).
+  //   必须走 addSelectedNodes([flowNode, ...]) 同步 VueFlow 内部态 → 粘贴项 outline 高亮.
+  // nextTick 等 VueFlow 把新节点注册到内部 lookup, findNode 才能拿到 reactive flowNode.
+  nextTick(() => {
+    const newFlowNodes: any[] = []
+    for (const n of newNodes) {
+      const flowNode = findNode(n.id) as any
+      if (flowNode) newFlowNodes.push(flowNode)
+    }
+    if (newFlowNodes.length > 0) {
+      addSelectedNodes(newFlowNodes)
+    }
+  })
 
   if (clipboardMode.value === 'cut') {
     clipboard.value = null
