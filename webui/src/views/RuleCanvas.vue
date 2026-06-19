@@ -812,6 +812,10 @@ let selectionLastContainer = { x: 0, y: 0 }
 /** 全局鼠标位置: 任何 mousemove 都更新, 用于快捷键 Ctrl+V 拿鼠标坐标 (KeyboardEvent 没 clientX/Y) */
 const globalMousePos = ref({ x: 0, y: 0 })
 
+// BUG-7 修复 (2026-06-19): 保存 mousemove 回调引用, onBeforeUnmount 才能 remove
+//   (之前匿名箭头函数 addEventListener, 卸载时引用不一致导致 listener 泄漏)
+let trackGlobalMousePos: ((e: MouseEvent) => void) | null = null
+
 // 复制粘贴
 /** 剪贴板 payload: 复制/剪切时把节点+关联边+鼠标位置一起记下
  *
@@ -1726,13 +1730,20 @@ onMounted(async () => {
   // 键盘事件
   window.addEventListener('keydown', handleKeyDown)
   // 全局鼠标位置追踪 — 快捷键 Ctrl+V 没有 MouseEvent, 需要 lastMousePos
-  window.addEventListener('mousemove', (e) => {
+  // BUG-7 修复 (2026-06-19): 之前匿名箭头函数 addEventListener, onBeforeUnmount
+  //   无法 remove (引用不一致). 改用命名句柄 + 闭包变量, 卸载时正确清理.
+  trackGlobalMousePos = (e: MouseEvent) => {
     globalMousePos.value = { x: e.clientX, y: e.clientY }
-  })
+  }
+  window.addEventListener('mousemove', trackGlobalMousePos)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  if (trackGlobalMousePos) {
+    window.removeEventListener('mousemove', trackGlobalMousePos)
+    trackGlobalMousePos = null
+  }
   panelResizeCleanup.value?.()
 })
 
