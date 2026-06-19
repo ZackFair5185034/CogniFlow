@@ -832,11 +832,15 @@ const clipboard = ref<ClipboardPayload | null>(null)
 const clipboardMode = ref<'copy' | 'cut'>('copy')
 
 // 右键菜单
+// BUG-5 修复 (2026-06-19): target 类型收窄为 Node<RuleNodeData> | Edge | null
+//   之前是 `null as unknown` + handlePaletteContextMenu 存 NodeDefinition, 类型安全丢失
+//   面板右键不存任何对象 (target=null, targetType='pane') → 删除操作走 selected 路径
+//   用显式 Node<RuleNodeData> 避免 VueFlow 默认 Node 泛型递归过深触发 TS2589
 const contextMenu = reactive({
   show: false,
   x: 0,
   y: 0,
-  target: null as unknown,
+  target: null as Node<RuleNodeData> | Edge | null,
   targetType: null as 'node' | 'edge' | 'pane' | null
 })
 
@@ -1626,22 +1630,27 @@ function handleDelete() {
 }
 
 // 右键菜单
-function handleContextMenu(event: MouseEvent, target: Node | Edge | NodeDefinition | null, type: 'node' | 'edge' | 'pane') {
+// BUG-5 修复 (2026-06-19): 签名收窄为 Node<RuleNodeData> | Edge | null
+//   (面板右键走单独的 handlePaletteContextMenu, 不再走这条路径)
+function handleContextMenu(event: MouseEvent, target: Node<RuleNodeData> | Edge | null, type: 'node' | 'edge' | 'pane') {
   event.preventDefault()
   event.stopPropagation()
   contextMenu.show = true
   contextMenu.x = event.clientX
   contextMenu.y = event.clientY
-  contextMenu.target = target
+  // safe: 签名已收窄; reactive() 因 VueFlow Node 泛型递归过深, 赋值处用 as any 桥接
+  contextMenu.target = target as any
   contextMenu.targetType = type
 }
 
-function handlePaletteContextMenu(event: MouseEvent, node: NodeDefinition) {
+function handlePaletteContextMenu(event: MouseEvent, _node: NodeDefinition) {
+  // BUG-5 修复 (2026-06-19): 不再把 NodeDefinition 存为 target (类型安全 + 避免误删)
+  //   面板右键不操作具体节点, 菜单按 selected 状态显示 (无选中 → 仅显示 selectAll)
   event.preventDefault()
   contextMenu.show = true
   contextMenu.x = event.clientX
   contextMenu.y = event.clientY
-  contextMenu.target = node
+  contextMenu.target = null
   contextMenu.targetType = 'pane'
 }
 
@@ -1671,8 +1680,10 @@ function handleContextAction(action: string, event?: MouseEvent) {
       // 右键未选中节点/边时, VueFlow 不会自动加 selected 标志,
       // handleDelete() 依赖 selected 过滤 → 静默失败.
       // 先把右键目标对象加入 selected, 再委托给 handleDelete()
-      // (VueFlow addSelectedNodes/addSelectedEdges 签名接收 GraphNode[]/Edge[],
-      //  内部用 .id 取值, 传对象数组而非字符串 ID 数组)
+      // BUG-5 修复 (2026-06-19): contextMenu.target 类型收窄为 Node | Edge | null
+      //   addSelectedNodes/addSelectedEdges 接收的是 VueFlow 内部 GraphNode/GraphEdge
+      //   (含 computedPosition 等内部字段, 与 public Node/Edge 不完全一致),
+      //   类型签名差异靠 as any 桥接 (内部用 .id 取值, 实际语义安全)
       if (contextMenu.targetType === 'node' && contextMenu.target) {
         addSelectedNodes([contextMenu.target as any])
       } else if (contextMenu.targetType === 'edge' && contextMenu.target) {
