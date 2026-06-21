@@ -246,16 +246,34 @@
 
           <!-- 变量下拉菜单 -->
           <div
-            v-if="activeVarMenu === key && variables.length > 0"
+            v-if="activeVarMenu === key"
             class="nce-var-dropdown"
           >
+            <!-- 有变量时正常列出选项 -->
+            <template v-if="variables.length > 0">
+              <div
+                v-for="v in variables"
+                :key="v.name"
+                class="nce-var-option"
+                @click="bindVariable(key, v.name)"
+              >
+                {{ formatVarRef(v.name) }}
+              </div>
+            </template>
+            <!-- 2026-06-21: 空状态提示 — 之前 v-if="variables.length > 0" 导致无变量时静默不渲染,
+                 用户点击 tag 按钮没反应以为坏了. 现在给明确指引.
+                 注: 变量管理 UI 内联在 RuleCanvas.vue 左侧调色板底部 (📌 变量 区),
+                 VariablePanel.vue 是孤儿组件, 不要引用. -->
             <div
-              v-for="v in variables"
-              :key="v.name"
-              class="nce-var-option"
-              @click="bindVariable(key, v.name)"
+              v-else
+              class="nce-var-empty"
             >
-              {{ formatVarRef(v.name) }}
+              <div class="nce-var-empty-title">
+                暂无变量
+              </div>
+              <div class="nce-var-empty-desc">
+                请先在左侧调色板底部「📌 变量」区域点击「+ 添加变量」后再来绑定
+              </div>
             </div>
           </div>
         </div>
@@ -843,6 +861,25 @@ function updateConfig(key: string, value: string | number | boolean | null) {
 .nce-var-option:hover {
   background: var(--bg-hover);
   color: var(--accent-blue);
+}
+
+/* 2026-06-21: 空状态 — 提示用户去 VariablePanel 添加变量 */
+.nce-var-empty {
+  padding: 12px;
+  min-width: 200px;
+}
+
+.nce-var-empty-title {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.nce-var-empty-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
 }
 
 .nce-empty {
