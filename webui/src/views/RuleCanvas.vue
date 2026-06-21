@@ -4106,10 +4106,11 @@ $panel-header-height: 44px;
     display: none;
   }
 
-  /* 拖拽性能优化: 为每个节点 wrapper 创建独立合成层,
-     GPU 直接位移跳过 repaint, 与 CSS containment 配合隔离布局重算 */
+  /* 拖拽性能优化: CSS containment 隔离子树布局重算 (节点内重排不影响其他节点).
+     2026-06-21: 移除 will-change: transform — 用户明确要求完全去掉 GPU 合成层效果,
+     will-change 同样会强制元素进入独立层, 触发文字 subpixel 抗锯齿丢失.
+     保留 contain: layout style (只隔离布局, 不影响渲染质量) */
   :deep(.vue-flow__node) {
-    will-change: transform;
     contain: layout style;
   }
 

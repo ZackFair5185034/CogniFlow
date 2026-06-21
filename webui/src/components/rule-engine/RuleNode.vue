@@ -305,15 +305,15 @@ const isDisabled = computed(() => {
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
     0 2px 8px rgba(0,0,0,0.3);
-  /* === GPU 合成层提示 (Tier 0 性能优化) ===
-     - contain: layout style  隔离子树对外部布局/样式影响 (去掉 paint! paint containment
-       等同 overflow:hidden, 会裁切超出节点壳的 Handle 圆 → 老大反馈"只能看到半个圆")
-     - will-change: transform  提示浏览器提前创建独立合成层
-     - translateZ(0) + backface-visibility: hidden  兜底强制 layer,避免子像素抖动 */
+  /* === 合成层隔离 (Tier 0 性能优化) ===
+     - contain: layout style  隔离子树对外部布局/样式影响
+       (注意: 不加 paint, paint containment 等同 overflow:hidden, 会裁切超出
+        节点壳的 Handle 圆 → 老大反馈"只能看到半个圆")
+     - 2026-06-21 修复: 移除永久的 will-change/translateZ(0)/backface-visibility:hidden.
+       这三件套会强制元素进入独立 GPU 合成层, 浏览器对合成层文字禁用
+       subpixel 抗锯齿, 导致节点文字永久性"糊" (用户 2026-06-21 反馈).
+       仅在拖动期临时启用, 兼顾拖动平滑 + 静态期文字清晰. */
   contain: layout style;
-  will-change: transform;
-  transform: translateZ(0);
-  backface-visibility: hidden;
   overflow: visible !important;
   /* ========== 2026-06-19: 节点默认 cursor ==========
      Vue Flow 默认给 .vue-flow__node 设了 cursor: grab,
@@ -327,6 +327,8 @@ const isDisabled = computed(() => {
 .vue-flow__node.dragging .rule-node,
 .vue-flow__node.selected.dragging .rule-node {
   transition: none !important;
+  /* 2026-06-21: 移除所有 GPU 合成层 hack (will-change/translateZ/backface-visibility).
+     用户明确要求完全去掉 — 文字清晰度优先, 即使牺牲部分拖动平滑度. */
 }
 
 /* P2-I (Phase 17.1): 节点状态切换瞬间禁用 transition
