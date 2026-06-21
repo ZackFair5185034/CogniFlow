@@ -105,7 +105,6 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
         return true
       })
       .on('start', (event: DragEvent) => {
-        // start 阶段 event 是合成 DragEvent, __cfNodeEl 挂在 event.sourceEvent 上
         const el = (event.sourceEvent as any)?.__cfNodeEl as HTMLElement | undefined
         if (!el) return
         currentDragEl = el
