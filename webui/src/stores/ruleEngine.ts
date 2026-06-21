@@ -294,26 +294,25 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    * 现在: store 全局 Map, O(1) 查询.
    */
   /**
-   * PERF-1 修复 (2026-06-19): 节点 ID → node O(1) 查找
-   *   之前是 computed, 每次 nodes.value 重新赋值都全量 O(N) 重建
-   *   (createNode/removeNode/handlePaste/undo/redo/saveGraph/loadGraph/handleNodesChange)
-   *   100 节点场景 ~0.05ms 看似小, 高频操作 (快速粘贴/撤销) 会累积
-   * 改 lazy 增量: 维护 _nodeByIdMap + _nodeByIdDirty flag, 读取时按需重建
-   *   重建只在 (a) 首次访问 (b) flag dirty 时触发, 命中时返回同 Map 引用 (Vue computed 缓存)
-   *   dirty 由 _nodeByIdMarkDirty() 在所有 mutation 站点调用
+   * 节点 ID → node O(1) 查找 (computed)
+   *
+   * 2026-06-21 修复: 去掉 lazy dirty 优化
+   *   原实现用 _nodeByIdDirty flag, false 时直接 return 缓存 Map, 不访问 nodes.value,
+   *   导致 Vue computed 依赖追踪断裂 — createNode 改 nodes.value 后 computed 不重算,
+   *   Map 停留在旧值, 新增节点 nodeById.get(id) 返回 undefined, onDragStart 中断,
+   *   表现为"新增节点拖不动, 已有节点能拖".
+   *   现每次都访问 nodes.value 建立依赖, nodes.value 变化即重建. 100 节点 ~0.05ms 可接受.
+   *
+   * _nodeByIdMarkDirty() 保留为空函数: 历史 mutation 站点 (loadGraph/createNode/
+   *   removeNode/undo/redo 等) 仍在调用, 删除需改 6 处, 保留空函数零成本兼容.
    */
-  const _nodeByIdMap = new Map<string, Node<RuleNodeData>>()
-  let _nodeByIdDirty = true
-  function _nodeByIdMarkDirty() { _nodeByIdDirty = true }
+  function _nodeByIdMarkDirty() { /* 2026-06-21: nodeById 改全量 computed, 无需 dirty flag, 空函数保留避免改动调用点 */ }
   const nodeById = computed<Map<string, Node<RuleNodeData>>>(() => {
-    if (_nodeByIdDirty) {
-      _nodeByIdMap.clear()
-      for (const n of nodes.value) {
-        _nodeByIdMap.set(n.id, n)
-      }
-      _nodeByIdDirty = false
+    const map = new Map<string, Node<RuleNodeData>>()
+    for (const n of nodes.value) {
+      map.set(n.id, n)
     }
-    return _nodeByIdMap
+    return map
   })
 
   /** 是否可以撤销 */
