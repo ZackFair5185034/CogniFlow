@@ -2346,13 +2346,14 @@ function handleDrop(event: DragEvent) {
   if (!data) return
 
   const nodeDef = JSON.parse(data)
-  const container = flowContainer.value
-  if (!container) return
-
-  const rect = container.getBoundingClientRect()
+  // 2026-06-21 修复: screenToFlowCoordinate 内部已减 vueFlowRef.getBoundingClientRect()
+  //   (useViewportHelper.ts:189), 这里不能再减 rect.left, 否则双重减法会让节点
+  //   落在画布左外侧 (palette 后面), 节点虽创建但被调色板遮挡无法点击/拖动.
+  //   之前表现: 第一个节点存 flow(-90, 300) → 渲染到 screen(222, 243) (palette 0-280 之后),
+  //   后续节点被前面节点遮住 → "第一个能拖, 后续不能拖".
   const position = screenToFlowCoordinate({
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
+    x: event.clientX,
+    y: event.clientY
   })
 
   if (snapGrid.value) {

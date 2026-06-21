@@ -113,11 +113,16 @@
       />
     </div>
 
-    <!-- ========== 节点内嵌配置 (Phase 19.3+: 默认全展开显示, 双击折叠到 200px) ========== -->
+    <!-- ========== 节点内嵌配置 (Phase 19.3+: 默认全展开显示, 双击折叠到 200px) ==========
+         2026-06-21 修复: 移除 @mousedown.stop
+           原因: .stop 会 stopPropagation, 导致 mousedown 无法冒泡到
+           .vue-flow__viewport 上的 d3-drag handler, 用户抓配置区拖不动节点.
+           保留 @click.stop / @dblclick.stop: 防止点击配置时触发节点选中/折叠切换.
+           拖拽排除由 useCogniFlowDrag.ts 的 d3-drag filter 兜底:
+           `if (target.closest('.node-config-section')) return false` -->
     <div
       v-if="isExpanded"
       class="node-config-section"
-      @mousedown.stop
       @click.stop
       @dblclick.stop
     >

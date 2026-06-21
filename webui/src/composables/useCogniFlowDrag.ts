@@ -84,29 +84,38 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
     }
 
     const dragHandler = d3Drag<HTMLElement, unknown>()
-      .filter((event: MouseEvent) => {
-        if (event.button) return false
-        // 找最近的可拖动节点 wrapper
-        const target = event.target as HTMLElement | null
-        if (!target) return false
-        const nodeEl = target.closest<HTMLElement>('.vue-flow__node[data-id]')
+      .filter((event: any) => {
+        // 2026-06-21 修复: d3-drag v3 mousedowned 调用 filter 时传入的 event 是**原始 MouseEvent**
+        //   (而非某些版本假设的合成 DragEvent). 之前的代码假设了 sourceEvent,
+        //   结果 event.target 是 d3 内部对象, .closest() 永远返回 null, filter 永远 reject,
+        //   拖动功能彻底失效 (新建节点 + 已有节点都无法拖).
+        //   兼容写法: srcEvent = event?.sourceEvent ?? event,
+        //   未来若 d3-drag 改成传入 DragEvent 也能正确回退.
+        const srcEvent = event?.sourceEvent ?? event
+        if (srcEvent.button) return false
+        const target = srcEvent.target as HTMLElement | null
+        if (!target || typeof target.closest !== 'function') return false
+        const nodeEl = target.closest('.vue-flow__node[data-id]') as HTMLElement | null
         if (!nodeEl) return false
-        // 限制拖动只在 .node-header (标题栏) 触发 (2026-06-19 优化)
-        //   旧实现: 整个节点都可拖, 但用户体感"只有标题栏能拖", cursor 也不对 (进入节点就是 grab)
-        //   新实现: 严格只在标题栏启动拖动, 节点其余区域 (端口/配置/状态) 不参与拖动
-        //   配合 RuleNode.vue 的分区 cursor, 用户鼠标样式与可交互区一致
-        if (!target.closest('.node-header')) return false
-        // 排除交互元素 (按钮等):
-        // - .node-collapse-btn / .node-expand-btn: 标题栏内的折叠/展开按钮
-        //   (d3-drag 会劫持 click 事件, 必须从 mousedown 起就放行,
-        //   否则按钮 @click 不触发)
+        // 2026-06-21 放宽: 原限制 `if (!target.closest('.node-header')) return false`
+        //   导致新增节点 (默认全展开 280px, 配置区占大部分) 抓主体拖不动 —
+        //   target 命中 .node-config-section / .node-ports, filter 永久 reject.
+        //   体感"新增节点不能拖, 老节点能拖"实为标题栏在折叠态占比更大更易命中.
+        //   新策略: 整个节点壳都可拖, 仅排除真正需要独占交互的子区域:
+        //   - .vue-flow__handle: 连接端口 (VueFlow 内部 onPointerDown 接线)
+        //   - .node-collapse-btn / .node-expand-btn: 折叠/展开按钮 (防 d3-drag 劫持 click)
+        //   - .node-config-section: 内嵌配置 (RuleNode.vue 已有 @mousedown.stop 拦截,
+        //     此处双保险, 防未来误删 .stop 导致配置输入触发拖动)
+        if (target.closest('.vue-flow__handle')) return false
         if (target.closest('.node-collapse-btn')) return false
         if (target.closest('.node-expand-btn')) return false
+        if (target.closest('.node-config-section')) return false
         // 把 nodeEl 存到 sourceEvent 供 start/drag/end 阶段读取
-        ;(event as any).__cfNodeEl = nodeEl
+        srcEvent.__cfNodeEl = nodeEl
         return true
       })
       .on('start', (event: DragEvent) => {
+        // start 阶段 event 是合成 DragEvent, __cfNodeEl 挂在 event.sourceEvent 上
         const el = (event.sourceEvent as any)?.__cfNodeEl as HTMLElement | undefined
         if (!el) return
         currentDragEl = el
