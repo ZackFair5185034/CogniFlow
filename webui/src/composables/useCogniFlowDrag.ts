@@ -97,20 +97,10 @@ export function useCogniFlowDrag(options: UseCogniFlowDragOptions) {
         if (!target || typeof target.closest !== 'function') return false
         const nodeEl = target.closest('.vue-flow__node[data-id]') as HTMLElement | null
         if (!nodeEl) return false
-        // 2026-06-21 放宽: 原限制 `if (!target.closest('.node-header')) return false`
-        //   导致新增节点 (默认全展开 280px, 配置区占大部分) 抓主体拖不动 —
-        //   target 命中 .node-config-section / .node-ports, filter 永久 reject.
-        //   体感"新增节点不能拖, 老节点能拖"实为标题栏在折叠态占比更大更易命中.
-        //   新策略: 整个节点壳都可拖, 仅排除真正需要独占交互的子区域:
-        //   - .vue-flow__handle: 连接端口 (VueFlow 内部 onPointerDown 接线)
-        //   - .node-collapse-btn / .node-expand-btn: 折叠/展开按钮 (防 d3-drag 劫持 click)
-        //   - .node-config-section: 内嵌配置 (RuleNode.vue 已有 @mousedown.stop 拦截,
-        //     此处双保险, 防未来误删 .stop 导致配置输入触发拖动)
         if (target.closest('.vue-flow__handle')) return false
         if (target.closest('.node-collapse-btn')) return false
         if (target.closest('.node-expand-btn')) return false
         if (target.closest('.node-config-section')) return false
-        // 把 nodeEl 存到 sourceEvent 供 start/drag/end 阶段读取
         srcEvent.__cfNodeEl = nodeEl
         return true
       })
