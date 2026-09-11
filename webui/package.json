@@ -17,7 +17,7 @@
     "@element-plus/icons-vue": "^2.3.2",
     "@vue-flow/background": "^1.3.2",
     "@vue-flow/controls": "^1.1.3",
-    "@vue-flow/core": "file:/home/wanglei/vue-flow/packages/core",
+    "@vue-flow/core": "1.48.2",
     "@vue-flow/minimap": "^1.5.4",
     "axios": "^1.17.0",
     "d3-drag": "3.0.0",
