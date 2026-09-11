@@ -939,6 +939,7 @@ import '@vue-flow/minimap/dist/style.css'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import { useCogniFlowDrag } from '@/composables/useCogniFlowDrag'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const router = useRouter()
 const route = useRoute()
@@ -1367,67 +1368,44 @@ function miniMapNodeColor(node: { data?: { category?: string } }) {
 }
 
 
-// WebSocket 连接（Phase 5 实时推送）
-let ws: WebSocket | null = null
-let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
+// WebSocket 连接（Phase 5 实时推送, P1-B 2026-09-11 改用统一 composable）
 const wsConnected = ref(false)
+/** 待订阅的执行 ID, 由 connectWebSocket(execId) 设置, onOpen 时发送 subscribe */
+let pendingSubscribeId: number | null = null
 
-function getWsUrl() {
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${proto}//${window.location.host}/ws/rule-execution`
-}
+const { connect: wsConnect, close: wsClose, send: wsSend } = useWebSocket({
+  url: () => {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${proto}//${window.location.host}/ws/rule-execution`
+  },
+  /** 仅在执行进行中时重连; 完成后断开不再尝试 */
+  reconnect: () => executionStatus.value === 'running' && !!executionId.value,
+  onOpen: () => {
+    wsConnected.value = true
+    if (pendingSubscribeId !== null) {
+      wsSend({ action: 'subscribe', execution_id: pendingSubscribeId })
+      pendingSubscribeId = null
+    }
+  },
+  onClose: () => {
+    wsConnected.value = false
+  },
+  onError: () => {
+    wsConnected.value = false
+  },
+  onMessage: (msg) => {
+    handleWsMessage(msg)
+  },
+})
 
 function connectWebSocket(execId: number) {
-  if (ws) {
-    ws.close()
-    ws = null
-  }
-
-  try {
-    ws = new WebSocket(getWsUrl())
-
-    ws.onopen = () => {
-      wsConnected.value = true
-      ws?.send(JSON.stringify({ action: 'subscribe', execution_id: execId }))
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data)
-        handleWsMessage(msg)
-      } catch (e) {
-        console.error('[WS] 解析消息失败', e)
-      }
-    }
-
-    ws.onerror = () => {
-      wsConnected.value = false
-      if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
-      wsReconnectTimer = setTimeout(() => {
-        if (executionStatus.value === 'running' && executionId.value) {
-          connectWebSocket(executionId.value)
-        }
-      }, 3000)
-    }
-
-    ws.onclose = () => {
-      wsConnected.value = false
-      ws = null
-    }
-  } catch (e) {
-    console.error('[WS] 连接失败', e)
-  }
+  pendingSubscribeId = execId
+  wsConnect()
 }
 
 function disconnectWebSocket() {
-  if (wsReconnectTimer) {
-    clearTimeout(wsReconnectTimer)
-    wsReconnectTimer = null
-  }
-  if (ws) {
-    ws.close()
-    ws = null
-  }
+  pendingSubscribeId = null
+  wsClose()
 }
 
 function handleWsMessage(msg: any) {

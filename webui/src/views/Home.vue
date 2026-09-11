@@ -137,6 +137,14 @@
 <script setup lang="ts">
 import { atlasApi, imageApi, modelApi, trainingApi } from '@/api'
 import type { TrainingJobResponse } from '@/types/api'
+import { useWebSocket } from '@/composables/useWebSocket'
+
+interface SystemStats {
+  cpu: { percent: number }
+  memory: { percent: number; used: number; total: number }
+  disk: { percent: number; used: number; total: number }
+  gpu: { percent: number; memory_used: number; memory_total: number; name: string | null }
+}
 
 const loading = ref(true)
 
@@ -169,11 +177,11 @@ const quickActions = [
 ]
 
 // 系统状态
-const systemStats = ref({
+const systemStats = ref<SystemStats>({
   cpu: { percent: 0 },
   memory: { total: 0, used: 0, percent: 0 },
   disk: { total: 0, used: 0, percent: 0 },
-  gpu: { percent: 0, memory_used: 0, memory_total: 0, name: null as string | null },
+  gpu: { percent: 0, memory_used: 0, memory_total: 0, name: null },
 })
 
 const formatBytes = (bytes: number) => {
@@ -216,50 +224,24 @@ const statusItems = computed(() => {
   ]
 })
 
-// WebSocket
-let wsSystem: WebSocket | null = null
-let wsTraining: WebSocket | null = null
-// 防止组件卸载后定时器继续重连
-let intentionalDisconnect = false
-// 保存 setTimeout 句柄，便于卸载时清理
-let reconnectSystemTimer: number | null = null
-let reconnectTrainingTimer: number | null = null
-
-const connectSystemWs = () => {
-  // 组件已卸载则不再建立连接
-  if (intentionalDisconnect) return
-  wsSystem = new WebSocket('/ws/system')
-  wsSystem.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-    if (data.type === 'system_stats') {
-      systemStats.value = data.data
+// WebSocket (P1-B, 2026-09-11): 改用统一 composable, 自动重连 + 卸载清理
+useWebSocket<{ type: string; data: SystemStats }>({
+  url: '/ws/system',
+  onMessage: (msg) => {
+    if (msg.type === 'system_stats') {
+      systemStats.value = msg.data
     }
-  }
-  wsSystem.onclose = () => {
-    wsSystem = null
-    // 组件已卸载则不重连
-    if (intentionalDisconnect) return
-    reconnectSystemTimer = window.setTimeout(connectSystemWs, 3000)
-  }
-}
+  },
+})
 
-const connectTrainingWs = () => {
-  // 组件已卸载则不再建立连接
-  if (intentionalDisconnect) return
-  wsTraining = new WebSocket('/ws/training')
-  wsTraining.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-    if (data.type === 'training_update') {
+useWebSocket<{ type: string }>({
+  url: '/ws/training',
+  onMessage: (msg) => {
+    if (msg.type === 'training_update') {
       loadTrainingJobs()
     }
-  }
-  wsTraining.onclose = () => {
-    wsTraining = null
-    // 组件已卸载则不重连
-    if (intentionalDisconnect) return
-    reconnectTrainingTimer = window.setTimeout(connectTrainingWs, 3000)
-  }
-}
+  },
+})
 
 const loadTrainingJobs = async () => {
   try {
@@ -329,31 +311,12 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-  connectSystemWs()
-  connectTrainingWs()
+  // WebSocket 由 composable 自动建立 + 自动卸载清理 (P1-B, 2026-09-11)
   startTrainingProgressPolling()
 })
 
 onUnmounted(() => {
-  // 标记为主动断开，避免 onclose 触发重连
-  intentionalDisconnect = true
-  // 清理待执行的重连定时器
-  if (reconnectSystemTimer !== null) {
-    clearTimeout(reconnectSystemTimer)
-    reconnectSystemTimer = null
-  }
-  if (reconnectTrainingTimer !== null) {
-    clearTimeout(reconnectTrainingTimer)
-    reconnectTrainingTimer = null
-  }
-  if (wsSystem) {
-    wsSystem.close()
-    wsSystem = null
-  }
-  if (wsTraining) {
-    wsTraining.close()
-    wsTraining = null
-  }
+  // useWebSocket composable 已在 onUnmounted 内部自动 close (P1-B)
   stopTrainingProgressPolling()
 })
 </script>

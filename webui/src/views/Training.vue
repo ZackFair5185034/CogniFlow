@@ -284,6 +284,7 @@
 <script setup lang="ts">
 import { trainingApi, modelApi, atlasApi } from '@/api'
 import type { TrainingJobResponse, ModelResponse, AtlasResponse } from '@/types/api'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const jobs = ref<TrainingJobResponse[]>([])
 const models = ref<ModelResponse[]>([])
@@ -306,8 +307,6 @@ const startForm = ref({
   device: 'cpu',
   pretrained_model: 'yolov8s.pt',
 })
-
-let ws: WebSocket | null = null
 
 const statusText: Record<string, string> = {
   pending: '等待中',
@@ -409,18 +408,15 @@ const handleStop = async (job: TrainingJobResponse) => {
   }
 }
 
-const connectWebSocket = () => {
-  ws = new WebSocket(`/ws/training`)
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-    if (data.type === 'training_update') {
+// WebSocket (P1-B, 2026-09-11): 使用统一 composable, 自动重连 + 卸载清理
+useWebSocket<{ type: string }>({
+  url: '/ws/training',
+  onMessage: (msg) => {
+    if (msg.type === 'training_update') {
       loadJobs()
     }
-  }
-  ws.onclose = () => {
-    setTimeout(connectWebSocket, 3000)
-  }
-}
+  },
+})
 
 // 轮询进度
 let progressPollingTimer: number | null = null
@@ -464,13 +460,13 @@ const stopProgressPolling = () => {
 
 onMounted(() => {
   Promise.all([loadJobs(), loadModels(), loadAtlases(), loadDeviceInfo()])
-  connectWebSocket()
+  // WebSocket 由 composable 自动建立 (P1-B, 2026-09-11)
   // 启动轮询
   startProgressPolling()
 })
 
 onUnmounted(() => {
-  if (ws) ws.close()
+  // useWebSocket composable 已在 onUnmounted 内部自动 close (P1-B)
   stopProgressPolling()
 })
 </script>

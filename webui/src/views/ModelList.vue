@@ -583,6 +583,7 @@
 <script setup lang="ts">
 import { atlasApi, modelApi } from '@/api'
 import type {ModelResponse, AtlasResponse} from '@/types/api'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const models = ref<ModelResponse[]>([])
 const atlases = ref<AtlasResponse[]>([])
@@ -604,7 +605,35 @@ const exportStatus = ref<'idle' | 'starting' | 'loading' | 'saving' | 'completed
 const exportProgress = ref(0)
 const exportMessage = ref('')
 const exportId = ref<string | null>(null)
-let exportWs: WebSocket | null = null
+
+// 导出进度 WebSocket (P1-B, 2026-09-11): 使用统一 composable
+// - autoConnect:false: 拿到 export_id 后手动 connect
+// - reconnect:false: 导出是一次性任务, 不重连
+const exportWs = useWebSocket<{
+  type: string
+  data: { status: string; progress: number; message: string }
+}>({
+  url: () => (exportId.value ? `/ws/export/${exportId.value}` : ''),
+  autoConnect: false,
+  reconnect: false,
+  onMessage: (msg) => {
+    if (msg.type === 'export_update') {
+      const data = msg.data
+      exportStatus.value = data.status as typeof exportStatus.value
+      exportProgress.value = data.progress
+      exportMessage.value = data.message
+
+      if (data.status === 'completed') {
+        ElMessage.success('导出完成')
+        exporting.value = false
+        loadModels()
+      } else if (data.status === 'error') {
+        ElMessage.error(data.message)
+        exporting.value = false
+      }
+    }
+  },
+})
 
 const exportStatusText = computed(() => {
   const map: Record<string, string> = {
@@ -870,58 +899,12 @@ const handleExport = (row: ModelResponse) => {
 
 // 关闭导出弹窗
 const handleExportClose = () => {
-  if (exportWs) {
-    exportWs.close()
-    exportWs = null
-  }
+  exportWs.close()
+  exportId.value = null
   showExportDialog.value = false
   exportStatus.value = 'idle'
   exportProgress.value = 0
   exportMessage.value = ''
-}
-
-// 连接导出进度 WebSocket
-const connectExportWs = (exportId: string) => {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = window.location.host
-  const wsUrl = `${protocol}//${host}/ws/export/${exportId}`
-
-  exportWs = new WebSocket(wsUrl)
-
-  exportWs.onopen = () => {
-    // 连接已建立
-  }
-
-  exportWs.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data)
-      if (msg.type === 'export_update') {
-        const data = msg.data
-        exportStatus.value = data.status
-        exportProgress.value = data.progress
-        exportMessage.value = data.message
-
-        if (data.status === 'completed') {
-          ElMessage.success('导出完成')
-          exporting.value = false
-          loadModels()
-        } else if (data.status === 'error') {
-          ElMessage.error(data.message)
-          exporting.value = false
-        }
-      }
-    } catch (e) {
-      console.error('解析导出消息失败', e)
-    }
-  }
-
-  exportWs.onerror = (error) => {
-    console.error('导出 WebSocket 错误', error)
-  }
-
-  exportWs.onclose = () => {
-    exportWs = null
-  }
 }
 
 const handleExportSubmit = async () => {
@@ -940,7 +923,7 @@ const handleExportSubmit = async () => {
       exportStatus.value = 'starting'
       exportProgress.value = 0
       exportMessage.value = '正在连接...'
-      connectExportWs(res.data.export_id)
+      exportWs.connect()
     }
   } catch (error: unknown) {
     const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '导出失败'
