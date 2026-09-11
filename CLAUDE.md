@@ -299,34 +299,36 @@ style/
 ├── _animations.scss        # @keyframes 动画定义
 ├── _element-plus-vars.scss # Element Plus CSS 变量主题
 ├── _element-plus.scss      # Element Plus 全局样式覆盖
-├── _common.scss            # .ui-* 组件样式
 └── index.scss              # 主入口，@use 导入所有模块
 ```
 
+> **ENG 修正 (2026-09-12)**：原文档列的 `_common.scss` **已不存在**（2026-06-18 其内容全部迁到 `uno.config.ts` 的 shortcut）。
+> 按钮/卡片/标签等组件类现在**只**定义在 `uno.config.ts`，不在 SCSS 文件里。
+
 #### 按钮体系
 
-全局统一的 `.ui-btn` 按钮体系，定义在 `_common.scss`：
+全局按钮类定义在 **`uno.config.ts` 的 `shortcuts`**（不是 SCSS）：
 
-| 类名 | 用途 | 说明 |
-|------|------|------|
-| `.ui-btn` | 默认按钮 | `padding: 10px 20px`，`font-size: 14px`，`border-radius: 8px`，透明背景+边框 |
-| `.ui-btn-primary` | 主操作按钮 | 青色渐变背景 |
-| `.ui-btn-success` | 成功操作 | 绿色渐变背景 |
-| `.ui-btn-danger` | 危险操作 | 红色渐变背景 |
-| `.ui-btn-small` | 紧凑按钮 | `padding: 4px 8px`，`font-size: 13px` |
-| `.ui-btn-icon` | 图标按钮 | 36×36 方形，透明背景 |
-| `.ui-tag` | 标签 | `.ui-tag-cyan`、`.ui-tag-green`、`.ui-tag-yellow`、`.ui-tag-magenta` |
-| `.ui-card` | 卡片容器 | 背景+边框+圆角，悬停顶部渐变条 |
-| `.ui-input` | 输入框 | 全宽，深色背景 |
-| `.ui-badge` | 徽章 | mono 字体，等宽显示 |
-| `.ui-scrollbar` | 滚动条 | 统一滚动条样式 |
+| 类名 | 用途 | 实际实现 |
+|------|------|----------|
+| `ui-btn` | 默认按钮 | 13px / `px-4 py-2` / 6px 圆角 / 卡片底+边框 |
+| `ui-btn-primary` | 主操作按钮 | 品牌青底 + **深墨字**（`--on-vibrant`） |
+| `ui-btn-success` / `ui-btn-danger` | 语义操作 | 语义色底 + 深墨字 |
+| `ui-btn-small` / `ui-btn-xs` / `ui-btn-sm` | 紧凑尺寸 | `ui-btn-sm` 是**修饰符**，与基础类组合用 |
+| `ui-btn-secondary` | 次要按钮 | 低对比底色，hover 点亮品牌青（修饰符） |
+| `ui-btn-icon` | 图标按钮 | 34×34 方形，透明底 |
+| `ui-card` / `ui-card-header` / `ui-card-content` | 卡片 | 背景+边框+圆角 |
+| `ui-tag` / `ui-tag-blue|green|yellow|red` | 标签 | 语义底 + 语义字 |
+| `ui-input` / `ui-badge` / `ui-scrollbar` | 输入/徽章/滚动条 | — |
 
 **使用规范：**
-- 页面主操作按钮使用 `.ui-btn .ui-btn-primary`
-- 工具栏/卡片内操作使用 `.ui-btn .ui-btn-small`
-- 不允许在视图组件中覆盖 `.ui-btn` 的 padding、border-radius 等基础样式
-- 图标按钮使用 `.ui-btn-icon`
-- Element Plus 的 `el-button--text` 已全局统一样式为青色
+- 页面主操作按钮使用 `ui-btn ui-btn-primary`
+- 工具栏/卡片内操作使用 `ui-btn ui-btn-small`
+- 修饰符必须与基础类组合：`class="ui-btn ui-btn-primary ui-btn-sm"`
+  （`ui-btn-sm` / `ui-btn-secondary` 内部用 `!` 强制覆盖，避免 UnoCSS 生成顺序影响结果）
+- **亮色底（品牌青/语义色）上一律用 `text-[var(--on-vibrant)]`，禁止 `text-white`**
+  —— 白字在 `#22d3ee` 上仅 1.81:1，在 v1 蓝 `#5898ff` 上也仅 2.86:1，均不可读
+- 不允许在视图组件中覆盖基础类的 padding、border-radius
 
 **页面头部结构规范：**
 ```html
@@ -349,7 +351,7 @@ style/
 }
 .header-info h2 {
   @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+  background: linear-gradient(90deg, var(--text-primary), var(--accent));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -359,8 +361,10 @@ style/
 }
 ```
 
+> 实际写法更简单：直接用 `cf-gradient-text` shortcut（`uno.config.ts` 已定义，6 个视图在用），无需手写 SCSS 块。
+
 - 根容器使用 `gap-4`（16px）与子元素间距
-- 页面标题统一使用渐变色文字（text → accent-cyan）
+- 页面标题统一使用渐变色文字：`class="cf-gradient-text text-2xl font-semibold"`
 - 副标题使用 `text-muted`，左侧 `ml-3` 与标题保持间距
 - 右侧操作按钮统一使用 `ui-btn-primary`
 
@@ -368,54 +372,54 @@ style/
 
 UnoCSS 是原子化 CSS 引擎，提供即时按需编译。所有原子化样式直接使用 UnoCSS/Tailwind 工具类，scoped SCSS 仅用于复杂结构样式。
 
-**前缀规范：`cf-`（CogniFlow）**
+**前缀规范：`ui-`（组件类）与 `cf-`（框架类）**
 
-所有项目级快捷方式统一使用 `cf-` 前缀，定义在 `uno.config.ts` 的 `shortcuts` 中。
+> **ENG 修正 (2026-09-12)**：原文档声称"所有项目级快捷方式统一使用 `cf-` 前缀"，
+> 并列出 34 个 `cf-*`。**实测其中 31 个不存在，且全项目 0 处使用**。
+> 实际生效的是 `ui-*` 系列（`ui-btn` 70 处 / `ui-card` 28 处…）。
+> 文档与实现对齐后如下；**新代码请按此表写**。
 
-**快捷方式完整列表：**
+**一、`ui-*` 组件类（`uno.config.ts` 定义，实际在用）**
 
-| 名称 | 用途 | 实际样式 |
-|------|------|----------|
-| `cf-btn` | 默认按钮 | 胶囊形卡片边框按钮 |
-| `cf-btn-primary` | 主操作按钮 | 黑色胶囊背景 |
-| `cf-btn-brand` | 品牌强调按钮 | 青色渐变背景 |
-| `cf-btn-small` | 紧凑按钮 | 小尺寸胶囊 |
-| `cf-btn-icon` | 图标按钮 | 40×40 圆形透明 |
-| `cf-card` | 卡片容器 | 背景+边框+圆角 |
-| `cf-card-header` | 卡片头部 | flex+分隔线 |
-| `cf-card-content` | 卡片内容区 | p-6 |
-| `cf-flex` | flex 容器 | `flex` |
-| `cf-flex-col` | 纵向 flex | `flex flex-col` |
-| `cf-items-center` | 垂直居中 | `items-center` |
-| `cf-justify-center` | 水平居中 | `justify-center` |
-| `cf-justify-between` | 两端对齐 | `justify-between` |
-| `cf-gap-2` ~ `cf-gap-6` | 间距 | `gap-2` ~ `gap-6` |
-| `cf-text-xs` ~ `cf-text-lg` | 文字层级 | 14~20px 不同字重 |
-| `cf-text-muted` | 次要文字 | `text-[var(--text-muted)]` |
-| `cf-text-secondary` | 辅助文字 | `text-[var(--text-secondary)]` |
-| `cf-font-mono` | 等宽字体 | JetBrains Mono |
-| `cf-font-bold` | 加粗 | `font-bold` |
-| `cf-badge` | 徽章 | mono+边框+大写 |
-| `cf-input` | 输入框 | 全宽+边框+聚焦态 |
-| `cf-animate-fade-in` | 淡入动画 | fadeIn keyframes |
-| `cf-transition` | 通用过渡 | `transition-all duration-200` |
-| `cf-page-header` | 页面头部 | flex+间隙+不缩放 |
-| `cf-dialog-overlay` | 对话框遮罩 | 固定定位+模糊 |
-| `cf-dialog-panel` | 对话框面板 | 最大宽度 450px |
-| `cf-table-wrapper` | 表格容器 | 横向滚动 |
-| `cf-toolbar` | 工具栏 | flex+两端对齐 |
-| `cf-content-area` | 内容区 | flex-1+溢出隐藏 |
-| `cf-panel` | 侧边面板 | 固定宽度+背景 |
-| `cf-loading` | 加载状态 | 绝对定位居中 |
-| `cf-empty` | 空状态 | 居中+内边距 |
-| `cf-scroll-y` | 纵向滚动 | `overflow-y-auto` |
-| `cf-scrollbar` | 滚动条样式 | 1.5px 宽度 |
+| 名称 | 用途 |
+|------|------|
+| `ui-btn` | 按钮基类（13px / `px-4 py-2` / 6px 圆角 / 卡片底） |
+| `ui-btn-primary` / `ui-btn-success` / `ui-btn-danger` | 语义按钮，亮底 + 深墨字 |
+| `ui-btn-secondary` | 次要按钮（修饰符，hover 点亮品牌青） |
+| `ui-btn-small` / `ui-btn-xs` / `ui-btn-sm` | 紧凑尺寸（后两者为修饰符，`ui-btn-sm` 用 `!` 强制覆盖） |
+| `ui-btn-icon` | 图标按钮（34×34） |
+| `ui-card` / `ui-card-header` / `ui-card-content` | 卡片容器 / 头部 / 内容区 |
+| `ui-tag` + `ui-tag-blue` / `-green` / `-yellow` / `-red` | 标签及语义变体 |
+| `ui-input` | 输入框（全宽，深色底，聚焦青边） |
+| `ui-badge` | 徽章（mono 字体） |
+| `ui-scrollbar` | 滚动条样式 |
+
+**二、`cf-*` 框架类（仅这两个体系在用，共 6 个）**
+
+| 名称 | 用途 |
+|------|------|
+| `cf-gradient-text` | 页面标题渐变文字（6 个视图在用） |
+| `cf-loading` / `cf-loading--overlay` / `cf-loading__container` / `cf-loading__ring` / `cf-loading__text` | LoadingSpinner 子元素 |
+
+**三、`--cat-*` 节点分类色板（规则引擎专用，定义在 `_variables.scss`）**
+
+6 类各三个令牌：`--cat-<name>`（主色）/ `--cat-<name>-bg`（18% 底）/ `--cat-<name>-fg`（chip 文字）。
+
+| 分类 | 主色 |
+|------|------|
+| `input` / `detection` / `processing` | `#58e49e` / `#58bae4` / `#e4c158` |
+| `action` / `logic` / `output` | `#e48b58` / `#b158e4` / `#e4586b` |
+
+> 注意 `detection` 原为 `#00f0FF`，因品牌强调色改用青色而**让位**，改为 `#58bae4`。
+> 分类色必须在 CSS 里用 `var(--cat-*)`；JS canvas 绘图（如小地图、`ctx.strokeStyle`）
+> 用 hex 字面量，因为 `var()` 在 canvas API 上不解析。
 
 **使用示例：**
 ```html
-<button class="cf-btn">默认按钮</button>
-<button class="cf-btn-primary">主要按钮</button>
-<div class="cf-card">卡片内容</div>
+<button class="ui-btn ui-btn-primary">主要按钮</button>
+<button class="ui-btn ui-btn-secondary ui-btn-sm">次要小按钮</button>
+<h2 class="cf-gradient-text text-2xl font-semibold">页面标题</h2>
+<div class="ui-card">卡片内容</div>
 ```
 
 **样式迁移原则：**
@@ -586,20 +590,31 @@ const jobs = res.data as TrainingJobResponse[]
 
 ```scss
 :root {
-  // CogniFlow 品牌主色替换 EP 默认蓝色
-  --el-color-primary: #00f0ff;
-  --el-text-color-primary: #ffffff;
-  --el-text-color-regular: #d0d0e0;
-  --el-text-color-secondary: #8888aa;
-  --el-text-color-placeholder: #555566;
-  --el-border-color: #2a2a3a;
-  --el-border-color-light: #222230;
-  --el-fill-color-blank: #0a0a0f;
-  --el-bg-color: #0a0a0f;
-  --el-bg-color-page: #0a0a0f;
+  // CogniFlow 品牌主色替换 EP 默认蓝色（v2: 品牌青 #22d3ee）
+  --el-color-primary: #22d3ee;
+  --el-text-color-primary: #e8e8f0;
+  --el-text-color-regular: #c2c2d4;
+  --el-text-color-secondary: #9a9ab2;
+  --el-text-color-placeholder: #8585a0;
+  --el-border-color: #2e2e3c;
+  --el-border-color-light: #262632;
+  --el-fill-color-blank: #0b0b10;
+  --el-bg-color: #0b0b10;
+  --el-bg-color-page: #0b0b10;
   --el-bg-color-overlay: #1a1a24;
 }
 ```
+
+> ⚠️ **亮色 primary 底上的前景必须改深墨色**：EP 默认在 primary 底放白字
+> （`--el-color-white`），而品牌青是亮色，白字在上面对比度仅 **1.81:1**。
+> 凡是「primary 底 + 文字/图标」的 EP 组件，前景统一用 `var(--on-vibrant)`（`#04161a`）：
+>
+> ```scss
+> .el-checkbox__input.is-checked .el-checkbox__inner::after { border-color: var(--on-vibrant) !important; }
+> .el-switch.is-checked .el-switch__action { background: var(--on-vibrant) !important; }
+> ```
+>
+> （`el-button` 不受影响：`_element-plus.scss` 已把 `.el-button` 重置为透明底。）
 
 全局 `:deep()` 样式覆盖（背景/边框/下拉面板，放在 `src/style/_element-plus.scss` 中）：
 
@@ -618,7 +633,7 @@ const jobs = res.data as TrainingJobResponse[]
 }
 // el-button link 类型（AtlasList 等操作按钮）
 .el-button.is-link {
-  color: var(--accent-cyan) !important;
+  color: var(--accent) !important;
 }
 ```
 

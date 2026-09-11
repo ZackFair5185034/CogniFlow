@@ -3,7 +3,7 @@
 > 本文件是 CogniFlow 前端项目的 **样式编写宪法**。所有新写、改动的样式必须按本文执行。
 > 历史包袱（已存在的违规）按"修复路线"分波处理，详见 [§ 4 修复路线](#4-历史包袱修复路线)。
 
-**最后更新**: 2026-06-18
+**最后更新**: 2026-09-12（v2 设计令牌 + 文档与实现对齐）
 **适用范围**: `webui/src/**/*.vue` 内的所有样式
 **不属于本文范围**:
 - `src/style/_element-plus*.scss` — Element Plus 主题覆盖（必须 SCSS，UnoCSS 帮不了）
@@ -18,7 +18,7 @@
 
 按下列优先级使用，**前面的能解决问题就不要用后面的**：
 
-1. **UnoCSS shortcut**（`uno.config.ts` 里定义的 `cf-*` 类）
+1. **UnoCSS shortcut**（`uno.config.ts` 里定义的 `ui-*` / `cf-*` 类）
 2. **UnoCSS utility**（`flex` / `gap-4` / `text-[var(--xxx)]` 之类）
 3. **UnoCSS `@apply`**（在 `<style>` 块里组合多个 utility）
 4. **内联 `:style` 对象**（仅限**真正动态**的值：width 进度、坐标、颜色绑定）
@@ -60,13 +60,21 @@
 </style>
 ```
 
-### 1.3 命名体系（cf-* vs ui-* 二选一）
+### 1.3 命名体系（`ui-*` 是实际生效的那套）
 
-**项目已确定**：所有新写代码用 **`cf-*` shortcut**（定义在 `uno.config.ts`）。
+> **ENG 修正 (2026-09-12)**：本文件原称"项目已确定所有新写代码用 `cf-*`"，
+> 但实测 `cf-btn` / `cf-card` / `cf-input` / `cf-badge` 等 **全项目 0 命中**，
+> 且 `_common.scss` **文件已不存在**（2026-06-18 内容迁至 `uno.config.ts`）。
+> 实际生效的是 **`ui-*` 系列**（`ui-btn` 70 处、`ui-card` 28 处…）。
 
-**`.ui-*` 体系**（`src/style/_common.scss`）**仅用于**：
-- 第三方组件（Element Plus）需要**非 scoped** 样式时
-- 老代码逐步迁移期间，**不能新增** `.ui-*` 类
+**项目实际约定**：所有按钮/卡片/标签/输入类组件用 **`ui-*` shortcut**
+（定义在 `uno.config.ts` 的 `shortcuts`）。
+
+**`cf-*` 前缀目前只有两个体系在用**：
+- `cf-gradient-text` — 页面标题渐变文字（6 个视图在用）
+- `cf-loading` / `cf-loading--overlay` / `cf-loading__container` / `cf-loading__ring` / `cf-loading__text` — LoadingSpinner
+
+**命名单一来源**：所有 shortcut **只**定义在 `uno.config.ts`，SCSS 文件里不再定义组件类。
 
 **判定**：写新类之前先看 `uno.config.ts` 的 `shortcuts` 块——**已经有就别写第二遍**。
 
@@ -76,23 +84,33 @@
 
 ### 2.1 常用 shortcut 速查表
 
-完整列表见 `uno.config.ts`，高频用到的：
+> **ENG 修正 (2026-09-12)**：原表列的 12 个 shortcut 里 **11 个不存在**（`cf-btn*` / `cf-card*` / `cf-flex*` /
+> `cf-text-*` / `cf-badge` / `cf-input`），按它写会得到静默失效的类名。下表是**实测存在**的清单。
 
-| 用途 | 类名 | 替代手写 |
+完整列表见 `uno.config.ts` 的 `shortcuts`，高频用到的：
+
+| 用途 | 类名 | 备注 |
 |------|------|----------|
-| 主按钮 | `cf-btn-primary` | `px-4 py-2 rounded-md ...` 8 行 |
-| 次按钮 | `cf-btn` | 同上 7 行 |
-| 小按钮 | `cf-btn-small` | `px-2.5 py-1.5 ...` 6 行 |
-| 图标按钮 | `cf-btn-icon` | `w-9 h-9 flex ...` 5 行 |
-| 卡片容器 | `cf-card` | `bg-[var(--bg-card)] border ...` 3 行 |
-| 卡片头 | `cf-card-header` | `flex items-center gap-3 px-5 py-4 ...` 4 行 |
-| 卡片内容 | `cf-card-content` | `p-5` 1 行 |
-| 弹性列 | `cf-flex-col` | `flex flex-col` 2 行 |
-| 文本副 | `cf-text-muted` | `text-[var(--text-muted)]` 1 行（也 OK） |
-| 文本次 | `cf-text-secondary` | `text-[var(--text-secondary)]` 1 行（也 OK） |
-| 徽章 | `cf-badge` | `px-2 py-0.5 ...` 6 行 |
-| 输入框 | `cf-input` | `w-full px-3.5 py-2.5 ...` 7 行 |
-| 加载态 | `cf-loading` | `absolute inset-0 flex ...` 5 行 |
+| 按钮基类 | `ui-btn` | 13px / `px-4 py-2` / 6px 圆角 |
+| 主按钮 | `ui-btn ui-btn-primary` | 品牌青底 + **深墨字**（`text-[var(--on-vibrant)]`） |
+| 语义按钮 | `ui-btn ui-btn-success` / `ui-btn-danger` | 同样用深墨字，**禁止 `text-white`** |
+| 次要按钮 | `ui-btn ui-btn-secondary` | 修饰符，hover 点亮品牌青 |
+| 小按钮 | `ui-btn ui-btn-small` / `ui-btn-xs` / `ui-btn-sm` | `ui-btn-sm` 是修饰符（内部 `!` 强制覆盖） |
+| 图标按钮 | `ui-btn-icon` | 34×34 |
+| 卡片 | `ui-card` / `ui-card-header` / `ui-card-content` | 背景+边框+圆角 |
+| 标签 | `ui-tag` + `ui-tag-blue` / `-green` / `-yellow` / `-red` | 语义底 + 语义字 |
+| 输入框 | `ui-input` | 全宽 + 深色底 + 聚焦青边 |
+| 徽章 | `ui-badge` | mono 字体 |
+| 滚动条 | `ui-scrollbar` | — |
+| 标题渐变 | `cf-gradient-text` | 6 个视图页头在用 |
+| 加载态 | `cf-loading` 系列 | LoadingSpinner 专用 |
+
+**两条硬规则（v2 新增）：**
+
+1. **亮色底上禁止白字。** 白字在品牌青 `#22d3ee` 上仅 1.81:1、在 v1 蓝 `#5898ff` 上也仅 2.86:1，
+   都不可读。一律用 `text-[var(--on-vibrant)]`（`#04161a`，在五个亮底色上 5.50–10.24:1）。
+2. **分类色必须走令牌。** 节点分类色用 `var(--cat-<name>)` / `-bg` / `-fg`，不要写字面量。
+   JS canvas 绘图（小地图、`ctx.strokeStyle`）例外，用 hex 字面量（`var()` 在 canvas API 上不解析）。
 
 **原则**：能用 shortcut 不用 utility（更短 + 团队统一）。
 
@@ -127,6 +145,10 @@
 ---
 
 ## 3. 反模式清单（PR 审查时必看）
+
+> **2026-09-12 状态**：违规 5（静态内联 `style="..."`）**已清零**（11 处 → 0）；
+> 违规 6（`ui-*` / `cf-*` 两套并存）**已裁定**（`ui-*` 为准）。
+> 违规 1 / 2 / 4 / 7 仍未处理，见 §4.3 的待办清单。
 
 ### 3.1 违规 1：UnoCSS shortcut 和 SCSS 块**双定义同类名**
 
@@ -194,11 +216,14 @@
 
 ### 3.6 违规 6：`.ui-*` 和 `.cf-*` **两套并存**
 
-**症状**：老代码用 `.ui-btn` / `.ui-card`，新代码用 `cf-btn` / `cf-card`，同一项目里**两套都活**。
+**症状**：文档推荐 `cf-btn` / `cf-card`，代码里实际是 `.ui-btn` / `.ui-card`，两套说法并存。
+（2026-09-12 已裁定：**`ui-*` 为准**，`cf-*` 仅保留 `cf-gradient-text` + `cf-loading` 系列。）
 
 **风险**：新人不知道用哪套，PR 审查会扯皮。
 
-**修法**：逐步把 `.ui-*` 迁到 `cf-*`，**禁止新增** `.ui-*` 类。
+**修法（已裁定 2026-09-12）**：以 **`ui-*` 为准**；不要再引入新的 `cf-*` 组件类。
+
+> 原写法是「迁到 `cf-*`」，方向反了 —— `cf-*` 组件类实际 **0 命中**，`ui-*` 才是 130+ 处在用的那套。
 
 ### 3.7 违规 7：`<style scoped>` 块里写**零 `@apply` 纯手写 CSS**
 
@@ -242,16 +267,23 @@
 
 **验证**：4 件套 + 视觉对比（截图前后）。
 
-### 4.3 🔴 第 3 波：体系合并（高风险，最后做）
+### 4.3 🔴 第 3 波：体系合并（**已裁定，部分完成** 2026-09-12）
 
-**改动范围**：`_common.scss` 整文件 + 8 个 view 的类名替换 + 全局 grep 验证。
+**决策已定**：**保留 `ui-*`，砍 `cf-*` 的说法**（反过来了 —— 原文推荐保留 `cf-*`，但实测
+`cf-*` 组件类 0 命中，`ui-*` 才是 130+ 处在用的）。
 
-1. **决策**：保留 `cf-*` 砍 `ui-*`（推荐），还是反过来。
-2. `src/style/_common.scss` 删除 / 改名为 `_legacy-ui.scss`。
-3. 全项目 grep `.ui-btn` / `.ui-card` / `.ui-tag` / `.ui-input` / `.ui-badge` / `.ui-scrollbar` → 替换为对应 `cf-*`。
-4. 全项目 grep `cf-*` 确保和 `uno.config.ts` 100% 对应。
-5. 8 个 view 文件的 `:deep` EP 覆盖**全部移入** `src/style/_element-plus.scss`。
-6. 全文搜 `style="..."` 静态内联 → 0 命中。
+**已完成：**
+1. ~~决策保留哪套~~ → **`ui-*` 为准**，已写入 §1.3
+2. ~~`_common.scss` 删除~~ → **该文件 2026-06-18 已不存在**，内容在 `uno.config.ts`
+3. ~~静态 `style="..."` 清零~~ → **已完成**（11 处 → 0）
+4. ~~文档与实现对齐~~ → **已完成**（本文件 §1.3 / §2.1 / §3.6，CLAUDE.md §7.3 / §7.5 / §7.4.1，COGNIFLOW_DESIGN.md）
+
+**仍待处理：**
+5. 8 个 view 文件的 `:deep` EP 覆盖**全部移入** `src/style/_element-plus.scss`
+6. `--accent-blue*` 三个兼容别名 → 迁移 176 处引用后删除别名，统一用 `--accent*`
+7. 中立灰阶硬编码（`#888` 25 处、`#666` 10、`#555` 10、`#444` 8、`#e0e0e8`/`#e0e0e0` 各 7）→ 令牌
+8. 规则画布内部暗色（`#1e1e2e` 16 处、`#2a2a3a` 12、`#3a3a5c` 7…）→ 令牌（属画布重构范围）
+9. `RuleCanvas.vue` 2097 行 scoped 块（`@apply` 用量为 0）与 alpha 漂移归一化（青色有 13 种 alpha 值）
 
 **验证**：4 件套 + 视觉回归 + 端到端 smoke test（每个 view 跑一遍关键流程）。
 
