@@ -559,7 +559,6 @@
             :is-valid-connection="isValidConnection"
             :class="{ 'is-connecting': isConnecting }"
             @node-click="handleNodeClick"
-            @pane-click="handlePaneClick"
             @connect="handleConnect"
             @connect-start="handleConnectStart"
             @connect-end="handleConnectEnd"
@@ -1855,6 +1854,10 @@ function handleSelectionStart(event: any) {
   isBatchDragging.value = true  // P0: 框选期间节流, handleNodesChange 立即 return
   store.setSelectionBoxActive(true) // LOD-1: 框选期间锁定 LOD
 
+  // 记录按下点, 供 handleSelectionEnd 判定「点击 vs 拖拽」
+  const downSrc = event as (PointerEvent | MouseEvent | undefined)
+  panePointerDownScreen = downSrc ? { x: downSrc.clientX, y: downSrc.clientY } : null
+
   // Phase 19.7+: 锁定本次框选模式 (Ctrl/Meta/Shift = 增量加选)
   // 直接读 PointerEvent 修饰键, 不再用自挂 keydown/keyup ref
   // (BUG-CFL-2: 两套状态分裂消除; mousedown 瞬间的 PointerEvent 是同源数据, 无需 ref 缓冲)
@@ -1924,6 +1927,19 @@ function handleSelectionStart(event: any) {
 let selectionStartPos: { x: number; y: number } | null = null
 
 /**
+ * 空白处 pointerdown 的屏幕坐标, 用于在 handleSelectionEnd 里区分「点击」与「拖拽框选」。
+ *
+ * 2026-09-12: 因为 Pane 的 @pane-click 在本项目配置下永不发出 (见 handlePaneClick 处的溯源),
+ * 「点空白收起全部展开节点」只能挂到确实会触发的 selection-end 上。判据用按下/抬起
+ * 的位移距离, 而非 vue-flow 的 userSelectionActive —— 真实点击也会带极小的 pointermove,
+ * 用位移阈值才可靠。
+ */
+let panePointerDownScreen: { x: number; y: number } | null = null
+
+/** 判为「点击」而非「框选拖拽」的位移上限 (px) */
+const PANE_CLICK_MAX_DISTANCE = 5
+
+/**
  * Phase 18: 框选模式 (覆盖 vs 加选)
  * - 普通拖框 → 选中集合被新命中完全替换 (老大原行为)
  * - Ctrl/Meta+拖框 → 保留旧选中, 把新命中并入 (增量加选)
@@ -1952,6 +1968,20 @@ function handleSelectionEnd(_event: any) {
   isSelectionDragging.value = false
   isBatchDragging.value = false  // P0: 恢复 nodes-change 处理
   store.setSelectionBoxActive(false) // LOD-1: 解除框选 LOD 锁定
+
+  // 空白处「点击」(而非拖拽框选) → 收起所有已展开的节点
+  //   用户切回画布视角的常见操作。2026-09-12: 由原 handlePaneClick 迁移至此
+  //   (原路径走 @pane-click, 在本项目配置下永不触发, 见 handlePaneClick 处溯源)。
+  //   只做收起, 不动选中态 —— 该区域的选中逻辑有 BUG-CFL-2/3/5 的历史包袱, 不在此处搅动。
+  const upSrc = _event as (PointerEvent | MouseEvent | undefined)
+  const downScreen = panePointerDownScreen
+  panePointerDownScreen = null
+  if (upSrc && downScreen) {
+    const moved = Math.hypot(upSrc.clientX - downScreen.x, upSrc.clientY - downScreen.y)
+    if (moved < PANE_CLICK_MAX_DISTANCE) {
+      store.collapseAllExpanded()
+    }
+  }
 
   // 提取本帧需要的数据 + 重置状态
   const start = selectionStartPos
@@ -2406,24 +2436,15 @@ function handleNodeDoubleClick(event: any) {
 // 拖动行为由 useCogniFlowDrag (见下) 通过 d3-drag 直接接管节点 wrapper DOM,
 // 拖动期间 0 次响应式写入, drag-end 一次性 setNodesPositions + recordMoveHistory.
 
-// 画布点击
-function handlePaneClick(event: MouseEvent) {
-  // Phase 19.7+ 修复: 加选状态 (Ctrl/Meta/Shift 按下) 不清空旧选中
-  //   与 Pane.onClick fork 守卫同语义: 业务侧是 paneClick 真实接收方, 守卫放这里
-  //   之前无条件清空导致"Ctrl+点空白仍清空" BUG
-  const isAdditive = event && (event.ctrlKey || event.metaKey || event.shiftKey)
-  if (!isAdditive) {
-    // Phase 19.7+ 修复: 走 VueFlow 官方 removeSelectedNodes, 不再 mutate store.nodes[i].selected
-    //   (shallowRef 死路, 改 store 视觉不更新)
-    const currentlySelected = getSelectedNodes.value as any[]
-    if (currentlySelected.length > 0) {
-      removeSelectedNodes(currentlySelected)
-    }
-  }
-  // Phase 17.1+: 点空白收起所有展开的节点 (用户切回画布视角的常见操作)
-  // 加选模式下也收起展开, 不影响选中态, UX 仍然合理
-  store.collapseAllExpanded()
-}
+// 画布空白点击 —— 原 handlePaneClick 走 VueFlow 的 @pane-click, 但该事件在本项目中
+// **永远不会发出**, 故该函数是不可达的死代码, 已删除。原因 (2026-09-12 溯源到 vue-flow-core):
+//   Pane 模板把点击绑成 `onClick: (e) => hasActiveSelection.value ? void 0 : ...`,
+//   而 hasActiveSelection = elementsSelectable && (isSelecting || userSelectionActive)。
+//   本项目为「空白拖拽 = 框选」设了 :selection-key-code="true" (恒真) + :elements-selectable="true",
+//   于是 hasActiveSelection 恒为真 → 模板 onClick 恒 return → emits.paneClick 从不触发。
+//   又因真实点击会带极小的 pointermove, userSelectionActive 变真, Pane 内部那条
+//   直呼局部 onClick 的兜底路径同样被跳过。
+// 「点空白收起全部展开节点」改由 handleSelectionEnd 用「点击 vs 拖拽」判定实现 (见下)。
 
 // 端口类型兼容性检查
 function isPortCompatible(sourceType: string, targetType: string): boolean {
