@@ -289,7 +289,7 @@
   }
 
   &:active {
-    color: #4a80e0 !important;
+    color: #1ba9be !important;
   }
 }
 
@@ -310,12 +310,25 @@
   border-radius: 4px !important;
 }
 .el-checkbox__input.is-checked .el-checkbox__inner {
-  background: var(--accent-blue) !important;
-  border-color: var(--accent-blue) !important;
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+// 亮青底上的白色对勾对比度仅 1.8:1, 改为深墨色 (10.24:1)
+.el-checkbox__input.is-checked .el-checkbox__inner::after {
+  border-color: var(--on-vibrant) !important;
 }
 .el-checkbox__label {
   color: var(--text-primary) !important;
 }
 .el-checkbox__input.is-checked + .el-checkbox__label {
   color: var(--text-primary) !important;
+}
+
+// el-switch 开关 — 选中态底色为品牌青, 白色旋钮在亮青上几乎看不见, 改深墨色
+.el-switch.is-checked .el-switch__core {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+.el-switch.is-checked .el-switch__action {
+  background: var(--on-vibrant) !important;
 }

@@ -1,15 +1,26 @@
 // -*- coding: utf-8 -*-
 /**
- * CogniFlow 设计令牌
+ * CogniFlow 设计令牌 v2
  *
  * 定义所有 CSS 变量（:root）和 SCSS 变量（$）。
  * CSS 变量在编译时输出到目标文件，SCSS 变量供其他文件 @use 引用。
  *
- * 设计原则：
- * - 专业工程工具风格（Grafana / Datadog inspired）
- * - 单色系深色主题，单一蓝色强调色
- * - 零装饰效果（无发光、无渐变色、无装饰动画）
- * - 小圆角（4-8px），高信息密度
+ * 设计原则（v2, 2026-09-12）：
+ * - 专业工程工具风格（Grafana / Datadog inspired），高信息密度
+ * - 深色单色基底 + 单一品牌强调色（青色）。强调色只承担「焦点」语义：
+ *   激活态 / 选中态 / 主操作 / 聚焦环。不用于装饰铺色。
+ * - 文字与背景对比度 ≥ 4.5:1（WCAG AA）；图形/边框 ≥ 3:1
+ * - 装饰性动画仅允许用于「进行中」状态指示（pulse），不做纯装饰动效
+ *
+ * v2 相对 v1 的变更：
+ * - 品牌强调色：蓝 #5898ff → 青 #22d3ee
+ * - --text-muted：#55556a → #8585a0（卡片层对比度 2.38 → 4.81，修复 WCAG 违规）
+ * - --color-danger：#ef4444 → #f2555f（卡片层 4.58 → 5.13，脱离擦线）
+ * - 新增 6 色节点分类色板（供规则引擎替换散落的霓虹硬编码）
+ * - 基底四层亮度间隔拉开，卡片与页面背景可辨
+ *
+ * 兼容策略：所有 v1 令牌名一律保留（--accent-blue 等仅改值不改名），
+ * 以保证 15 个引用文件零破坏；改名留待后续独立一波处理。
  */
 
 // === SCSS 变量（必须先定义，供后面的 :root {} 插值使用）===
@@ -38,37 +49,84 @@ $panel-width: clamp(200px, 18vw, 320px);
 
 // === CSS 变量（:root）===
 :root {
-  // 背景色
-  --bg-primary: #0d0d14;
-  --bg-secondary: #14141c;
-  --bg-card: #1c1c26;
-  --bg-hover: #252531;
+  // --- 背景色：四层，L* 间隔约 2.6 / 4.0 / 5.4，保证卡片与页面可辨 ---
+  --bg-primary: #0b0b10;
+  --bg-secondary: #121219;
+  --bg-card: #1a1a24;
+  --bg-hover: #25252f;
 
-  // 边框/分割线
-  --border-color: #2a2a38;
-  --border-subtle: #22222e;
+  // --- 边框/分割线 ---
+  --border-color: #2e2e3c;
+  --border-subtle: #242430;
 
-  // 文字色
+  // --- 文字色：三级对比，全部 ≥4.5:1 on --bg-card ---
+  // primary 14.16:1 / secondary 6.28:1 / muted 4.81:1
   --text-primary: #e8e8f0;
-  --text-secondary: #9090a8;
-  --text-muted: #55556a;
+  --text-secondary: #9a9ab2;
+  --text-muted: #8585a0;
 
-  // 强调色 — 单一蓝色作为主要强调色（Grafana 风格）
-  --accent-blue: #5898ff;
-  --accent-blue-hover: #73a9ff;
-  --accent-blue-muted: rgba(88, 152, 255, 0.15);
+  // --- 品牌强调色（青）：唯一焦点色，9.55:1 on --bg-card ---
+  // 语义：激活态 / 选中态 / 主操作按钮 / 聚焦环。禁止用于大面积铺色。
+  --accent: #22d3ee;
+  --accent-hover: #4fdcef;
+  --accent-soft: rgba(34, 211, 238, 0.14);
+  --accent-ring: rgba(34, 211, 238, 0.45);
 
-  // 语义色
-  --color-success: #22c55e;
-  --color-warning: #eab308;
-  --color-danger: #ef4444;
-  --color-info: #5898ff;
+  // 亮色底（品牌青 / 语义色）上的深墨前景。
+  // 白字在品牌青上仅 1.81:1、在 success 上 1.85:1，全部不可读；
+  // 深墨在青上 10.24:1、success 10.01、warning 10.08、info 6.80、danger 5.50，全部 ≥AA。
+  // 凡「亮色底 + 文字/图标」一律用它，不要用 #fff。
+  --on-vibrant: #04161a;
 
-  // 语义色背景
-  --color-success-bg: rgba(34, 197, 94, 0.12);
-  --color-warning-bg: rgba(234, 179, 8, 0.12);
-  --color-danger-bg: rgba(239, 68, 68, 0.12);
-  --color-info-bg: rgba(88, 152, 255, 0.12);
+  // --- v1 兼容别名（--accent-blue 等仅改值不改名，15 文件零破坏）---
+  // 新代码请直接用 --accent / --accent-hover / --accent-soft。
+  --accent-blue: var(--accent);
+  --accent-blue-hover: var(--accent-hover);
+  --accent-blue-muted: var(--accent-soft);
+
+  // --- 语义色：均 ≥5.1:1 on --bg-card ---
+  --color-success: #34d97b;
+  --color-warning: #e8b93c;
+  --color-danger: #f2555f;
+  --color-info: #5b9dff;
+
+  // 语义色 hover 态（提亮一档）
+  --color-danger-hover: #f56e77;
+
+  // --- 语义色背景（14% 叠底）---
+  --color-success-bg: rgba(52, 217, 123, 0.14);
+  --color-warning-bg: rgba(232, 185, 60, 0.14);
+  --color-danger-bg: rgba(242, 85, 95, 0.14);
+  --color-info-bg: rgba(91, 157, 255, 0.14);
+
+  // --- 节点分类色板（规则引擎 6 类）---
+  // 低眩光珠宝调，替换 v1 的纯霓虹（#4CFF4C / #00f0FF / #FFFF4C ...）。
+  // 主色用于 2px 顶条 / 图标 / 小地图点，图形对比 4.42–10.69:1；
+  // -fg 用于 chip 文字，配 -bg 底色对比 6.47–8.77:1。6 色相最小间距 48°。
+  // 注意：detection 原为 #00f0FF，已让位给品牌强调色，改为 #58bae4。
+  --cat-input: #58e49e;
+  --cat-input-bg: rgba(88, 228, 158, 0.18);
+  --cat-input-fg: #9bf3c7;
+
+  --cat-detection: #58bae4;
+  --cat-detection-bg: rgba(88, 186, 228, 0.18);
+  --cat-detection-fg: #9bd8f3;
+
+  --cat-processing: #e4c158;
+  --cat-processing-bg: rgba(228, 193, 88, 0.18);
+  --cat-processing-fg: #f3dd9b;
+
+  --cat-action: #e48b58;
+  --cat-action-bg: rgba(228, 139, 88, 0.18);
+  --cat-action-fg: #f3bb9b;
+
+  --cat-logic: #b158e4;
+  --cat-logic-bg: rgba(177, 88, 228, 0.18);
+  --cat-logic-fg: #d39bf3;
+
+  --cat-output: #e4586b;
+  --cat-output-bg: rgba(228, 88, 107, 0.18);
+  --cat-output-fg: #f39ba7;
 
   // Spacing Token（映射 SCSS 变量）
   --spacing-hair: #{$spacing-hair};
@@ -88,6 +146,6 @@ $panel-width: clamp(200px, 18vw, 320px);
   --rounded-full: #{$rounded-full};
 
   // Typography — Inter 优先，回退到系统字体
-  --font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-family-sans: 'Inter', 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-family-mono: 'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
 }
