@@ -66,7 +66,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const executionRefs = storeToRefs(execution)
   const variablesRefs = storeToRefs(variables)
 
-  return {
+  const exposed = {
     // ===== graph store state (re-exposed) =====
     nodeDefinitions: graphRefs.nodeDefinitions,
     graphMeta: graphRefs.graphMeta,
@@ -77,7 +77,11 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     historyStack: graphRefs.historyStack,
     historyIndex: graphRefs.historyIndex,
     isHistoryPaused: graphRefs.isHistoryPaused,
-    maxHistorySize: graphRefs.maxHistorySize,
+    // P1-A.1 修复 (2026-09-11): maxHistorySize 在 graph.ts 是普通常量 (非 ref),
+    // storeToRefs(graph) 不会包含它 —— 走 graphRefs 会得到 undefined,
+    // 导致外部 storeToRefs(本 store) 读 `value.effect` 时抛
+    // TypeError: Cannot read properties of undefined (reading 'effect')。
+    maxHistorySize: graph.maxHistorySize,
     lastSavedHistoryIndex: graphRefs.lastSavedHistoryIndex,
     viewportZoom: graphRefs.viewportZoom,
     isDragging: graphRefs.isDragging,
@@ -159,4 +163,22 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     updateVariable: variables.updateVariable,
     getVariable: variables.getVariable,
   }
+
+  // 兜底断言 (P1-A.1 2026-09-11):
+  //   compat store 里任何 undefined 字段都会让外部 `storeToRefs(compatStore)` 崩在
+  //   pinia 内部的 `value.effect` 上, 而报错信息完全指不到源头 (只在 RuleCanvas 的
+  //   setup 行号上打转)。这里在 store 创建期就抛出可定位的错误。
+  //   根因通常是: 字段来自子 store 但本身不是 ref/computed (普通常量/函数),
+  //   被错误地经由 storeToRefs 结果取值。
+  for (const [key, value] of Object.entries(exposed)) {
+    if (value === undefined) {
+      throw new Error(
+        `[useRuleEngineStore] 字段 "${key}" 为 undefined。` +
+        `若它来自子 store, 请确认是 ref/computed 再走 storeToRefs; ` +
+        `普通常量请直接取 store.${key}。`
+      )
+    }
+  }
+
+  return exposed
 })
