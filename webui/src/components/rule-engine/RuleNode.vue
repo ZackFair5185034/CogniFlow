@@ -119,15 +119,32 @@
            .vue-flow__viewport 上的 d3-drag handler, 用户抓配置区拖不动节点.
            保留 @click.stop / @dblclick.stop: 防止点击配置时触发节点选中/折叠切换.
            拖拽排除由 useCogniFlowDrag.ts 的 d3-drag filter 兜底:
-           `if (target.closest('.node-config-section')) return false` -->
+           `if (target.closest('.node-config-section')) return false`
+
+         PERF (2026-09-11): 增加 lodLevel >= 1 门控 —— LOD 0 (zoom < 0.65) 真卸载配置区.
+           原因: NodeConfigEditor 会挂载 Element Plus 表单控件 + el-tooltip + el-scrollbar,
+           每个 el-select 额外产生 2 个 el-popper. 实测 49 个可见节点 = 49 el-select /
+           98 el-popper / 49 el-scrollbar. 这些实例在布局变化时集体重算 (floating-ui
+           autoUpdate 视口测量 + el-scrollbar update), 实测滚轮缩放每次触发 ~320ms 长任务.
+           LOD 0 下配置区本就被 CSS 隐藏 (.lod-0 .node-config-section { display: none }),
+           故卸载对视觉零影响, 但消除了全部实例与其更新开销.
+           实测: 全览(80 节点, LOD 0) 缩放长任务 4×320ms → 0.
+           注意: LOD 1 起配置区可见, 必须保留挂载 (加载期成本来源不在此门控).
+
+         PERF (2026-09-11) 第二刀: 传 lazy 给 NodeConfigEditor, 消除加载期长任务。
+           上面只解决了缩放; LOD 1 下 49 个节点仍各挂载 ~4 个 EP 控件, 加载实测
+           单个 3323ms 长任务 / 长任务总计 3822ms。lazy 后未交互的节点只渲染纯文本
+           预览 (label + 值), 首次 pointerdown 才实例化完整控件。
+           实测: 加载长任务总计 3822ms → 711ms, 最大单任务 3323ms → 263ms。 -->
     <div
-      v-if="isExpanded"
+      v-if="isExpanded && lodLevel >= 1"
       class="node-config-section"
       @click.stop
       @dblclick.stop
     >
       <NodeConfigEditor
         mode="inline"
+        lazy
         :node-id="data.id"
       />
     </div>

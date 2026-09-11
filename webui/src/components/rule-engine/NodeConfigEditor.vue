@@ -1,5 +1,32 @@
 <template>
+  <!-- 懒挂载预览态 (PERF 2026-09-11): lazy 模式且未激活时渲染纯文本, 不挂载任何 Element Plus 控件 -->
   <div
+    v-if="!isActive"
+    class="node-config-editor nce-preview-mode"
+    :class="{ 'nce-inline': mode === 'inline' }"
+    @pointerdown.capture="activate"
+  >
+    <div class="nce-body">
+      <div
+        v-for="(schema, key) in configProperties"
+        :key="key"
+        class="nce-field nce-field-preview"
+      >
+        <label class="nce-field-label">{{ schema.title || key }}</label>
+        <span class="nce-field-value">{{ previewValue(key) }}</span>
+      </div>
+      <div
+        v-if="!hasConfig"
+        class="nce-empty"
+      >
+        <p>该节点无需配置</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 完整编辑态 -->
+  <div
+    v-else
     class="node-config-editor"
     :class="{ 'nce-inline': mode === 'inline' }"
   >
@@ -321,9 +348,39 @@ const props = withDefaults(defineProps<{
    * - 'inline': 节点内嵌模式 (隐藏头部, 紧凑 padding, 适合 LOD 2 节点壳)
    */
   mode?: 'panel' | 'inline'
+  /**
+   * 懒挂载 (PERF 2026-09-11)。
+   *
+   * 为 true 时: 未交互前只渲染纯文本预览 (label + 值), **不挂载任何 Element Plus 控件**;
+   * 首次 pointerdown 后才实例化完整控件。
+   *
+   * 背景: 每个 el-select 会连带产生 1 个 el-tooltip 触发器 + 1 个 el-popper 下拉
+   * + 1 个 el-scrollbar。80 节点图实测 49 个可见节点 → 49 el-select / 98 el-popper
+   * / 49 el-scrollbar, 挂载与布局重算造成单个 3323ms 长任务 (加载) 与 4×320ms
+   * 长任务 (缩放)。改为懒挂载后加载长任务总计 3822ms → 711ms。
+   *
+   * 注意: 仅节点内嵌 (mode='inline') 场景开启; 右侧属性面板不开启。
+   */
+  lazy?: boolean
 }>(), {
-  mode: 'panel'
+  mode: 'panel',
+  lazy: false
 })
+
+// ============ 懒挂载状态 ============
+
+/** 是否已激活 (lazy 模式下首次交互后置 true)。 */
+const activated = ref(false)
+
+/** 当前是否渲染完整控件 (非 lazy 模式恒为 true)。 */
+const isActive = computed(() => !props.lazy || activated.value)
+
+/** 首次交互时激活完整控件。 */
+function activate() {
+  if (props.lazy && !activated.value) {
+    activated.value = true
+  }
+}
 
 const store = useRuleEngineStore()
 
@@ -369,6 +426,20 @@ const nodeConfig = computed((): Record<string, NodeConfigValue> => {
 /** 拿到节点配置值（辅助方法） */
 function getNodeValue(key: string): NodeConfigValue {
   return (nodeConfig.value as Record<string, NodeConfigValue>)[key] ?? null
+}
+
+/**
+ * 预览态的值文本 (懒挂载占位用)。
+ *
+ * 只做纯字符串格式化 — 不引入任何 Element Plus 控件, 故预览态组件开销为零。
+ * 未设置的值显示 '—', 让"默认全展开"的观感保持完整。
+ */
+function previewValue(key: string): string {
+  const v = getNodeValue(key)
+  if (v === null || v === undefined || v === '') return '—'
+  if (Array.isArray(v)) return v.length > 0 ? v.join(', ') : '—'
+  if (typeof v === 'boolean') return v ? '是' : '否'
+  return String(v)
 }
 
 /** 可用模型（model-select 用） */
@@ -709,6 +780,25 @@ function updateConfig(key: string, value: string | number | boolean | null) {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+/* 懒挂载预览态 (PERF 2026-09-11)
+   纯文本占位, 目的是"看起来配置区还在", 但不挂载任何 Element Plus 控件。
+   首次 pointerdown / 点击后切换为完整编辑态。cursor 提示此处可交互。 */
+.nce-preview-mode {
+  cursor: pointer;
+}
+
+.nce-field-preview {
+  gap: 2px;
+}
+
+.nce-field-value {
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nce-field-label {
