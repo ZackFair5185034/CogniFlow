@@ -912,23 +912,46 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     triggerRef(expandedNodeIds)
   }
 
+  /**
+   * 收起全部节点 (点击画布空白处触发)。
+   *
+   * ⚠️ expandedNodeIds 存的是「**已折叠**的节点 id」(名字与语义相反, 见 Phase 19.3+ 反转,
+   *   消费端确认见 RuleNode.vue `isCollapsed = expandedNodeIds.has(id)`)。
+   *   所以「收起全部」= 把所有节点 id 都放进去, **不是** clear()。
+   *
+   * 修复 (2026-09-12): 原实现是 clear(), 等于「全部展开」, 与函数名恰好相反。
+   *   用户点空白本意是收起所有展开的节点以切回画布视角, 实际却把所有节点都展开了。
+   */
   function collapseAllExpanded() {
-    if (expandedNodeIds.value.size > 0) {
-      expandedNodeIds.value.clear()
-      triggerRef(expandedNodeIds)
+    if (nodes.value.length === 0) return
+    let changed = false
+    for (const n of nodes.value) {
+      if (!expandedNodeIds.value.has(n.id)) {
+        expandedNodeIds.value.add(n.id)
+        changed = true
+      }
     }
+    // 原地变更 + triggerRef: 与 removeNode / removeNodes / toggleNodeExpanded 一致,
+    // 避免重新赋值导致外部捕获的 Set 引用失效
+    if (changed) triggerRef(expandedNodeIds)
   }
 
   function syncExpandedNodeIds() {
     triggerRef(expandedNodeIds)
   }
 
+  /**
+   * 展开全部节点。
+   *
+   * 同上语义反转: 「展开全部」= 清空「已折叠」集合。
+   *
+   * 修复 (2026-09-12): 原实现是 new Set(所有节点 id), 等于「全部收起」, 与函数名相反。
+   *   这两个函数体此前正好互换 (collapseAllExpanded 做了展开、expandAll 做了收起)。
+   */
   function expandAll() {
-    const allIds: string[] = []
-    for (const n of nodes.value) allIds.push(n.id)
-    if (allIds.length === 0) return
-    const next = new Set(allIds)
-    expandedNodeIds.value = next
+    if (expandedNodeIds.value.size === 0) return
+    expandedNodeIds.value.clear()
+    triggerRef(expandedNodeIds)
   }
 
   // ============ 边操作 ============
