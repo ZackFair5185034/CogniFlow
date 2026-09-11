@@ -1246,7 +1246,7 @@ onUnmounted(() => {
 .nav-info {
   font-family: 'JetBrains Mono', monospace;
   @apply text-sm text-[var(--accent-blue)] px-3 py-1 rounded;
-  background: rgba(0, 240, 255, 0.1);
+  background: rgba(34, 211, 238, 0.1);
 }
 
 .hotkey-hints {
@@ -1347,7 +1347,7 @@ onUnmounted(() => {
 }
 
 .category-item.active {
-  background: rgba(0, 240, 255, 0.1);
+  background: rgba(34, 211, 238, 0.1);
   @apply border-[var(--accent-blue)];
 }
 
@@ -1456,7 +1456,7 @@ onUnmounted(() => {
 }
 
 .tag-item.active {
-  background: rgba(0, 240, 255, 0.1);
+  background: rgba(34, 211, 238, 0.1);
   @apply border-[var(--accent-blue)];
 }
 
@@ -1519,8 +1519,8 @@ onUnmounted(() => {
   }
 
   &.selected {
-    background: rgba(0, 240, 255, 0.08);
-    border-color: rgba(0, 240, 255, 0.4);
+    background: rgba(34, 211, 238, 0.08);
+    border-color: rgba(34, 211, 238, 0.4);
   }
 
   &.pending {
@@ -1672,7 +1672,7 @@ onUnmounted(() => {
 }
 
 .toggle-btn.active {
-  @apply border-[var(--accent-blue)] bg-[rgba(88,152,255,0.1)] text-[var(--accent-blue)];
+  @apply border-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.1)] text-[var(--accent-blue)];
 }
 
 .parent-path {
@@ -1734,7 +1734,7 @@ onUnmounted(() => {
 
 .import-dropzone:hover {
   border-color: var(--accent-blue);
-  background: rgba(0, 240, 255, 0.05);
+  background: rgba(34, 211, 238, 0.05);
 }
 
 .import-dropzone svg {

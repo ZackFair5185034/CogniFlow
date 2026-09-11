@@ -386,9 +386,9 @@ const isDisabled = computed(() => {
   transition: all 0.15s ease;
 
   &:hover {
-    background: rgba(0, 240, 255, 0.1);
-    border-color: rgba(0, 240, 255, 0.3);
-    color: #00f0ff;
+    background: rgba(34, 211, 238, 0.1);
+    border-color: rgba(34, 211, 238, 0.3);
+    color: var(--accent);
   }
 }
 
@@ -497,9 +497,9 @@ const isDisabled = computed(() => {
   }
 
   &:hover {
-    background: rgba(0, 240, 255, 0.15);
-    border-color: var(--accent-blue, #00f0FF);
-    color: #00f0FF;
+    background: rgba(34, 211, 238, 0.15);
+    border-color: var(--accent-blue, var(--accent));
+    color: var(--accent);
   }
 
   &:active {
@@ -508,20 +508,20 @@ const isDisabled = computed(() => {
 }
 
 /* 分类头部渐变 */
-.category-input .node-header { background: linear-gradient(90deg, rgba(76,255,76,0.2), rgba(76,255,76,0.05)); }
-.category-detection .node-header { background: linear-gradient(90deg, rgba(88,152,255,0.2), rgba(88,152,255,0.05)); }
-.category-processing .node-header { background: linear-gradient(90deg, rgba(255,255,76,0.2), rgba(255,255,76,0.05)); }
-.category-action .node-header { background: linear-gradient(90deg, rgba(255,127,76,0.2), rgba(255,127,76,0.05)); }
-.category-logic .node-header { background: linear-gradient(90deg, rgba(220,79,220,0.2), rgba(220,79,220,0.05)); }
-.category-output .node-header { background: linear-gradient(90deg, rgba(255,76,76,0.2), rgba(255,76,76,0.05)); }
+.category-input .node-header { background: linear-gradient(90deg, var(--cat-input-bg), transparent); }
+.category-detection .node-header { background: linear-gradient(90deg, var(--cat-detection-bg), transparent); }
+.category-processing .node-header { background: linear-gradient(90deg, var(--cat-processing-bg), transparent); }
+.category-action .node-header { background: linear-gradient(90deg, var(--cat-action-bg), transparent); }
+.category-logic .node-header { background: linear-gradient(90deg, var(--cat-logic-bg), transparent); }
+.category-output .node-header { background: linear-gradient(90deg, var(--cat-output-bg), transparent); }
 
 /* 分类图标颜色 */
-.category-input .node-icon { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
-.category-detection .node-icon { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
-.category-processing .node-icon { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
-.category-action .node-icon { background: rgba(255, 127, 76, 0.2); color: #FF7F4C; }
-.category-logic .node-icon { background: rgba(220, 79, 220, 0.15); color: #DC4FDC; }
-.category-output .node-icon { background: rgba(255, 76, 76, 0.15); color: #FF4C4C; }
+.category-input .node-icon { background: var(--cat-input-bg); color: var(--cat-input); }
+.category-detection .node-icon { background: var(--cat-detection-bg); color: var(--cat-detection); }
+.category-processing .node-icon { background: var(--cat-processing-bg); color: var(--cat-processing); }
+.category-action .node-icon { background: var(--cat-action-bg); color: var(--cat-action); }
+.category-logic .node-icon { background: var(--cat-logic-bg); color: var(--cat-logic); }
+.category-output .node-icon { background: var(--cat-output-bg); color: var(--cat-output); }
 
 /* 节点摘要 — Phase 17.1+ 已移除, 删死样式 */
 
@@ -535,28 +535,28 @@ const isDisabled = computed(() => {
 
 /* 节点执行状态高亮 */
 .rule-node[data-status='running'] {
-  border-color: #5898ff;
+  border-color: var(--accent);
   box-shadow:
-    inset 0 1px 0 rgba(88,152,255,0.15),
-    0 0 0 1px rgba(88,152,255,0.4),
-    0 0 18px rgba(88,152,255,0.25);
+    inset 0 1px 0 rgba(34, 211, 238, 0.15),
+    0 0 0 1px rgba(34, 211, 238, 0.4),
+    0 0 18px rgba(34, 211, 238, 0.25);
 }
 .rule-node[data-status='success'] {
-  border-color: #4CFF4C;
+  border-color: var(--color-success);
   box-shadow:
-    inset 0 1px 0 rgba(76,255,76,0.12),
-    0 0 0 1px rgba(76,255,76,0.3),
-    0 0 12px rgba(76,255,76,0.18);
+    inset 0 1px 0 rgba(52, 217, 123, 0.12),
+    0 0 0 1px rgba(52, 217, 123, 0.3),
+    0 0 12px rgba(52, 217, 123, 0.18);
 }
 .rule-node[data-status='failed'] {
-  border-color: #FF4C4C;
+  border-color: var(--color-danger);
   box-shadow:
-    inset 0 1px 0 rgba(255,76,76,0.12),
-    0 0 0 1px rgba(255,76,76,0.3),
-    0 0 14px rgba(255,76,76,0.2);
+    inset 0 1px 0 rgba(242, 85, 95, 0.12),
+    0 0 0 1px rgba(242, 85, 95, 0.3),
+    0 0 14px rgba(242, 85, 95, 0.2);
 }
 .rule-node[data-status='timeout'] {
-  border-color: #FFA500;
+  border-color: var(--color-warning);
   box-shadow:
     inset 0 1px 0 rgba(255,165,0,0.12),
     0 0 0 1px rgba(255,165,0,0.3),
@@ -658,21 +658,21 @@ const isDisabled = computed(() => {
   width: 14px !important;
   height: 14px !important;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.4), 0 0 12px rgba(0, 240, 255, 0.6);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.4), 0 0 12px rgba(34, 211, 238, 0.6);
   animation: handle-pulse 1s ease-in-out infinite;
 }
 
 @keyframes handle-pulse {
-  0%, 100% { box-shadow: 0 0 0 2px rgba(0, 240, 255, 0.4), 0 0 12px rgba(0, 240, 255, 0.6); }
-  50% { box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.7), 0 0 18px rgba(0, 240, 255, 0.9); }
+  0%, 100% { box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.4), 0 0 12px rgba(34, 211, 238, 0.6); }
+  50% { box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.7), 0 0 18px rgba(34, 211, 238, 0.9); }
 }
 
-:deep(.vue-flow__handle.type-image) { border-color: #4CFF4C; }
-:deep(.vue-flow__handle.type-bbox) { border-color: #00f0FF; }
-:deep(.vue-flow__handle.type-model) { border-color: #FFA500; }
-:deep(.vue-flow__handle.type-string) { border-color: #FFFF4C; }
+:deep(.vue-flow__handle.type-image) { border-color: var(--cat-input); }
+:deep(.vue-flow__handle.type-bbox) { border-color: var(--cat-detection); }
+:deep(.vue-flow__handle.type-model) { border-color: var(--color-warning); }
+:deep(.vue-flow__handle.type-string) { border-color: var(--cat-processing); }
 :deep(.vue-flow__handle.type-control),
-:deep(.vue-flow__handle.type-trigger) { border-color: #DC4FDC; }
+:deep(.vue-flow__handle.type-trigger) { border-color: var(--cat-logic); }
 :deep(.vue-flow__handle.type-any) { border-color: #888; }
 
 :deep(.vue-flow__handle.is-connected) {
@@ -683,14 +683,14 @@ const isDisabled = computed(() => {
 
 /* 必填端口的 * 标记 */
 .required-marker {
-  color: #ff5252;
+  color: var(--color-danger);
   font-weight: 700;
   margin-left: 2px;
 }
 
 /* 必填未连的 handle: 红框 + 呼吸光晕 */
 :deep(.vue-flow__handle.is-missing-required) {
-  border-color: #ff5252 !important;
+  border-color: var(--color-danger) !important;
   border-width: 2px !important;
   box-shadow: 0 0 0 2px rgba(255, 82, 82, 0.25), 0 0 8px rgba(255, 82, 82, 0.6);
   animation: required-pulse 1.5s ease-in-out infinite;
@@ -711,7 +711,7 @@ const isDisabled = computed(() => {
   border-radius: 8px;
   background: rgba(255, 82, 82, 0.15);
   border: 1px solid rgba(255, 82, 82, 0.4);
-  color: #ff5252;
+  color: var(--color-danger);
   font-size: 10px;
   font-weight: 600;
   cursor: help;
@@ -768,23 +768,23 @@ const isDisabled = computed(() => {
 }
 
 .status-indicator.running {
-  background: #5898ff;
-  box-shadow: 0 0 6px rgba(88, 152, 255, 0.7);
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(34, 211, 238, 0.7);
   animation: pulse 1.2s ease-in-out infinite;
 }
 
 .status-indicator.success {
-  background: #4CFF4C;
-  box-shadow: 0 0 6px rgba(76, 255, 76, 0.6);
+  background: var(--color-success);
+  box-shadow: 0 0 6px rgba(52, 217, 123, 0.6);
 }
 
 .status-indicator.failed {
-  background: #FF4C4C;
-  box-shadow: 0 0 6px rgba(255, 76, 76, 0.6);
+  background: var(--color-danger);
+  box-shadow: 0 0 6px rgba(242, 85, 95, 0.6);
 }
 
 .status-indicator.timeout {
-  background: #FFA500;
+  background: var(--color-warning);
   box-shadow: 0 0 6px rgba(255, 165, 0, 0.6);
 }
 

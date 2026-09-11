@@ -16,16 +16,13 @@
     </div>
 
     <!-- 模型列表 -->
-    <div
-      class="ui-card"
-      style="width: 100%; min-width: 0;"
-    >
+    <div class="ui-card w-full min-w-0">
       <div class="table-wrapper">
         <el-table
           v-loading="loading"
           :data="models"
           :row-class-name="tableRowClassName"
-          style="width: 100%"
+          class="w-full"
         >
           <el-table-column
             prop="id"
@@ -366,7 +363,7 @@
               ref="fileInputRef"
               type="file"
               accept=".pt,.pth,.onnx"
-              style="display: none"
+              class="hidden"
               @change="handleFileChange"
             >
             <button
@@ -1005,7 +1002,7 @@ onMounted(() => {
 }
 
 .id-badge {
-  @apply font-mono text-xs text-[var(--accent-blue)] px-2 py-1 bg-[rgba(88,152,255,0.1)] rounded;
+  @apply font-mono text-xs text-[var(--accent-blue)] px-2 py-1 bg-[rgba(34, 211, 238, 0.1)] rounded;
 }
 
 .name-cell {
@@ -1021,7 +1018,7 @@ onMounted(() => {
 }
 
 .best-badge {
-  @apply inline-flex items-center gap-1 text-xs px-2 py-1 bg-[rgba(0,255,136,0.1)] text-[var(--color-success)] border border-[rgba(0,255,136,0.3)] rounded;
+  @apply inline-flex items-center gap-1 text-xs px-2 py-1 bg-[rgba(52, 217, 123,0.1)] text-[var(--color-success)] border border-[rgba(52, 217, 123,0.3)] rounded;
 
   svg {
     @apply w-3 h-3;
@@ -1033,7 +1030,7 @@ onMounted(() => {
   white-space: nowrap;
 
   &.trained {
-    @apply bg-[rgba(0,255,136,0.1)] text-[var(--color-success)] border border-[rgba(0,255,136,0.3)];
+    @apply bg-[rgba(52, 217, 123,0.1)] text-[var(--color-success)] border border-[rgba(52, 217, 123,0.3)];
   }
 
   &.untrained {
@@ -1180,7 +1177,7 @@ onMounted(() => {
   input:focus,
   select:focus {
     @apply outline-none border-[var(--accent-blue)];
-    box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.1);
   }
 
   input::placeholder {
@@ -1240,7 +1237,7 @@ onMounted(() => {
   }
 
   &.is-default {
-    @apply text-[var(--accent-blue)] bg-[rgba(88,152,255,0.1)] border border-[rgba(88,152,255,0.3)];
+    @apply text-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.1)] border border-[rgba(34, 211, 238, 0.3)];
   }
 }
 
@@ -1299,7 +1296,7 @@ onMounted(() => {
   @apply inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-[var(--bg-secondary)] text-[var(--text-secondary)];
 
   &.is-default {
-    @apply text-[var(--accent-blue)] bg-[rgba(88,152,255,0.1)] border border-[rgba(88,152,255,0.25)];
+    @apply text-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.1)] border border-[rgba(34, 211, 238, 0.25)];
   }
 
   .default-tag {

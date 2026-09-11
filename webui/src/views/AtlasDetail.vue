@@ -121,14 +121,14 @@
         type="file"
         accept="image/*"
         multiple
-        style="display: none"
+        class="hidden"
         @change="handleFileSelect"
       >
       <input
         ref="videoInputRef"
         type="file"
         accept="video/*"
-        style="display: none"
+        class="hidden"
         @change="handleVideoSelect"
       >
     </div>
@@ -1313,8 +1313,8 @@ onUnmounted(() => {
 }
 
 .tab-btn.active {
-  background: rgba(0, 240, 255, 0.1);
-  border-color: rgba(0, 240, 255, 0.3);
+  background: rgba(34, 211, 238, 0.1);
+  border-color: rgba(34, 211, 238, 0.3);
   @apply text-[var(--accent-blue)];
 }
 
@@ -1366,7 +1366,7 @@ onUnmounted(() => {
 }
 
 .sort-option.active {
-  @apply text-[var(--accent-blue)] bg-[rgba(88,152,255,0.1)];
+  @apply text-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.1)];
 }
 
 .sort-divider {
@@ -1445,7 +1445,7 @@ onUnmounted(() => {
 
 .image-card:hover {
   @apply border-[var(--accent-blue)];
-  box-shadow: 0 2px 8px rgba(0, 240, 255, 0.12);
+  box-shadow: 0 2px 8px rgba(34, 211, 238, 0.12);
 }
 
 .image-wrapper {
@@ -1641,7 +1641,7 @@ onUnmounted(() => {
 
 /* 上传提示 */
 .upload-tip {
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.05), rgba(255, 0, 170, 0.05));
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.05), rgba(242, 85, 95, 0.05));
 }
 
 .tip-header {
@@ -1776,7 +1776,7 @@ onUnmounted(() => {
 }
 
 .status-tag.annotated {
-  background: rgba(0, 255, 136, 0.15);
+  background: rgba(52, 217, 123, 0.15);
   @apply text-[var(--color-success)];
 }
 
@@ -1861,14 +1861,6 @@ onUnmounted(() => {
 
 .extract-hint {
   @apply text-xs text-[var(--text-muted)];
-}
-
-.ui-btn-secondary {
-  @apply bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)];
-}
-
-.ui-btn-secondary:hover {
-  @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
 }
 
 /* 提取进度对话框 */

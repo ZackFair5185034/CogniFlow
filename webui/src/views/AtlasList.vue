@@ -16,16 +16,13 @@
     </div>
 
     <!-- 图集表格 -->
-    <div
-      class="ui-card"
-      style="width: 100%; min-width: 0;"
-    >
+    <div class="ui-card w-full min-w-0">
       <div class="table-wrapper">
         <el-table
           v-loading="loading"
           :data="atlases"
           :row-class-name="tableRowClassName"
-          style="width: 100%"
+          class="w-full"
         >
           <el-table-column
             prop="id"
@@ -388,7 +385,7 @@ onMounted(loadAtlases)
 }
 
 .id-badge {
-  @apply font-mono text-xs text-[var(--accent-blue)] px-2 py-1 bg-[rgba(88,152,255,0.1)] rounded;
+  @apply font-mono text-xs text-[var(--accent-blue)] px-2 py-1 bg-[rgba(34, 211, 238, 0.1)] rounded;
 }
 
 .name-cell {
@@ -469,7 +466,7 @@ onMounted(loadAtlases)
   input:focus,
   textarea:focus {
     @apply outline-none border-[var(--accent-blue)];
-    box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.1);
   }
 
   input::placeholder,

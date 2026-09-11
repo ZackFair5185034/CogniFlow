@@ -184,7 +184,7 @@
                   ref="fileInputRef"
                   type="file"
                   accept="image/*"
-                  style="display: none"
+                  class="hidden"
                   @change="handleFileSelect"
                 >
                 <div class="upload-hint">
@@ -215,7 +215,7 @@
                   ref="streamInputRef"
                   type="file"
                   accept="video/*"
-                  style="display: none"
+                  class="hidden"
                   @change="handleStreamSelect"
                 >
                 <div class="upload-hint">
@@ -1589,7 +1589,7 @@ onUnmounted(() => {
   @apply border-2 border-dashed border-[var(--border-color)] rounded-lg p-6 text-center cursor-pointer transition-all;
 
   &.dragging {
-    @apply border-[var(--accent-blue)] bg-[rgba(88,152,255,0.05)];
+    @apply border-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.05)];
   }
 
   &.disabled {
@@ -1626,12 +1626,12 @@ onUnmounted(() => {
 }
 
 :deep(.detect-btn.stop-btn) {
-  background: #dc3545 !important;
-  border-color: #dc3545 !important;
-  color: white !important;
+  background: var(--color-danger) !important;
+  border-color: var(--color-danger) !important;
+  color: var(--on-vibrant) !important;
 
   &:hover:not(:disabled) {
-    background: #c82333 !important;
+    background: var(--color-danger-hover, var(--color-danger)) !important;
   }
 }
 
@@ -1646,7 +1646,7 @@ onUnmounted(() => {
 }
 
 .result-count {
-  @apply text-xs text-[var(--accent-blue)] px-2.5 py-1 bg-[rgba(88,152,255,0.1)] rounded-full;
+  @apply text-xs text-[var(--accent-blue)] px-2.5 py-1 bg-[rgba(34, 211, 238, 0.1)] rounded-full;
 }
 
 .result-image-wrapper {
@@ -1796,7 +1796,7 @@ onUnmounted(() => {
   left: 0;
   top: 0;
   height: 100%;
-  background: rgba(0, 240, 255, 0.2);
+  background: rgba(34, 211, 238, 0.2);
   border-radius: 3px;
   transition: width 0.5s ease;
 }
@@ -1809,7 +1809,7 @@ onUnmounted(() => {
   background: var(--accent-blue);
   border-radius: 3px;
   transition: width 0.3s ease;
-  box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
   z-index: 1;
 }
 
@@ -1907,7 +1907,7 @@ onUnmounted(() => {
   z-index: 2;
 
   &:hover {
-    background: rgba(0, 240, 255, 0.15);
+    background: rgba(34, 211, 238, 0.15);
   }
 }
 
@@ -1931,7 +1931,7 @@ onUnmounted(() => {
 }
 
 .console-count {
-  @apply text-xs px-1.5 py-0.5 rounded bg-[rgba(88,152,255,0.1)] text-[var(--accent-blue)];
+  @apply text-xs px-1.5 py-0.5 rounded bg-[rgba(34, 211, 238, 0.1)] text-[var(--accent-blue)];
 }
 
 .console-header-right {
@@ -1983,7 +1983,7 @@ onUnmounted(() => {
   @apply text-[10px] px-1.5 py-0.5 rounded flex-shrink-0 font-medium;
 
   &.src-image {
-    background: rgba(0, 240, 255, 0.15);
+    background: rgba(34, 211, 238, 0.15);
     color: var(--accent-blue);
   }
 
@@ -2006,7 +2006,7 @@ onUnmounted(() => {
   }
 
   &:hover {
-    @apply text-[var(--accent-blue)] bg-[rgba(88,152,255,0.1)];
+    @apply text-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.1)];
   }
 
   svg {

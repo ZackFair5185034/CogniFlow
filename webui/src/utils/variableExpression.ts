@@ -238,13 +238,13 @@ export function formatVariableType(type: Variable['type']): string {
  */
 export function getVariableTypeColor(type: Variable['type']): string {
   const colors: Record<Variable['type'], string> = {
-    STRING: '#8888aa',
-    NUMBER: '#00f0ff',
-    BOOLEAN: '#DC4FDC',
-    IMAGE: '#4CFF4C',
-    BBOX: '#FF7F4C'
+    STRING: '#9a9ab2',
+    NUMBER: '#22d3ee',
+    BOOLEAN: '#b158e4',
+    IMAGE: '#58e49e',
+    BBOX: '#e48b58'
   }
-  return colors[type] || '#8888aa'
+  return colors[type] || '#9a9ab2'
 }
 
 // ============ 快捷构建函数 ============

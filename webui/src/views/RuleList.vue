@@ -431,7 +431,7 @@ function formatDate(dateStr: string) {
   .rule-version {
     font-size: 10px;
     padding: 1px 6px;
-    background: rgba(0, 240, 255, 0.15);
+    background: rgba(34, 211, 238, 0.15);
     color: var(--accent-blue);
     border-radius: 3px;
     font-family: 'JetBrains Mono', monospace;
@@ -461,9 +461,9 @@ function formatDate(dateStr: string) {
   white-space: nowrap;
 
   &.active {
-    background: rgba(0, 255, 136, 0.15);
+    background: rgba(52, 217, 123, 0.15);
     color: var(--color-success);
-    border: 1px solid rgba(0, 255, 136, 0.3);
+    border: 1px solid rgba(52, 217, 123, 0.3);
   }
 
   &.inactive {
@@ -525,7 +525,7 @@ function formatDate(dateStr: string) {
 
     &.active {
       color: var(--color-success);
-      border-color: rgba(0, 255, 136, 0.4);
+      border-color: rgba(52, 217, 123, 0.4);
     }
 
     &.danger:hover {
@@ -671,7 +671,7 @@ function formatDate(dateStr: string) {
     color: #000;
 
     &:hover:not(:disabled) {
-      box-shadow: 0 4px 20px rgba(0, 240, 255, 0.3);
+      box-shadow: 0 4px 20px rgba(34, 211, 238, 0.3);
     }
   }
 }
@@ -688,12 +688,12 @@ function formatDate(dateStr: string) {
 
   &.success {
     background: linear-gradient(135deg, var(--color-success), var(--color-success));
-    color: #000;
+    color: var(--on-vibrant);
   }
 
   &.error {
     background: linear-gradient(135deg, var(--color-danger), var(--color-danger));
-    color: #fff;
+    color: var(--on-vibrant);
   }
 
   &.info {

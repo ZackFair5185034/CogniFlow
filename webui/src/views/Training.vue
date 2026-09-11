@@ -597,7 +597,7 @@ onUnmounted(() => {
 
   &.active {
     @apply border-[var(--accent-blue)];
-    box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+    box-shadow: 0 0 15px rgba(34, 211, 238, 0.15);
   }
 }
 
@@ -617,11 +617,11 @@ onUnmounted(() => {
   }
 
   &.running {
-    @apply bg-[rgba(88,152,255,0.2)] text-[var(--accent-blue)];
+    @apply bg-[rgba(34, 211, 238, 0.2)] text-[var(--accent-blue)];
   }
 
   &.completed {
-    @apply bg-[rgba(0,255,136,0.2)] text-[var(--color-success)];
+    @apply bg-[rgba(52, 217, 123,0.2)] text-[var(--color-success)];
   }
 
   &.failed {

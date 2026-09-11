@@ -21,7 +21,7 @@ defineProps({
     stroke-width="2"
     stroke-linecap="round"
     stroke-linejoin="round"
-    style="display:inline-block;vertical-align:middle"
+    class="inline-block align-middle"
   >
     <use :xlink:href="'#icon-' + name" />
   </svg>
