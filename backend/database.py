@@ -168,6 +168,9 @@ class RuleGraph(Base):
     cron_expression = Column(String(100), nullable=True)  # 定时触发 Cron 表达式
     thumbnail = Column(Text, nullable=True)  # Base64 缩略图快照
     webhook_api_key = Column(String(64), nullable=True)  # Webhook API Key 认证
+    # P0-B (2026-09-11): 图 schema 版本号, 用于迁移框架识别需要升级的图。
+    # 旧图默认为 1 (与 CURRENT_SCHEMA_VERSION 一致, 无需迁移)。
+    schema_version = Column(Integer, default=1, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -282,6 +285,14 @@ def init_db():
     _migrate_add_column("inference_job", "device", "VARCHAR(20) DEFAULT 'cpu'")
     _migrate_add_column("inference_job", "precision", "VARCHAR(10) DEFAULT 'fp32'")
     _migrate_add_column("inference_job", "used_format", "VARCHAR(20) DEFAULT 'yolo_pt'")
+
+    # 迁移 P0-B (2026-09-11): 为 rule_graph 添加 schema_version 列 (无 Alembic 过渡)
+    try:
+        from backend.services.rule_engine.migrations import ensure_rule_graph_schema_column
+        ensure_rule_graph_schema_column()
+    except Exception as e:  # noqa: BLE001 - 容错，列已存在或表尚未创建均允许
+        import logging as _logging
+        _logging.getLogger(__name__).warning("ensure_rule_graph_schema_column 失败: %s", e)
 
     # 迁移：Phase 11.1 节点执行指标端到端链路（2026-06-04 验收发现 P0 缺口）
     # _save_node_log 写 duration_ms / metrics_json 但表缺这两列导致执行失败

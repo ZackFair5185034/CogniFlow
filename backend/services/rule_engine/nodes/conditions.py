@@ -5,13 +5,41 @@
 
 节点分类: logic (#DC4FDC)
 """
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from backend.services.rule_engine.models import (
-    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+    NodeConfigSchema, NodeDefinition, NodeCategory, PortDefinition,
+    PortType, ConfigSchemaProperty,
 )
+from pydantic import Field
 from typing import Dict
 from .base import BaseExecutor
+
+
+# P0-A (2026-09-11): 节点配置 schema（Pydantic 强类型校验）。
+class ObjectExistsConditionConfig(NodeConfigSchema):
+    """ObjectExistsConditionNode 配置 schema。"""
+    class_names: List[str] = Field(
+        default_factory=list, description="要检查的类别名称列表"
+    )
+    min_count: int = Field(default=1, ge=0, le=1000, description="满足条件的最小数量")
+    comparison: Literal["gte", "lte", "eq", "gt", "lt"] = Field(
+        default="gte", description="数量比较方式"
+    )
+
+
+class ConfidenceThresholdConditionConfig(NodeConfigSchema):
+    """ConfidenceThresholdConditionNode 配置 schema。"""
+    min_confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="最小置信度阈值")
+
+
+class VariableConditionConfig(NodeConfigSchema):
+    """VariableConditionNode 配置 schema。"""
+    variable_name: str = Field(default="", description="要检查的变量名称")
+    expected_value: str = Field(default="", description="与变量比较的期望值")
+    comparison: Literal["eq", "ne", "gt", "lt", "gte", "lte", "contains"] = Field(
+        default="eq", description="比较方式"
+    )
 
 
 class ObjectExistsConditionNode(BaseExecutor):
@@ -29,6 +57,8 @@ class ObjectExistsConditionNode(BaseExecutor):
     description = "检查是否检测到指定目标"
     icon = "checkbox-marked"
     color = "#DC4FDC"
+
+    ConfigSchema = ObjectExistsConditionConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -147,6 +177,8 @@ class ConfidenceThresholdConditionNode(BaseExecutor):
     icon = "percent"
     color = "#DC4FDC"
 
+    ConfigSchema = ConfidenceThresholdConditionConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -235,6 +267,8 @@ class VariableConditionNode(BaseExecutor):
     description = "检查变量的值是否满足条件"
     icon = "variable"
     color = "#DC4FDC"
+
+    ConfigSchema = VariableConditionConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(

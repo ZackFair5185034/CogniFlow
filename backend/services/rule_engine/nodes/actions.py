@@ -6,13 +6,59 @@
 节点分类: action (#FF7F4C)
 """
 import asyncio
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from backend.services.rule_engine.models import (
-    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+    NodeConfigSchema, NodeDefinition, NodeCategory, PortDefinition,
+    PortType, ConfigSchemaProperty,
 )
+from pydantic import Field
 from typing import Dict
 from .base import BaseExecutor
+
+
+# P0-A (2026-09-11): 节点配置 schema（Pydantic 强类型校验）。
+class KeyboardActionConfig(NodeConfigSchema):
+    """KeyboardActionNode 配置 schema。"""
+    keys: List[str] = Field(default_factory=list, description="要模拟按下的键列表")
+    hold_duration: float = Field(default=0.1, ge=0.01, le=5.0, description="按住时长（秒）")
+    interval: float = Field(default=0, ge=0, le=10.0, description="按键间隔（秒）")
+
+
+class MouseActionConfig(NodeConfigSchema):
+    """MouseActionNode 配置 schema。"""
+    action: Literal["click", "move", "scroll", "double_click", "right_click"] = Field(
+        default="click", description="鼠标动作类型"
+    )
+    x: float = Field(default=0, ge=0, le=9999, description="鼠标 X 坐标")
+    y: float = Field(default=0, ge=0, le=9999, description="鼠标 Y 坐标")
+    button: Literal["left", "right", "middle"] = Field(
+        default="left", description="使用的鼠标按钮"
+    )
+
+
+class WaitActionConfig(NodeConfigSchema):
+    """WaitActionNode 配置 schema。"""
+    duration: float = Field(default=1.0, ge=0.1, le=300.0, description="等待时长（秒）")
+
+
+class HttpRequestActionConfig(NodeConfigSchema):
+    """HttpRequestActionNode 配置 schema。"""
+    url: str = Field(default="", description="HTTP 请求的目标 URL")
+    method: Literal["GET", "POST", "PUT", "DELETE", "PATCH"] = Field(
+        default="GET", description="HTTP 请求方法"
+    )
+    headers: str = Field(default="{}", description="HTTP 请求头（JSON 格式）")
+    body: str = Field(default="{}", description="HTTP 请求体（JSON 格式）")
+    timeout: int = Field(default=30, ge=1, le=300, description="请求超时时间（秒）")
+
+
+class LogActionConfig(NodeConfigSchema):
+    """LogActionNode 配置 schema。"""
+    message: str = Field(default="", description="要记录的日志消息, 支持 {变量名} 插值")
+    level: Literal["debug", "info", "warning", "error"] = Field(
+        default="info", description="日志输出级别"
+    )
 
 
 class KeyboardActionNode(BaseExecutor):
@@ -30,6 +76,8 @@ class KeyboardActionNode(BaseExecutor):
     description = "模拟键盘按键"
     icon = "keyboard"
     color = "#FF7F4C"
+
+    ConfigSchema = KeyboardActionConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -143,6 +191,8 @@ class MouseActionNode(BaseExecutor):
     icon = "mouse"
     color = "#FF7F4C"
 
+    ConfigSchema = MouseActionConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -252,6 +302,8 @@ class WaitActionNode(BaseExecutor):
     icon = "clock"
     color = "#FF7F4C"
 
+    ConfigSchema = WaitActionConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -326,6 +378,8 @@ class HttpRequestActionNode(BaseExecutor):
     description = "发送 HTTP 请求"
     icon = "http"
     color = "#FF7F4C"
+
+    ConfigSchema = HttpRequestActionConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -457,6 +511,8 @@ class LogActionNode(BaseExecutor):
     description = "记录日志信息"
     icon = "note-text"
     color = "#FF7F4C"
+
+    ConfigSchema = LogActionConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(

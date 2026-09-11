@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PortType(str, Enum):
@@ -105,6 +105,46 @@ class NodeDefinition(BaseModel):
     inputs: Dict[str, PortDefinition] = Field(default_factory=dict, description="输入端口定义")
     outputs: Dict[str, PortDefinition] = Field(default_factory=dict, description="输出端口定义")
     config_schema: Dict[str, ConfigSchemaProperty] = Field(default_factory=dict, description="节点可配置参数定义")
+
+
+class NodeConfigSchema(BaseModel):
+    """节点配置 schema 基类 - P0-A (2026-09-11)。
+
+    所有节点的 ConfigSchema 必须继承此类。
+
+    关键约束：
+    - extra='forbid'：禁止未知字段。前端字段名拼错（如 confidenc）会立即报
+      ValidationError, 避免静默使用默认值导致运行时难定位的 bug。
+    - validate_assignment=False（默认）：执行期校验一次性读取，避免运行中
+      修改 config 触发二次校验。
+    """
+    model_config = ConfigDict(extra="forbid")
+
+
+def prop_to_pydantic_field(prop: ConfigSchemaProperty) -> Dict[str, Any]:
+    """把 ConfigSchemaProperty 转换为 Pydantic Field 参数。
+
+    这是手工编写 NodeConfigSchema 时的辅助参考（不强制使用）。
+    用于从现有 ConfigSchemaProperty 单源派生 Pydantic Field 约束。
+
+    Args:
+        prop: 节点配置项定义
+
+    Returns:
+        dict 包含 default / ge / le / description 等键，可展开给 Field()
+
+    注意：返回 dict 中的 type 注解（int/float/bool/str）需人工映射,
+    因为 widget 语义无法完全靠 Pydantic Field 表达（如 dropdown 需用 Literal）。
+    """
+    result: Dict[str, Any] = {
+        "default": prop.default,
+        "description": prop.description or prop.title,
+    }
+    if prop.minimum is not None:
+        result["ge"] = prop.minimum
+    if prop.maximum is not None:
+        result["le"] = prop.maximum
+    return result
 
 
 class NodeDefinitionsResponse(BaseModel):

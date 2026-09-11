@@ -4,13 +4,43 @@
 按 Phase 1 设计文档实现 BaseExecutor 模式。
 """
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple
 
 from backend.services.rule_engine.models import (
-    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+    NodeConfigSchema, NodeDefinition, NodeCategory, PortDefinition,
+    PortType, ConfigSchemaProperty,
 )
+from pydantic import Field
 from typing import Dict
 from .base import BaseExecutor
+
+
+# P0-A (2026-09-11): 节点配置 schema（Pydantic 强类型校验）。
+class TimerTriggerConfig(NodeConfigSchema):
+    """TimerTriggerNode 配置 schema。"""
+    interval: float = Field(default=5.0, ge=0.1, le=3600, description="触发间隔时间（秒）")
+    enabled: Literal["true", "false"] = Field(default="true", description="是否启用定时器")
+
+
+class CronTriggerConfig(NodeConfigSchema):
+    """CronTriggerNode 配置 schema。"""
+    cron: str = Field(default="0 * * * *", description="标准 Cron 格式，如 0 * * * *")
+    timezone: Literal[
+        "Asia/Shanghai", "UTC", "America/New_York", "Europe/London", "Japan"
+    ] = Field(default="Asia/Shanghai", description="时区名称")
+
+
+class WebhookTriggerConfig(NodeConfigSchema):
+    """WebhookTriggerNode 配置 schema。"""
+    path: str = Field(default="/webhook/trigger", description="Webhook 端点路径")
+    method: Literal["GET", "POST", "PUT", "DELETE"] = Field(
+        default="POST", description="支持的 HTTP 方法"
+    )
+
+
+class ApiTriggerConfig(NodeConfigSchema):
+    """ApiTriggerNode 配置 schema。"""
+    api_name: str = Field(default="", description="调用的 API 名称")
 
 
 class ManualTriggerNode(BaseExecutor):
@@ -25,6 +55,7 @@ class ManualTriggerNode(BaseExecutor):
     description = "手动触发规则执行"
     icon = "play"
     color = "#4CFF4C"
+    # ManualTrigger 无配置, 不声明 ConfigSchema (validate_config 自动放行)
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -76,6 +107,8 @@ class TimerTriggerNode(BaseExecutor):
     description = "按固定时间间隔触发规则执行"
     icon = "timer"
     color = "#4CFF4C"
+
+    ConfigSchema = TimerTriggerConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -161,6 +194,8 @@ class CronTriggerNode(BaseExecutor):
     icon = "clock"
     color = "#4CFF4C"
 
+    ConfigSchema = CronTriggerConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -243,6 +278,8 @@ class WebhookTriggerNode(BaseExecutor):
     description = "接收 HTTP 请求触发规则执行"
     icon = "webhook"
     color = "#4CFF4C"
+
+    ConfigSchema = WebhookTriggerConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -327,6 +364,8 @@ class ApiTriggerNode(BaseExecutor):
     description = "通过 API 调用触发规则执行"
     icon = "api"
     color = "#4CFF4C"
+
+    ConfigSchema = ApiTriggerConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(

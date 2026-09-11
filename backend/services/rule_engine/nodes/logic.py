@@ -6,13 +6,43 @@
 节点分类: logic (#DC4FDC)
 """
 import asyncio
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple
 
 from backend.services.rule_engine.models import (
-    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+    NodeConfigSchema, NodeDefinition, NodeCategory, PortDefinition,
+    PortType, ConfigSchemaProperty,
 )
+from pydantic import Field
 from typing import Dict
 from .base import BaseExecutor
+
+
+# P0-A (2026-09-11): 节点配置 schema（Pydantic 强类型校验）。
+# BranchNode 无配置, 继承 BaseExecutor.ConfigSchema=None, validate_config 自动放行。
+class ParallelBranchConfig(NodeConfigSchema):
+    """ParallelBranchNode 配置 schema。"""
+    max_concurrent: int = Field(default=3, ge=1, le=10, description="最多同时执行的分支数")
+
+
+class DelayConfig(NodeConfigSchema):
+    """DelayNode 配置 schema。"""
+    delay: float = Field(default=1.0, ge=0.1, le=60.0, description="延迟多少秒后继续执行")
+
+
+class SetVariableConfig(NodeConfigSchema):
+    """SetVariableNode 配置 schema。"""
+    variable_name: str = Field(default="", description="要设置的变量名称")
+    value: str = Field(default="", description="变量的值（静态值或动态变量名）")
+    value_type: Literal["static", "dynamic"] = Field(
+        default="static", description="静态值还是从其他变量获取"
+    )
+
+
+class CounterConfig(NodeConfigSchema):
+    """CounterNode 配置 schema。"""
+    variable_name: str = Field(default="_counter", description="存储计数值的变量名")
+    increment: float = Field(default=1, ge=1, le=1000, description="每次计数增加的数值")
+    reset_on_trigger: bool = Field(default=False, description="每次触发时是否重置为增量值")
 
 
 class BranchNode(BaseExecutor):
@@ -87,6 +117,8 @@ class ParallelBranchNode(BaseExecutor):
     description = "同时执行多个分支"
     icon = "merge"
     color = "#DC4FDC"
+
+    ConfigSchema = ParallelBranchConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -167,6 +199,8 @@ class DelayNode(BaseExecutor):
     description = "延迟后继续执行"
     icon = "clock"
     color = "#DC4FDC"
+
+    ConfigSchema = DelayConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -252,6 +286,8 @@ class SetVariableNode(BaseExecutor):
     description = "设置执行上下文中的变量"
     icon = "variable"
     color = "#DC4FDC"
+
+    ConfigSchema = SetVariableConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -368,6 +404,8 @@ class CounterNode(BaseExecutor):
     description = "计数执行次数"
     icon = "counter"
     color = "#DC4FDC"
+
+    ConfigSchema = CounterConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(

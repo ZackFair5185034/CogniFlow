@@ -7,11 +7,35 @@ docs/research/rule-engine-phase1-node-registry.md
 节点分类: input (#4CFF4C)
 """
 import asyncio
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple
 
-from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty, Region
+from backend.services.rule_engine.models import (
+    NodeConfigSchema, NodeDefinition, NodeCategory, PortDefinition,
+    PortType, ConfigSchemaProperty, Region,
+)
+from pydantic import Field
 from typing import Dict
 from .base import BaseExecutor
+
+
+# P0-A (2026-09-11): 节点配置 schema（Pydantic 强类型校验）。
+# extra='forbid' 继承自 NodeConfigSchema 基类, 防止前端字段名拼错静默生效。
+class ImageCaptureConfig(NodeConfigSchema):
+    """ImageCaptureNode 配置 schema。"""
+    source: str = Field(default="", description="本地文件路径或 HTTP/HTTPS URL")
+
+
+class VideoCaptureConfig(NodeConfigSchema):
+    """VideoCaptureNode 配置 schema。"""
+    source: str = Field(default="video0", description="/dev/video0 或视频文件路径")
+    fps: float = Field(default=30, ge=1, le=120, description="每秒采集帧数")
+
+
+class ScreenCaptureConfig(NodeConfigSchema):
+    """ScreenCaptureNode 配置 schema。"""
+    source: Literal["screen", "window"] = Field(
+        default="screen", description="screen(全屏) 或 window(窗口)"
+    )
 
 
 class ImageCaptureNode(BaseExecutor):
@@ -27,6 +51,8 @@ class ImageCaptureNode(BaseExecutor):
     description = "从文件路径或 URL 采集单张图片"
     icon = "image"
     color = "#4CFF4C"
+
+    ConfigSchema = ImageCaptureConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -131,6 +157,8 @@ class VideoCaptureNode(BaseExecutor):
     icon = "video"
     color = "#4CFF4C"
 
+    ConfigSchema = VideoCaptureConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -218,6 +246,8 @@ class ScreenCaptureNode(BaseExecutor):
     description = "截取屏幕或窗口内容"
     icon = "monitor"
     color = "#4CFF4C"
+
+    ConfigSchema = ScreenCaptureConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(

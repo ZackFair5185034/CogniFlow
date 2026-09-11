@@ -8,10 +8,14 @@ docs/research/rule-engine-phase1-node-registry.md
 1. get_definition() - 返回节点定义
 2. validate_inputs() - 校验输入参数
 3. execute() - 执行节点逻辑（必须是 async）
+
+P0-A (2026-09-11): 新增 ConfigSchema 与 validate_config() 提供强类型配置校验。
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type
+
+from pydantic import BaseModel, ValidationError
 
 from backend.services.rule_engine.models import (
     NodeDefinition,
@@ -127,6 +131,12 @@ class BaseExecutor(ABC):
     # 例如：yolo_model 节点加载大型模型可能需要更长时间，可设为 600。
     default_timeout: Optional[float] = None
 
+    # P0-A (2026-09-11): 节点配置 schema 类（Pydantic BaseModel 子类）。
+    # 子类可覆盖此值声明本节点配置的强类型 schema。
+    # - None（默认）：节点无需配置, validate_config 直接放行
+    # - Type[BaseModel]：必须继承 NodeConfigSchema (extra='forbid')
+    ConfigSchema: Optional[Type[BaseModel]] = None
+
     def __init__(self, node_id: str = None, config: dict = None):
         """初始化节点执行器。
 
@@ -204,11 +214,47 @@ class BaseExecutor(ABC):
 
     def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
         """返回节点的可配置参数 schema。
-        
+
         子类可以覆盖此方法定义自己的配置项。
         返回空字典表示该节点无需配置。
         """
         return {}
+
+    def validate_config(
+        self, config: Optional[Dict[str, Any]]
+    ) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+        """P0-A (2026-09-11): 强类型校验节点配置。
+
+        与 validate_inputs 不同：
+        - validate_inputs: 校验运行时输入数据（上游边传来的值）
+        - validate_config: 校验用户保存的静态配置（节点面板设置）
+
+        调用时机：
+        1. graph_manager.update_graph / create_graph (保存期 soft warn)
+        2. executor._execute_node (执行期 hard fail)
+
+        Returns:
+            (is_valid, error_message, sanitized_config)
+            - is_valid: 配置是否合法
+            - error_message: 错误描述（如果非法）
+            - sanitized_config: 校验后的配置（已填默认值、丢弃未知字段）
+
+        注意：当 ConfigSchema=None 时直接放行, 不做校验 (向后兼容无配置节点)。
+        """
+        raw = dict(config or {})
+        if self.ConfigSchema is None:
+            return True, None, raw
+        try:
+            validated = self.ConfigSchema.model_validate(raw)
+        except ValidationError as e:
+            # 友好格式化: loc.msg 形式
+            errors: List[str] = []
+            for err in e.errors():
+                loc = ".".join(str(p) for p in err.get("loc", [])) or "<root>"
+                msg = err.get("msg", "unknown error")
+                errors.append(f"{loc}: {msg}")
+            return False, "; ".join(errors), raw
+        return True, None, validated.model_dump()
 
     def merge_with_defaults(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """将可选输入与默认值合并。"""

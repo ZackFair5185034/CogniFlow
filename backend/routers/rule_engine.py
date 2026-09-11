@@ -92,7 +92,8 @@ async def update_graph_thumbnail(
     existing = manager.get_graph(graph_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="规则图不存在")
-    updated_graph = manager.update_graph(graph_id=graph_id, thumbnail=thumbnail)
+    # P0-A: update_graph 现返回 (graph, warnings), 解构时给空列表兜底
+    updated_graph, _warnings = manager.update_graph(graph_id=graph_id, thumbnail=thumbnail)
     return updated_graph
 
 
@@ -102,7 +103,10 @@ async def update_graph(
     graph_update: RuleGraphUpdate,
     db: Session = Depends(get_db),
 ):
-    """更新规则图。"""
+    """更新规则图。
+
+    P0-A: 响应头 X-Config-Warnings 携带保存期配置校验警告列表 (逗号分隔)。
+    """
     manager = GraphManager(db)
 
     # 检查是否存在
@@ -110,7 +114,8 @@ async def update_graph(
     if existing is None:
         raise HTTPException(status_code=404, detail="规则图不存在")
 
-    updated_graph = manager.update_graph(
+    # P0-A: update_graph 现返回 (graph, warnings), 警告透传响应头供前端展示
+    updated_graph, warnings = manager.update_graph(
         graph_id=graph_id,
         name=graph_update.name,
         description=graph_update.description,
@@ -120,7 +125,37 @@ async def update_graph(
         is_active=graph_update.is_active,
         thumbnail=graph_update.thumbnail,
     )
+    if warnings:
+        # 用 JSON 响应体透传警告 (前端可解析), 同时放响应头 (兼容旧客户端)
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=200,
+            content={
+                **(_graph_to_dict(updated_graph) if updated_graph else {}),
+                "warnings": warnings,
+            },
+            headers={"X-Config-Warnings": ",".join(warnings)},
+        )
     return updated_graph
+
+
+def _graph_to_dict(graph):
+    """RuleGraph ORM -> 响应 dict, 用于包裹 warnings 字段。"""
+    return {
+        "id": graph.id,
+        "name": graph.name,
+        "description": graph.description,
+        "nodes_json": graph.nodes_json,
+        "edges_json": graph.edges_json,
+        "variables_json": graph.variables_json,
+        "version": graph.version,
+        "is_active": graph.is_active,
+        "cron_expression": graph.cron_expression,
+        "thumbnail": graph.thumbnail,
+        "schema_version": getattr(graph, "schema_version", None),
+        "created_at": graph.created_at,
+        "updated_at": graph.updated_at,
+    }
 
 
 @router.delete("/graphs/{graph_id}")
@@ -155,7 +190,7 @@ async def activate_graph(graph_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"规则图验证失败: {error_message}")
 
     # 激活图
-    updated_graph = manager.update_graph(graph_id=graph_id, is_active=True)
+    updated_graph, _warnings = manager.update_graph(graph_id=graph_id, is_active=True)
 
     # 注册定时任务
     from backend.services.rule_engine.scheduler import rule_scheduler
@@ -173,7 +208,7 @@ async def activate_graph(graph_id: int, db: Session = Depends(get_db)):
 async def deactivate_graph(graph_id: int, db: Session = Depends(get_db)):
     """停用规则图，并移除定时任务。"""
     manager = GraphManager(db)
-    updated_graph = manager.update_graph(graph_id=graph_id, is_active=False)
+    updated_graph, _warnings = manager.update_graph(graph_id=graph_id, is_active=False)
 
     # 移除定时任务
     from backend.services.rule_engine.scheduler import rule_scheduler

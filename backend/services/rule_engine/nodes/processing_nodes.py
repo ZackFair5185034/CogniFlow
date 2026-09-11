@@ -7,14 +7,83 @@ docs/research/rule-engine-phase1-node-registry.md
 节点分类: processing (#FFFF4C)
 """
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
-from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+from backend.services.rule_engine.models import (
+    NodeConfigSchema, NodeDefinition, NodeCategory, PortDefinition,
+    PortType, ConfigSchemaProperty,
+)
 from backend.services.rule_engine.tracker import SortTracker
+from pydantic import Field
 from typing import Dict
 from .base import BaseExecutor, ExecutionContext
 
 logger = logging.getLogger(__name__)
+
+
+# P0-A (2026-09-11): 节点配置 schema（Pydantic 强类型校验）。
+class CategoryEncodeConfig(NodeConfigSchema):
+    """CategoryEncodeNode 配置 schema。"""
+    class_mapping: str = Field(
+        default="", description="格式: name:id, 如 person:0,car:1"
+    )
+
+
+class FilterConfig(NodeConfigSchema):
+    """FilterNode 配置 schema。"""
+    filter_by: Literal["class", "confidence", "count"] = Field(
+        default="confidence", description="按什么条件过滤"
+    )
+    class_names: str = Field(
+        default="", description="要保留的类别, 多个用逗号分隔, 如 person,car,dog"
+    )
+    min_confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="最小置信度")
+    min_count: int = Field(default=0, ge=0, le=100, description="最少保留结果数")
+    max_count: int = Field(default=999, ge=1, le=1000, description="最多保留结果数")
+
+
+class TrackerConfig(NodeConfigSchema):
+    """TrackerNode 配置 schema。"""
+    max_age: int = Field(default=30, ge=1, le=100, description="目标丢失多少帧后删除轨迹")
+    min_hits: int = Field(default=3, ge=1, le=10, description="目标连续命中多少次后才输出")
+    iou_threshold: float = Field(default=0.3, ge=0.1, le=0.9, description="检测与轨迹匹配的最小 IoU")
+
+
+class ImagePreprocessorConfig(NodeConfigSchema):
+    """ImagePreprocessorNode 配置 schema。"""
+    operation: Literal["resize", "crop", "normalize"] = Field(
+        default="resize", description="图像预处理操作"
+    )
+    width: int = Field(default=640, ge=16, le=4096, description="预处理后图片宽度")
+    height: int = Field(default=640, ge=16, le=4096, description="预处理后图片高度")
+
+
+class TemplateConfig(NodeConfigSchema):
+    """TemplateNode 配置 schema。"""
+    template: str = Field(
+        default="",
+        description="支持 {{var}} 与 {{nested.key}} 插值；未定义变量替换为空字符串",
+    )
+    parse_as: Literal["text", "json"] = Field(
+        default="text",
+        description="text 渲染为字符串；json 解析为对象（解析失败回退为字符串）",
+    )
+
+
+class MergeDetectionsConfig(NodeConfigSchema):
+    """MergeDetectionsNode 配置 schema。"""
+    iou_threshold: float = Field(default=0.5, ge=0.0, le=1.0, description="IoU 阈值")
+    strategy: Literal["nms", "union"] = Field(
+        default="nms", description="nms=按 IoU 去重保留最高置信度；union=简单拼接不去重"
+    )
+    keep_source: bool = Field(default=False, description="在每个检测 dict 中添加 source 字段")
+
+
+class RoiExtractConfig(NodeConfigSchema):
+    """RoiExtractNode 配置 schema。"""
+    padding: float = Field(default=0.0, ge=0.0, le=0.5, description="bbox 周边扩展比例")
+    min_size: int = Field(default=4, ge=1, le=1024, description="裁剪后最小边长（像素）")
+    max_rois: int = Field(default=10, ge=1, le=100, description="最多保留的 ROI 数量")
 
 # 跨执行调用的跟踪器状态（key: node_id -> SortTracker）
 _tracker_states: Dict[str, SortTracker] = {}
@@ -33,6 +102,8 @@ class CategoryEncodeNode(BaseExecutor):
     description = "将类别名称与 ID 相互转换"
     icon = "tag"
     color = "#FFFF4C"
+
+    ConfigSchema = CategoryEncodeConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -129,6 +200,8 @@ class FilterNode(BaseExecutor):
     description = "根据条件过滤检测结果"
     icon = "filter"
     color = "#FFFF4C"
+
+    ConfigSchema = FilterConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -272,6 +345,8 @@ class TrackerNode(BaseExecutor):
     icon = "route"
     color = "#FFFF4C"
 
+    ConfigSchema = TrackerConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -405,6 +480,8 @@ class ImagePreprocessorNode(BaseExecutor):
     description = "对图像进行缩放/裁剪/归一化等预处理"
     icon = "image-edit"
     color = "#FFFF4C"
+
+    ConfigSchema = ImagePreprocessorConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -628,6 +705,8 @@ class TemplateNode(BaseExecutor):
     icon = "file-text"
     color = "#FFFF4C"
 
+    ConfigSchema = TemplateConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -738,6 +817,8 @@ class MergeDetectionsNode(BaseExecutor):
     description = "合并多个检测源的检测结果，按 IoU 去重（多 YOLO 模型融合）"
     icon = "merge"
     color = "#FFFF4C"
+
+    ConfigSchema = MergeDetectionsConfig
 
     def get_definition(self) -> NodeDefinition:
         # 动态输入端口列表（input_1, input_2, ..., input_N）
@@ -938,6 +1019,8 @@ class RoiExtractNode(BaseExecutor):
     description = "按 BBOX 从原图裁剪 ROI 区域（每个检测目标一张）"
     icon = "crop"
     color = "#FFFF4C"
+
+    ConfigSchema = RoiExtractConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(

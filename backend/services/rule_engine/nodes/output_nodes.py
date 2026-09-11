@@ -7,12 +7,41 @@ docs/research/rule-engine-phase1-node-registry.md
 节点分类: output (#FF4C4C)
 """
 import json
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple
 from datetime import datetime
 
-from backend.services.rule_engine.models import NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+from backend.services.rule_engine.models import (
+    NodeConfigSchema, NodeDefinition, NodeCategory, PortDefinition,
+    PortType, ConfigSchemaProperty,
+)
+from pydantic import Field
 from typing import Dict
 from .base import BaseExecutor
+
+
+# P0-A (2026-09-11): 节点配置 schema（Pydantic 强类型校验）。
+class SaveResultConfig(NodeConfigSchema):
+    """SaveResultNode 配置 schema。"""
+    output_path: str = Field(default="/tmp/rule_result.json", description="保存文件的完整路径")
+    format: Literal["json", "csv"] = Field(default="json", description="保存数据的格式")
+
+
+class NotificationConfig(NodeConfigSchema):
+    """NotificationNode 配置 schema。"""
+    notification_type: Literal["console", "webhook", "email", "sms"] = Field(
+        default="console", description="发送通知的方式"
+    )
+    recipients: str = Field(
+        default="", description="通知接收者（webhook填URL，email填邮箱）"
+    )
+    message: str = Field(
+        default="规则执行完成", description="通知消息内容, 支持 {{变量名}} 插值"
+    )
+
+
+class DisplayConfig(NodeConfigSchema):
+    """DisplayNode 配置 schema。"""
+    title: str = Field(default="调试信息", description="调试信息的标题")
 
 
 class SaveResultNode(BaseExecutor):
@@ -29,6 +58,8 @@ class SaveResultNode(BaseExecutor):
     description = "将执行结果保存到文件"
     icon = "save"
     color = "#FF4C4C"
+
+    ConfigSchema = SaveResultConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -137,6 +168,8 @@ class NotificationNode(BaseExecutor):
     icon = "bell"
     color = "#FF4C4C"
 
+    ConfigSchema = NotificationConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -239,6 +272,8 @@ class DisplayNode(BaseExecutor):
     description = "显示节点执行结果（调试用）"
     icon = "eye"
     color = "#FF4C4C"
+
+    ConfigSchema = DisplayConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(

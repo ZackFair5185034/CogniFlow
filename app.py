@@ -90,6 +90,9 @@ async def lifespan(app: FastAPI):
     os.makedirs(YOLO_RUNS_DIR, exist_ok=True)
 
     init_db()
+    # P0-B (2026-09-11): 启动期幂等补齐 rule_graph.schema_version 列 (无 Alembic)
+    from backend.services.rule_engine.migrations import ensure_rule_graph_schema_column
+    ensure_rule_graph_schema_column()
     # 启动时初始化节点注册表单例（修复 2026-06-04 验收发现的 P1：
     # 否则 executor 用 get_registry() 拿不到节点，所有执行都报"未知节点类型"）
     from backend.services.rule_engine.registry import init_builtin_executors

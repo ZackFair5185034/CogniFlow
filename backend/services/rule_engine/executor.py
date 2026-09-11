@@ -689,6 +689,24 @@ class RuleGraphExecutor:
             if not executor:
                 raise ExecutorError(f"未知的节点类型: {node_type}", node_id=node_id, node_type=node_type)
 
+            # P0-A (2026-09-11): 执行期 hard fail - 强类型校验节点配置。
+            # graph_manager 保存期已 soft warn, 这里是兜底: 即使上游未校验,
+            # 也确保运行时配置合法, 并用 sanitized_config 替换原 params
+            # (Pydantic 会丢弃未知字段 + 应用默认值, 与后续 execute() 行为一致)。
+            # 用 getattr 容错: 测试 mock 类 (test_executor_fault_isolation.OkExec) 不继承
+            # BaseExecutor 时不会崩, 与下方 cleanup 容错模式一致。
+            validate_config = getattr(executor, "validate_config", None)
+            if validate_config is not None:
+                is_valid, config_err, sanitized_config = validate_config(params)
+                if not is_valid:
+                    raise ExecutorError(
+                        f"节点配置校验失败: {config_err}",
+                        node_id=node_id,
+                        node_type=node_type,
+                    )
+                if sanitized_config:
+                    params = sanitized_config
+
             # 校验输入
             is_valid, error_msg = executor.validate_inputs(merged_inputs)
             if not is_valid:

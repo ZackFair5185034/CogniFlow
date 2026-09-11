@@ -10,19 +10,50 @@ docs/research/rule-engine-phase1-node-registry.md
 """
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from backend.services.rule_engine.models import (
-    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+    NodeConfigSchema, NodeDefinition, NodeCategory, PortDefinition,
+    PortType, ConfigSchemaProperty,
 )
 from backend.services.rule_engine.model_cache import ModelCache
 # BE-P0-1 修复 (2026-06-19): 之前 3 处函数内 from backend.routers.yolo_training import
 #   load_yolo_model, inference_yolo (依赖方向反了). 现走 services.inference_service
 #   (services 内部同层, 不再依赖 routers)
 from backend.services.inference_service import load_yolo_model, inference_yolo
+from pydantic import Field
 from .base import BaseExecutor
 
 logger = logging.getLogger(__name__)
+
+
+# P0-A (2026-09-11): 节点配置 schema（Pydantic 强类型校验）。
+# P0-2 (2026-09-11): ObjectDetector 仅保留 yolo, ssd/detectron2 选项已移除（未实现）。
+class YOLOModelConfig(NodeConfigSchema):
+    """YOLOModelNode 配置 schema。"""
+    model_id: int = Field(default=0, ge=0, description="模型 ID")
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="置信度阈值")
+    iou_threshold: float = Field(default=0.45, ge=0.0, le=1.0, description="IOU 阈值")
+    max_detections: int = Field(default=300, ge=1, le=1000, description="最大检测数")
+    device: Literal["auto", "cuda", "cpu"] = Field(default="auto", description="推理设备")
+
+
+class YOLOTriggerConfig(NodeConfigSchema):
+    """YOLOTriggerNode 配置 schema。"""
+    model_id: int = Field(default=0, ge=0, description="模型 ID")
+    class_names: List[str] = Field(
+        default_factory=list, description="要检测的类别名称列表"
+    )
+    min_confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="最小置信度")
+    max_objects: int = Field(default=10, ge=1, le=100, description="最大检测数")
+    device: Literal["auto", "cuda", "cpu"] = Field(default="auto", description="推理设备")
+
+
+class ObjectDetectorConfig(NodeConfigSchema):
+    """ObjectDetectorNode 配置 schema（P0-2: 仅支持 yolo）。"""
+    model_type: Literal["yolo"] = Field(default="yolo", description="检测模型类型")
+    model_path: str = Field(default="", description="模型文件的完整路径")
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="置信度阈值")
 
 
 class YOLOModelNode(BaseExecutor):
@@ -42,6 +73,8 @@ class YOLOModelNode(BaseExecutor):
     description = "使用 YOLO 模型进行目标检测"
     icon = "radar"
     color = "#00f0FF"
+
+    ConfigSchema = YOLOModelConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -249,6 +282,8 @@ class YOLOTriggerNode(BaseExecutor):
     icon = "radar"
     color = "#4CFF4C"  # 使用输入类颜色
 
+    ConfigSchema = YOLOTriggerConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -454,6 +489,8 @@ class ObjectDetectorNode(BaseExecutor):
     icon = "eye"
     color = "#00f0FF"
 
+    ConfigSchema = ObjectDetectorConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -493,7 +530,8 @@ class ObjectDetectorNode(BaseExecutor):
                 description="选择检测模型类型",
                 default="yolo",
                 widget="dropdown",
-                enum=["yolo", "ssd", "mtcnn"],
+                # P0-2 (2026-09-11): ssd/detectron2/mtcnn 选项已移除, 后端未实现, 仅保留 yolo
+                enum=["yolo"],
             ),
             "model_path": ConfigSchemaProperty(
                 type="string",
