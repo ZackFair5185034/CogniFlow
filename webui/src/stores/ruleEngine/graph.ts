@@ -1,41 +1,45 @@
 // -*- coding: utf-8 -*-
 /**
- * 规则引擎状态管理 - Pinia Store
+ * 规则引擎图状态 (P1-A 拆分)
  *
- * 提供规则引擎的全局状态管理，作为唯一数据源（Single Source of Truth）。
- * RuleCanvas（画布视图）和 RuleNode（节点组件）均从此读取/写入状态。
- * VueFlow 通过 storeToRefs 绑定的 writable ref 与 store 保持同步。
+ * 独立子 store — 管理画布与图相关的所有 state:
+ *   - 节点定义 (nodeDefinitions, availableModels)
+ *   - 图元数据 (graphMeta)
+ *   - 节点/边 (nodes, edges) + 选中/连接索引 (connectedHandleIndex, nodeById)
+ *   - 展开状态 (expandedNodeIds)
+ *   - 禁用状态 (disabledNodeIds)
+ *   - 画布交互 (viewportZoom, isDragging, isSelectionBoxActive)
+ *   - LOD (currentGlobalLod, baseLodLevelMap)
+ *   - 历史栈 (historyStack, historyIndex, isHistoryPaused, lastSavedHistoryIndex)
+ *
+ * 跨子 store 写入:
+ *   - loadGraph / importFromJSON 解析 variables_json 后写入 variables store
+ *   - saveGraph 读 variables store 写回 backend
+ *   - duplicateAsNewGraph 同上
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed, shallowRef, triggerRef, toRaw } from 'vue'
+import { ref, computed, shallowRef, triggerRef, markRaw, toRaw } from 'vue'
 import { ruleEngineApi, modelApi } from '@/api'
 import type {
   NodeDefinition as NodeDefinitionBase,
   GraphNode as GraphNodeBase,
   GraphEdge as GraphEdgeBase,
-  VariableDefaultValue as VariableDefaultValueBase,
-  ConfigSchemaProperty,
   RuleNodeData,
-  VariableType
+  VariableType,
+  VariableDefaultValue
 } from '@/types/api'
 import type { Node, Edge } from '@vue-flow/core'
 import { MarkerType } from '@vue-flow/core'
+import { getDefaultConfig, cloneForHistory } from './_helpers'
+import { useRuleVariablesStore } from './variables'
+import type { Variable } from './variables'
 
 // ============ 类型别名（兼容旧代码）============
 
-export type VariableDefaultValue = VariableDefaultValueBase
-export { ConfigSchemaProperty, RuleNodeData, VariableType }
 export type NodeDefinition = NodeDefinitionBase
 export type GraphNode = GraphNodeBase
 export type GraphEdge = GraphEdgeBase
-
-export interface Variable {
-  name: string
-  type: VariableType
-  defaultValue?: VariableDefaultValue
-  description?: string
-}
 
 /** 规则图元数据 */
 export interface GraphMeta {
@@ -46,25 +50,6 @@ export interface GraphMeta {
   version?: string
   thumbnail?: string
 }
-
-/** 执行状态 */
-export interface ExecutionState {
-  status: 'idle' | 'running' | 'success' | 'failed'
-  progress: number
-  executionId: number | null
-  logs: Array<{
-    level: string
-    timestamp: string
-    node_type?: string
-    message: string
-    duration_ms?: number
-    /** 节点输出指标（如 detections 数量、数据量等） */
-    metrics?: Record<string, number>
-  }>
-  nodeStates: Record<string, string>
-}
-
-// ============ Store 定义 ============
 
 /**
  * 对齐模式 (P1-2 2026-06-19)
@@ -77,7 +62,7 @@ export type AlignMode =
   | 'h-center' | 'v-center'
   | 'distribute-h' | 'distribute-v'
 
-export const useRuleEngineStore = defineStore('ruleEngine', () => {
+export const useRuleGraphStore = defineStore('ruleGraph', () => {
   // ============ 状态 ============
 
   /** 节点定义列表（节点面板数据） */
@@ -103,47 +88,14 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    * - 双击节点 → 加入此 Set → 该节点 LOD 强制升到 2 (无视 zoom)
    * - 再次双击 / 删除节点 / 点击空白 → 从 Set 移除 → 退回 zoom 决定的 LOD
    * - 多节点可同时展开 (用户编辑 2 个节点时, 对比配置很常见)
+   *
+   * Phase 19.3+: 语义反转 = "已折叠节点"
    */
   const expandedNodeIds = shallowRef<Set<string>>(new Set())
-
-  /** 变量列表 */
-  const variables = ref<Variable[]>([])
 
   /** 可用模型列表（供 model-select widget 使用） */
   const availableModels = ref<Array<{ id: number; name: string }>>([])
 
-  /** 执行状态 (Phase 17.2 P1-H: shallowRef 避免 logs/nodeStates 深代理)
-   *  - logs 高速推送 (YOLO 30FPS) 时, 深 ref 触发整对象深 watcher 链
-   *  - 改 shallowRef 后, mutate 字段需手动 triggerRef 通知
-   *  - addExecutionLog 走 100ms 批合并, 推送峰值帧耗不抖 */
-  const executionState = shallowRef<ExecutionState>({
-    status: 'idle',
-    progress: 0,
-    executionId: null,
-    logs: [],
-    nodeStates: {}
-  })
-
-  /** P1-H: 日志批合并 — 100ms 内多条 log 合成一次 triggerRef */
-  let pendingLogs: ExecutionState['logs'] = []
-  let logsFlushTimer: ReturnType<typeof setTimeout> | null = null
-  const LOGS_BATCH_INTERVAL_MS = 100
-
-  function flushPendingLogs() {
-    if (pendingLogs.length === 0) return
-    // 浅 ref: 直接 push 到内部数组, 然后 triggerRef
-    executionState.value.logs.push(...pendingLogs)
-    pendingLogs = []
-    logsFlushTimer = null
-    triggerRef(executionState)
-  }
-
-  /** 当前画布缩放级别 (LOD 决策依据) */
-  const viewportZoom = ref(1)
-  /** 拖动中标记 (锁定 LOD, 避免切换抖动破坏 v-memo) */
-  const isDragging = ref(false)
-  /** 框选拖拽中 (同样锁定 LOD) */
-  const isSelectionBoxActive = ref(false)
   // ---- Undo/Redo 栈 ----
   // Phase B 任务3: 混合 history (snapshot + move entry), 拖拽松手不再克隆整图
   // - snapshot: 完整克隆, 用于非拖拽操作 (创建/删除/连接/粘贴)
@@ -152,9 +104,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     | { type: 'snapshot'; nodes: GraphNode[]; edges: GraphEdge[] }
     | { type: 'move'; nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }
     | { type: 'groupMove'; moves: Array<{ nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }> }
-    // PERF-5 修复 (2026-06-19): 边增删也走增量 history entry, 不再 snapshot 整图
-    //   addEdge/removeEdge 是高频操作 (用户拖线/删线), 之前 saveHistory() 序列化 200 节点图
-    //   ~0.5-1ms, 累积明显. 现在只存 1 条边的快照, undo/redo 反向操作即可.
     | { type: 'addEdge'; edge: GraphEdge }
     | { type: 'removeEdge'; edge: GraphEdge }
     | { type: 'removeEdges'; edges: GraphEdge[] }
@@ -167,6 +116,15 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   //   dirty = (historyIndex !== lastSavedHistoryIndex), 配合 beforeunload 提示 + 草稿自动保存.
   //   比"对比 nodes JSON 字符串"更便宜 — history 索引变化即可, 不必序列化.
   const lastSavedHistoryIndex = ref(-1)
+
+  // ============ 画布交互状态 ============
+
+  /** 当前画布缩放级别 (LOD 决策依据) */
+  const viewportZoom = ref(1)
+  /** 拖动中标记 (锁定 LOD, 避免切换抖动破坏 v-memo) */
+  const isDragging = ref(false)
+  /** 框选拖拽中 (同样锁定 LOD) */
+  const isSelectionBoxActive = ref(false)
 
   // ============ 计算属性 ============
 
@@ -182,15 +140,14 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   const _connectedHandleIndex = new Set<string>()
   const _connectedHandleVersion = shallowRef(0)  // 触发 computed/下游依赖
 
+  /** PERF-8 (2026-06-19): 维护"已索引的 edge id"辅助 Set, 供 _indexRebuild diff 使用 */
+  const _indexedEdgeIds = new Set<string>()
+
   // FIX (BUG-4 2026-06-19): 节点配置变更的响应式信号
   // 之前 updateNodeConfig 不 trigger, NodeConfigEditor (LOD 2 内嵌) 的 computed 链断裂.
   // 现在用独立 configVersion shallowRef, 精确触发 Editor, 不影响 VueFlow 整图 diff.
   const _configVersion = shallowRef(0)
 
-  /**
-   * 把一个 edge 的 source/target handle 加入索引
-   * PERF-8 (2026-06-19): 同步维护 _indexedEdgeIds 辅助 Set, 供 _indexRebuild diff 用
-   */
   function _indexAddEdge(e: { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) {
     if (e.sourceHandle) {
       _connectedHandleIndex.add(`${e.source}:${e.sourceHandle}:source`)
@@ -201,10 +158,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     _indexedEdgeIds.add(e.id)
   }
 
-  /**
-   * 从索引中移除一个 edge 的 source/target handle
-   * PERF-8 (2026-06-19): 同步维护 _indexedEdgeIds
-   */
   function _indexRemoveEdge(e: { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) {
     if (e.sourceHandle) {
       _connectedHandleIndex.delete(`${e.source}:${e.sourceHandle}:source`)
@@ -217,19 +170,9 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
 
   /**
    * 全量重建索引 (loadGraph / undo snapshot 路径调用)
-   *
-   * PERF-8 修复 (2026-06-19): loadGraph / applyHistoryEntry snapshot 路径
-   *   整图替换 edges 时, 之前是 O(2E) clear + 重建, 哪怕只变了 1 条也是 2E.
-   *   改用 diff: 计算 newEdges vs 旧 edges (从 store.edges 拉, edges.value)
-   *   的 edge.id 差异, 只 add/remove 变更.
-   *   复杂度: O(E_old + E_new) 但常数小, 实际变更场景 O(|Δ|)
-   *   200 边场景从 ~0.1ms 全量降到 ~0.001ms (只 1 条变更)
-   *
-   * 注: 旧 _indexRebuild 也被 _indexReset 调用 (完全重置时), 仍保留 clear+rebuild
-   *   兜底 (e.g. 测试环境 / 单元测试重置)
+   * PERF-8 (2026-06-19): diff 模式 — 只 add/remove 变更的边, 不再 O(2E) clear + 重建
    */
   function _indexRebuild() {
-    // 收集"已在索引中"的 edge id (从 _indexedEdgeIds 辅助 Set 拿, 见 _indexAddEdge/_indexRemoveEdge)
     const oldIds = _indexedEdgeIds
     const newIds = new Set<string>()
     for (const e of edges.value) newIds.add(e.id)
@@ -237,7 +180,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     // 1) 移除被删的边
     for (const oldId of oldIds) {
       if (!newIds.has(oldId)) {
-        const oldEdge = _findEdgeById(oldId)
+        const oldEdge = edges.value.find((e) => e.id === oldId)
         if (oldEdge) _indexRemoveEdge(oldEdge)
       }
     }
@@ -249,35 +192,13 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
   }
 
-  /**
-   * PERF-8 (2026-06-19): 维护"已索引的 edge id"辅助 Set, 供 _indexRebuild diff 使用
-   * _indexAddEdge 时 add, _indexRemoveEdge 时 delete.
-   * 内存: 200 边场景 +200 字符串 (几十 KB), 可忽略.
-   */
-  const _indexedEdgeIds = new Set<string>()
-
-  /**
-   * PERF-8 (2026-06-19): 辅助 O(1) edge 查找 (替代 edges.value.find O(N))
-   * Map 懒构建, 任何 _indexAddEdge 后重建. 实际使用频率低 (只在 rebuild), 性能影响小.
-   */
-  function _findEdgeById(id: string) {
-    return edges.value.find((e) => e.id === id)
-  }
-
-  /**
-   * 暴露的只读 connectedHandleIndex — computed 包装避免外部直接 mutate
-   * 但内部 _indexAddEdge/_indexRemoveEdge 仍然能改 _connectedHandleIndex
-   */
+  /** 暴露的只读 connectedHandleIndex — computed 包装避免外部直接 mutate */
   const connectedHandleIndex = computed<ReadonlySet<string>>(() => {
-    // 依赖 _connectedHandleVersion 触发响应式
     void _connectedHandleVersion.value
     return _connectedHandleIndex
   })
 
-  /**
-   * O(1) 查询 handle 是否已连接.
-   * 取代 RuleNode 内部 O(E) 扫描.
-   */
+  /** O(1) 查询 handle 是否已连接. 取代 RuleNode 内部 O(E) 扫描. */
   function isHandleConnected(
     nodeId: string,
     handleId: string,
@@ -287,26 +208,12 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   }
 
   /**
-   * 节点 ID -> Node Map (Phase B 任务6: 连接校验节点索引)
-   *
-   * 之前: getNodePortType / validateConnection / isValidConnection 每次 nodes.value.find(),
-   *       连接拖拽时高频调用变成 O(E) per call.
-   * 现在: store 全局 Map, O(1) 查询.
-   */
-  /**
    * 节点 ID → node O(1) 查找 (computed)
-   *
    * 2026-06-21 修复: 去掉 lazy dirty 优化
    *   原实现用 _nodeByIdDirty flag, false 时直接 return 缓存 Map, 不访问 nodes.value,
-   *   导致 Vue computed 依赖追踪断裂 — createNode 改 nodes.value 后 computed 不重算,
-   *   Map 停留在旧值, 新增节点 nodeById.get(id) 返回 undefined, onDragStart 中断,
-   *   表现为"新增节点拖不动, 已有节点能拖".
-   *   现每次都访问 nodes.value 建立依赖, nodes.value 变化即重建. 100 节点 ~0.05ms 可接受.
-   *
-   * _nodeByIdMarkDirty() 保留为空函数: 历史 mutation 站点 (loadGraph/createNode/
-   *   removeNode/undo/redo 等) 仍在调用, 删除需改 6 处, 保留空函数零成本兼容.
+   *   导致 Vue computed 依赖追踪断裂 — createNode 改 nodes.value 后 computed 不重算.
    */
-  function _nodeByIdMarkDirty() { /* 2026-06-21: nodeById 改全量 computed, 无需 dirty flag, 空函数保留避免改动调用点 */ }
+  function _nodeByIdMarkDirty() { /* 空函数保留避免改动调用点 */ }
   const nodeById = computed<Map<string, Node<RuleNodeData>>>(() => {
     const map = new Map<string, Node<RuleNodeData>>()
     for (const n of nodes.value) {
@@ -321,9 +228,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   /** 是否可以重做 */
   const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
 
-  // P0-2 (2026-06-19): 当前是否有未保存改动
-  //   -1 表示从未保存过 (新图); 否则比较 historyIndex
-  //   loadGraph 后也会重置 lastSavedHistoryIndex, 此时历史里有初始 snapshot, 视为干净
+  /** P0-2 (2026-06-19): 当前是否有未保存改动 */
   const isDirty = computed(() => historyIndex.value !== lastSavedHistoryIndex.value)
 
   /** 是否有节点 */
@@ -332,51 +237,18 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
   /** 锁定期间的 LOD 缓存, drag 期间维持稳定 (避免切换抖动破坏 v-memo) */
   const lodLevelMapCache = new Map<string, 0 | 1>()
 
-  /**
-   /**
-    * 全局稳定的 LOD 等级 (Phase 19.3+: 单阈值两级)
-    * - 升档 LOD 0 → 1: zoom ≥ 0.65
-    * - 降档 LOD 1 → 0: zoom < 0.65
-    * - 默认 LOD 1 (zoom 1.0 起步)
-    * - 死区已删 (Phase 19.3 老大拍板, v-memo + computed 短路缓存已防抖动)
-    *
-    * 历史: Phase 19 C 曾用 hysteresis 死区 [0.65, 0.80), Phase 19.3 简化为单阈值 0.65.
-    */
-   const currentGlobalLod = ref<0 | 1>(1)
+  /** 全局稳定的 LOD 等级 (Phase 19.3+: 单阈值两级) */
+  const currentGlobalLod = ref<0 | 1>(1)
 
-   /**
-    * 基础 LOD 等级 map: 仅依赖 zoom + 节点总数.
-    * 选中态 / 折叠态 → CSS-only .expanded 修饰符负责, 不影响 baseLod.
-    *
-    * 0 = 极简 (120px, 仅标题+图标, 端口隐藏)
-    * 1 = 完整 (280px, 标题+端口+内嵌配置 NodeConfigEditor, 默认全展开)
-    *   双击节点 -> 折叠到 200px (.expanded 修饰符激活, 配置区 hidden)
-    *
-    * - 拖动中 / 框选拖拽中 → 锁定当前 LOD (走 lodLevelMapCache)
-    * - 折叠态 (CSS .expanded) 独立于 LOD 等级, 不影响 zoom 决策
-    *
-    * P0-A (Phase 17.1): 短路缓存 — 60Hz 缩放期间 baseLod 跨阈值才重建.
-    * P0-C (Phase 17.1+): 内嵌配置 (取代右侧面板).
-    * P0-D (Phase 19.3): expandedNodeIds 含义反转 = "已折叠节点".
-    */
   /**
    * 桶化 zoom 值用于缓存命中 (Phase 17.3 修复 P0-A 短路 bug)
-   *
-   * 旧实现: `cachedBaseLodRef.zoom === zoom` — zoom 是连续小数, 几乎永远不 ==
-   *        → 60Hz 缩放时永远走全量 Map 重建
-   * 新实现: zoom 桶化到 0.1 精度 — 同一桶内复用 Map, 跨桶才重建
-   *        实际 LOD 切换只依赖阈值 0.5 / 1.0, 桶化 0.1 已足够精确
-   *        (LOD 阈值外的小数变化不会影响 autoLod 结果)
+   * 旧实现 zoom 是连续小数几乎永远不 ==, 桶化到 0.1 精度后同桶复用.
    */
   function bucketZoom(z: number): number {
     return Math.round(z * 10) / 10
   }
 
   // PERF-2 修复 (2026-06-19): 缓存 key 改用 length + firstId + lastId 代替引用相等
-  //   nodes 是 shallowRef, 任何 createNode/removeNode/handlePaste/handleCut/undo/redo
-  //   都创建新数组引用 → 引用相等必失效 → 全量重建 Map (200 节点 ~0.1ms)
-  //   实际业务场景下, 大多数"看似引用变化"都不改变 LOD 决策 (只是浅拷贝)
-  //   改用 length + 首尾 id 校验: 安全 (节点增删必改 length), 缓存命中率大幅提升
   let cachedBaseLodRef: {
     zoomBucket: number
     zoom: number
@@ -394,14 +266,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     const expandedRef = expandedNodeIds.value
     const nodesRef = nodes.value
 
-    // ===== Phase 19.3: 单阈值两级 LOD, 无死区 =====
-    // LOD 0 → 1: zoom ≥ 0.65
-    // LOD 1 → 0: zoom < 0.65
-    //
-    // 历史: Phase 19.2 曾用死区 [0.65, 0.80) 防抖动
-    //       老大拍板去掉中间档后, 单阈值更简洁
-    // 抖动源已由 v-memo + computed 缓存 (Phase 17.3 P0-A 短路) 解决
-    //       无需 hysteresis 死区
     if (!isLodLocked) {
       const cur = currentGlobalLod.value
       let next: 0 | 1 = cur
@@ -411,8 +275,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
     const globalLod = currentGlobalLod.value
 
-    // 短路: 输入未变化 (桶化 zoom) → 复用上次 Map
-    // PERF-2 修复: 节点引用用 length + 首尾 id 校验代替引用相等
     const zoomBucket = bucketZoom(zoom)
     if (
       cachedBaseLodRef &&
@@ -427,21 +289,16 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       return cachedBaseLodMap
     }
 
-    // 重建 — 全部节点用 globalLod (除了展开节点强制 LOD 2)
     const map = new Map<string, 0 | 1>()
     for (const n of nodesRef) {
       if (isLodLocked) {
-        // 锁定时维持上次 LOD (避免拖动期间样式跳变)
         const cached = lodLevelMapCache.get(n.id) as 0 | 1 | undefined
         map.set(n.id, cached ?? globalLod)
       } else {
-        // 两级 LOD: 展开不影响 baseLod (CSS-only .expanded 修饰符负责)
-        // 拖动期 isLodLocked 锁在前面已处理
         map.set(n.id, globalLod)
       }
     }
 
-    // 非锁定时刷新缓存 (drag 结束后从这里恢复)
     if (!isLodLocked) {
       lodLevelMapCache.clear()
       for (const [k, v] of map) lodLevelMapCache.set(k, v)
@@ -460,7 +317,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     return map
   })
 
-  /** 保留旧 lodLevelMap 名称作为兼容导出 (RuleNode.vue 等仍可能引用) */
+  /** 保留旧 lodLevelMap 名称作为兼容导出 */
   const lodLevelMap = baseLodLevelMap
 
   /** O(1) 查询节点 LOD 等级 */
@@ -477,6 +334,34 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
     return map
   })
+
+  // ============ 节点禁用 (P2-A 2026-06-19) ============
+
+  /**
+   * 禁用节点集合. 禁用的节点执行时被跳过 (后端 executor 已支持 skipped 机制).
+   * 视觉: RuleNode.vue 检测 is-disabled 类, 半透明 + 灰边.
+   */
+  const disabledNodeIds = shallowRef<Set<string>>(new Set())
+
+  /** O(1) 查询节点是否禁用 */
+  function isNodeDisabled(nodeId: string): boolean {
+    return disabledNodeIds.value.has(nodeId)
+  }
+
+  /** 切换节点禁用状态 */
+  function toggleNodeDisabled(nodeId: string): boolean {
+    const next = new Set(disabledNodeIds.value)
+    let nowDisabled: boolean
+    if (next.has(nodeId)) {
+      next.delete(nodeId)
+      nowDisabled = false
+    } else {
+      next.add(nodeId)
+      nowDisabled = true
+    }
+    disabledNodeIds.value = next
+    return nowDisabled
+  }
 
   // ============ 数据加载 ============
 
@@ -508,7 +393,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    * 数据规范：
    * - n.type 始终归一化为 'ruleNode'（VueFlow 组件类型）
    * - 原始业务类型（如 yolo_model）存储在 n.data.type 中
-   * - 兼容旧数据：旧版 n.type 可能为 'ruleNode'/'rule-node'
    */
   async function loadGraph(id: number) {
     const res = await ruleEngineApi.getGraphDetail(id)
@@ -524,7 +408,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
 
     // 解析节点：标准化 type 字段，补充必要属性
-    // markRaw 防止 Vue 对每个节点的 n.data 建深代理（80 节点 × ~20 字段 = 1600 个 Proxy）
     nodes.value = (data.nodes ?? []).map((n: GraphNode) => {
       const isVueFlowType = n.type === 'ruleNode' || n.type === 'rule-node'
       return markRaw({
@@ -533,13 +416,12 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         position: n.position ?? { x: 0, y: 0 },
         data: {
           ...(n.data ?? {}),
-          // 确保 data.type 为原始业务类型（兼容新旧数据格式）
           type: isVueFlowType ? (n.data?.type ?? 'unknown') : n.type,
           id: n.id
         } as RuleNodeData
       })
     })
-    _nodeByIdMarkDirty()  // PERF-1: loadGraph 全量加载后失效 nodeById cache
+    _nodeByIdMarkDirty()
 
     // 解析边
     edges.value = (data.edges ?? []).map((e: GraphEdge) => ({
@@ -552,11 +434,10 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       animated: false,
       markerEnd: MarkerType.ArrowClosed
     }))
-    // P1-F: 全量重建 connectedHandleIndex
     _indexRebuild()
     triggerRef(_connectedHandleVersion)
 
-    // P2-A (2026-06-19): 从节点 data.disabled 恢复禁用状态
+    // P2-A: 从节点 data.disabled 恢复禁用状态
     const disabledIds = new Set<string>()
     for (const n of (data.nodes ?? []) as GraphNode[]) {
       const nodeData = (n as any).data ?? {}
@@ -566,38 +447,37 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
     disabledNodeIds.value = disabledIds
 
-    // 解析变量
+    // 跨子 store: 解析 variables
+    const variablesStore = useRuleVariablesStore()
     if (data.variables_json) {
       try {
         const vars = JSON.parse(data.variables_json) as Record<string, {
           type?: string; defaultValue?: VariableDefaultValue; description?: string
         }>
-        variables.value = Object.entries(vars).map(([name, config]) => ({
+        variablesStore.setVariables(Object.entries(vars).map(([name, config]) => ({
           name,
           type: (config.type as VariableType) ?? 'STRING',
           defaultValue: config.defaultValue ?? '',
           description: config.description ?? ''
-        }))
+        })))
       } catch {
-        variables.value = []
+        variablesStore.setVariables([])
       }
     } else if (data.variables) {
-      // 后端返回 Record<string, {type, defaultValue, description}>
       const vars = data.variables as Record<string, {
         type?: VariableType
         defaultValue?: VariableDefaultValue
         description?: string
       }>
-      variables.value = Object.entries(vars).map(([name, config]) => ({
+      variablesStore.setVariables(Object.entries(vars).map(([name, config]) => ({
         name,
         type: config.type ?? 'STRING',
         defaultValue: config.defaultValue,
         description: config.description ?? ''
-      }))
+      })))
     }
 
     saveHistory()
-    // P0-2 (2026-06-19): loadGraph 后当前状态视为干净 (loaded == saved)
     lastSavedHistoryIndex.value = historyIndex.value
     return data
   }
@@ -606,18 +486,15 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
 
   /**
    * 保存规则图 - 将节点/边序列化为 JSON 字符串写入后端。
-   *
-   * 保存规范：
-   * - 只保存业务字段（id, position, data），不保存 VueFlow 内部字段
-   * - type 保存原始业务类型（n.data.type），便于后续兼容
    */
   async function saveGraph() {
     if (!graphMeta.value) return
 
+    const variablesStore = useRuleVariablesStore()
     const varsObj: Record<string, {
       type: VariableType; defaultValue: VariableDefaultValue; description: string
     }> = {}
-    for (const v of variables.value) {
+    for (const v of variablesStore.variables) {
       varsObj[v.name] = {
         type: v.type,
         defaultValue: v.defaultValue ?? null,
@@ -633,7 +510,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         position: n.position,
         data: {
           ...n.data,
-          // P2-A (2026-06-19): 把禁用状态持久化到 data.disabled
+          // P2-A: 把禁用状态持久化到 data.disabled
           disabled: disabledNodeIds.value.has(n.id),
         }
       }))),
@@ -648,26 +525,19 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     })
 
     saveHistory()
-    // P0-2 (2026-06-19): 保存成功后, 标记当前 history 位置为"已保存"
     lastSavedHistoryIndex.value = historyIndex.value
   }
 
   // ============ 草稿 (P0-2 2026-06-19) ============
 
-  /**
-   * 把当前节点/边/变量序列化到 localStorage 草稿槽.
-   * 5s 防抖由调用方控制 (RuleCanvas mounted 启 setInterval).
-   * 失败容错: localStorage 满 / 不可用时静默吞异常, 不影响主流程.
-   */
   function saveDraftToLocalStorage(graphId: number): boolean {
     try {
+      const variablesStore = useRuleVariablesStore()
       const payload = {
         nodes: nodes.value,
         edges: edges.value,
-        variables: variables.value,
+        variables: variablesStore.variables,
         graphName: graphMeta.value?.name,
-        // 不存 lastSavedHistoryIndex — 它与具体 historyStack 状态耦合,
-        // 重载后 historyStack 是新的 (loadGraph 重置), dirty 判定靠 hash 比较
         savedAt: Date.now(),
       }
       localStorage.setItem(`cogniflow:rule-graph:${graphId}:draft`, JSON.stringify(payload))
@@ -677,9 +547,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
   }
 
-  /**
-   * 读取指定图的 localStorage 草稿, 不存在或解析失败返回 null.
-   */
   function loadDraftFromLocalStorage(graphId: number): {
     nodes: Node<RuleNodeData>[]; edges: Edge[]; variables: Variable[]
     graphName?: string; savedAt: number
@@ -688,7 +555,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       const raw = localStorage.getItem(`cogniflow:rule-graph:${graphId}:draft`)
       if (!raw) return null
       const payload = JSON.parse(raw)
-      // 简易校验: 至少要有 nodes 数组
       if (!Array.isArray(payload.nodes)) return null
       return payload
     } catch {
@@ -696,7 +562,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
   }
 
-  /** 保存成功后清掉 localStorage 草稿 (已无意义) */
   function clearLocalStorageDraft(graphId: number): void {
     try {
       localStorage.removeItem(`cogniflow:rule-graph:${graphId}:draft`)
@@ -707,12 +572,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
 
   // ============ 导入导出 JSON (P1-3 2026-06-19) ============
 
-  /**
-   * 导出当前图为 JSON 字符串。
-   * 包含字段: graphName, nodes, edges, variables, exportedAt, version
-   * 节点/边经过裁剪, 仅保留业务字段 (剔除 VueFlow 内部 cache)
-   */
   function exportToJSON(): string {
+    const variablesStore = useRuleVariablesStore()
     const payload = {
       graphName: graphMeta.value?.name || 'untitled',
       graphDescription: graphMeta.value?.description,
@@ -729,24 +590,18 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         source_handle: e.sourceHandle,
         target_handle: e.targetHandle,
       })),
-      variables: variables.value,
+      variables: variablesStore.variables,
       exportedAt: new Date().toISOString(),
       version: '1.0.0',
     }
     return JSON.stringify(payload, null, 2)
   }
 
-  /**
-   * 从 JSON 字符串导入, 替换当前 graph 状态。
-   * @returns 导入的图名称, 用于 UI 提示
-   * @throws JSON 解析失败 / 字段缺失
-   */
   function importFromJSON(text: string): string {
     const payload = JSON.parse(text)
     if (!Array.isArray(payload.nodes) || !Array.isArray(payload.edges)) {
       throw new Error('JSON 格式无效：缺少 nodes/edges 数组')
     }
-    // 替换 state (与 loadGraph 路径一致)
     nodes.value = payload.nodes.map((n: any) =>
       markRaw({
         id: n.id,
@@ -772,7 +627,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }))
     _indexRebuild()
     triggerRef(_connectedHandleVersion)
-    variables.value = Array.isArray(payload.variables) ? payload.variables : []
+    const variablesStore = useRuleVariablesStore()
+    variablesStore.setVariables(Array.isArray(payload.variables) ? payload.variables : [])
     if (graphMeta.value && payload.graphName) {
       graphMeta.value = { ...graphMeta.value, name: payload.graphName }
     }
@@ -782,10 +638,9 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
 
   /**
    * 复制当前图为新图 (另存为)。
-   * @param newName 新图名称
-   * @returns 新图 ID
    */
   async function duplicateAsNewGraph(newName?: string): Promise<number> {
+    const variablesStore = useRuleVariablesStore()
     const name = newName || `${graphMeta.value?.name || 'untitled'} (副本)`
     const res = await ruleEngineApi.createGraph({
       name,
@@ -804,7 +659,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         target_handle: e.targetHandle,
       }))),
       variables_json: JSON.stringify(
-        variables.value.reduce((acc: Record<string, any>, v) => {
+        variablesStore.variables.reduce((acc: Record<string, any>, v) => {
           acc[v.name] = {
             type: v.type,
             defaultValue: v.defaultValue ?? null,
@@ -824,8 +679,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    * 1. Kahn 拓扑分层
    * 2. 同层节点沿 X 轴均匀分布
    * 3. 不同层沿 Y 轴递增
-   *
-   * 不依赖 dagre/elk, 100% 本地实现, 0 网络依赖.
    */
   function autoLayoutGraph(options?: {
     nodeSpacing?: number
@@ -863,10 +716,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         if (d === 0) layer.push(id)
       }
       if (layer.length === 0) {
-        // 容错: 把剩余节点丢到最后一层 (避免死循环)
         for (const [id] of remaining) layer.push(id)
       }
-      // 稳定排序: 按当前 y 升序 (保留用户上下顺序)
       layer.sort((a, b) => {
         const na = nodeArr.find((n) => n.id === a)
         const nb = nodeArr.find((n) => n.id === b)
@@ -903,9 +754,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     return updates
   }
 
-  /**
-   * 应用自动布局: 计算 + 写入 store (进 history 可撤销)
-   */
   function applyAutoLayout(): number {
     const updates = autoLayoutGraph()
     if (updates.length === 0) return 0
@@ -915,12 +763,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
 
   // ============ 节点操作 ============
 
-  /**
-   * 创建并添加节点到画布。
-   * - 使用 'ruleNode' 作为 VueFlow 组件类型
-   * - 原始业务类型（如 yolo_model）存储在 data.type 中
-   * - 自动从 configSchema 提取默认配置值
-   */
   function createNode(
     def: NodeDefinition,
     position: { x: number; y: number }
@@ -944,25 +786,15 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         selected: false
       } as unknown as RuleNodeData
     }
-    // 关键：shallowRef 不会追踪内部数组突变,需用新数组重新赋值触发响应式
-    // 之前直接 push() 会让节点"进了 store 但不渲染"（拖拽/双击添加都不显示）
-    // markRaw 防止 Vue 对 n.data 建深代理（节点体里 el-* 控件的响应式由组件内部自管）
     nodes.value = [...nodes.value, markRaw(newNode)]
-    _nodeByIdMarkDirty()  // PERF-1: 节点增, nodeById map 失效
+    _nodeByIdMarkDirty()
     saveHistory()
     return true
   }
 
   /**
    * 更新节点配置 - 内部 mutate + 触发 _configVersion（精确信号）.
-   *
-   * FIX (BUG-4 2026-06-19): 之前不再 triggerRef(nodes) 后,
-   * NodeConfigEditor (LOD 2 内嵌) 通过 store.nodeById.get(id) 取引用,
-   * 但 shallowRef nodes 不变 → Editor computed 不重算 → 折叠再展开后看到旧值.
-   *
-   * 现在用 _configVersion shallowRef 单独精确触发:
-   * - NodeConfigEditor 的 computed 加 `_configVersion.value` 依赖 → Editor 实时刷新
-   * - 不 triggerRef(nodes) → VueFlow 不会做整图 diff（保持拖拽性能）
+   * FIX (BUG-4 2026-06-19): 不 triggerRef(nodes), 仅精确触发 _configVersion
    */
   function updateNodeConfig(nodeId: string, key: string, value: VariableDefaultValue) {
     const node = nodes.value.find(n => n.id === nodeId)
@@ -971,13 +803,11 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
         node.data.config = {} as Record<string, VariableDefaultValue>
       }
       node.data.config[key] = value
-      // 精确触发: NodeConfigEditor 依赖 _configVersion, 不扩散到 VueFlow 整图 diff
       _configVersion.value++
     }
   }
 
-  /** 批量更新节点位置 (路径 B: 自研拖动专用)
-   * @param rawWrite - true: 用 toRaw 绕过 Vue Proxy, 零 watcher 触发 (dragEnd 专用) */
+  /** 批量更新节点位置 (路径 B: 自研拖动专用) */
   function setNodesPositions(
     updates: Array<{ id: string; position: { x: number; y: number } }>,
     recordHistory = true,
@@ -993,8 +823,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       const newPos = updateMap.get(node.id)
       if (newPos) {
         if (rawWrite) {
-          // 绕过 Vue Proxy: 直接写 raw object, 零 watcher 调度.
-          // 拖动期间 VueFlow 内部 flowNode.position 已实时同步, store 只做持久化.
           const raw = toRaw(node.position)
           const oldX = raw.x
           const oldY = raw.y
@@ -1010,9 +838,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
           const fromX = node.position.x
           const fromY = node.position.y
           if (fromX !== newPos.x || fromY !== newPos.y) {
-            // 原地变异 .x/.y: 保持 position 对象引用不变, 避免触发 Vue Proxy
-            // position setter → 所有依赖 node.position 的 watcher 重新调度.
-            // 原地改属性只触发 .x/.y 级别的 setter, 调度量少一个数量级.
             node.position.x = newPos.x
             node.position.y = newPos.y
             anyChange = true
@@ -1035,10 +860,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       }
     }
 
-    // triggerRef 触发 VueFlow 内部 store.nodes watcher 重建 (80 节点 createGraphNodes + 80 边 path 重算),
-    // 对 drag-end 路径完全冗余 (拖动期间 flowNode.position 已实时同步到 VueFlow 内部),
-    // 且同步 flush 100-200ms 阻塞后续事件循环, 导致二次拖动卡顿.
-    // skipTrigger=true 跳过 triggerRef, 仅更新 store.nodes / history.
     if (!skipTrigger) {
       triggerRef(nodes)
     }
@@ -1049,9 +870,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
    */
   function removeNode(nodeId: string) {
     nodes.value = nodes.value.filter(n => n.id !== nodeId)
-    _nodeByIdMarkDirty()  // PERF-1: 节点删
+    _nodeByIdMarkDirty()
     edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
-    // 同步清理展开状态
     if (expandedNodeIds.value.has(nodeId)) {
       expandedNodeIds.value.delete(nodeId)
       triggerRef(expandedNodeIds)
@@ -1059,24 +879,16 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     saveHistory()
   }
 
-  /**
-   * 批量删除节点 (Phase B 任务4)
-   *
-   * 之前: handleDelete 里 for 循环调 removeNode, 每次 filter 一次全图 + 一次 saveHistory.
-   *       50 节点 = 50 次全图 filter + 50 次历史快照, O(50*E) + 50 * JSON 克隆.
-   * 现在: 单次 filter, 单次 saveHistory. O(E).
-   */
+  /** 批量删除节点 (Phase B 任务4) */
   function removeNodes(nodeIds: string[]) {
     if (nodeIds.length === 0) return
     const idSet = new Set(nodeIds)
     nodes.value = nodes.value.filter(n => !idSet.has(n.id))
-    _nodeByIdMarkDirty()  // PERF-1: 节点批量删
-    // P1-F: 先收集要删的 incident edges, 用于增量维护
+    _nodeByIdMarkDirty()
     const removedEdges = edges.value.filter(e => idSet.has(e.source) || idSet.has(e.target))
     edges.value = edges.value.filter(e => !idSet.has(e.source) && !idSet.has(e.target))
     for (const e of removedEdges) _indexRemoveEdge(e)
     triggerRef(_connectedHandleVersion)
-    // 同步清理展开状态
     if (expandedNodeIds.value.size > 0) {
       let changed = false
       for (const id of idSet) {
@@ -1090,15 +902,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     saveHistory()
   }
 
-  /**
-   * 切换节点折叠状态 (Phase 19.3+: 语义反转)
-   * - expandedNodeIds 集合名字保留, 但含义改为"已折叠节点" (双击加入 = 折叠)
-   * - 默认 LOD 1 节点 280px 全展开 (端口+配置+标题)
-   * - 双击节点 -> 加入 expandedNodeIds -> .expanded 修饰符激活 -> 折叠到 200px (隐藏配置)
-   * - 再次双击 -> 移除 -> 回到全展开
-   *
-   * 历史: Phase 17.1~19.2 是 "未展开"→"展开" 语义, Phase 19.3 老大拍板反转默认.
-   */
+  /** 切换节点折叠状态 (Phase 19.3+: 语义反转) */
   function toggleNodeExpanded(nodeId: string) {
     if (expandedNodeIds.value.has(nodeId)) {
       expandedNodeIds.value.delete(nodeId)
@@ -1108,46 +912,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     triggerRef(expandedNodeIds)
   }
 
-  // ============ 节点禁用 (P2-A 2026-06-19) ============
-
-  /**
-   * 禁用节点集合. 禁用的节点执行时被跳过 (后端 executor 已支持 skipped 机制).
-   * 视觉: RuleNode.vue 检测 is-disabled 类, 半透明 + 灰边.
-   * 用途: 调试时暂存某个节点 (类似断点), 或长期下线某逻辑分支.
-   */
-  const disabledNodeIds = shallowRef<Set<string>>(new Set())
-
-  /** O(1) 查询节点是否禁用 */
-  function isNodeDisabled(nodeId: string): boolean {
-    return disabledNodeIds.value.has(nodeId)
-  }
-
-  /** 切换节点禁用状态 */
-  function toggleNodeDisabled(nodeId: string): boolean {
-    const next = new Set(disabledNodeIds.value)
-    let nowDisabled: boolean
-    if (next.has(nodeId)) {
-      next.delete(nodeId)
-      nowDisabled = false
-    } else {
-      next.add(nodeId)
-      nowDisabled = true
-    }
-    disabledNodeIds.value = next
-    return nowDisabled
-  }
-
-  /** 序列化: 把禁用状态附加到节点的 data.disabled (持久化) */
-  // 注: 后端执行时不需要 disabled 字段, 它从 node.data.disabled 读取
-  //   但前端 disabledNodeIds 是 UI 状态, 需同步到 data 才能持久化
-  // 已在 saveGraph() 中通过 nodes.value.map 自动序列化 data 字段
-
-  /**
-   * 折叠状态清理 (Phase 19.3+: 语义反转)
-   * - 旧语义: clear expandedNodeIds -> 所有节点回折叠 (Phase 19.2)
-   * - 新语义: clear expandedNodeIds -> 所有节点回全展开 (Phase 19.3+, 默认 280px)
-   * 适用场景: 画布空白点击 / 切换图 / "全展开" 工具按钮 (一键回到默认全展开)
-   */
   function collapseAllExpanded() {
     if (expandedNodeIds.value.size > 0) {
       expandedNodeIds.value.clear()
@@ -1155,23 +919,10 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     }
   }
 
-  /**
-   * 同步展开状态 (Phase 19.7+: 修复外部 triggerRef(store.expandedNodeIds) 类型错)
-   * - 原因: Pinia setup store 暴露 expandedNodeIds 是 Set<string> (已 unwrap)
-   *        外部拿不到原 shallowRef, 无法直接 triggerRef
-   * - 调用场景: nodes 删除时清理已折叠集合里的悬空 id, 再 triggerRef 通知
-   * - 行为: 在外部 mutate Set 之后调用, 强制组件 watch 重新计算
-   */
   function syncExpandedNodeIds() {
     triggerRef(expandedNodeIds)
   }
 
-  /**
-   * 折叠全部 (Phase 19.4+ 显示模式按钮)
-   * - 全部节点加进 expandedNodeIds (反语义: 表示"已折叠")
-   * - 配 setDisplayMode 用: 一次 set 全图折叠
-   * 性能: shallowRef Set 一次性 add 所有 + 一次 triggerRef
-   */
   function expandAll() {
     const allIds: string[] = []
     for (const n of nodes.value) allIds.push(n.id)
@@ -1187,10 +938,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     source: string; target: string
     sourceHandle?: string | null; targetHandle?: string | null
   }): boolean {
-    // P0-1 (2026-06-19): 拒绝自循环边 (前端兜底，与后端 graph_manager.validate_graph 保持一致)
     if (connection.source === connection.target) return false
-    // P0-1 (2026-06-19): 拒绝重复边 (同 source/target/handles)
-    // 后端 validate_graph 也会拦截, 但前端先挡能给用户即时反馈
     const dup = edges.value.some((e) =>
       e.source === connection.source &&
       e.target === connection.target &&
@@ -1198,7 +946,6 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       (e.targetHandle ?? null) === (connection.targetHandle ?? null)
     )
     if (dup) return false
-    // shallowRef 需重新赋值触发响应式（与 createNode 同问题）
     const newEdge = {
       id: `edge_${Date.now()}`,
       source: connection.source,
@@ -1209,182 +956,148 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
       animated: false
     }
     edges.value = [...edges.value, newEdge]
-    // P1-F: 增量维护 connectedHandleIndex
     _indexAddEdge(newEdge)
     triggerRef(_connectedHandleVersion)
-    // PERF-5 (2026-06-19): 走增量 history, 不再 saveHistory() 整图快照
     _recordEdgeAddHistory(newEdge)
     return true
   }
 
-  /** 删除边 */
   function removeEdge(edgeId: string) {
     const target = edges.value.find(e => e.id === edgeId)
     edges.value = edges.value.filter(e => e.id !== edgeId)
-    // P1-F: 增量维护 connectedHandleIndex
     if (target) _indexRemoveEdge(target)
     triggerRef(_connectedHandleVersion)
-    // PERF-5 (2026-06-19): 走增量 history
     if (target) _recordEdgeRemoveHistory(target)
   }
 
-  /**
-   * 批量删除边 (Phase B 任务4)
-   */
   function removeEdges(edgeIds: string[]) {
     if (edgeIds.length === 0) return
     const idSet = new Set(edgeIds)
-    // P1-F: 先收集要删的边, 用于增量维护
     const removed = edges.value.filter(e => idSet.has(e.id))
     edges.value = edges.value.filter(e => !idSet.has(e.id))
     for (const e of removed) _indexRemoveEdge(e)
     triggerRef(_connectedHandleVersion)
-    // PERF-5 (2026-06-19): 走批量增量 history
     if (removed.length > 0) _recordEdgesRemoveHistory(removed)
   }
 
   // ============ 节点对齐 (P1-2 2026-06-19) ============
 
-/**
- * 对齐选中节点。
- *
- * @param mode 对齐模式
- * @param selectedFlowNodes 选中的 VueFlow GraphNode 数组 (从 useVueFlow().getSelectedNodes 取)
- * @param screenToFlowCoordinate 屏幕坐标 → 画布坐标转换函数 (避免 store 依赖 useVueFlow)
- * @returns 移动的节点数, 0 表示无需调整 (单选/无选)
- *
- * 实现细节:
- * - 用 DOM getBoundingClientRect 拿真实屏幕尺寸 (不同 LOD 宽度不同)
- * - screenToFlowCoordinate 转回画布坐标 (对齐后写入 store.position)
- * - 走 setNodesPositions 批量同步 + recordMoveHistory=true (对齐是可撤销单位)
- */
-function _alignSelectedNodesImpl(
-  mode: AlignMode,
-  selectedFlowNodes: Array<{ id: string; position: { x: number; y: number } }>,
-  screenToFlowCoordinate: (pt: { x: number; y: number }) => { x: number; y: number }
-): number {
-  if (selectedFlowNodes.length < 2) return 0
-  const ids = selectedFlowNodes.map((n) => n.id)
+  function _alignSelectedNodesImpl(
+    mode: AlignMode,
+    selectedFlowNodes: Array<{ id: string; position: { x: number; y: number } }>,
+    screenToFlowCoordinate: (pt: { x: number; y: number }) => { x: number; y: number }
+  ): number {
+    if (selectedFlowNodes.length < 2) return 0
+    const ids = selectedFlowNodes.map((n) => n.id)
 
-  // 收集每个节点的 [flowX, flowY, flowW, flowH]
-  interface Box { id: string; x: number; y: number; w: number; h: number }
-  const boxes: Box[] = []
-  for (const n of selectedFlowNodes) {
-    const el = document.querySelector<HTMLElement>(`.vue-flow__node[data-id="${n.id}"]`)
-    if (!el) continue
-    const r = el.getBoundingClientRect()
-    const tl = screenToFlowCoordinate({ x: r.left, y: r.top })
-    const br = screenToFlowCoordinate({ x: r.right, y: r.bottom })
-    boxes.push({
-      id: n.id,
-      x: tl.x,
-      y: tl.y,
-      w: br.x - tl.x,
-      h: br.y - tl.y,
-    })
-  }
-  if (boxes.length < 2) return 0
+    interface Box { id: string; x: number; y: number; w: number; h: number }
+    const boxes: Box[] = []
+    for (const n of selectedFlowNodes) {
+      const el = document.querySelector<HTMLElement>(`.vue-flow__node[data-id="${n.id}"]`)
+      if (!el) continue
+      const r = el.getBoundingClientRect()
+      const tl = screenToFlowCoordinate({ x: r.left, y: r.top })
+      const br = screenToFlowCoordinate({ x: r.right, y: r.bottom })
+      boxes.push({
+        id: n.id,
+        x: tl.x,
+        y: tl.y,
+        w: br.x - tl.x,
+        h: br.y - tl.y,
+      })
+    }
+    if (boxes.length < 2) return 0
 
-  // 计算参考值
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const b of boxes) {
-    if (b.x < minX) minX = b.x
-    if (b.y < minY) minY = b.y
-    if (b.x + b.w > maxX) maxX = b.x + b.w
-    if (b.y + b.h > maxY) maxY = b.y + b.h
-  }
-  const midX = (minX + maxX) / 2
-  const midY = (minY + maxY) / 2
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const b of boxes) {
+      if (b.x < minX) minX = b.x
+      if (b.y < minY) minY = b.y
+      if (b.x + b.w > maxX) maxX = b.x + b.w
+      if (b.y + b.h > maxY) maxY = b.y + b.h
+    }
+    const midX = (minX + maxX) / 2
+    const midY = (minY + maxY) / 2
 
-  // 计算每个节点的新位置
-  const updates: Array<{ id: string; position: { x: number; y: number } }> = []
-  for (const b of boxes) {
-    let nx = b.x
-    let ny = b.y
-    switch (mode) {
-      case 'left':
-        nx = minX
-        break
-      case 'right':
-        nx = maxX - b.w
-        break
-      case 'top':
-        ny = minY
-        break
-      case 'bottom':
-        ny = maxY - b.h
-        break
-      case 'h-center':
-        nx = midX - b.w / 2
-        break
-      case 'v-center':
-        ny = midY - b.h / 2
-        break
-      case 'distribute-h': {
-        // 等距分布: 按当前 x 排序, 第一/最后位置不变, 中间节点均分间距
-        // 至少 3 个才有意义
-        if (boxes.length < 3) break
-        const sorted = [...boxes].sort((a, b) => a.x - b.x)
-        const first = sorted[0]
-        const last = sorted[sorted.length - 1]
-        const span = (last.x + last.w / 2) - (first.x + first.w / 2)
-        const step = span / (sorted.length - 1)
-        const idx = sorted.findIndex((s) => s.id === b.id)
-        if (idx > 0 && idx < sorted.length - 1) {
-          nx = (first.x + first.w / 2) + step * idx - b.w / 2
+    const updates: Array<{ id: string; position: { x: number; y: number } }> = []
+    for (const b of boxes) {
+      let nx = b.x
+      let ny = b.y
+      switch (mode) {
+        case 'left':
+          nx = minX
+          break
+        case 'right':
+          nx = maxX - b.w
+          break
+        case 'top':
+          ny = minY
+          break
+        case 'bottom':
+          ny = maxY - b.h
+          break
+        case 'h-center':
+          nx = midX - b.w / 2
+          break
+        case 'v-center':
+          ny = midY - b.h / 2
+          break
+        case 'distribute-h': {
+          if (boxes.length < 3) break
+          const sorted = [...boxes].sort((a, b) => a.x - b.x)
+          const first = sorted[0]
+          const last = sorted[sorted.length - 1]
+          const span = (last.x + last.w / 2) - (first.x + first.w / 2)
+          const step = span / (sorted.length - 1)
+          const idx = sorted.findIndex((s) => s.id === b.id)
+          if (idx > 0 && idx < sorted.length - 1) {
+            nx = (first.x + first.w / 2) + step * idx - b.w / 2
+          }
+          break
         }
-        break
+        case 'distribute-v': {
+          if (boxes.length < 3) break
+          const sorted = [...boxes].sort((a, b) => a.y - b.y)
+          const first = sorted[0]
+          const last = sorted[sorted.length - 1]
+          const span = (last.y + last.h / 2) - (first.y + first.h / 2)
+          const step = span / (sorted.length - 1)
+          const idx = sorted.findIndex((s) => s.id === b.id)
+          if (idx > 0 && idx < sorted.length - 1) {
+            ny = (first.y + first.h / 2) + step * idx - b.h / 2
+          }
+          break
+        }
       }
-      case 'distribute-v': {
-        if (boxes.length < 3) break
-        const sorted = [...boxes].sort((a, b) => a.y - b.y)
-        const first = sorted[0]
-        const last = sorted[sorted.length - 1]
-        const span = (last.y + last.h / 2) - (first.y + first.h / 2)
-        const step = span / (sorted.length - 1)
-        const idx = sorted.findIndex((s) => s.id === b.id)
-        if (idx > 0 && idx < sorted.length - 1) {
-          ny = (first.y + first.h / 2) + step * idx - b.h / 2
-        }
-        break
+      if (nx !== b.x || ny !== b.y) {
+        updates.push({ id: b.id, position: { x: nx, y: ny } })
       }
     }
-    if (nx !== b.x || ny !== b.y) {
-      updates.push({ id: b.id, position: { x: nx, y: ny } })
-    }
+    void ids
+    if (updates.length === 0) return 0
+
+    setNodesPositions(updates, true, false, false)
+    return updates.length
   }
-  void ids  // 避免 unused
-  if (updates.length === 0) return 0
 
-  // 走 setNodesPositions 批量同步 (recordMoveHistory=true, 但用 groupMove 一次撤销)
-  setNodesPositions(updates, true, false, false)
-  return updates.length
-}
+  function alignSelectedNodes(
+    mode: AlignMode,
+    screenToFlowCoordinate: (pt: { x: number; y: number }) => { x: number; y: number }
+  ): number {
+    const selected = _getSelectedNodesFn ? _getSelectedNodesFn() : []
+    return _alignSelectedNodesImpl(mode, selected, screenToFlowCoordinate)
+  }
 
-/**
- * 对齐选中节点的 store action 入口 (供 RuleCanvas 调用)
- * @param mode 对齐模式
- * @param screenToFlowCoordinate 画布坐标转换函数
- */
-function alignSelectedNodes(
-  mode: AlignMode,
-  screenToFlowCoordinate: (pt: { x: number; y: number }) => { x: number; y: number }
-): number {
-  // selectedFlowNodes 通过外部传入 — store 不直接依赖 useVueFlow
-  // 调用方: const selected = getSelectedNodes.value; store.alignSelectedNodes(mode, ...)
-  // 这里通过全局缓存 selected 节点 (避免循环依赖)
-  const selected = _getSelectedNodesFn ? _getSelectedNodesFn() : []
-  return _alignSelectedNodesImpl(mode, selected, screenToFlowCoordinate)
-}
+  /**
+   * P1-2 (2026-06-19): store 不直接依赖 useVueFlow, 但 alignSelectedNodes 需要 selected 节点.
+   * RuleCanvas 在 onMounted 时注入回调 (避免 store → composable 反向依赖)
+   */
+  let _getSelectedNodesFn: (() => Array<{ id: string; position: { x: number; y: number } }>) | null = null
+  function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
+    _getSelectedNodesFn = fn
+  }
 
-/**
- * P1-2 (2026-06-19): store 不直接依赖 useVueFlow, 但 alignSelectedNodes 需要 selected 节点.
- * RuleCanvas 在 onMounted 时注入回调 (避免 store → composable 反向依赖)
- */
-let _getSelectedNodesFn: (() => Array<{ id: string; position: { x: number; y: number } }>) | null = null
-function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
-  _getSelectedNodesFn = fn
-}
+  // ============ Undo/Redo ============
+
   function _recordEdgeAddHistory(edge: GraphEdge) {
     if (isHistoryPaused.value) return
     historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
@@ -1417,44 +1130,6 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
     }
   }
 
-  // ============ Undo/Redo ============
-
-  /** 序列化时需要丢弃的 VueFlow 内部字段（DOM 引用、计算尺寸等） */
-  const VUEFLOW_INTERNAL_KEYS = [
-    'selected', 'dragging', 'parentNode', 'dimensions', 'handleBounds',
-    'internals', 'events', 'selectable', 'deletable', 'focusable',
-    'updatable', 'resizing', 'initialized', 'resizer', 'dragHandle',
-  ] as const
-
-  /** 深拷贝节点/边用于历史快照 - 使用 JSON 路线避免 structuredClone 撞上 DOM/Proxy。
-   * 在 JSON 序列化前剥离 VueFlow 内部字段（DOM 引用、循环引用根）。
-   *
-   * 注意：data/position 必须浅 spread（连同嵌套的 data.config），
-   * 否则 updateNodeConfig 的内层 mutate（`node.data.config[key] = value`）会
-   * 污染所有持有同一引用的历史快照，导致 undo/redo 实际不工作。
-   */
-  function cloneForHistory<T>(items: T[]): T[] {
-    return items.map(item => {
-      const cleaned: any = {}
-      for (const key in item) {
-        if ((VUEFLOW_INTERNAL_KEYS as readonly string[]).includes(key)) continue
-        const value = (item as any)[key]
-        if (key === 'data' && value && typeof value === 'object') {
-          // data.config 是 updateNodeConfig mutate 的目标，独立拷贝
-          cleaned.data = value.config
-            ? { ...value, config: { ...value.config } }
-            : { ...value }
-        } else if (key === 'position' && value && typeof value === 'object') {
-          cleaned.position = { ...value }
-        } else {
-          cleaned[key] = value
-        }
-      }
-      return cleaned as T
-    })
-  }
-
-  /** 保存当前状态到历史栈 */
   function saveHistory() {
     if (isHistoryPaused.value) return
     historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
@@ -1470,15 +1145,8 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
     }
   }
 
-  /**
-   * 记录单节点移动历史 (Phase B 任务3)
-   *
-   * 拖拽松手时调用, 不克隆整图, 只存 1 个节点的位置变化.
-   * 200 节点图拖拽松手从 ~370ms 响应式开销降到 ~1ms.
-   */
   function recordMoveHistory(nodeId: string, from: { x: number; y: number }, to: { x: number; y: number }) {
     if (isHistoryPaused.value) return
-    // 跳过零位移 (防止 drag-stop 偶然触发)
     if (from.x === to.x && from.y === to.y) return
     historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
     historyStack.value.push({ type: 'move', nodeId, from: { ...from }, to: { ...to } })
@@ -1489,42 +1157,29 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
     }
   }
 
-  /** 撤销 */
   function undo() {
     if (!canUndo.value) return
     historyIndex.value--
     applyHistoryEntry(historyStack.value[historyIndex.value], 'undo')
   }
 
-  /** 重做 */
   function redo() {
     if (!canRedo.value) return
     historyIndex.value++
     applyHistoryEntry(historyStack.value[historyIndex.value], 'redo')
   }
 
-  /**
-   * 应用一个 history entry
-   * - snapshot: 还原整图 (undo/redo 方向无关, 都是恢复到该 entry 状态)
-   * - move: undo 回到 from, redo 调到 to
-   * - groupMove: undo 回到各自 from, redo 调到各自 to
-   *
-   * FIX (BUG-1 2026-06-19): 之前永远用 from, 导致 redo 永远回不到拖动终点.
-   * 现在通过 direction 参数区分 undo/redo, undo 用 from, redo 用 to.
-   */
   function applyHistoryEntry(
     entry: typeof historyStack.value[number],
     direction: 'undo' | 'redo',
   ) {
     if (entry.type === 'snapshot') {
       nodes.value = JSON.parse(JSON.stringify(entry.nodes))
-      _nodeByIdMarkDirty()  // PERF-1: snapshot 重建
+      _nodeByIdMarkDirty()
       edges.value = JSON.parse(JSON.stringify(entry.edges))
-      // P1-F: 整体替换 edges 后全量重建索引
       _indexRebuild()
       triggerRef(_connectedHandleVersion)
     } else if (entry.type === 'move') {
-      // 单节点位置变更, 直接 mutate + triggerRef 避免整图重渲染
       const targetPos = direction === 'undo' ? entry.from : entry.to
       const node = nodes.value.find(n => n.id === entry.nodeId)
       if (node) {
@@ -1532,10 +1187,6 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
         triggerRef(nodes)
       }
     } else if (entry.type === 'addEdge') {
-      // PERF-5 (2026-06-19): 增量边历史
-      // undo 撤销添加 → removeEdge; redo 重新添加 → addEdge
-      // 注意: 这里需要走 addEdge/removeEdge 自身, 不绕过 _indexAddEdge/_indexRemoveEdge
-      // 避免索引不同步. 但 _recordEdgeAddHistory/Remove 会再 push 历史, 所以这里直接 mutate
       if (direction === 'undo') {
         edges.value = edges.value.filter(e => e.id !== entry.edge.id)
         _indexRemoveEdge(entry.edge)
@@ -1545,7 +1196,6 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
       }
       triggerRef(_connectedHandleVersion)
     } else if (entry.type === 'removeEdge') {
-      // undo 撤销删除 → 加回; redo 重新删除 → 删
       if (direction === 'undo') {
         edges.value = [...edges.value, entry.edge]
         _indexAddEdge(entry.edge)
@@ -1555,7 +1205,6 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
       }
       triggerRef(_connectedHandleVersion)
     } else if (entry.type === 'removeEdges') {
-      // 批量: undo 全加回, redo 全删
       if (direction === 'undo') {
         edges.value = [...edges.value, ...entry.edges]
         for (const e of entry.edges) _indexAddEdge(e)
@@ -1566,8 +1215,6 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
       }
       triggerRef(_connectedHandleVersion)
     } else {
-      // groupMove: 批量还原
-      // 调用 setNodesPositions 把所有节点归位 (recordHistory=false 避免污染 history stack)
       const updates = entry.moves.map(m => ({
         id: m.nodeId,
         position: { ...(direction === 'undo' ? m.from : m.to) },
@@ -1576,126 +1223,22 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
     }
   }
 
-  /** 暂停历史记录（拖拽等批量操作） */
   function pauseHistory() {
     isHistoryPaused.value = true
   }
 
-  /** 恢复历史记录并保存快照 */
   function unpauseHistory() {
     isHistoryPaused.value = false
     saveHistory()
   }
 
-  /**
-   * 仅恢复 paused 状态, 不存 snapshot (Phase B 任务3)
-   *
-   * 用于 dragStop: recordMoveHistory 已存了 move entry, 不需要再存当前 snapshot.
-   * 配合 recordMoveHistory 一起使用.
-   */
   function resumeHistory() {
     isHistoryPaused.value = false
   }
 
-  // ============ 变量操作 ============
-
-  function addVariable(variable?: Partial<Variable>): Variable {
-    const newVar: Variable = {
-      name: variable?.name ?? `var_${variables.value.length + 1}`,
-      type: variable?.type ?? 'STRING',
-      defaultValue: variable?.defaultValue ?? '',
-      description: variable?.description ?? ''
-    }
-    variables.value.push(newVar)
-    return newVar
-  }
-
-  function removeVariable(name: string) {
-    variables.value = variables.value.filter(v => v.name !== name)
-  }
-
-  function updateVariable(name: string, updates: Partial<Variable>) {
-    const v = variables.value.find(item => item.name === name)
-    if (v) {
-      Object.assign(v, updates)
-    }
-  }
-
-  function getVariable(name: string): Variable | undefined {
-    return variables.value.find(v => v.name === name)
-  }
-
-  // ============ 执行管理 ============
-
-  function setExecutionStatus(status: ExecutionState['status']) {
-    // shallowRef: mutate 字段后手动 triggerRef
-    executionState.value.status = status
-    triggerRef(executionState)
-  }
-
-  function addExecutionLog(log: ExecutionState['logs'][0]) {
-    // P1-H: 100ms 批合并 — YOLO 30FPS 推流时, 一次推送可能 N 条 log
-    pendingLogs.push(log)
-    if (logsFlushTimer === null) {
-      logsFlushTimer = setTimeout(flushPendingLogs, LOGS_BATCH_INTERVAL_MS)
-    }
-  }
-
-  function setExecutionProgress(progress: number) {
-    // shallowRef: mutate 字段后手动 triggerRef
-    executionState.value.progress = progress
-    triggerRef(executionState)
-  }
-
-  function setNodeExecutionState(nodeId: string, state: string) {
-    // shallowRef: mutate 字段后手动 triggerRef
-    executionState.value.nodeStates[nodeId] = state
-    triggerRef(executionState)
-  }
-
-  function clearExecution() {
-    // 清理时先 flush 待推送日志, 避免状态错乱
-    if (logsFlushTimer !== null) {
-      clearTimeout(logsFlushTimer)
-      logsFlushTimer = null
-    }
-    pendingLogs = []
-    executionState.value = {
-      status: 'idle',
-      progress: 0,
-      executionId: null,
-      logs: [],
-      nodeStates: {}
-    }
-    triggerRef(executionState)
-  }
-
-  function setExecutionId(id: number) {
-    // shallowRef: mutate 字段后手动 triggerRef
-    executionState.value.executionId = id
-    triggerRef(executionState)
-  }
-
   // ============ 辅助函数 ============
 
-  /**
-   * 从 config_schema 提取默认配置值。
-   */
-  function getDefaultConfig(
-    schema: Record<string, ConfigSchemaProperty>
-  ): Record<string, VariableDefaultValue> {
-    const config: Record<string, VariableDefaultValue> = {}
-    for (const [key, prop] of Object.entries(schema)) {
-      if (prop.default !== undefined) {
-        config[key] = prop.default
-      }
-    }
-    return config
-  }
-
-  /**
-   * 获取节点类型对应的分类名称。
-   */
+  /** 获取节点类型对应的分类名称。 */
   function getNodeCategory(type: string): string {
     const def = nodeDefinitions.value.find(d => d.type === type)
     return def?.category ?? 'action'
@@ -1703,14 +1246,7 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
 
   // ============ LOD 状态 (Phase LOD-1) ============
 
-  /**
-   * 同步画布缩放级别到 store.
-   * RuleCanvas 监听 @viewport-change 时调用, 供 lodLevelMap 计算用.
-   *
-   * Phase 17.3: 加自节流 — 同一帧内多次 setViewportZoom 合并为 1 次 ref.set
-   * 60Hz 缩放下每帧只触发 1 次响应式 (而不是理论上 60 次).
-   * rAF 之外基本无 zoom 事件, 节流主要保护 d3-zoom 内部抖动场景.
-   */
+  /** 自节流 setViewportZoom — 同一帧内多次合并为 1 次 ref.set */
   let setViewportZoomRafId = 0
   let pendingZoomValue = 1
   function setViewportZoom(z: number) {
@@ -1722,12 +1258,10 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
     })
   }
 
-  /** 拖动期间锁定 LOD (useCogniFlowDrag onStart 调用) */
   function setDragging(v: boolean) {
     isDragging.value = v
   }
 
-  /** 框选拖拽期间锁定 LOD (handleSelectionDragStart 调用) */
   function setSelectionBoxActive(v: boolean) {
     isSelectionBoxActive.value = v
   }
@@ -1739,29 +1273,30 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
     graphMeta,
     nodes,
     edges,
-    expandedNodeIds,    // LOD 2 展开集合 (Phase 17.1+: 取代右侧面板)
-    variables,
+    expandedNodeIds,
     availableModels,
-    executionState,
     historyStack,
     historyIndex,
     isHistoryPaused,
     maxHistorySize,
-    viewportZoom,        // LOD
-    isDragging,          // LOD 锁定
-    isSelectionBoxActive,// LOD 锁定
+    lastSavedHistoryIndex,
+    viewportZoom,
+    isDragging,
+    isSelectionBoxActive,
+    disabledNodeIds,
+    currentGlobalLod,
 
     // 计算属性
     connectedHandleIndex,
-    nodeById,  // Phase B 任务6
+    nodeById,
     canUndo,
     canRedo,
-    isDirty,           // P0-2 (2026-06-19): 是否有未保存改动
+    isDirty,
     hasNodes,
     nodeDefinitionsByCategory,
-    lodLevelMap,         // LOD
-    getLodLevel,         // LOD
-    configVersion: _configVersion,  // FIX (BUG-4 2026-06-19): 暴露给 NodeConfigEditor 作 computed 依赖
+    lodLevelMap,
+    getLodLevel,
+    configVersion: _configVersion,
 
     // 数据加载
     fetchNodeDefinitions,
@@ -1786,59 +1321,43 @@ function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
     // 节点操作
     createNode,
     updateNodeConfig,
-    setNodesPositions,  // 路径 B: 自研拖动 drag-end 批量同步
+    setNodesPositions,
     removeNode,
-    removeNodes,        // Phase B 任务4
-    toggleNodeExpanded, // Phase 17.1+: 双击节点展开 LOD 2
-    collapseAllExpanded,// Phase 17.1+: 点空白收起所有展开
-    syncExpandedNodeIds,// Phase 19.7+: 外部 Set mutate 后通知响应式
-    expandAll,          // Phase 19.4+: 工具栏"全部折叠"按钮
-    isHandleConnected,  // Phase B 任务2
+    removeNodes,
+    toggleNodeExpanded,
+    collapseAllExpanded,
+    syncExpandedNodeIds,
+    expandAll,
+    isHandleConnected,
 
     // 节点禁用 (P2-A)
-    disabledNodeIds,
     isNodeDisabled,
     toggleNodeDisabled,
 
     // 边操作
     addEdge,
     removeEdge,
-    removeEdges,        // Phase B 任务4
+    removeEdges,
 
     // Undo/Redo
     saveHistory,
-    recordMoveHistory,  // Phase B 任务3
+    recordMoveHistory,
     undo,
     redo,
     pauseHistory,
     unpauseHistory,
-    resumeHistory,      // Phase B 任务3
-
-    // 变量操作
-    addVariable,
-    removeVariable,
-    updateVariable,
-    getVariable,
+    resumeHistory,
 
     // 节点对齐 (P1-2)
     alignSelectedNodes,
     setSelectedNodesGetter,
 
-    // 执行管理
-    setExecutionStatus,
-    addExecutionLog,
-    setExecutionProgress,
-    setNodeExecutionState,
-    clearExecution,
-    setExecutionId,
-
     // 辅助函数
-    getDefaultConfig,
     getNodeCategory,
 
     // LOD (Phase LOD-1)
     setViewportZoom,
     setDragging,
-    setSelectionBoxActive
+    setSelectionBoxActive,
   }
 })
