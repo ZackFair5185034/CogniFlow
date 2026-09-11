@@ -321,16 +321,18 @@ describe('变量表达式解析器', () => {
   // ============ getVariableTypeColor 测试 ============
 
   describe('getVariableTypeColor', () => {
+    // 2026-09-12: 随设计令牌 v2 更新 —— 变量类型色改用低眩光调, 并让出品牌青。
+    // NUMBER 原为 #00f0ff (v1 的品牌色), 品牌色改为 #22d3ee 后此处改用该值。
     it('应为每种类型返回正确的颜色', () => {
-      expect(getVariableTypeColor('STRING')).toBe('#8888aa')
-      expect(getVariableTypeColor('NUMBER')).toBe('#00f0ff')
-      expect(getVariableTypeColor('BOOLEAN')).toBe('#DC4FDC')
-      expect(getVariableTypeColor('IMAGE')).toBe('#4CFF4C')
-      expect(getVariableTypeColor('BBOX')).toBe('#FF7F4C')
+      expect(getVariableTypeColor('STRING')).toBe('#9a9ab2')
+      expect(getVariableTypeColor('NUMBER')).toBe('#22d3ee')
+      expect(getVariableTypeColor('BOOLEAN')).toBe('#b158e4')
+      expect(getVariableTypeColor('IMAGE')).toBe('#58e49e')
+      expect(getVariableTypeColor('BBOX')).toBe('#e48b58')
     })
 
     it('对于未知类型应返回默认颜色', () => {
-      expect(getVariableTypeColor('UNKNOWN' as any)).toBe('#8888aa')
+      expect(getVariableTypeColor('UNKNOWN' as any)).toBe('#9a9ab2')
     })
   })
 
