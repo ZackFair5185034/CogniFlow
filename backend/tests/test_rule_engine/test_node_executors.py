@@ -902,15 +902,25 @@ class TestImagePreprocessorNode:
         assert "image" in result
 
     def test_fallback_when_cv2_missing(self, mock_context):
-        """OpenCV 未安装时返回原始图片（不报错）。"""
+        """OpenCV 未安装时返回原始图片（不报错）。
+
+        2026-10-24 修复: 原用例依赖"环境里没装 cv2"这个前提, 在装了 cv2 的环境里
+        会真的去 imread 一个不存在的路径 → 返回 error → 用例失败(长期挂着的遗留失败)。
+        现在用 sys.modules['cv2'] = None 精确模拟"cv2 不可用",
+        让用例在任何环境下都测的是同一条降级分支。
+        """
         from backend.services.rule_engine.nodes.processing_nodes import ImagePreprocessorNode
         node = ImagePreprocessorNode()
         node.config = {"params": {"operation": "resize"}}
 
-        # cv2 实际未安装，execute 内部的 try/except ImportError 会处理
-        result = asyncio.run(node.execute({"image": {"path": "/test.jpg"}}, mock_context))
+        # sys.modules 中置 None → `import cv2` 抛 ImportError → 走降级分支
+        with patch.dict('sys.modules', {'cv2': None}):
+            result = asyncio.run(node.execute({"image": {"path": "/test.jpg"}}, mock_context))
+
         # 应返回原始路径 + warning
         assert "image" in result
+        assert result["image"] == {"path": "/test.jpg"}
+        assert "warning" in result
 
 
 class TestFilterNode:
