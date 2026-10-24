@@ -95,6 +95,8 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     canUndo: graphRefs.canUndo,
     canRedo: graphRefs.canRedo,
     isDirty: graphRefs.isDirty,
+    markDirty: graph.markDirty,
+    clearDirty: graph.clearDirty,
     hasNodes: graphRefs.hasNodes,
     nodeDefinitionsByCategory: graphRefs.nodeDefinitionsByCategory,
     lodLevelMap: graphRefs.lodLevelMap,

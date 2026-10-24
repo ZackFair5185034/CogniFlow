@@ -228,8 +228,30 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
   /** 是否可以重做 */
   const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
 
+  /**
+   * 配置类修改标记 (2026-10-24)。
+   *
+   * `updateNodeConfig` 不写历史栈 —— 每按一次键就克隆全图快照太贵, 也会把
+   * 撤销栈冲垮。但它必须能被 `isDirty` 看见, 否则「改了参数以为保存了」
+   * 实际没保存。这个独立标志位参与 isDirty 计算。
+   */
+  const _configDirty = shallowRef(false)
+
+  /** 标记为未保存 */
+  function markDirty(): void {
+    _configDirty.value = true
+  }
+
+  /** 清除未保存标记(保存成功后调用) */
+  function clearDirty(): void {
+    _configDirty.value = false
+    lastSavedHistoryIndex.value = historyIndex.value
+  }
+
   /** P0-2 (2026-06-19): 当前是否有未保存改动 */
-  const isDirty = computed(() => historyIndex.value !== lastSavedHistoryIndex.value)
+  const isDirty = computed(
+    () => historyIndex.value !== lastSavedHistoryIndex.value || _configDirty.value
+  )
 
   /** 是否有节点 */
   const hasNodes = computed(() => nodes.value.length > 0)
@@ -512,7 +534,8 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     }
 
     saveHistory()
-    lastSavedHistoryIndex.value = historyIndex.value
+    // 载入的是服务端已保存的图, 视为干净状态
+    clearDirty()
     return data
   }
 
@@ -561,7 +584,8 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     })
 
     saveHistory()
-    lastSavedHistoryIndex.value = historyIndex.value
+    // 保存成功: 清除脏标记(含配置类改动)
+    clearDirty()
   }
 
   // ============ 草稿 (P0-2 2026-06-19) ============
@@ -845,6 +869,9 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
       }
       node.data.config[key] = value
       _configVersion.value++
+      // 配置改动要标脏: 旧实现不写历史栈, isDirty 看不到它
+      // (用户改了参数以为保存了, 实际没保存)
+      markDirty()
     }
   }
 
@@ -1399,6 +1426,8 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     canUndo,
     canRedo,
     isDirty,
+    markDirty,
+    clearDirty,
     hasNodes,
     nodeDefinitionsByCategory,
     lodLevelMap,

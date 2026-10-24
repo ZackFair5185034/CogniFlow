@@ -923,6 +923,7 @@
 <script setup lang="ts">
 import { throttle, debounce } from 'lodash-es'
 import { nextTick, onBeforeUnmount, onMounted, ref, triggerRef } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { useRuleEngineStore, type RuleNodeData, type NodeDefinition, type AlignMode } from '@/stores/ruleEngine'
 import { useRulePortsStore } from '@/stores/ruleEngine/ports'
 import { storeToRefs } from 'pinia'
@@ -1531,6 +1532,20 @@ function handleKeyDown(event: KeyboardEvent) {
   }
 
   const isCtrl = event.ctrlKey || event.metaKey
+
+  // Ctrl/Cmd + S: 保存 (工具栏 title 承诺的快捷键, 此前未实现)
+  if (isCtrl && event.key.toLowerCase() === 's') {
+    event.preventDefault()
+    void handleSave()
+    return
+  }
+
+  // Enter: 执行规则图 (工具栏 title 承诺的快捷键, 此前未实现)
+  if (event.key === 'Enter' && !isCtrl && !executing.value && hasNodes.value) {
+    event.preventDefault()
+    void handleExecute()
+    return
+  }
 
   if (isCtrl && event.key === 'c') {
     event.preventDefault()
@@ -2237,6 +2252,20 @@ function zoomOut() {
   const rect = container.getBoundingClientRect()
   setCenter(rect.width / 2, rect.height / 2, { zoom: zoomLevel.value / 1.2, duration: 200 })
 }
+
+// 未保存时离开页面给出提示
+// 2026-10-24: isDirty 现在能看见配置类改动(updateNodeConfig 单独标脏),
+// 之前改参数不标脏, 用户以为保存了其实没保存
+onBeforeRouteLeave((_to, _from, next) => {
+  if (store.isDirty) {
+    const confirmed = window.confirm('规则图有未保存的修改，确定离开吗？')
+    if (!confirmed) {
+      next(false)
+      return
+    }
+  }
+  next()
+})
 
 // 生命周期
 onMounted(async () => {
