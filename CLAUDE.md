@@ -233,12 +233,12 @@ Closes #123
 - **已知遗留失败**：无（2026-10-24 改造后后端 0 failed）。
   - `test_node_executors.py::TestImagePreprocessorNode::test_fallback_when_cv2_missing` 原为长期遗留失败（假设 cv2 不可用，但环境 cv2 已装 → 走正常错误路径）。已于 2026-10-24 修正为用 `sys.modules['cv2'] = None` 精确模拟「cv2 不可用」，在任何环境下都测同一条降级分支。
   - 注：原 docs 提到的 5 个 test_api/test_atlas.py 测试文件已不存在（`backend/tests/test_api/` 目录被清理），不再计入遗留失败。
-- **测试基线**（2026-10-24 改造后）：
-  - 后端：`PYTHONPATH=. .\.venv\Scripts\python.exe -m pytest backend/tests/ tests/ -q` → **369 passed / 0 failed**
-  - 前端：`cd webui; node_modules\.bin\vitest.cmd run` → **120 passed（15 个测试文件）**
+- **测试基线**（2026-10-24 改造 + 走查轮修复后）：
+  - 后端：`PYTHONPATH=. .\.venv\Scripts\python.exe -m pytest backend/tests/ tests/ -q` → **373 passed / 0 failed**
+  - 前端：`cd webui; node_modules\.bin\vitest.cmd run` → **136 passed（17 个测试文件）**
   - 类型检查：`node_modules\.bin\vue-tsc.cmd --noEmit` → **0 error**
   - 端到端：`PYTHONPATH=. .\.venv\Scripts\python.exe scripts\e2e\rule_engine_business_flow.py` → **退出码 0**
-  - 规模基线：`cd webui; node ..\scripts\perf\rule_canvas_scale_bench.mjs` → 500 节点索引构建 < 50ms（实测 ~2ms）
+  - 规模基线：`cd webui; node ..\scripts\perf\rule_canvas_scale_bench.mjs` → 500 节点索引构建 < 50ms（实测最大 1.00ms）
 
 ## 6. 文档维护
 
