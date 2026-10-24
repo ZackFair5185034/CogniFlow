@@ -131,6 +131,12 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     isHandleConnected: graph.isHandleConnected,
     isNodeDisabled: graph.isNodeDisabled,
     toggleNodeDisabled: graph.toggleNodeDisabled,
+
+    // ===== 节点运行期状态 (2026-10-24) =====
+    nodeStatusMap: graphRefs.nodeStatusMap,
+    getNodeStatus: graph.getNodeStatus,
+    setNodeStatus: graph.setNodeStatus,
+    clearNodeStatuses: graph.clearNodeStatuses,
     addEdge: graph.addEdge,
     removeEdge: graph.removeEdge,
     removeEdges: graph.removeEdges,
@@ -154,6 +160,7 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     addExecutionLog: execution.addExecutionLog,
     setExecutionProgress: execution.setExecutionProgress,
     setNodeExecutionState: execution.setNodeExecutionState,
+    setNodeStateSink: execution.setNodeStateSink,
     clearExecution: execution.clearExecution,
     setExecutionId: execution.setExecutionId,
 

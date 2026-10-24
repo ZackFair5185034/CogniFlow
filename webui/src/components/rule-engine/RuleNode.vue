@@ -7,11 +7,11 @@
     selected 走 VueFlow wrapper 的 CSS class, 不需列入依赖.
   -->
   <div
-    v-memo="[data.id, data.status, data.category, lodLevel, isExpanded, hasMissingRequired, isDisabled]"
+    v-memo="[data.id, nodeStatus, data.category, lodLevel, isExpanded, hasMissingRequired, isDisabled]"
     v-bind="$attrs"
     class="rule-node"
     :class="[`category-${data.category}`, `lod-${lodLevel}`, { expanded: isCollapsed, 'missing-required': hasMissingRequired, 'is-disabled': isDisabled }]"
-    :data-status="data.status || 'idle'"
+    :data-status="nodeStatus"
     :data-lod="lodLevel"
     :data-expanded="isCollapsed ? 'true' : 'false'"
     :data-missing-required="hasMissingRequired ? 'true' : 'false'"
@@ -103,12 +103,12 @@
 
     <!-- 执行状态指示 (所有级别) -->
     <div
-      v-if="data.status && data.status !== 'idle'"
+      v-if="nodeStatus && nodeStatus !== 'idle'"
       class="node-status"
     >
       <div
         class="status-indicator"
-        :class="data.status"
+        :class="nodeStatus"
         :title="statusTitle"
       />
     </div>
@@ -214,8 +214,17 @@ const store = useRuleEngineStore()
 
 // ============ 状态指示器 tooltip ============
 
+/**
+ * 节点运行期状态。
+ *
+ * 2026-10-24: 状态从 graph store 的 nodeStatusMap 读取, 不再读 `data.status` ——
+ * `nodes` 是 shallowRef, 就地改 data.status 不会让 VueFlow 重算,
+ * 结果执行状态永远点不亮。独立 Map 换引用后订阅它的组件按需重渲染。
+ */
+const nodeStatus = computed(() => store.getNodeStatus(props.data.id))
+
 const statusTitle = computed(() => {
-  switch (props.data.status) {
+  switch (nodeStatus.value) {
     case 'running': return '正在执行...'
     case 'success': return '执行成功'
     case 'failed': return '执行失败'

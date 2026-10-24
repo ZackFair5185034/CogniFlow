@@ -335,6 +335,40 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     return map
   })
 
+  // ============ 节点执行状态 (2026-10-24) ============
+
+  /**
+   * 节点运行期状态表: node_id -> 'idle' | 'running' | 'success' | 'failed'。
+   *
+   * 为什么不用 `node.data.status`:
+   *   `nodes` 是 shallowRef, 就地改 `node.data.status` 不会触发 VueFlow 重算
+   *   (节点数组 identity 没变, VueFlow 的 watch 不触发), 状态就永远点不亮。
+   *   独立 Map + 整体换引用, 订阅它的组件按需重渲染, 代价 O(1)/节点。
+   */
+  const nodeStatusMap = shallowRef<Map<string, string>>(new Map())
+
+  /** 读取节点运行期状态(未设置时视为 idle) */
+  function getNodeStatus(nodeId: string): string {
+    return nodeStatusMap.value.get(nodeId) ?? 'idle'
+  }
+
+  /**
+   * 设置节点运行期状态。
+   *
+   * @param nodeId 节点 ID
+   * @param status 'idle' | 'running' | 'success' | 'failed'
+   */
+  function setNodeStatus(nodeId: string, status: string): void {
+    const next = new Map(nodeStatusMap.value)
+    next.set(nodeId, status)
+    nodeStatusMap.value = next
+  }
+
+  /** 清空所有节点运行期状态 */
+  function clearNodeStatuses(): void {
+    nodeStatusMap.value = new Map()
+  }
+
   // ============ 节点禁用 (P2-A 2026-06-19) ============
 
   /**
@@ -1402,6 +1436,12 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     syncExpandedNodeIds,
     expandAll,
     isHandleConnected,
+
+    // 节点运行期状态 (2026-10-24)
+    nodeStatusMap,
+    getNodeStatus,
+    setNodeStatus,
+    clearNodeStatuses,
 
     // 节点禁用 (P2-A)
     isNodeDisabled,

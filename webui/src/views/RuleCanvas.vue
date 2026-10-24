@@ -2258,6 +2258,11 @@ onMounted(async () => {
     console.error('加载模型列表失败:', err)
   }
   loading.value = false
+  // 执行状态回填: WS 消息 → 节点状态(旧实现只写 executionState.nodeStates,
+  // 节点视觉读的是 data.status, 两边对不上, 执行状态永远不点亮)
+  store.setNodeStateSink((nodeId: string, state: string) => {
+    store.setNodeStatus(nodeId, state)
+  })
   // 键盘事件
   window.addEventListener('keydown', handleKeyDown)
   // 全局鼠标位置追踪 — 快捷键 Ctrl+V 没有 MouseEvent, 需要 lastMousePos

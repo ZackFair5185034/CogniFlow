@@ -74,9 +74,24 @@ export const useRuleExecutionStore = defineStore('ruleExecution', () => {
     triggerRef(executionState)
   }
 
+  /**
+   * 节点状态回填回调 - 由 graph store 注册。
+   * 用回调而不是直接 import graph store, 避免两个子 store 互相依赖成环。
+   */
+  let nodeStateSink: ((nodeId: string, state: string) => void) | null = null
+
+  /** 注册节点状态回填回调 */
+  function setNodeStateSink(sink: (nodeId: string, state: string) => void): void {
+    nodeStateSink = sink
+  }
+
   function setNodeExecutionState(nodeId: string, state: string) {
     executionState.value.nodeStates[nodeId] = state
     triggerRef(executionState)
+    // 回填到节点状态, 让 RuleNode 的状态视觉真正点亮。
+    // timeout 归一化为 failed(节点状态只有 idle/running/success/failed 四态)。
+    const visual = state === 'timeout' ? 'failed' : state
+    nodeStateSink?.(nodeId, visual)
   }
 
   function clearExecution() {
@@ -107,6 +122,7 @@ export const useRuleExecutionStore = defineStore('ruleExecution', () => {
     addExecutionLog,
     setExecutionProgress,
     setNodeExecutionState,
+    setNodeStateSink,
     clearExecution,
     setExecutionId,
   }
