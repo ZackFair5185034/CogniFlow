@@ -37,6 +37,26 @@ async def get_node_definitions():
         raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
 
 
+# ============ 端口类型矩阵 ============
+
+@router.get("/port-compatibility")
+async def get_port_compatibility():
+    """获取端口类型兼容矩阵 - 前端连线校验的唯一依据。
+
+    后端此前在前端硬编码了一套 4 条规则, 与执行器的 14 类矩阵漂移,
+    导致 BOOLEAN->TRIGGER 的边被静默丢弃。此接口下发完整矩阵。
+    """
+    from backend.services.rule_engine.port_types import (
+        PORT_TYPES,
+        get_compatibility_matrix,
+    )
+
+    return {
+        "matrix": get_compatibility_matrix(),
+        "types": list(PORT_TYPES),
+    }
+
+
 # ============ 规则图 CRUD ============
 
 @router.post("/graphs", response_model=RuleGraphResponse)

@@ -327,6 +327,18 @@ export interface GraphEdge {
   target_handle?: string
 }
 
+/**
+ * 端口类型兼容矩阵响应。
+ *
+ * 后端 `backend/services/rule_engine/port_types.py` 是矩阵的唯一事实源。
+ */
+export interface PortCompatibilityResponse {
+  /** 源类型 -> 兼容的目标类型列表 */
+  matrix: Record<string, string[]>
+  /** 全部端口类型 */
+  types: string[]
+}
+
 /** 规则图基础 */
 export interface RuleGraphBase {
   name: string

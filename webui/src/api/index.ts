@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { DetectImageResponse, RuleGraphDetail } from '@/types/api'
+import type { DetectImageResponse, PortCompatibilityResponse, RuleGraphDetail } from '@/types/api'
 
 const api = axios.create({
   baseURL: '/api',
@@ -200,6 +200,10 @@ export const inferenceApi = {
 export const ruleEngineApi = {
   // 节点定义
   getNodeDefinitions: () => api.get('/rule-engine/nodes/definitions'),
+
+  // 端口类型兼容矩阵(后端唯一事实源, 前端不得硬编码)
+  getPortCompatibility: () =>
+    api.get<PortCompatibilityResponse>('/rule-engine/port-compatibility'),
 
   // 规则图 CRUD
   listGraphs: () => api.get('/rule-engine/graphs'),

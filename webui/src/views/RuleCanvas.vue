@@ -924,6 +924,7 @@
 import { throttle, debounce } from 'lodash-es'
 import { nextTick, onBeforeUnmount, onMounted, ref, triggerRef } from 'vue'
 import { useRuleEngineStore, type RuleNodeData, type NodeDefinition, type AlignMode } from '@/stores/ruleEngine'
+import { useRulePortsStore } from '@/stores/ruleEngine/ports'
 import { storeToRefs } from 'pinia'
 import { ruleEngineApi } from '@/api'
 import type { Node, Edge, NodeMouseEvent, EdgeMouseEvent } from '@vue-flow/core'
@@ -962,6 +963,8 @@ const {
 
 // ============ Store 绑定（唯一数据源）============
 const store = useRuleEngineStore()
+// 端口兼容矩阵 store —— 后端下发的唯一事实源
+const portsStore = useRulePortsStore()
 const {
   nodes,
   edges,
@@ -2446,13 +2449,11 @@ function handleNodeDoubleClick(event: any) {
 //   直呼局部 onClick 的兜底路径同样被跳过。
 // 「点空白收起全部展开节点」改由 handleSelectionEnd 用「点击 vs 拖拽」判定实现 (见下)。
 
-// 端口类型兼容性检查
+// 端口类型兼容性检查 - 统一走后端下发的矩阵(唯一事实源)。
+// 旧实现只认 ANY/同型/TRIGGER→TRIGGER|CONTROL 四条规则, 与后端 14 类矩阵漂移,
+// 导致 BOOLEAN→TRIGGER 的边被 VueFlow 在 isValidConnection 阶段静默丢弃。
 function isPortCompatible(sourceType: string, targetType: string): boolean {
-  if (sourceType === 'ANY' || targetType === 'ANY') return true
-  if (sourceType === targetType) return true
-  if (sourceType === 'TRIGGER' && (targetType === 'TRIGGER' || targetType === 'CONTROL')) return true
-  if (sourceType === 'CONTROL' && targetType === 'CONTROL') return true
-  return false
+  return portsStore.isCompatible(sourceType, targetType)
 }
 
 function getNodePortType(nodeId: string, handleId: string | null, isSource: boolean): string | null {
@@ -2481,6 +2482,8 @@ function validateConnection(params: any): { valid: boolean; error?: string } {
   const targetType = getNodePortType(target, targetHandle, false)
 
   if (sourceType === null || targetType === null) return { valid: false, error: '端口定义缺失' }
+  // 矩阵未加载时给出明确原因, 而不是含糊的「类型不兼容」
+  if (!portsStore.loaded) return { valid: false, error: '端口类型矩阵未加载, 请刷新页面重试' }
   if (!isPortCompatible(sourceType, targetType)) return { valid: false, error: `类型不兼容: ${sourceType} → ${targetType}` }
 
   return { valid: true }

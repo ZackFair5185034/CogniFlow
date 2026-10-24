@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from backend.database import ExecutionHistory, NodeExecutionLog
 from .exceptions import CycleError, ExecutorError, ValidationError
 from .nodes.base import BaseExecutor, ExecutionContext, NodeStatus
+from .port_types import PORT_COMPATIBILITY, is_port_compatible
 from .registry import NodeRegistry, get_registry
 
 # BE-P0-2 (2026-06-19): 用于 finally cleanup 失败时降级告警, 不掩盖主结果
@@ -29,26 +30,8 @@ class RuleGraphExecutor:
     # 保存所有进行中的执行上下文（用于取消操作）
     _active_executions: Dict[int, ExecutionContext] = {}
 
-    # 端口类型兼容性矩阵
-    PORT_COMPATIBILITY = {
-        # 源类型: [兼容的目标类型]
-        # ANY 可连接到所有类型
-        "ANY": ["ANY", "IMAGE", "BBOX", "MASK", "SCORES", "TRIGGER", "CONTROL", "MODEL",
-                "INT", "FLOAT", "BOOLEAN", "STRING", "ARRAY", "OBJECT"],
-        "IMAGE": ["ANY", "IMAGE"],
-        "BBOX": ["ANY", "BBOX"],
-        "MASK": ["ANY", "MASK"],
-        "SCORES": ["ANY", "SCORES"],
-        "TRIGGER": ["ANY", "TRIGGER", "CONTROL", "BOOLEAN"],
-        "CONTROL": ["ANY", "CONTROL", "BOOLEAN"],
-        "MODEL": ["ANY", "MODEL"],
-        "INT": ["ANY", "INT"],
-        "FLOAT": ["ANY", "FLOAT"],
-        "BOOLEAN": ["ANY", "BOOLEAN", "TRIGGER", "CONTROL"],
-        "STRING": ["ANY", "STRING"],
-        "ARRAY": ["ANY", "ARRAY"],
-        "OBJECT": ["ANY", "OBJECT"],
-    }
+    # 端口类型兼容性矩阵 - 唯一事实源在 port_types 模块, 此处仅做向后兼容转发
+    PORT_COMPATIBILITY = PORT_COMPATIBILITY
 
     def __init__(self, db=None, ws_manager=None):
         """初始化执行器。
@@ -157,10 +140,9 @@ class RuleGraphExecutor:
                 first_input = next(iter(target_def.inputs.values()))
                 target_port_type = first_input.type
 
-            # 检查兼容性
+            # 检查兼容性 - 统一走共享矩阵, 与前端连线校验使用同一套规则
             if source_port_type and target_port_type:
-                compatible_types = self.PORT_COMPATIBILITY.get(source_port_type, [])
-                if target_port_type not in compatible_types:
+                if not is_port_compatible(source_port_type, target_port_type):
                     raise ValidationError(
                         f"端口类型不兼容: {source_id}.{source_handle or 'output'} "
                         f"({source_port_type}) → {target_id}.{target_handle or 'input'} "
