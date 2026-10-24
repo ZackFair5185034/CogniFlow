@@ -237,6 +237,17 @@
           <SvgIcon name="panel-left" />
         </button>
 
+        <!-- Task 13: 右侧属性面板开关 (窄屏时收起, 给画布让出空间) -->
+        <button
+          class="tb-icon-btn"
+          :class="{ active: showRightPanel }"
+          :title="showRightPanel ? '收起属性面板' : '展开属性面板'"
+          aria-label="切换属性面板"
+          @click="showRightPanel = !showRightPanel"
+        >
+          <SvgIcon name="edit" />
+        </button>
+
         <div class="tb-divider" />
 
         <!-- 二级操作: 导入/导出/复制 -->
@@ -540,7 +551,7 @@
             :connection-line-style="connectionLineStyle"
             :snap-to-grid="false"
             :snap-grid="[gridSize, gridSize]"
-            :default-viewport="{ x: 0, y: 0, zoom: 0.65 }"
+            :default-viewport="{ x: 0, y: 0, zoom: 0.75 }"
             :pan-on-drag="false"
             :pan-on-scroll="true"
             :zoom-on-scroll="true"
@@ -651,6 +662,20 @@
           />
         </div>
       </div>
+
+      <!-- 右侧栏 (Task 13): 属性面板 + 节点图例
+           常驻而非「选中才出现」—— 布局不跳动, 图例也一直可见(用户靠它认颜色) -->
+      <div
+        v-show="showRightPanel"
+        class="canvas-right"
+      >
+        <NodeInspector
+          :node="inspectorNode"
+          :node-id="inspectorNodeId"
+          @close="handleInspectorClose"
+        />
+        <NodeLegend />
+      </div>
     </div>
 
     <!-- 执行日志面板 -->
@@ -659,7 +684,8 @@
       :class="{ expanded: showExecutionPanel }"
       :style="{
         height: showExecutionPanel ? panelHeight + 'px' : '44px',
-        left: showPalette ? EXPANDED_WIDTH + 'px' : COLLAPSED_WIDTH + 'px'
+        left: showPalette ? EXPANDED_WIDTH + 'px' : COLLAPSED_WIDTH + 'px',
+        right: rightPanelWidth + 'px'
       }"
     >
       <!-- 拖拽调整高度 -->
@@ -922,7 +948,7 @@
 
 <script setup lang="ts">
 import { throttle, debounce } from 'lodash-es'
-import { nextTick, onBeforeUnmount, onMounted, ref, triggerRef } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, triggerRef, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useRuleEngineStore, type RuleNodeData, type NodeDefinition, type AlignMode } from '@/stores/ruleEngine'
 import { useRulePortsStore } from '@/stores/ruleEngine/ports'
@@ -933,6 +959,9 @@ import type { Node, Edge, NodeMouseEvent, EdgeMouseEvent } from '@vue-flow/core'
 // auto-import 的全局 const 在 template 中不被 TS 识别），需要显式 import
 import { SelectionMode } from '@vue-flow/core'
 import RuleNode from '@/components/rule-engine/RuleNode.vue'
+// Task 13: 右侧属性面板 + 节点图例
+import NodeInspector from '@/components/rule-engine/NodeInspector.vue'
+import NodeLegend from '@/components/rule-engine/NodeLegend.vue'
 // Phase 17.1+: NodeConfigEditor 已不再用于右侧面板, 改由 RuleNode LOD 2 内嵌使用,
 // RuleNode.vue 自行 import 该组件, RuleCanvas 不再 import.
 import '@vue-flow/core/dist/style.css'
@@ -944,6 +973,7 @@ import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import { useCogniFlowDrag } from '@/composables/useCogniFlowDrag'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { ruleCanvasPath } from '@/utils/ruleNavigation'
+import { pickQuickAddNodes } from '@/utils/ruleQuickAdd'
 
 const router = useRouter()
 const route = useRoute()
@@ -1087,8 +1117,29 @@ const globalMousePos = ref({ x: 0, y: 0 })
 let trackGlobalMousePos: ((e: MouseEvent) => void) | null = null
 
 // P0-2 (2026-06-19): 草稿自动保存定时器 / beforeunload 句柄
-let draftAutosaveTimer: number | null = null
+// Task 15 (2026-10-24): 定时器 → 防抖计时器 (变更后 1.5s 才写, 连续改动只写最后一次)
+let draftSaveTimer: number | null = null
 let trackBeforeUnload: ((e: BeforeUnloadEvent) => string | undefined) | null = null
+
+/** 草稿写入防抖间隔 (毫秒) */
+const DRAFT_SAVE_DEBOUNCE_MS = 1500
+
+/**
+ * 安排一次草稿写入 (1.5s 防抖)。
+ *
+ * 旧实现是 5s 定时器无条件轮询: 用户停下不操作时也在每 5s 做一次全图序列化,
+ * 而序列化的是含 VueFlow 内部字段的原始节点对象 —— 500 节点图一次几十 ms,
+ * 连续拖拽时更是每 5s 一次卡顿。
+ */
+function scheduleDraftSave() {
+  if (!store.isDirty) return
+  if (draftSaveTimer !== null) window.clearTimeout(draftSaveTimer)
+  draftSaveTimer = window.setTimeout(() => {
+    draftSaveTimer = null
+    if (!store.isDirty) return
+    store.saveDraftToLocalStorage(graphId.value)
+  }, DRAFT_SAVE_DEBOUNCE_MS)
+}
 
 // 复制粘贴
 /** 剪贴板 payload: 复制/剪切时把节点+关联边+鼠标位置一起记下
@@ -1141,6 +1192,15 @@ const panelResizeCleanup = ref<(() => void) | null>(null)
 // palette 折叠后的宽度
 const COLLAPSED_WIDTH = 48
 const EXPANDED_WIDTH = 280
+
+// 右侧栏宽度 (属性面板 + 图例) —— 与左侧 palette 同宽, 视觉平衡
+const RIGHT_PANEL_WIDTH = 280
+
+// 右侧栏是否展开 (窄屏可收起, 给画布让出空间)
+const showRightPanel = ref(true)
+
+/** 右侧栏实际占位宽度 —— 执行日志面板据此右移, 避免盖住属性面板 */
+const rightPanelWidth = computed(() => (showRightPanel.value ? RIGHT_PANEL_WIDTH : 0))
 
 // 节点分类展开状态（reactive，分离避免循环引用）
 const categoryExpanded = reactive({
@@ -1239,12 +1299,48 @@ function toggleCategory(name: string) {
   categoryExpanded[name as keyof typeof categoryExpanded] = !categoryExpanded[name as keyof typeof categoryExpanded]
 }
 
-// 快速添加
-const quickAddNodes = computed(() => nodeDefinitions.value.slice(0, 4))
+// 快速添加 —— 按分类各取一个 (Task 13)
+//
+// 旧实现是 nodeDefinitions.value.slice(0, 4), 取的是注册顺序最靠前的 4 个,
+// 结果全部落在 input / trigger 分类 —— 用户在空画布上根本看不到「检测」「动作」
+// 这类节点, 误以为产品没有这些能力。改为每个分类各出一个代表节点。
+const quickAddNodes = computed(() => pickQuickAddNodes(nodeDefinitions.value))
+
+// ============ Task 13: 右侧属性面板 ============
+
+/**
+ * 属性面板当前聚焦的节点 id。
+ *
+ * 仅在「恰好选中 1 个节点」时给值 —— 多选或未选中时不显示属性面板,
+ * 否则用户会误以为面板里的参数属于某个具体节点。
+ *
+ * Task 14: 读 store.selectedIds (增量维护的 Set), 不再遍历 VueFlow 内部节点数组。
+ */
+const inspectorNodeId = computed<string | null>(() => {
+  if (store.selectedIds.size !== 1) return null
+  for (const id of store.selectedIds) return id
+  return null
+})
+
+/** 属性面板节点数据 —— 从 store 取, 保证读到最新 config */
+const inspectorNode = computed<RuleNodeData | null>(() => {
+  const id = inspectorNodeId.value
+  if (!id) return null
+  const node = nodes.value.find(n => n.id === id)
+  return (node?.data as RuleNodeData) ?? null
+})
+
+/** 关闭属性面板 → 取消选中 */
+function handleInspectorClose() {
+  const sel = getSelectedNodes.value as any[]
+  if (sel.length > 0) removeSelectedNodes(sel)
+}
 
 // P1-2 (2026-06-19): 对齐按钮可用性 (≥2 选中可对齐, ≥3 选中可等距分布)
-const canAlign = computed(() => (getSelectedNodes.value as any[]).length >= 2)
-const canDistribute = computed(() => (getSelectedNodes.value as any[]).length >= 3)
+// Task 14: 改读 store.selectedIds —— getSelectedNodes 是对 VueFlow 内部 nodes 的
+//   O(N) 过滤 computed, 拖拽时每帧都会重算。
+const canAlign = computed(() => store.selectedIds.size >= 2)
+const canDistribute = computed(() => store.selectedIds.size >= 3)
 
 function handleAlign(mode: AlignMode) {
   const moved = store.alignSelectedNodes(mode, screenToFlowCoordinate)
@@ -2050,34 +2146,33 @@ function handleSelectionEnd(_event: any) {
   // 关键修复: 不依赖 store.nodes[].dimensions (Phase 17.5 诊断确认:
   //   store.dimensions 不会从 vue-flow 内部回写, fallback 200x80 比真实 280x222 小
   //   → 命中区域偏小, 用户必须拖更宽才能框中节点)
-  // 直接遍历 .vue-flow__node[data-id] DOM 元素, 用 getBoundingClientRect() 拿
-  // 真实屏幕位置 + 用元素 style.transform 读 computedPosition 画布坐标
-  // 全程都在容器坐标系下做 AABB 比对 (避免 zoom 反变换的浮点误差)
+  // Task 16: 进一步去掉 DOM 依赖 —— 命中判定完全走数据层 (见下)。
   const container = flowContainer.value
   if (!container) return
   const cBounds = container.getBoundingClientRect()
-  const flowLeft   = containerRect.x
-  const flowTop    = containerRect.y
-  const flowRight  = containerRect.x + containerRect.width
-  const flowBottom = containerRect.y + containerRect.height
 
-  const hitIds = new Set<string>()
-  const nodeEls = container.querySelectorAll<HTMLElement>('.vue-flow__node[data-id]')
-  for (const el of nodeEls) {
-    const id = el.getAttribute('data-id')
-    if (!id) continue
-    const r = el.getBoundingClientRect()
-    // 节点容器像素矩形
-    const cLeft = r.left   - cBounds.left
-    const cTop  = r.top    - cBounds.top
-    const cRight= r.right  - cBounds.left
-    const cBot  = r.bottom - cBounds.top
-    // AABB 相交 (partial 模式)
-    if (cLeft < flowRight && cRight > flowLeft &&
-        cTop  < flowBottom && cBot   > flowTop) {
-      hitIds.add(id)
-    }
-  }
+  // 框选命中: 数据层判定 (Task 16) —— 不再依赖 DOM
+  //
+  // 旧实现遍历 `.vue-flow__node[data-id]` 做 getBoundingClientRect AABB 相交:
+  //   1) 框不到视口外的节点 (DOM 里没有它们的元素) —— 纯缺陷;
+  //   2) 每次框选结束都强制一次布局。
+  // 现在把选区换算到画布坐标, 交给 store.nodesInRect 做 O(N) 数据层判定。
+  //
+  // 坐标换算: 选区起止是容器坐标 → 加容器偏移回屏幕坐标 → screenToFlowCoordinate 转画布坐标。
+  const startFlow = screenToFlowCoordinate({
+    x: cBounds.left + start.x,
+    y: cBounds.top + start.y
+  })
+  const endFlow = screenToFlowCoordinate({
+    x: cBounds.left + end.x,
+    y: cBounds.top + end.y
+  })
+  const hitIds = new Set<string>(store.nodesInRect({
+    x: startFlow.x,
+    y: startFlow.y,
+    width: endFlow.x - startFlow.x,
+    height: endFlow.y - startFlow.y
+  }))
 
   // Phase 18: 加选模式 = 保留旧选中, 合并新命中
   // 普通模式 = 旧选中被新命中完全替换 (修 BUG-3: 未命中节点的反选)
@@ -2099,7 +2194,7 @@ function handleSelectionEnd(_event: any) {
 }
 
 /**
- * 把 selectedIds 同步到 vue-flow 内部 GraphNode.selected
+ * 把目标选中集合同步到 vue-flow 内部 GraphNode.selected
  * (Phase 19.7+ 重构: 走 addSelectedNodes/removeSelectedNodes 官方 API, 不再 mutate)
  *
  * - Phase 17.5 旧版: 同时改 store.nodes[i].selected (shallowRef 死路) + flowNode.selected (直接 mutate)
@@ -2107,21 +2202,26 @@ function handleSelectionEnd(_event: any) {
  *   addSelectedNodes 链路被切, 部分节点 selected class 没刷新)
  * - 新版: 走 VueFlow 官方 diff 语义 — 算 toAdd/toRemove → add/remove
  *   VueFlow 内部维护 flowNode.selected reactive 状态 + DOM .selected class 联动
- *   store.nodes[i].selected 不再维护 (因为它压根不参与显示)
+ *
+ * BUG 修复 (Task 14, 2026-10-24): VueFlow 1.48 的 addSelectedNodes 在**非 multi 模式**下
+ *   实际是「替换选中集」语义 —— 实现是 getSelectionChanges(nodeLookup, new Set(传入节点)),
+ *   会把**所有**不在传入集合里的节点置为未选中。
+ *   旧实现只传增量 (toAdd = 最终集合 - 当前集合), 于是:
+ *   「已选中 A, 再框选一个包含 A 的区域」→ A 被 addSelectedNodes([B]) 顺带取消。
+ *   现在传**完整目标集合**, 语义与函数名一致。
  */
 function syncSelectionToStoreNodes(selectedIds: Set<string>) {
   const currentlySelected = getSelectedNodes.value as any[]
-  const currentlySelectedIds = new Set(currentlySelected.map((n) => n.id))
-  const toAdd: any[] = []
+  // 需要取消选中的 (不在目标集合里)
   const toRemove: any[] = []
   for (const n of currentlySelected) {
     if (!selectedIds.has(n.id)) toRemove.push(n)
   }
+  // 需要选中的 = 目标集合里的**全部**节点 (addSelectedNodes 是替换语义, 不能只传增量)
+  const toAdd: any[] = []
   for (const id of selectedIds) {
-    if (!currentlySelectedIds.has(id)) {
-      const flowNode = findNode(id) as any
-      if (flowNode) toAdd.push(flowNode)
-    }
+    const flowNode = findNode(id) as any
+    if (flowNode) toAdd.push(flowNode)
   }
   if (toRemove.length > 0) removeSelectedNodes(toRemove)
   if (toAdd.length > 0) addSelectedNodes(toAdd)
@@ -2338,12 +2438,23 @@ onMounted(async () => {
     console.error('草稿恢复检查失败:', err)
   }
 
-  // P0-2 (2026-06-19): 启动定时草稿 (每 5s, 仅在 dirty 时写 localStorage)
-  draftAutosaveTimer = window.setInterval(() => {
-    if (store.isDirty) {
-      store.saveDraftToLocalStorage(graphId.value)
+  // P0-2 (2026-06-19) + Task 15: 草稿自动保存 —— 监听变更计数, 1.5s 防抖写一次。
+  // 只在"有未保存改动"时写; 保存成功后 isDirty 转 false → 取消待写入的计时器。
+  // 注意: 必须在草稿恢复检查**之后**再挂监听, 否则 loadGraph 的历史入栈会
+  // 抢先触发一次写入, 把用户还没来得及确认的草稿覆盖掉。
+  watch(
+    () => store.dirtyTick,
+    () => {
+      if (!store.isDirty) {
+        if (draftSaveTimer !== null) {
+          window.clearTimeout(draftSaveTimer)
+          draftSaveTimer = null
+        }
+        return
+      }
+      scheduleDraftSave()
     }
-  }, 5000)
+  )
 
   // P0-2 (2026-06-19): beforeunload 拦截未保存
   trackBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -2364,10 +2475,14 @@ onBeforeUnmount(() => {
     window.removeEventListener('mousemove', trackGlobalMousePos)
     trackGlobalMousePos = null
   }
-  // P0-2 (2026-06-19): 清理定时草稿 + beforeunload
-  if (draftAutosaveTimer) {
-    clearInterval(draftAutosaveTimer)
-    draftAutosaveTimer = null
+  // P0-2 (2026-06-19): 清理草稿保存计时器 + beforeunload
+  if (draftSaveTimer !== null) {
+    window.clearTimeout(draftSaveTimer)
+    draftSaveTimer = null
+    // 卸载前若仍有未保存改动, 立即落一次草稿 (防抖窗口内的最后改动不能丢)
+    if (store.isDirty) {
+      store.saveDraftToLocalStorage(graphId.value)
+    }
   }
   if (trackBeforeUnload) {
     window.removeEventListener('beforeunload', trackBeforeUnload)
@@ -2653,11 +2768,25 @@ function handleNodesChange(changes: any[]) {
     // 撤销回到 drag 前的位置是用户期望行为。
   }
 
-  // === 阶段 3: 其他 change 走 VueFlow 完整重算路径（低频）===
-  if (meaningful.length === 0) return
-  const newNodes = applyVueFlowNodeChanges(meaningful)
+  // === 阶段 3: select 走增量路径, add/remove 走完整重算路径 ===
+  //
+  // Task 14 (2026-10-24): 旧实现把 select 也塞进 applyVueFlowNodeChanges,
+  //   导致每次选中都整体替换 nodes 数组 —— 500 节点图上点一下 = 全数组克隆
+  //   + VueFlow 整图 vdom diff。
+  // 现在 select 只做两件事: 改目标节点的 data.selected + 维护 store.selectedIds,
+  //   nodes 数组引用不变, VueFlow 不会重渲染整图。
+  //   (VueFlow 1.48 内部用 selectedNodeIds + node.selected 管理选中态,
+  //    它自己已经改好了, 不需要我们再把数组喂回去。)
+  const selectChanges = meaningful.filter(c => c.type === 'select')
+  const structuralChanges = meaningful.filter(c => c.type !== 'select')
+  for (const c of selectChanges) {
+    store.setNodeSelected(c.id, !!c.selected)
+  }
+  if (structuralChanges.length === 0) return
+
+  const newNodes = applyVueFlowNodeChanges(structuralChanges)
   // remove 类型：附带清理孤立边 + 保存历史
-  const hasRemoval = meaningful.some(c => c.type === 'remove')
+  const hasRemoval = structuralChanges.some(c => c.type === 'remove')
   if (hasRemoval) {
     const remainingIds = new Set(newNodes.map(n => n.id))
     store.edges = store.edges.filter((e: Edge) =>
@@ -2665,7 +2794,7 @@ function handleNodesChange(changes: any[]) {
     ) as any
     // Phase 17.1+: 同步清理展开状态 (删除节点时, 它的 LOD 2 展开态也得收)
     // 之前是清 selectedNodeId (右侧面板) — 现在是清 expandedNodeIds (内嵌配置)
-    const removedIds = new Set(meaningful.filter(c => c.type === 'remove').map(c => c.id))
+    const removedIds = new Set(structuralChanges.filter(c => c.type === 'remove').map(c => c.id))
     if (removedIds.size > 0 && store.expandedNodeIds.size > 0) {
       let changed = false
       for (const id of removedIds) {
@@ -2675,6 +2804,10 @@ function handleNodesChange(changes: any[]) {
         }
       }
       if (changed) store.syncExpandedNodeIds()
+    }
+    // Task 14: 删除的节点不能留在选中集合里 (否则属性面板会指向一个不存在的节点)
+    for (const id of removedIds) {
+      store.setNodeSelected(id, false)
     }
   }
   store.nodes = newNodes as any
@@ -4117,6 +4250,22 @@ $panel-header-height: 44px;
     radial-gradient(circle, #3a3a4a 1px, transparent 1px);
   background-size: 30px 30px;
   background-position: 0 0;
+}
+
+// 右侧栏 (Task 13): 属性面板 + 节点图例
+// 宽度与左侧 palette 对齐; 通过工具栏按钮可收起, 优先保证画布可用面积
+.canvas-right {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+  background: #0e0e14;
+  border-left: 1px solid #1e1e2e;
+  z-index: 50;
+  position: relative;
 }
 
 .flow-container {

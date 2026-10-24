@@ -292,6 +292,8 @@ export interface RuleNodeData {
   label?: string
   /** 节点分类 */
   category: string
+  /** 节点功能描述（来自节点定义, 用于属性面板展示） */
+  description?: string
   /** 输入端口定义 */
   inputs?: NodePort[]
   /** 输出端口定义 */

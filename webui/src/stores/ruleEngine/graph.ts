@@ -19,7 +19,7 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed, shallowRef, triggerRef, markRaw, toRaw } from 'vue'
+import { ref, computed, shallowRef, triggerRef, markRaw, toRaw, reactive } from 'vue'
 import { ruleEngineApi, modelApi } from '@/api'
 import type {
   NodeDefinition as NodeDefinitionBase,
@@ -143,10 +143,39 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
   /** PERF-8 (2026-06-19): 维护"已索引的 edge id"辅助 Set, 供 _indexRebuild diff 使用 */
   const _indexedEdgeIds = new Set<string>()
 
+  /**
+   * 已索引的边 id → 边对象 (Task 15, 2026-10-24)
+   *
+   * 用途: _indexRebuild 要把「被删掉的边」从句柄索引里摘掉, 必须知道那条边的
+   * source/target/handle 信息。旧实现用 `edges.value.find(e => e.id === oldId)` 找,
+   * 但被删的边此时**已经不在 edges.value 里** → find 永远返回 undefined →
+   * 句柄索引残留 → 换图后上一张图用过的端口仍显示"已连接", 且连线校验会拒绝重连。
+   *
+   * 同时把 _indexRebuild 从 O(E²) 降为 O(E)。
+   */
+  const _indexedEdges = new Map<string, { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>()
+
   // FIX (BUG-4 2026-06-19): 节点配置变更的响应式信号
   // 之前 updateNodeConfig 不 trigger, NodeConfigEditor (LOD 2 内嵌) 的 computed 链断裂.
-  // 现在用独立 configVersion shallowRef, 精确触发 Editor, 不影响 VueFlow 整图 diff.
+  //
+  // Task 14 (2026-10-24): 改为**按节点粒度**的版本号 Map。
+  // 旧实现是全局计数器 —— 改 A 节点的参数会让所有节点的 Editor computed 全部失效,
+  // 80 节点图上每敲一个键就是 80 次无谓重算。reactive Map 的 get/set 只通知该 key 的依赖,
+  // 只有被改的那个节点会重算。
+  const _configVersionMap = reactive(new Map<string, number>())
+
+  /** 配置变更总次数 (诊断用) —— 不再作为响应式触发器, 见 _configVersionMap */
   const _configVersion = shallowRef(0)
+
+  /**
+   * 读取某节点的配置版本号 —— 组件在 computed 里读它建立**按节点**的响应式依赖。
+   *
+   * @param nodeId 节点 id
+   * @returns 该节点的配置变更次数 (从未改过为 0)
+   */
+  function configVersionOf(nodeId: string): number {
+    return _configVersionMap.get(nodeId) ?? 0
+  }
 
   function _indexAddEdge(e: { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) {
     if (e.sourceHandle) {
@@ -156,6 +185,7 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
       _connectedHandleIndex.add(`${e.target}:${e.targetHandle}:target`)
     }
     _indexedEdgeIds.add(e.id)
+    _indexedEdges.set(e.id, e)
   }
 
   function _indexRemoveEdge(e: { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) {
@@ -166,11 +196,14 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
       _connectedHandleIndex.delete(`${e.target}:${e.targetHandle}:target`)
     }
     _indexedEdgeIds.delete(e.id)
+    _indexedEdges.delete(e.id)
   }
 
   /**
    * 全量重建索引 (loadGraph / undo snapshot 路径调用)
    * PERF-8 (2026-06-19): diff 模式 — 只 add/remove 变更的边, 不再 O(2E) clear + 重建
+   * Task 15 (2026-10-24): 移除边时从 _indexedEdges 按 id 取回端口信息 (O(1)),
+   *   不再用 edges.value.find (O(E) → 整体 O(E²)), 且修掉了「被删边找不到 → 索引残留」。
    */
   function _indexRebuild() {
     const oldIds = _indexedEdgeIds
@@ -180,7 +213,7 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     // 1) 移除被删的边
     for (const oldId of oldIds) {
       if (!newIds.has(oldId)) {
-        const oldEdge = edges.value.find((e) => e.id === oldId)
+        const oldEdge = _indexedEdges.get(oldId)
         if (oldEdge) _indexRemoveEdge(oldEdge)
       }
     }
@@ -190,6 +223,43 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
         _indexAddEdge(e)
       }
     }
+  }
+
+  /**
+   * 数据层框选命中 - 返回命中节点 id。
+   *
+   * 旧实现走 DOM 查询 (`.vue-flow__node[data-id]` + getBoundingClientRect),
+   * 有两个问题:
+   *   1. **框不到视口外的节点** —— DOM 里根本没有它们的元素 (纯缺陷, 与节点数量无关);
+   *   2. 每次框选结束都要对所有可见节点做 getBoundingClientRect, 强制布局。
+   *
+   * 现在直接遍历节点数据判定, O(N) 且与渲染无关。
+   *
+   * 命中判定: 节点锚点 (position, 即节点左上角) 落在矩形内。
+   * 注: 这是相对改造前「节点盒与矩形相交(partial)」的**语义收窄** ——
+   *   框选矩形需要盖住节点左上角才算命中。矩形宽高为 0 时视为空选区。
+   */
+  function nodesInRect(rect: {
+    x: number; y: number; width: number; height: number
+  }): string[] {
+    // 反向拖拽 → 宽高为负, 取绝对值归一化; 宽或高为 0 → 退化选区, 无命中
+    const w = Math.abs(rect.width)
+    const h = Math.abs(rect.height)
+    if (w <= 0 || h <= 0) return []
+    const left = Math.min(rect.x, rect.x + rect.width)
+    const top = Math.min(rect.y, rect.y + rect.height)
+    const right = Math.max(rect.x, rect.x + rect.width)
+    const bottom = Math.max(rect.y, rect.y + rect.height)
+
+    const hit: string[] = []
+    for (const node of nodes.value) {
+      const cx = node.position?.x ?? 0
+      const cy = node.position?.y ?? 0
+      if (cx >= left && cx <= right && cy >= top && cy <= bottom) {
+        hit.push(node.id)
+      }
+    }
+    return hit
   }
 
   /** 暴露的只读 connectedHandleIndex — computed 包装避免外部直接 mutate */
@@ -222,6 +292,41 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     return map
   })
 
+  /**
+   * 选中节点 id 集合 —— 增量维护 (Task 14)
+   *
+   * 旧实现: 每次 select change 都 applyVueFlowNodeChanges + 整体替换 nodes 数组,
+   *   500 节点图上点一下 = 全数组克隆 + VueFlow 整图 vdom diff。
+   * 新实现: 只 mutate 目标节点的 data.selected + 增删本集合, nodes 数组引用不变。
+   *
+   * 用 reactive(Set) 而非 shallowRef(Set): Vue 的集合代理按 key 精确通知,
+   *   删除一个 id 不会让其他 id 的依赖失效。
+   */
+  const selectedIds = reactive(new Set<string>())
+
+  /**
+   * 增量设置节点选中态 —— 不替换 nodes 数组引用。
+   *
+   * @param nodeId 节点 id
+   * @param selected 是否选中
+   */
+  function setNodeSelected(nodeId: string, selected: boolean) {
+    const node = nodeById.value.get(nodeId)
+    if (node?.data) {
+      ;(node.data as RuleNodeData).selected = selected
+    }
+    if (selected) {
+      selectedIds.add(nodeId)
+    } else {
+      selectedIds.delete(nodeId)
+    }
+  }
+
+  /** 清空选中集合 (加载新图时用) */
+  function clearSelection() {
+    selectedIds.clear()
+  }
+
   /** 是否可以撤销 */
   const canUndo = computed(() => historyIndex.value > 0)
 
@@ -237,9 +342,20 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
    */
   const _configDirty = shallowRef(false)
 
+  /**
+   * 变更计数 (Task 15) —— 每次图变更自增。
+   *
+   * 用途: 草稿自动保存需要「有任意改动就重置防抖计时器」的信号。
+   * - `isDirty` 是布尔量: 连续两次改动它都保持 true, watch 它不会二次触发;
+   * - `historyIndex` 只覆盖结构类改动, 覆盖不到 `updateNodeConfig` 这类配置改动。
+   * 所以另设一个「每次改动必自增」的计数器作为统一变更信号。
+   */
+  const _dirtyTick = shallowRef(0)
+
   /** 标记为未保存 */
   function markDirty(): void {
     _configDirty.value = true
+    _dirtyTick.value++
   }
 
   /** 清除未保存标记(保存成功后调用) */
@@ -258,6 +374,14 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
 
   /** 锁定期间的 LOD 缓存, drag 期间维持稳定 (避免切换抖动破坏 v-memo) */
   const lodLevelMapCache = new Map<string, 0 | 1>()
+
+  /**
+   * LOD 展开阈值 (Task 16: 0.65 → 0.75)。
+   *
+   * 提高阈值 = 中等缩放级别下展开的节点更少 → 挂载的 NodeConfigEditor
+   * (每个带 el-select + el-tooltip + el-scrollbar) 更少 → 缩放时的长任务更短。
+   */
+  const LOD_EXPAND_THRESHOLD = 0.75
 
   /** 全局稳定的 LOD 等级 (Phase 19.3+: 单阈值两级) */
   const currentGlobalLod = ref<0 | 1>(1)
@@ -291,8 +415,8 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     if (!isLodLocked) {
       const cur = currentGlobalLod.value
       let next: 0 | 1 = cur
-      if (cur === 0 && zoom >= 0.65) next = 1
-      else if (cur === 1 && zoom < 0.65) next = 0
+      if (cur === 0 && zoom >= LOD_EXPAND_THRESHOLD) next = 1
+      else if (cur === 1 && zoom < LOD_EXPAND_THRESHOLD) next = 0
       if (next !== cur) currentGlobalLod.value = next
     }
     const globalLod = currentGlobalLod.value
@@ -454,6 +578,9 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     const res = await ruleEngineApi.getGraphDetail(id)
     const data = res.data
 
+    // 换图 = 旧选中态失效 (Task 14: 选中集合是增量维护的, 必须显式清空)
+    selectedIds.clear()
+
     graphMeta.value = {
       id: data.id,
       name: data.name,
@@ -590,12 +717,36 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
 
   // ============ 草稿 (P0-2 2026-06-19) ============
 
+  /**
+   * 保存草稿到 localStorage (Task 15: 载荷瘦身)。
+   *
+   * 旧实现直接序列化 `nodes.value` / `edges.value` 原始对象 —— 里面塞着 VueFlow
+   * 的内部字段 (dimensions / handleBounds / computedPosition / internals / events ...),
+   * 500 节点图序列化出来轻易上百 KB, localStorage 只有 ~5MB 配额, 写入失败还被
+   * catch 静默吞掉 → 草稿根本没存上, 用户以为有草稿保护其实没有。
+   *
+   * 现在只保留业务字段: 节点 (id / 组件类型 / 位置 / data) + 边 (id / 端点 / 端口)。
+   * 恢复路径 (store.nodes = draft.nodes) 只需要这些。
+   */
   function saveDraftToLocalStorage(graphId: number): boolean {
     try {
       const variablesStore = useRuleVariablesStore()
       const payload = {
-        nodes: nodes.value,
-        edges: edges.value,
+        nodes: nodes.value.map((n) => ({
+          id: n.id,
+          // 组件类型 ('ruleNode') —— 恢复后 VueFlow 才知道用哪个组件渲染
+          type: n.type,
+          position: n.position,
+          data: { ...(n.data ?? {}) } as RuleNodeData,
+        })),
+        edges: edges.value.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          sourceHandle: e.sourceHandle,
+          targetHandle: e.targetHandle,
+          type: e.type ?? 'default',
+        })),
         variables: variablesStore.variables,
         graphName: graphMeta.value?.name,
         savedAt: Date.now(),
@@ -858,8 +1009,11 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
   }
 
   /**
-   * 更新节点配置 - 内部 mutate + 触发 _configVersion（精确信号）.
-   * FIX (BUG-4 2026-06-19): 不 triggerRef(nodes), 仅精确触发 _configVersion
+   * 更新节点配置 - 内部 mutate + 触发该节点的配置版本号（精确信号）。
+   *
+   * FIX (BUG-4 2026-06-19): 不 triggerRef(nodes), 仅精确触发配置变更信号
+   * Task 14 (2026-10-24): 信号从全局计数器改为按节点粒度, 避免改一个节点
+   *   触发全图所有节点配置区的重算。
    */
   function updateNodeConfig(nodeId: string, key: string, value: VariableDefaultValue) {
     const node = nodes.value.find(n => n.id === nodeId)
@@ -868,6 +1022,7 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
         node.data.config = {} as Record<string, VariableDefaultValue>
       }
       node.data.config[key] = value
+      _configVersionMap.set(nodeId, (_configVersionMap.get(nodeId) ?? 0) + 1)
       _configVersion.value++
       // 配置改动要标脏: 旧实现不写历史栈, isDirty 看不到它
       // (用户改了参数以为保存了, 实际没保存)
@@ -940,6 +1095,7 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     nodes.value = nodes.value.filter(n => n.id !== nodeId)
     _nodeByIdMarkDirty()
     edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
+    selectedIds.delete(nodeId)
     if (expandedNodeIds.value.has(nodeId)) {
       expandedNodeIds.value.delete(nodeId)
       triggerRef(expandedNodeIds)
@@ -957,6 +1113,7 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     edges.value = edges.value.filter(e => !idSet.has(e.source) && !idSet.has(e.target))
     for (const e of removedEdges) _indexRemoveEdge(e)
     triggerRef(_connectedHandleVersion)
+    for (const id of idSet) selectedIds.delete(id)
     if (expandedNodeIds.value.size > 0) {
       let changed = false
       for (const id of idSet) {
@@ -1277,6 +1434,8 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
       historyStack.value.shift()
       historyIndex.value--
     }
+    // Task 15: 结构性变更也要自增变更计数 (草稿自动保存靠它重置防抖计时器)
+    _dirtyTick.value++
   }
 
   function recordMoveHistory(nodeId: string, from: { x: number; y: number }, to: { x: number; y: number }) {
@@ -1433,6 +1592,16 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     lodLevelMap,
     getLodLevel,
     configVersion: _configVersion,
+    configVersionOf,
+    dirtyTick: _dirtyTick,
+
+    // 数据层框选命中 (Task 16)
+    nodesInRect,
+
+    // 选中态 (Task 14: 增量维护)
+    selectedIds,
+    setNodeSelected,
+    clearSelection,
 
     // 数据加载
     fetchNodeDefinitions,

@@ -101,6 +101,16 @@ export const useRuleEngineStore = defineStore('ruleEngine', () => {
     nodeDefinitionsByCategory: graphRefs.nodeDefinitionsByCategory,
     lodLevelMap: graphRefs.lodLevelMap,
     configVersion: graphRefs.configVersion,
+    configVersionOf: graph.configVersionOf,
+    dirtyTick: graphRefs.dirtyTick,
+
+    // ===== 选中态 (Task 14: 增量维护) =====
+    selectedIds: graphRefs.selectedIds,
+    setNodeSelected: graph.setNodeSelected,
+    clearSelection: graph.clearSelection,
+
+    // ===== 数据层框选命中 (Task 16) =====
+    nodesInRect: graph.nodesInRect,
 
     // ===== execution store state =====
     executionState: executionRefs.executionState,

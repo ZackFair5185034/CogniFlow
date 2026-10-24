@@ -4,9 +4,9 @@
  *
  * 覆盖 store.lodLevelMap (Phase 19.3 反转):
  * - LOD 0/1 两级 (LOD 2 概念删除, 配置只受 expandedNodeIds 集合的反转语义控制)
- * - 单阈值 0.65, 无 hysteresis 死区
- * - 升档 LOD 0 → 1: zoom ≥ 0.65
- * - 降档 LOD 1 → 0: zoom < 0.65
+ * - 单阈值 0.75 (Task 16: 由 0.65 上调, 减少中等缩放下的展开节点数), 无 hysteresis 死区
+ * - 升档 LOD 0 → 1: zoom ≥ 0.75
+ * - 降档 LOD 1 → 0: zoom < 0.75
  * - expandedNodeIds 含义反转 = "已折叠节点"
  *   - 默认空集 = 全节点全展开 (280px, 配置可见)
  *   - 双击加入 = 折叠 (200px, 配置 hidden)
@@ -60,21 +60,28 @@ describe('LOD 等级决策 (Phase 19.3+: 单阈值两级, 默认全展开)', () 
     expect(levels.every((l) => l === 1)).toBe(true)
   })
 
-  it('zoom 0.64 (低于 0.65 阈值) → 全 LOD 0', () => {
+  it('zoom 0.74 (低于 0.75 阈值) → 全 LOD 0', () => {
     const s = useRuleEngineStore()
     s.nodes = makeNodes(5)
-    s.viewportZoom = 0.64
+    s.viewportZoom = 0.74
     expect(s.lodLevelMap.get('n0')).toBe(0)
   })
 
-  it('zoom 0.65 (升档阈值) → 全 LOD 1', () => {
+  it('zoom 0.75 (升档阈值) → 全 LOD 1', () => {
     const s = useRuleEngineStore()
     s.nodes = makeNodes(5)
-    s.viewportZoom = 0.65
+    s.viewportZoom = 0.75
     expect(s.lodLevelMap.get('n0')).toBe(1)
   })
 
-  it('zoom 0.50 → 全 LOD 0 (低于 0.65 阈值)', () => {
+  it('zoom 0.65 (低于 0.75 阈值, 旧阈值值) → 全 LOD 0', () => {
+    const s = useRuleEngineStore()
+    s.nodes = makeNodes(5)
+    s.viewportZoom = 0.65
+    expect(s.lodLevelMap.get('n0')).toBe(0)
+  })
+
+  it('zoom 0.50 → 全 LOD 0 (低于 0.75 阈值)', () => {
     const s = useRuleEngineStore()
     s.nodes = makeNodes(5)
     s.viewportZoom = 0.50

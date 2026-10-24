@@ -121,7 +121,7 @@
            拖拽排除由 useCogniFlowDrag.ts 的 d3-drag filter 兜底:
            `if (target.closest('.node-config-section')) return false`
 
-         PERF (2026-09-11): 增加 lodLevel >= 1 门控 —— LOD 0 (zoom < 0.65) 真卸载配置区.
+         PERF (2026-09-11): 增加 lodLevel >= 1 门控 —— LOD 0 (zoom < 0.75, Task 16 由 0.65 上调) 真卸载配置区.
            原因: NodeConfigEditor 会挂载 Element Plus 表单控件 + el-tooltip + el-scrollbar,
            每个 el-select 额外产生 2 个 el-popper. 实测 49 个可见节点 = 49 el-select /
            98 el-popper / 49 el-scrollbar. 这些实例在布局变化时集体重算 (floating-ui
