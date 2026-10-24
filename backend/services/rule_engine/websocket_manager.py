@@ -38,6 +38,13 @@ class RuleExecutionConnectionManager:
         # 批处理刷新任务
         self._flush_task: Optional[asyncio.Task] = None
 
+        # 回放缓冲: 无订阅者时暂存消息, 供后来订阅的连接补齐
+        # (修复前端「先 POST 执行再连 WS」的竞态窗口导致的消息丢失)
+        self._replay_buffer: Dict[int, List[dict]] = {}
+
+        # 回放缓冲上限(每个 execution_id 最多保留的消息条数)
+        self.REPLAY_BUFFER_SIZE: int = 200
+
     async def connect(self, websocket: WebSocket, execution_ids: list[int] = None):
         """客户端连接并订阅执行ID列表。"""
         await websocket.accept()
@@ -49,6 +56,10 @@ class RuleExecutionConnectionManager:
                 if eid not in self._subscriptions:
                     self._subscriptions[eid] = set()
                 self._subscriptions[eid].add(websocket)
+
+        # 连接即回放缓冲消息(修复订阅竞态)
+        for eid in execution_ids or []:
+            await self._replay_for(websocket, eid)
 
     async def disconnect(self, websocket: WebSocket):
         """客户端断开连接。"""
@@ -125,6 +136,9 @@ class RuleExecutionConnectionManager:
                 subscribers = self._subscriptions.get(execution_id, set()).copy()
 
             if not subscribers:
+                # 无订阅者: 消息不丢弃, 存入回放缓冲供后来订阅者补齐。
+                # 修复前端「先 POST 执行再连 WS」的竞态窗口导致的消息丢失。
+                self._store_for_replay(execution_id, messages)
                 continue
 
             # 合并消息为批量消息
@@ -145,6 +159,50 @@ class RuleExecutionConnectionManager:
                     pass  # 忽略发送失败的连接
 
             await asyncio.gather(*[send_to(ws) for ws in subscribers], return_exceptions=True)
+
+    def _store_for_replay(self, execution_id: int, messages: List[dict]) -> None:
+        """把无订阅者时的消息存入回放缓冲(超上限时裁掉最旧的)。"""
+        buffer = self._replay_buffer.setdefault(execution_id, [])
+        buffer.extend(messages)
+        overflow = len(buffer) - self.REPLAY_BUFFER_SIZE
+        if overflow > 0:
+            del buffer[:overflow]
+
+    async def subscribe_with_replay(self, websocket: WebSocket, execution_id: int) -> int:
+        """订阅指定 execution_id 并回放缓冲中的历史消息。
+
+        Args:
+            websocket: 要订阅的连接
+            execution_id: 执行 ID
+
+        Returns:
+            回放的消息条数
+        """
+        await self.subscribe(websocket, execution_id)
+        return await self._replay_for(websocket, execution_id)
+
+    async def _replay_for(self, websocket: WebSocket, execution_id: int) -> int:
+        """把回放缓冲中的消息发给指定连接, 并清空该缓冲。
+
+        Args:
+            websocket: 目标连接
+            execution_id: 执行 ID
+
+        Returns:
+            实际回放的消息条数
+        """
+        async with self._lock:
+            messages = list(self._replay_buffer.get(execution_id, []))
+            self._replay_buffer.pop(execution_id, None)
+
+        for message in messages:
+            try:
+                await websocket.send_text(json.dumps(message, ensure_ascii=False))
+            except Exception:
+                # 单条回放失败不阻断后续消息
+                continue
+
+        return len(messages)
 
     async def send_node_started(self, execution_id: int, node_id: str, node_type: str):
         """广播节点开始执行。"""

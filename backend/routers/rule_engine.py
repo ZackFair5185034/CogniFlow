@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """规则引擎 API 路由 - 提供规则图的 CRUD 和执行接口。"""
+import json
+import logging
 import secrets
 from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
+from backend.database import ExecutionHistory, get_db
 from backend.schemas import (
     RuleGraphCreate,
     RuleGraphUpdate,
@@ -20,6 +22,8 @@ from backend.services.rule_engine import GraphManager, RuleGraphExecutor
 from backend.services.rule_engine.registry import init_builtin_executors
 
 router = APIRouter(prefix="/api/rule-engine", tags=["规则引擎"])
+
+logger = logging.getLogger(__name__)
 
 
 # ============ 节点定义 ============
@@ -399,6 +403,17 @@ async def execute_graph(
         trigger_data=trigger.trigger_data,
     )
 
+    # 延后启动模式: 只登记执行记录, 等前端 WS 订阅完成后再调
+    # POST /executions/{execution_id}/start 真正触发。
+    # 旧顺序(先 POST 执行再连 WS)存在竞态窗口, 执行早期的节点消息会在
+    # 订阅建立前产生并被丢弃, 前端表现为「执行了但什么都没发生」。
+    if trigger.defer_start:
+        return ExecutionResponse(
+            execution_id=execution_id or 0,
+            status="pending",
+            result={"message": "执行已登记, 请先订阅 WebSocket 后再启动"},
+        )
+
     # 在后台异步执行，传入 rule_ws_manager
     from backend.services.rule_engine.websocket_manager import rule_ws_manager
 
@@ -426,7 +441,10 @@ async def execute_graph(
                 if rec:
                     rec.status = "failed"
                     rec.end_time = datetime.now()
-                    rec.error = str(e)
+                    # ExecutionHistory 没有 error 列(只有 status/start_time/end_time/
+                    # trigger_type/trigger_data_json/result_json/logs_json),
+                    # 错误信息写进 result_json 才能真正落库。
+                    rec.result_json = json.dumps({"error": str(e)}, ensure_ascii=False)
                     db.commit()
             except Exception:
                 db.rollback()
@@ -439,7 +457,10 @@ async def execute_graph(
                 if rec:
                     rec.status = "failed"
                     rec.end_time = datetime.now()
-                    rec.error = f"{type(e).__name__}: {str(e)}\n{tb[:500]}"
+                    rec.result_json = json.dumps(
+                        {"error": f"{type(e).__name__}: {str(e)}\n{tb[:500]}"},
+                        ensure_ascii=False,
+                    )
                     db.commit()
             except Exception:
                 db.rollback()
@@ -452,6 +473,75 @@ async def execute_graph(
         execution_id=execution_id or 0,
         status="running",
         result={"message": "执行已启动，请通过 WebSocket 订阅进度"},
+    )
+
+
+@router.post("/executions/{execution_id}/start", response_model=ExecutionResponse)
+async def start_execution(
+    execution_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """启动一个已登记但未开始的执行。
+
+    配合 `POST /execute` 的 `defer_start=True` 使用:
+    前端先连 WebSocket 订阅 execution_id, 再调用本接口真正触发执行,
+    从而消除执行消息早于订阅到达的竞态。
+    """
+    from backend.services.rule_engine.websocket_manager import rule_ws_manager
+
+    record = db.query(ExecutionHistory).filter(ExecutionHistory.id == execution_id).first()
+    if record is None:
+        raise HTTPException(status_code=404, detail="执行记录不存在")
+    if record.status != "pending":
+        raise HTTPException(status_code=409, detail=f"执行状态不允许启动: {record.status}")
+
+    manager = GraphManager(db)
+    graph = manager.get_graph(record.graph_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail="规则图不存在")
+    graph_data = manager.parse_graph_data(graph)
+
+    async def run_execution():
+        ex = RuleGraphExecutor(db, ws_manager=rule_ws_manager)
+        try:
+            # ExecutionHistory 存的是 trigger_data_json(Text), 这里解析回 dict
+            trigger_data = {}
+            if record.trigger_data_json:
+                try:
+                    trigger_data = json.loads(record.trigger_data_json)
+                except (TypeError, ValueError):
+                    trigger_data = {}
+            await ex.execute(
+                graph_data=graph_data,
+                execution_id=execution_id,
+                trigger_type=record.trigger_type,
+                trigger_data=trigger_data,
+            )
+        except Exception as exc:
+            logger.error("执行 %s 启动失败: %s", execution_id, exc, exc_info=True)
+            try:
+                rec = db.query(ExecutionHistory).filter(
+                    ExecutionHistory.id == execution_id
+                ).first()
+                if rec:
+                    rec.status = "failed"
+                    rec.end_time = datetime.now()
+                    rec.result_json = json.dumps(
+                        {"error": str(exc)}, ensure_ascii=False
+                    )
+                    db.commit()
+            except Exception:
+                db.rollback()
+
+    # background_tasks 是路由参数(由 FastAPI 注入), 直接 add_task 即可。
+    # 不要在函数体内重新构造 BackgroundTasks —— 那样 FastAPI 不会执行它。
+    background_tasks.add_task(run_execution)
+
+    return ExecutionResponse(
+        execution_id=execution_id,
+        status="running",
+        result={"message": "执行已启动"},
     )
 
 

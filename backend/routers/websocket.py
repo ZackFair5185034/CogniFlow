@@ -117,7 +117,9 @@ async def websocket_rule_execution(websocket: WebSocket):
             execution_id = msg.get("execution_id")
 
             if action == "subscribe" and execution_id:
-                await rule_ws_manager.subscribe(websocket, execution_id)
+                # 用 subscribe_with_replay: 订阅建立之前产生的消息在无订阅者时被
+                # 存入回放缓冲, 这里补发给客户端, 消除「先触发执行再连 WS」的竞态。
+                await rule_ws_manager.subscribe_with_replay(websocket, execution_id)
             elif action == "unsubscribe" and execution_id:
                 await rule_ws_manager.unsubscribe(websocket, execution_id)
     except WebSocketDisconnect:

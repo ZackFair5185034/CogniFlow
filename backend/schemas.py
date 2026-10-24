@@ -346,6 +346,10 @@ class ExecutionTrigger(BaseModel):
     graph_id: int
     trigger_type: str = "manual"  # yolo/timer/manual/http
     trigger_data: Optional[dict] = None
+    # 延后启动: 为 True 时只创建执行记录并返回 execution_id,
+    # 由前端连上 WebSocket 后再调用 /executions/{execution_id}/start 真正触发。
+    # 用于消除「先 POST 执行再连 WS」的竞态窗口。
+    defer_start: bool = False
 
 
 class ExecutionResponse(BaseModel):

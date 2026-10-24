@@ -1416,6 +1416,15 @@ function disconnectWebSocket() {
 }
 
 function handleWsMessage(msg: any) {
+  // 批量消息: 后端在 16ms 窗口内合并多条消息下发。
+  // 旧实现没有这个分支, 导致批处理窗口内的所有节点事件被丢弃。
+  if (msg?.type === 'batch' && Array.isArray(msg.messages)) {
+    for (const inner of msg.messages) {
+      handleWsMessage(inner)
+    }
+    return
+  }
+
   switch (msg.type) {
     case 'node_started':
       store.setNodeExecutionState(msg.node_id, 'running')
@@ -2959,14 +2968,20 @@ async function handleExecute() {
   showExecutionPanel.value = true
 
   try {
+    // 执行流程: 先登记执行(defer_start) -> 连上 WebSocket -> 再真正启动。
+    // 旧顺序(先 POST 执行再连 WS)存在竞态窗口, 执行早期的节点消息会在
+    // 订阅建立前产生并被丢弃, 前端表现为「执行了但什么都没发生」。
     const res = await ruleEngineApi.execute({
       graph_id: graphId.value,
-      trigger_type: 'manual'
+      trigger_type: 'manual',
+      defer_start: true
     })
 
     const execId = res.data.execution_id
     store.setExecutionId(execId)
     connectWebSocket(execId)
+    // 订阅建立后再触发真正的执行
+    await ruleEngineApi.startExecution(execId)
   } catch (err: any) {
     store.setExecutionStatus('failed')
     store.addExecutionLog({

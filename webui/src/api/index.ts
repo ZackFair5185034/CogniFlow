@@ -241,7 +241,13 @@ export const ruleEngineApi = {
     graph_id: number
     trigger_type?: string
     trigger_data?: object
+    /** 延后启动: 只登记执行记录, 等 WebSocket 订阅后再调 startExecution */
+    defer_start?: boolean
   }) => api.post('/rule-engine/execute', data),
+
+  // 启动一个已登记但未开始的执行(配合 defer_start 消除 WS 订阅竞态)
+  startExecution: (executionId: number) =>
+    api.post(`/rule-engine/executions/${executionId}/start`),
 
   // 执行历史 (P2-D 2026-06-19: 复用于回放对话框)
   listExecutions: (graphId?: number, limit?: number) =>
