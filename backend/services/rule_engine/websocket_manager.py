@@ -109,56 +109,81 @@ class RuleExecutionConnectionManager:
             self._pending_messages[execution_id].append(message)
 
             # 如果没有正在运行的刷新任务，则创建一个
-            if not self._flush_task or self._flush_task.done():
-                self._flush_task = asyncio.create_task(self._flush_messages())
+            self._ensure_flush_task()
+
+    def _ensure_flush_task(self) -> None:
+        """确保存在一个刷新任务（调用方必须已持有 _lock）。
+
+        不能只看 `task.done()`：刷新任务的**发送阶段在锁外**，
+        该阶段到达的消息会进缓冲但没人再触发刷新 —— 消息被永久滞留。
+        典型症状：execution_complete 在上一个批次发送途中到达时被吞掉，
+        前端状态永远停在「执行中」(2026-10-24 走查发现)。
+        刷新任务内部是循环的，会一直把缓冲区清空，所以这里只需保证「有且只有一个」。
+        """
+        if self._flush_task is None or self._flush_task.done():
+            self._flush_task = asyncio.create_task(self._flush_messages())
 
     async def _flush_messages(self):
         """将缓冲的消息批量发送出去。
 
         在 BATCH_WINDOW_SEC 时间窗口结束后，将该时间段内收集的所有消息
         按 execution_id 分组合并后发送。
+
+        循环直到缓冲区真正清空 —— 发送阶段（在锁外）到达的新消息必须
+        还有下一轮来发，否则会永久滞留（见 _ensure_flush_task 的说明）。
         """
-        # 等待一个批处理窗口
-        await asyncio.sleep(self.BATCH_WINDOW_SEC)
+        while True:
+            # 等待一个批处理窗口
+            await asyncio.sleep(self.BATCH_WINDOW_SEC)
 
-        async with self._lock:
-            # 取出所有待发送的消息
-            pending = self._pending_messages
-            self._pending_messages = {}
-
-        # 发送给各个 execution_id 的订阅者
-        for execution_id, messages in pending.items():
-            if not messages:
-                continue
-
-            # 获取订阅者
             async with self._lock:
-                subscribers = self._subscriptions.get(execution_id, set()).copy()
+                # 取出所有待发送的消息
+                pending = self._pending_messages
+                self._pending_messages = {}
 
-            if not subscribers:
-                # 无订阅者: 消息不丢弃, 存入回放缓冲供后来订阅者补齐。
-                # 修复前端「先 POST 执行再连 WS」的竞态窗口导致的消息丢失。
-                self._store_for_replay(execution_id, messages)
+            if not pending:
+                # 本轮无消息可发 —— 与 broadcast 的加锁互斥, 此刻缓冲区为空则收工。
+                # 收工后到达的消息会由新的 broadcast 重新拉起刷新任务。
+                async with self._lock:
+                    if not self._pending_messages:
+                        self._flush_task = None
+                        return
+                # 收工检查与本次加锁之间又来了新消息 —— 继续下一轮
                 continue
 
-            # 合并消息为批量消息
-            if len(messages) == 1:
-                # 只有一条消息，直接发送原消息
-                batch = messages[0]
-            else:
-                # 多条消息，包装为批量消息
-                batch = {"type": "batch", "messages": messages}
+            # 发送给各个 execution_id 的订阅者
+            for execution_id, messages in pending.items():
+                if not messages:
+                    continue
 
-            text = json.dumps(batch, ensure_ascii=False)
+                # 获取订阅者
+                async with self._lock:
+                    subscribers = self._subscriptions.get(execution_id, set()).copy()
 
-            # 并发发送给所有订阅者
-            async def send_to(ws: WebSocket):
-                try:
-                    await ws.send_text(text)
-                except Exception:
-                    pass  # 忽略发送失败的连接
+                if not subscribers:
+                    # 无订阅者: 消息不丢弃, 存入回放缓冲供后来订阅者补齐。
+                    # 修复前端「先 POST 执行再连 WS」的竞态窗口导致的消息丢失。
+                    self._store_for_replay(execution_id, messages)
+                    continue
 
-            await asyncio.gather(*[send_to(ws) for ws in subscribers], return_exceptions=True)
+                # 合并消息为批量消息
+                if len(messages) == 1:
+                    # 只有一条消息，直接发送原消息
+                    batch = messages[0]
+                else:
+                    # 多条消息，包装为批量消息
+                    batch = {"type": "batch", "messages": messages}
+
+                text = json.dumps(batch, ensure_ascii=False)
+
+                # 并发发送给所有订阅者
+                async def send_to(ws: WebSocket):
+                    try:
+                        await ws.send_text(text)
+                    except Exception:
+                        pass  # 忽略发送失败的连接
+
+                await asyncio.gather(*[send_to(ws) for ws in subscribers], return_exceptions=True)
 
     def _store_for_replay(self, execution_id: int, messages: List[dict]) -> None:
         """把无订阅者时的消息存入回放缓冲(超上限时裁掉最旧的)。"""

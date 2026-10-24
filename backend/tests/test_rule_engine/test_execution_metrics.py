@@ -285,6 +285,7 @@ async def test_broadcast_node_executed_passes_metrics(executor):
     await executor._broadcast_node_executed(
         execution_id=1,
         node_id="node-1",
+        node_type="yolo_model",
         status="success",
         outputs={"detections": [1, 2, 3]},
         duration_ms=200,
@@ -296,6 +297,8 @@ async def test_broadcast_node_executed_passes_metrics(executor):
     assert payload["status"] == "success"
     assert payload["duration_ms"] == 200
     assert payload["metrics"] == metrics
+    # node_type 必须带上 —— 前端日志面板按它标注来源节点 (2026-10-24 走查发现)
+    assert payload["node_type"] == "yolo_model"
 
 
 @pytest.mark.asyncio
@@ -306,6 +309,7 @@ async def test_broadcast_node_executed_no_ws_manager(executor):
     await executor._broadcast_node_executed(
         execution_id=1,
         node_id="node-1",
+        node_type="yolo_model",
         status="success",
         outputs={},
     )

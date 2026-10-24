@@ -749,6 +749,7 @@ class RuleGraphExecutor:
             await self._broadcast_node_executed(
                 context.execution_id,
                 node_id,
+                node_type,
                 "success",
                 outputs,
                 duration_ms=node_duration_ms,
@@ -763,6 +764,7 @@ class RuleGraphExecutor:
             await self._broadcast_node_timeout(
                 context.execution_id,
                 node_id,
+                node_type,
                 timeout_seconds=node_timeout,
                 error=error_msg
             )
@@ -774,7 +776,7 @@ class RuleGraphExecutor:
             error_msg = f"{str(e)}\n{traceback.format_exc()}"
             status = "failed"
             context.set_node_status(node_id, "failed")
-            await self._broadcast_node_failed(context.execution_id, node_id, error_msg)
+            await self._broadcast_node_failed(context.execution_id, node_id, node_type, error_msg)
 
             if isinstance(e, ExecutorError):
                 raise
@@ -1081,6 +1083,7 @@ class RuleGraphExecutor:
         self,
         execution_id: int,
         node_id: str,
+        node_type: str,
         status: str,
         outputs: Dict[str, Any],
         duration_ms: int = None,
@@ -1089,6 +1092,8 @@ class RuleGraphExecutor:
         """广播节点执行完成。
 
         Args:
+            node_type: 节点类型 —— 前端日志面板按它标注来源节点,
+                缺失时前端只能显示 "undefined 执行成功" (2026-10-24 走查发现)。
             metrics: 节点输出指标（detections 数量、数据量等），可选。
                 前端可基于 metrics 做轻量级展示（徽章、计数等），
                 无需解析完整 outputs 即可了解节点产出规模。
@@ -1098,6 +1103,7 @@ class RuleGraphExecutor:
                 "type": "node_executed",
                 "execution_id": execution_id,
                 "node_id": node_id,
+                "node_type": node_type,
                 "status": status,
                 "outputs": outputs,
                 "duration_ms": duration_ms,
@@ -1109,6 +1115,7 @@ class RuleGraphExecutor:
         self,
         execution_id: int,
         node_id: str,
+        node_type: str,
         error: str
     ):
         """广播节点执行失败。"""
@@ -1117,6 +1124,7 @@ class RuleGraphExecutor:
                 "type": "node_failed",
                 "execution_id": execution_id,
                 "node_id": node_id,
+                "node_type": node_type,
                 "error": error,
                 "timestamp": datetime.now().isoformat()
             })
@@ -1125,6 +1133,7 @@ class RuleGraphExecutor:
         self,
         execution_id: int,
         node_id: str,
+        node_type: str,
         timeout_seconds: float,
         error: str = None
     ):
@@ -1138,6 +1147,7 @@ class RuleGraphExecutor:
                 "type": "node_timeout",
                 "execution_id": execution_id,
                 "node_id": node_id,
+                "node_type": node_type,
                 "timeout_seconds": timeout_seconds,
                 "error": error or f"节点执行超时（{timeout_seconds}s）",
                 "timestamp": datetime.now().isoformat()
