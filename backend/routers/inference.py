@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db, SessionLocal, Model, ModelFile, InferenceJob
 from backend.utils.frame_buffer import stream_job_manager
+from backend.utils.safe_path import safe_join
 
 router = APIRouter()
 
@@ -129,9 +130,15 @@ async def detect_image(
     if not model_file or not os.path.exists(model_file.file_path):
         raise HTTPException(status_code=400, detail="模型文件不存在")
 
-    # 保存上传的图片
+    # 保存上传的图片（只取 basename，防止路径穿越）
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    file_path = INFERENCE_OUTPUT_DIR / f"input_{timestamp}_{file.filename}"
+    raw_name = os.path.basename(file.filename or "")
+    if not raw_name:
+        raise HTTPException(status_code=400, detail="非法路径")
+    try:
+        file_path = Path(safe_join(str(INFERENCE_OUTPUT_DIR), f"input_{timestamp}_{raw_name}"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法路径")
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
@@ -592,9 +599,15 @@ async def detect_video_stream(
     for cat in categories:
         cat['color'] = name_to_color.get(cat['name'], cat.get('color', '#FF0000'))
 
-    # 保存上传的视频
+    # 保存上传的视频（只取 basename，防止路径穿越）
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    input_path = INFERENCE_OUTPUT_DIR / f"stream_{timestamp}_{file.filename}"
+    raw_name = os.path.basename(file.filename or "")
+    if not raw_name:
+        raise HTTPException(status_code=400, detail="非法路径")
+    try:
+        input_path = Path(safe_join(str(INFERENCE_OUTPUT_DIR), f"stream_{timestamp}_{raw_name}"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法路径")
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 

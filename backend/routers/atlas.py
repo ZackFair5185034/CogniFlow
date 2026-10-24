@@ -18,6 +18,7 @@ from PIL import Image as PILImage
 from backend.database import get_db, Atlas, Image
 from backend.schemas import AtlasCreate, AtlasUpdate, AtlasResponse
 from backend.utils.frame_extract_manager import frame_extract_manager
+from backend.utils.safe_path import safe_join
 
 router = APIRouter()
 
@@ -34,12 +35,36 @@ VIDEO_STORAGE_DIR = os.path.join(_DATA_DIR, "uploads", "videos")
 def get_image_storage_path(atlas_id: int, filename: str) -> tuple[str, str]:
     """获取图片存储路径。
 
+    Args:
+        atlas_id: 图集 ID
+        filename: 图片文件名（只取 basename，防止路径穿越）
+
     Returns:
         (directory, file_path) - 目录路径和完整文件路径
+
+    Raises:
+        ValueError: 路径越出图集目录时抛出
     """
-    atlas_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id))
-    file_path = os.path.join(atlas_dir, filename)
+    atlas_dir = safe_join(IMAGE_STORAGE_DIR, str(atlas_id))
+    file_path = safe_join(atlas_dir, os.path.basename(filename))
     return atlas_dir, file_path
+
+
+def _safe_atlas_dir(atlas_id: int, *parts: str) -> str:
+    """拼接图集目录内的安全路径（内部使用 safe_join 做越界防护）。
+
+    Args:
+        atlas_id: 图集 ID
+        *parts: 额外的相对路径片段
+
+    Returns:
+        规范化后的绝对路径
+
+    Raises:
+        ValueError: 路径越出图集目录时抛出
+    """
+    atlas_dir = safe_join(IMAGE_STORAGE_DIR, str(atlas_id))
+    return safe_join(atlas_dir, *parts) if parts else atlas_dir
 
 
 @router.get("", response_model=List[AtlasResponse])
@@ -198,7 +223,10 @@ async def create_atlas_directory(
         raise HTTPException(status_code=404, detail="图集不存在")
 
     # 创建物理目录
-    dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), directory)
+    try:
+        dir_path = _safe_atlas_dir(atlas_id, directory)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法路径")
     os.makedirs(dir_path, exist_ok=True)
 
     return {"message": f"目录 '{directory}' 已创建", "directory": directory}
@@ -234,7 +262,10 @@ async def delete_atlas_directory(
         db.delete(image)
 
     # 删除物理目录
-    dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), directory)
+    try:
+        dir_path = _safe_atlas_dir(atlas_id, directory)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法路径")
     if os.path.exists(dir_path):
         try:
             shutil.rmtree(dir_path)
@@ -265,11 +296,13 @@ async def upload_images(
         raise HTTPException(status_code=404, detail="图集不存在")
 
     # 确定目标目录
+    atlas_dir = safe_join(IMAGE_STORAGE_DIR, str(atlas_id))
     if directory:
-        # 使用用户指定的目录名
-        atlas_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), directory)
-    else:
-        atlas_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id))
+        # 使用用户指定的目录名（限制在图集目录之内）
+        try:
+            atlas_dir = safe_join(atlas_dir, directory)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="非法路径")
     os.makedirs(atlas_dir, exist_ok=True)
 
     uploaded_images = []
@@ -277,16 +310,21 @@ async def upload_images(
         if not file.content_type or not file.content_type.startswith("image/"):
             continue
 
-        # 保持原始文件名（可加唯一前缀避免冲突）
-        filename = file.filename
-        file_path = os.path.join(atlas_dir, filename)
+        # 保持原始文件名（只取 basename，防止路径穿越）
+        filename = os.path.basename(file.filename or "")
+        if not filename:
+            continue
+        try:
+            file_path = safe_join(atlas_dir, filename)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="非法路径")
 
         # 如果文件已存在，添加时间戳前缀
         if os.path.exists(file_path):
             import time
             name, ext = os.path.splitext(filename)
             filename = f"{name}_{int(time.time())}{ext}"
-            file_path = os.path.join(atlas_dir, filename)
+            file_path = safe_join(atlas_dir, filename)
 
         # 保存文件
         with open(file_path, "wb") as buffer:
@@ -335,16 +373,21 @@ async def upload_video(
         raise HTTPException(status_code=400, detail=f"不支持的视频格式，支持：{', '.join(allowed_exts)}")
 
     # 保存视频到 uploads/videos/{atlas_id}/
-    atlas_video_dir = os.path.join(VIDEO_STORAGE_DIR, str(atlas_id))
+    atlas_video_dir = safe_join(VIDEO_STORAGE_DIR, str(atlas_id))
     os.makedirs(atlas_video_dir, exist_ok=True)
 
-    # 避免文件名冲突
-    filename = file.filename or f"video_{int(time.time())}.mp4"
-    if os.path.exists(os.path.join(atlas_video_dir, filename)):
+    # 避免文件名冲突（只取 basename，防止路径穿越）
+    filename = os.path.basename(file.filename or "") or f"video_{int(time.time())}.mp4"
+    try:
+        video_path = safe_join(atlas_video_dir, filename)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法路径")
+
+    if os.path.exists(video_path):
         name, ext = os.path.splitext(filename)
         filename = f"{name}_{int(time.time())}{ext}"
+        video_path = safe_join(atlas_video_dir, filename)
 
-    video_path = os.path.join(atlas_video_dir, filename)
     with open(video_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
@@ -397,7 +440,10 @@ async def extract_video_frames(
     interval = max(1, total_frames / extract_count) if total_frames > 0 else 1
 
     # 创建帧存储目录
-    frames_dir = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), directory)
+    try:
+        frames_dir = _safe_atlas_dir(atlas_id, directory)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法路径")
     os.makedirs(frames_dir, exist_ok=True)
 
     # 重新打开视频读帧（顺序读取，避免 codec seek 不准导致乱序）

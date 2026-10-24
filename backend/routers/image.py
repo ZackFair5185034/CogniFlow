@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from backend.database import get_db, Image
+from backend.utils.safe_path import safe_join
 
 router = APIRouter()
 
@@ -87,11 +88,14 @@ async def update_image_directory(image_id: int, directory: str, db: Session = De
     filename = os.path.basename(old_file_path)
 
     if new_directory:
-        new_dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), new_directory)
-        new_file_path = os.path.join(new_dir_path, filename)
+        try:
+            new_dir_path = safe_join(IMAGE_STORAGE_DIR, str(atlas_id), new_directory)
+            new_file_path = safe_join(new_dir_path, filename)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="非法路径")
     else:
-        new_dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id))
-        new_file_path = os.path.join(new_dir_path, filename)
+        new_dir_path = safe_join(IMAGE_STORAGE_DIR, str(atlas_id))
+        new_file_path = safe_join(new_dir_path, filename)
 
     # 移动物理文件
     os.makedirs(new_dir_path, exist_ok=True)
@@ -166,11 +170,15 @@ async def batch_update_directory(
         filename = os.path.basename(image.file_path)
 
         if new_directory:
-            new_dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id), new_directory)
-            new_file_path = os.path.join(new_dir_path, filename)
+            try:
+                new_dir_path = safe_join(IMAGE_STORAGE_DIR, str(atlas_id), new_directory)
+                new_file_path = safe_join(new_dir_path, filename)
+            except ValueError:
+                errors += 1
+                continue
         else:
-            new_dir_path = os.path.join(IMAGE_STORAGE_DIR, str(atlas_id))
-            new_file_path = os.path.join(new_dir_path, filename)
+            new_dir_path = safe_join(IMAGE_STORAGE_DIR, str(atlas_id))
+            new_file_path = safe_join(new_dir_path, filename)
 
         # 移动物理文件
         if os.path.exists(image.file_path):

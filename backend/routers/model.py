@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db, Model, ModelFile
 from backend.schemas import ModelCreate, ModelUpdate, ModelResponse, ModelExportRequest, ModelExportResponse, ModelFileResponse
+from backend.utils.safe_path import safe_join
 from backend.websocket_manager import ws_manager
 
 router = APIRouter()
@@ -208,8 +209,14 @@ async def upload_model_file(
     # 确保上传目录存在
     os.makedirs(MODEL_STORAGE_DIR, exist_ok=True)
 
-    # 保存模型文件
-    file_path = os.path.join(MODEL_STORAGE_DIR, f"model_{model_id}_{file.filename}")
+    # 保存模型文件（只取 basename，防止路径穿越）
+    raw_name = os.path.basename(file.filename or "")
+    if not raw_name:
+        raise HTTPException(status_code=400, detail="非法路径")
+    try:
+        file_path = safe_join(MODEL_STORAGE_DIR, f"model_{model_id}_{raw_name}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法路径")
     with open(file_path, "wb") as buffer:
         content = await file.read()
         buffer.write(content)
