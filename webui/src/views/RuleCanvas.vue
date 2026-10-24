@@ -942,6 +942,7 @@ import { RecycleScroller } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import { useCogniFlowDrag } from '@/composables/useCogniFlowDrag'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { ruleCanvasPath } from '@/utils/ruleNavigation'
 
 const router = useRouter()
 const route = useRoute()
@@ -1321,8 +1322,9 @@ async function handleDuplicateAsNew() {
     )
     const newId = await store.duplicateAsNewGraph(name)
     ElMessage.success(`已创建新规则图 #${newId}`)
-    // 跳转到新图
-    router.push(`/rule-engine/${newId}`)
+    // 跳转到新图 —— 旧实现 push(`/rule-engine/${newId}`), 那个路由不存在,
+    // 点「复制为新」后白屏无反应。路径统一由 ruleNavigation 产出。
+    router.push(ruleCanvasPath(newId))
   } catch {
     // 用户取消
   }
@@ -1484,7 +1486,8 @@ function handleWsMessage(msg: any) {
       } else {
         ElMessage.error(`执行失败: ${msg.error || ''}`)
       }
-      setTimeout(() => store.clearExecution(), 2000)
+      // 日志保留到用户手动清空或下次执行 —— 旧实现 2 秒后自毁,
+      // 用户还没看清结果就没了。节点状态另存在 graph store, 不受影响。
       disconnectWebSocket()
       break
   }
@@ -3008,6 +3011,8 @@ async function handleExecute() {
 // 清空日志
 function clearLogs() {
   store.clearExecution()
+  // 节点高亮也一并复位 —— 用户点了「清空」就是想让画布回到编辑态
+  store.clearNodeStatuses()
 }
 
 // ============ P2-D (2026-06-19): 执行历史回放 ============
@@ -3074,17 +3079,20 @@ async function selectExecutionForReplay(exec: any) {
  */
 function applyReplayToCanvas(logs: Array<{ node_id: string; status: string }>) {
   store.clearExecution()
+  store.clearNodeStatuses()
   for (const log of logs) {
     store.setNodeExecutionState(log.node_id, log.status)
   }
   // 5 秒后清空回放高亮, 让用户回到编辑态
-  setTimeout(() => store.clearExecution(), 5000)
+  // 只清节点高亮, 不清执行日志(clearExecution 会把日志一起抹掉)
+  setTimeout(() => store.clearNodeStatuses(), 5000)
 }
 
 function closeReplay() {
   showReplayDialog.value = false
   selectedExecution.value = null
   store.clearExecution()
+  store.clearNodeStatuses()
 }
 </script>
 
