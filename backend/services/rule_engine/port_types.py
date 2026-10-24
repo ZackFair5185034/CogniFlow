@@ -29,6 +29,11 @@ PORT_TYPES: List[str] = [
 
 # 端口兼容矩阵: 源类型 -> 兼容的目标类型列表
 # ANY 可连接到所有类型; 其余类型只允许同型(ANY 恒可)。
+#
+# 2026-10-24 补充 CONTROL -> TRIGGER:
+#   branch / parallel_branch / delay 的输出是 CONTROL 控制流信号, 语义上就是
+#   「可以触发后续动作」。若 CONTROL 不能接 TRIGGER, 「分支 -> 动作」这条最常见
+#   的链路在画布上连不出来, 动作层在分支场景下依然不可达。
 PORT_COMPATIBILITY: Dict[str, List[str]] = {
     "ANY": list(PORT_TYPES),
     "IMAGE": ["ANY", "IMAGE"],
@@ -36,7 +41,7 @@ PORT_COMPATIBILITY: Dict[str, List[str]] = {
     "MASK": ["ANY", "MASK"],
     "SCORES": ["ANY", "SCORES"],
     "TRIGGER": ["ANY", "TRIGGER", "CONTROL", "BOOLEAN"],
-    "CONTROL": ["ANY", "CONTROL", "BOOLEAN"],
+    "CONTROL": ["ANY", "CONTROL", "BOOLEAN", "TRIGGER"],
     "MODEL": ["ANY", "MODEL"],
     "INT": ["ANY", "INT"],
     "FLOAT": ["ANY", "FLOAT"],

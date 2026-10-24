@@ -100,3 +100,86 @@ class TestExecuteNodeInputSource:
 
         assert config["trigger"]["node_id"] == "from_connections"
         assert _E is not None
+
+
+class TestBuildInputConfig:
+    """_build_input_config —— 连接关系以边表为准推导。"""
+
+    @staticmethod
+    def _context(edges, nodes=None):
+        from backend.services.rule_engine.nodes.base import ExecutionContext
+
+        return ExecutionContext(
+            execution_id=1,
+            trigger_type="manual",
+            trigger_data={},
+            node_results={},
+            node_status={},
+            variables={},
+            config={"nodes": nodes or {}, "edges": edges},
+        )
+
+    def test_connections_are_derived_from_edges(self):
+        """边表是权威来源: 没有 data.connections 也能推出连接关系。"""
+        executor = RuleGraphExecutor()
+        edges = [{
+            "source": "n_yolo", "target": "n_log",
+            "source_handle": "detections", "target_handle": "trigger",
+        }]
+        context = self._context(edges)
+
+        config = executor._build_input_config("n_log", {}, context)
+
+        assert config["trigger"] == {"node_id": "n_yolo", "output": "detections"}
+
+    def test_snake_case_handles_are_supported(self):
+        """后端格式(蛇形)的边也能推导出连接。"""
+        executor = RuleGraphExecutor()
+        edges = [{
+            "source": "n_yolo", "target": "n_log",
+            "source_handle": "detections", "target_handle": "trigger",
+        }]
+        context = self._context(edges)
+
+        config = executor._build_input_config("n_log", {}, context)
+
+        assert config["trigger"]["node_id"] == "n_yolo"
+
+    def test_edges_override_declared_connections(self):
+        """边表与 data.connections 冲突时以边表为准。"""
+        executor = RuleGraphExecutor()
+        edges = [{
+            "source": "from_edge", "target": "n_log",
+            "source_handle": "out", "target_handle": "trigger",
+        }]
+        context = self._context(edges)
+        node_data = {"connections": {"trigger": {"node_id": "declared", "output": "x"}}}
+
+        config = executor._build_input_config("n_log", node_data, context)
+
+        assert config["trigger"]["node_id"] == "from_edge"
+
+    def test_declared_connections_fill_gaps(self):
+        """边表没覆盖的端口由 data.connections 补齐。"""
+        executor = RuleGraphExecutor()
+        edges = [{
+            "source": "n_a", "target": "n_log",
+            "source_handle": "out", "target_handle": "trigger",
+        }]
+        context = self._context(edges)
+        node_data = {"connections": {"extra": {"node_id": "n_b", "output": "o"}}}
+
+        config = executor._build_input_config("n_log", node_data, context)
+
+        assert config["trigger"]["node_id"] == "n_a"
+        assert config["extra"]["node_id"] == "n_b"
+
+    def test_legacy_inputs_dict_is_used_as_fallback(self):
+        """既无边也无 connections 时, 回退到旧契约 data.inputs(dict)。"""
+        executor = RuleGraphExecutor()
+        context = self._context([])
+        node_data = {"inputs": {"trigger": {"node_id": "legacy", "output": "r"}}}
+
+        config = executor._build_input_config("n_log", node_data, context)
+
+        assert config["trigger"]["node_id"] == "legacy"

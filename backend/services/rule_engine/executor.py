@@ -461,7 +461,8 @@ class RuleGraphExecutor:
             node_results={},
             node_status={},
             variables=dict(variables),
-            config={"nodes": nodes},
+            # edges 一并放进上下文: 输入连接关系由边表推导(见 _build_input_config)
+            config={"nodes": nodes, "edges": edges},
             cancelled=False,
             ws_manager=self.ws_manager
         )
@@ -658,14 +659,9 @@ class RuleGraphExecutor:
         flat_config = node_data.get("config") or node_data.get("params", {})
         params = flat_config if isinstance(flat_config, dict) else {}
         # 输入端口连接信息
-        # 新契约: data.connections = {目标端口名: {node_id, output}}
-        # 旧契约: data.inputs 为 dict 时同样兼容(存量图)
-        # 端口元数据(data.inputs 为数组)不含连线信息, 不能当连接配置用。
-        inputs_config = node_data.get("connections")
-        if not isinstance(inputs_config, dict):
-            inputs_config = node_data.get("inputs")
-        if not isinstance(inputs_config, dict):
-            inputs_config = {}
+        # 连接关系以**边表**为准推导(边表是拓扑的权威来源), 节点数据里的
+        # data.connections 作为补充/兜底。详见 _build_input_config。
+        inputs_config = self._build_input_config(node_id, node_data, context)
 
         # 更新状态为 running
         context.set_node_status(node_id, "running")
@@ -812,6 +808,60 @@ class RuleGraphExecutor:
                 error_message=error_msg,
                 metrics=metrics
             )
+
+    def _build_input_config(
+        self,
+        node_id: str,
+        node_data: Dict[str, Any],
+        context: ExecutionContext
+    ) -> Dict[str, Any]:
+        """构造节点的输入连接配置。
+
+        连接关系以**边表**为准: 边里已经带了 source / target / source_handle /
+        target_handle, 是拓扑的权威来源, 存量图(只有边、没有 data.connections)
+        也能直接跑通。
+
+        节点数据里的 `data.connections` 作为补充(当边表缺少某条连接时兜底),
+        旧契约 `data.inputs` 为 dict 时同样兼容。
+
+        Args:
+            node_id: 当前节点 ID
+            node_data: 节点数据
+            context: 执行上下文(config 内含 nodes 与 edges)
+
+        Returns:
+            {目标端口名: {node_id, output}} 形式的连接配置
+        """
+        config: Dict[str, Any] = {}
+
+        # 1) 边表推导(优先级最高)
+        for edge in (context.config.get("edges") or []):
+            if edge.get("target") != node_id:
+                continue
+            target_handle = edge.get("target_handle") or edge.get("targetHandle")
+            source = edge.get("source")
+            if not target_handle or not source:
+                continue
+            source_handle = edge.get("source_handle") or edge.get("sourceHandle")
+            config[target_handle] = {
+                "node_id": source,
+                "output": source_handle or "result",
+            }
+
+        # 2) 节点数据里的 connections 补齐边表没覆盖到的端口
+        declared = node_data.get("connections")
+        if isinstance(declared, dict):
+            for port_name, value in declared.items():
+                if port_name not in config and isinstance(value, dict):
+                    config[port_name] = value
+
+        # 3) 旧契约: data.inputs 为 dict 时兜底
+        if not config:
+            legacy = node_data.get("inputs")
+            if isinstance(legacy, dict):
+                config = legacy
+
+        return config
 
     def _resolve_inputs(
         self,

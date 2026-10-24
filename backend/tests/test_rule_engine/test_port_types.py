@@ -58,6 +58,24 @@ class TestPortCompatibility:
         m["IMAGE"].append("HACKED")
         assert "HACKED" not in PORT_COMPATIBILITY["IMAGE"]
 
+    def test_control_to_trigger_is_compatible(self):
+        """CONTROL -> TRIGGER 必须兼容。
+
+        branch / parallel_branch / delay 输出的是 CONTROL 控制流信号,
+        若不能接 TRIGGER, 「分支 -> 动作」这条最常见的链路在画布上连不出来。
+        """
+        assert is_port_compatible("CONTROL", "TRIGGER") is True
+
+    def test_every_trigger_input_port_has_a_producer(self):
+        """每个 TRIGGER 输入端口都必须有可用的上游类型。
+
+        全库没有任何节点输出 TRIGGER, 动作层的 trigger 输入只能靠
+        BOOLEAN / CONTROL / ANY 来喂 —— 这三类必须都能接到 TRIGGER,
+        否则动作层事实上不可达。
+        """
+        for source in ("BOOLEAN", "CONTROL", "ANY"):
+            assert is_port_compatible(source, "TRIGGER") is True, source
+
 
 class TestExecutorUsesSharedMatrix:
     """执行器必须复用同一张矩阵, 不允许再自带一份。"""
