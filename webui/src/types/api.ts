@@ -346,6 +346,19 @@ export interface PortCompatibilityResponse {
   types: string[]
 }
 
+/**
+ * 规则图校验结果。
+ *
+ * 后端返回 `{valid, errors[], error}`; `error` 是单条错误的向后兼容字段。
+ */
+export interface RuleGraphValidateResult {
+  valid: boolean
+  /** 逐条错误信息 */
+  errors: string[]
+  /** 单条错误(向后兼容) */
+  error?: string | null
+}
+
 /** 规则图基础 */
 export interface RuleGraphBase {
   name: string

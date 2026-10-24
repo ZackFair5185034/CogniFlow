@@ -511,13 +511,30 @@ class RuleGraphExecutor:
                 await self._execute_level(level, context, skipped_node_ids, branch_outputs)
 
             # 全部完成
+            # 顶层状态由节点真实结果推导 —— 旧实现恒为 "completed",
+            # 掩盖了「全部节点失败、零输出」的情况。
+            failed_nodes = [
+                node_id for node_id, st in context.node_status.items()
+                if st in ("failed", "timeout")
+            ]
+            top_status = "failed" if failed_nodes else "completed"
             result = {
-                "status": "completed",
+                "status": top_status,
                 "completed_at": datetime.now().isoformat(),
-                "node_results": context.node_results
+                "node_results": context.node_results,
+                "failed_nodes": failed_nodes,
+                "error": (
+                    f"{len(failed_nodes)} 个节点执行失败: {', '.join(failed_nodes[:10])}"
+                    if failed_nodes else None
+                ),
+                # 落库摘要: 只含状态与指标, 不含可能带 base64 图像的原始输出
+                "summary": {
+                    "node_status": dict(context.node_status),
+                    "node_count": len(context.node_status),
+                },
             }
 
-            await self._update_execution_status(execution_id, "completed", result)
+            await self._update_execution_status(execution_id, top_status, result)
             await self._broadcast_complete(execution_id, result)
 
             return result
@@ -1144,7 +1161,15 @@ class RuleGraphExecutor:
                     pass
 
             if result:
-                record.result_json = json.dumps(result, default=str)
+                # 只落轻量摘要: node_results 可能含 base64 图像, 不能整份入库。
+                # 原始负载保留在 execute() 返回值与 WS 推送里。
+                summary = result.get("summary") or {
+                    "status": result.get("status"),
+                    "completed_at": result.get("completed_at"),
+                    "failed_nodes": result.get("failed_nodes", []),
+                    "error": result.get("error"),
+                }
+                record.result_json = json.dumps(summary, default=str)
 
             self.db.commit()
 

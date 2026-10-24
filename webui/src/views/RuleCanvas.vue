@@ -2944,7 +2944,13 @@ async function handleValidate() {
     if (res.data.valid) {
       ElMessage.success('规则图校验通过')
     } else {
-      ElMessage.error(`校验失败: ${res.data.errors?.join(', ') || '未知错误'}`)
+      // 后端返回 {valid, errors[], error}; 旧实现读 res.data.errors?.join()
+      // 而后端只返回 {valid, error}, 结果永远显示「未知错误」。
+      const errors = res.data.errors ?? []
+      const detail = errors.length > 0
+        ? errors.join('; ')
+        : (res.data.error ?? '未知错误')
+      ElMessage.error(`校验失败: ${detail}`)
     }
   } catch {
     ElMessage.error('校验请求失败')

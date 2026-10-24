@@ -1,5 +1,10 @@
 import axios from 'axios'
-import type { DetectImageResponse, PortCompatibilityResponse, RuleGraphDetail } from '@/types/api'
+import type {
+  DetectImageResponse,
+  PortCompatibilityResponse,
+  RuleGraphDetail,
+  RuleGraphValidateResult,
+} from '@/types/api'
 
 const api = axios.create({
   baseURL: '/api',
@@ -231,7 +236,8 @@ export const ruleEngineApi = {
   updateThumbnail: (id: number, thumbnail: string) =>
     api.patch(`/rule-engine/graphs/${id}/thumbnail`, null, { params: { thumbnail } }),
   deleteGraph: (id: number) => api.delete(`/rule-engine/graphs/${id}`),
-  validateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/validate`),
+  validateGraph: (id: number) =>
+    api.post<RuleGraphValidateResult>(`/rule-engine/graphs/${id}/validate`),
   activateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/activate`),
   deactivateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/deactivate`),
   getWebhookUrl: (id: number) => api.get(`/rule-engine/graphs/${id}/webhook-url`),

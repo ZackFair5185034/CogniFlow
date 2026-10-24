@@ -197,8 +197,12 @@ async def validate_graph(graph_id: int, db: Session = Depends(get_db)):
     """验证规则图的完整性。"""
     manager = GraphManager(db)
     is_valid, error_message = manager.validate_graph(graph_id)
+    # errors 为列表形式, 便于前端逐条展示; error 保留单条错误向后兼容。
+    # 旧实现只返回 {valid, error}, 前端读 res.data.errors 永远拿不到内容,
+    # 结果恒显「未知错误」。
     return {
         "valid": is_valid,
+        "errors": [error_message] if error_message else [],
         "error": error_message,
     }
 
