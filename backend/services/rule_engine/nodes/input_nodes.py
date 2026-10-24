@@ -7,6 +7,7 @@ docs/research/rule-engine-phase1-node-registry.md
 节点分类: input (#4CFF4C)
 """
 import asyncio
+from pathlib import Path
 from typing import Any, Dict, Literal, Optional, Tuple
 
 from backend.services.rule_engine.models import (
@@ -16,6 +17,7 @@ from backend.services.rule_engine.models import (
 from pydantic import Field
 from typing import Dict
 from .base import BaseExecutor
+from ..exceptions import ExecutorError
 
 
 # P0-A (2026-09-11): 节点配置 schema（Pydantic 强类型校验）。
@@ -27,7 +29,10 @@ class ImageCaptureConfig(NodeConfigSchema):
 
 class VideoCaptureConfig(NodeConfigSchema):
     """VideoCaptureNode 配置 schema。"""
-    source: str = Field(default="video0", description="/dev/video0 或视频文件路径")
+    # 默认空串而非 "video0"：engine 的 VideoReader 只支持视频文件路径,
+    # "/dev/video0" 这类摄像头设备源无法接入, 留默认值只会让用户以为配好了。
+    # 空串 → execute() 显式报「缺少 source 配置」。
+    source: str = Field(default="", description="视频文件路径")
     fps: float = Field(default=30, ge=1, le=120, description="每秒采集帧数")
 
 
@@ -36,6 +41,14 @@ class ScreenCaptureConfig(NodeConfigSchema):
     source: Literal["screen", "window"] = Field(
         default="screen", description="screen(全屏) 或 window(窗口)"
     )
+    # region / fps 与 execute() 实际读取的参数保持一致，
+    # 否则 extra='forbid' 会在执行期硬校验时拒绝这些配置。
+    # region 用宽松的 dict 而非 Region model：非法 region 由 execute() 容错透传，
+    # 不在配置校验阶段硬失败（与节点既有语义一致）。
+    region: Optional[Dict[str, Any]] = Field(
+        default=None, description="采集区域 {x, y, width, height}，None 表示全屏"
+    )
+    fps: int = Field(default=30, ge=1, le=120, description="采集帧率")
 
 
 class ImageCaptureNode(BaseExecutor):
@@ -193,8 +206,8 @@ class VideoCaptureNode(BaseExecutor):
             "source": ConfigSchemaProperty(
                 type="string",
                 title="视频源",
-                description="/dev/video0 或视频文件路径",
-                default="video0",
+                description="视频文件路径（不支持摄像头设备源）",
+                default="",
                 widget="text",
             ),
             "fps": ConfigSchemaProperty(
@@ -218,18 +231,47 @@ class VideoCaptureNode(BaseExecutor):
         context
     ) -> Dict[str, Any]:
         params = self.config.get("params", {})
-        source = params.get("source", "video0")
+        source = params.get("source", "")
         fps = params.get("fps", 30)
 
-        # TODO: 实现实际视频帧读取
-        # 当前为占位实现
+        if not source:
+            raise ExecutorError("视频采集节点缺少 source 配置")
+
+        # 真实视频读取 —— 接入 engine 包的 VideoReader。
+        # 旧实现返回 image=None 占位，导致下游检测节点拿不到任何帧。
+        from engine.core.data_input.capture.video_reader import VideoReader
+
+        try:
+            reader = VideoReader(Path(source), target_fps=fps if fps > 0 else None)
+            self._reader = reader
+            # cv2 读取是同步阻塞调用，放到线程里避免阻塞事件循环
+            image = await asyncio.to_thread(reader.read)
+        except Exception as exc:
+            raise ExecutorError(f"视频读取失败({source}): {exc}") from exc
+
         frame_count = context.node_results.get("_frame_count", 0) + 1
 
         return {
-            "image": None,  # 占位
+            "image": image,
             "frame_id": frame_count,
             "timestamp": frame_count / fps if fps > 0 else 0,
         }
+
+    def cleanup(self) -> None:
+        """释放视频读取器持有的 cv2 句柄。
+
+        节点实例每次执行都会新建，cleanup 钩子由执行器在 finally 中调用。
+        """
+        reader = getattr(self, "_reader", None)
+        if reader is None:
+            return
+        try:
+            reader.release()
+        except Exception:
+            # 清理失败不掩盖主结果
+            pass
+        finally:
+            self._reader = None
 
 
 class ScreenCaptureNode(BaseExecutor):
@@ -296,11 +338,10 @@ class ScreenCaptureNode(BaseExecutor):
     ) -> Dict[str, Any]:
         params = self.config.get("params", {})
         raw_region = params.get("region", None)
+        source = params.get("source", "screen")
 
-        # TODO: 对接屏幕截图服务
-        # from engine.core.data_input.capture import ScreenCapturer
-        # capturer = ScreenCapturer()
-        # image_data = await capturer.capture(region=raw_region)
+        if source != "screen":
+            raise ExecutorError(f"暂不支持的采集源: {source}")
 
         # region 输出遵循 Region Pydantic model 序列化格式（dict），
         # 下游节点可通过 Region.model_validate() 安全解析。
@@ -316,7 +357,53 @@ class ScreenCaptureNode(BaseExecutor):
         else:
             serialized_region = raw_region  # None 或其他类型直接透传
 
+        # 真实屏幕采集 —— 接入 engine 包的 ScreenCapture。
+        # 旧实现返回 image=None 占位，导致下游检测节点拿不到任何图像。
+        from engine.core.data_input.capture.screen_capture import ScreenCapture
+
+        # 采集区域：仅当宽高齐全时才裁剪，否则整屏采集
+        capture_region = None
+        if isinstance(serialized_region, dict):
+            width = serialized_region.get("width")
+            height = serialized_region.get("height")
+            if width and height:
+                capture_region = (
+                    int(serialized_region.get("x", 0)),
+                    int(serialized_region.get("y", 0)),
+                    int(width),
+                    int(height),
+                )
+
+        try:
+            capture = ScreenCapture(
+                fps=int(params.get("fps", 30)),
+                capture_region=capture_region,
+            )
+            self._capture = capture
+            # 注意: mss/pyautogui 在 Windows 上绑定主线程的 GDC 句柄,
+            # 放到工作线程会抛 '_thread._local' object has no attribute 'srcdc',
+            # 因此这里必须在调用方线程同步执行(会短暂阻塞事件循环)。
+            image = capture.capture()
+        except Exception as exc:
+            raise ExecutorError(f"屏幕采集失败: {exc}") from exc
+
         return {
-            "image": None,  # 占位
+            "image": image,
             "region": serialized_region,
         }
+
+    def cleanup(self) -> None:
+        """释放屏幕采集器持有的 mss 句柄。
+
+        节点实例每次执行都会新建，cleanup 钩子由执行器在 finally 中调用。
+        """
+        capture = getattr(self, "_capture", None)
+        if capture is None:
+            return
+        try:
+            capture.release()
+        except Exception:
+            # 清理失败不掩盖主结果
+            pass
+        finally:
+            self._capture = None

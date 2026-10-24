@@ -15,6 +15,7 @@ from backend.services.rule_engine.models import (
 from pydantic import Field
 from typing import Dict
 from .base import BaseExecutor
+from ..exceptions import ExecutorError
 
 
 # P0-A (2026-09-11): 节点配置 schema（Pydantic 强类型校验）。
@@ -154,15 +155,29 @@ class KeyboardActionNode(BaseExecutor):
         hold_duration = params.get("hold_duration", 0.1)
         interval = params.get("interval", 0)
 
+        if not keys:
+            return {"executed_keys": [], "success": True}
+
+        # 真实键盘模拟 —— 接入 engine 包的 KeyboardEmulator。
+        # 旧实现只把键位塞进列表就返回 success=True（0ms 谎报成功）。
+        from engine.core.control.input_emulator import KeyboardEmulator
+
+        try:
+            keyboard = KeyboardEmulator()
+        except Exception as exc:
+            # 底层不可用时显式失败，绝不谎报成功
+            raise ExecutorError(f"键盘模拟不可用: {exc}") from exc
+
         executed_keys = []
 
         for key in keys:
-            # TODO: 对接键盘模拟
-            # from engine.core.control.input_emulator import KeyboardEmulator
-            # keyboard = KeyboardEmulator()
-            # keyboard.press(key)
-            # await asyncio.sleep(hold_duration)
-            # keyboard.release(key)
+            try:
+                keyboard.key_down(key)
+                await asyncio.sleep(hold_duration)
+                keyboard.key_up(key)
+            except Exception as exc:
+                raise ExecutorError(f"按键 {key} 执行失败: {exc}") from exc
+
             executed_keys.append(key)
 
             if interval > 0:
@@ -272,13 +287,29 @@ class MouseActionNode(BaseExecutor):
         y = params.get("y", 0)
         button = params.get("button", "left")
 
-        # TODO: 对接鼠标模拟
-        # from engine.core.control.input_emulator import MouseEmulator
-        # mouse = MouseEmulator()
-        # if action == "click":
-        #     mouse.click(x, y, button)
-        # elif action == "move":
-        #     mouse.move(x, y)
+        # 真实鼠标模拟 —— 接入 engine 包的 MouseEmulator。
+        # 旧实现只回显参数就返回 success=True（0ms 谎报成功）。
+        from engine.core.control.input_emulator import MouseEmulator
+
+        try:
+            mouse = MouseEmulator()
+        except Exception as exc:
+            # 底层不可用时显式失败，绝不谎报成功
+            raise ExecutorError(f"鼠标模拟不可用: {exc}") from exc
+
+        try:
+            if action == "click":
+                mouse.click(x, y, button)
+            elif action == "move":
+                mouse.move_to(x, y)
+            elif action == "scroll":
+                mouse.scroll(x, y)
+            else:
+                raise ExecutorError(f"不支持的鼠标动作: {action}")
+        except ExecutorError:
+            raise
+        except Exception as exc:
+            raise ExecutorError(f"鼠标动作 {action} 执行失败: {exc}") from exc
 
         return {
             "action": action,

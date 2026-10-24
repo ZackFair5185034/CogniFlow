@@ -14,7 +14,9 @@
 import asyncio
 import json
 import sys
+from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, '/mnt/e/coding-space/aiCode/CogniFlow')
@@ -37,6 +39,19 @@ def mock_context():
         trigger_data={},
         config={},
     )
+
+
+@pytest.fixture
+def mock_screen_capture():
+    """打桩屏幕采集后端（mss 真抓屏依赖桌面环境，不适合单元测试）。"""
+    frame = np.zeros((10, 20, 3), dtype=np.uint8)
+    capture = MagicMock()
+    capture.capture.return_value = frame
+    with patch(
+        "engine.core.data_input.capture.screen_capture.ScreenCapture",
+        return_value=capture,
+    ):
+        yield capture
 
 
 # ============================================================================
@@ -106,6 +121,7 @@ class TestRegionModel:
 # 2. ScreenCaptureNode region 序列化场景测试
 # ============================================================================
 
+@pytest.mark.usefixtures("mock_screen_capture")
 class TestScreenCaptureRegionSerialization:
     """ScreenCaptureNode.execute() 中 region 字段的序列化行为。"""
 
@@ -159,9 +175,10 @@ class TestScreenCaptureRegionSerialization:
         result = asyncio.run(node.execute({}, mock_context))
         assert result["region"] is None
 
-    def test_output_image_is_placeholder(self, mock_context):
-        """image 字段仍为 None 占位（TODO 待对接真实截图服务）。"""
+    def test_output_image_is_real_capture(self, mock_context):
+        """image 字段必须是真实采集到的图像（不再是 None 占位）。"""
         node = self._make_node({"x": 0, "y": 0, "width": 800, "height": 600})
         result = asyncio.run(node.execute({}, mock_context))
         assert "image" in result
-        assert result["image"] is None
+        assert result["image"] is not None
+        assert result["image"].shape == (10, 20, 3)
