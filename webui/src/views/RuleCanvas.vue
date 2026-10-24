@@ -237,13 +237,13 @@
           <SvgIcon name="panel-left" />
         </button>
 
-        <!-- Task 13: 右侧属性面板开关 (窄屏时收起, 给画布让出空间) -->
+        <!-- Task 13: 右侧属性面板开关 (窄屏时自动收起, 给画布让出空间) -->
         <button
           class="tb-icon-btn"
-          :class="{ active: showRightPanel }"
-          :title="showRightPanel ? '收起属性面板' : '展开属性面板'"
+          :class="{ active: rightPanelVisible }"
+          :title="rightPanelVisible ? '收起属性面板' : '展开属性面板'"
           aria-label="切换属性面板"
-          @click="showRightPanel = !showRightPanel"
+          @click="toggleRightPanel"
         >
           <SvgIcon name="edit" />
         </button>
@@ -666,7 +666,7 @@
       <!-- 右侧栏 (Task 13): 属性面板 + 节点图例
            常驻而非「选中才出现」—— 布局不跳动, 图例也一直可见(用户靠它认颜色) -->
       <div
-        v-show="showRightPanel"
+        v-show="rightPanelVisible"
         class="canvas-right"
       >
         <NodeInspector
@@ -756,10 +756,10 @@
             class="logs-scroller"
             :items="executionLogs"
             :item-size="34"
-            v-slot="{ item, index }"
+            v-slot="{ item }"
           >
             <div
-              :key="index"
+              :key="item.id"
               class="log-entry"
               :class="item.level"
             >
@@ -972,6 +972,12 @@ import { RecycleScroller } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import { useCogniFlowDrag } from '@/composables/useCogniFlowDrag'
 import { useWebSocket } from '@/composables/useWebSocket'
+// 草稿提示框状态跟踪 —— 卸载时精确关闭自己的弹框, 避免多层叠加
+import {
+  closeDraftPrompt,
+  hasActiveDraftPrompt,
+  openDraftPrompt,
+} from '@/utils/draftPrompt'
 import { ruleCanvasPath } from '@/utils/ruleNavigation'
 import { pickQuickAddNodes } from '@/utils/ruleQuickAdd'
 
@@ -1196,11 +1202,46 @@ const EXPANDED_WIDTH = 280
 // 右侧栏宽度 (属性面板 + 图例) —— 与左侧 palette 同宽, 视觉平衡
 const RIGHT_PANEL_WIDTH = 280
 
-// 右侧栏是否展开 (窄屏可收起, 给画布让出空间)
+// 右侧栏是否展开 (用户意图)
 const showRightPanel = ref(true)
 
+/**
+ * 视口宽度 (Task 13 走查补充)。
+ *
+ * 窄窗口下左侧 palette(280) + 右侧栏(280) 会把画布挤到不可用
+ * (实测 640px 视口 → 画布仅剩 ~80px)。因此右侧栏在视口过窄时自动收起。
+ */
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1440)
+
+/**
+ * 低于该视口宽度则自动收起右侧栏。
+ *
+ * 阈值由「画布至少保留 400px 可用宽度」推导:
+ * 左侧 palette 280 + 右侧栏 280 = 560, 560 + 400 = 960。
+ * 取 960 而非整数 1024, 是因为 960 才是真正影响可用性的临界点 ——
+ * 实测 980px 视口下画布仍有 420px, 完全可用, 不该被无谓收起。
+ */
+const RIGHT_PANEL_MIN_VIEWPORT = 960
+
+/** 右侧栏实际可见性 */
+const rightPanelVisible = computed(
+  () => showRightPanel.value && viewportWidth.value >= RIGHT_PANEL_MIN_VIEWPORT
+)
+
 /** 右侧栏实际占位宽度 —— 执行日志面板据此右移, 避免盖住属性面板 */
-const rightPanelWidth = computed(() => (showRightPanel.value ? RIGHT_PANEL_WIDTH : 0))
+const rightPanelWidth = computed(() => (rightPanelVisible.value ? RIGHT_PANEL_WIDTH : 0))
+
+/** 切换右侧栏 —— 视口过窄时给出明确提示 (自动收起无法手动展开) */
+function toggleRightPanel() {
+  if (viewportWidth.value < RIGHT_PANEL_MIN_VIEWPORT) {
+    ElMessage.warning(
+      `窗口过窄 (${viewportWidth.value}px < ${RIGHT_PANEL_MIN_VIEWPORT}px), 属性面板已自动收起以保证画布可用`
+    )
+    showRightPanel.value = false
+    return
+  }
+  showRightPanel.value = !showRightPanel.value
+}
 
 // 节点分类展开状态（reactive，分离避免循环引用）
 const categoryExpanded = reactive({
@@ -1585,6 +1626,9 @@ function handleWsMessage(msg: any) {
       }
       // 日志保留到用户手动清空或下次执行 —— 旧实现 2 秒后自毁,
       // 用户还没看清结果就没了。节点状态另存在 graph store, 不受影响。
+      // 执行结束 → 解除「执行中」锁定, 执行按钮恢复可用
+      // (旧实现只在 catch 里复位 executing → 成功执行一次后按钮永久禁用)
+      executing.value = false
       disconnectWebSocket()
       break
   }
@@ -2370,6 +2414,13 @@ onBeforeRouteLeave((_to, _from, next) => {
 // 生命周期
 onMounted(async () => {
   loading.value = true
+  // 视口宽度跟踪 (Task 13): 窄窗口自动收起右侧栏, 保证画布可用面积
+  const onViewportResize = () => {
+    viewportWidth.value = window.innerWidth
+  }
+  onViewportResize()
+  window.addEventListener('resize', onViewportResize)
+  onBeforeUnmount(() => window.removeEventListener('resize', onViewportResize))
   // 各 API 调用独立 try-catch，防止单点失败阻塞后续加载
   try {
     await store.loadGraph(graphId.value)
@@ -2414,6 +2465,8 @@ onMounted(async () => {
       const ageMs = Date.now() - (draft.savedAt || 0)
       const ageMin = Math.round(ageMs / 60000)
       const ageText = ageMin < 1 ? '刚刚' : `${ageMin} 分钟前`
+      // 记录本次弹框的序号 —— 卸载时据此精确关闭, 避免多层叠加
+      const draftPromptSeq = openDraftPrompt()
       try {
         await ElMessageBox.confirm(
           `检测到 ${ageText} 的未保存草稿 (${draft.nodes.length} 节点, ${draft.edges?.length || 0} 边)。是否恢复？`,
@@ -2429,9 +2482,14 @@ onMounted(async () => {
         triggerRef(nodes)
         store.saveHistory()
         ElMessage.success(`已恢复 ${ageText} 的草稿`)
-      } catch {
-        // 用户选放弃 — 清掉草稿
-        store.clearLocalStorageDraft(graphId.value)
+      } catch (action) {
+        // 只有用户显式点「放弃」(action === 'cancel')才清草稿。
+        // 'close' 来自组件卸载时的强制关闭 —— 用户并未表态, 清掉会丢草稿。
+        if (action === 'cancel') {
+          store.clearLocalStorageDraft(graphId.value)
+        }
+      } finally {
+        closeDraftPrompt(draftPromptSeq)
       }
     }
   } catch (err) {
@@ -2471,6 +2529,12 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  // 草稿提示框挂在 body 上, 不随组件卸载消失 —— 不关闭的话会残留在页面上,
+  // 下次进入同一张图会再弹一个, 最终多层叠加。closeDraftPrompt 的序号配对
+  // 保证这里关掉的确实是本组件打开的那一个。
+  if (hasActiveDraftPrompt()) {
+    ElMessageBox.close()
+  }
   if (trackGlobalMousePos) {
     window.removeEventListener('mousemove', trackGlobalMousePos)
     trackGlobalMousePos = null
@@ -3138,9 +3202,13 @@ async function handleExecute() {
   }
 
   executing.value = true
+  // ⚠️ 顺序: 先 clearExecution (它会把状态重置为 idle), 再置 running。
+  // 旧实现是 setExecutionStatus('running') 在前、clearExecution() 在后 ——
+  // clearExecution 整体替换 executionState, 把刚设的 'running' 又抹成 'idle',
+  // 面板一直显示「等待执行」。
+  store.clearExecution()
   store.setExecutionStatus('running')
   store.setExecutionProgress(0)
-  store.clearExecution()
   showExecutionPanel.value = true
 
   try {
@@ -3167,6 +3235,15 @@ async function handleExecute() {
     })
     ElMessage.error('执行失败')
     executing.value = false
+  } finally {
+    // executing 只表示「已发起」, 真正的结束由 execution_complete 事件复位。
+    // 这里兜底: 若启动请求本身失败/超时, 至少不能让执行按钮永久禁用。
+    // (旧实现只在 catch 里复位 executing → 成功发起后按钮永远禁用, 图只能执行一次)
+    window.setTimeout(() => {
+      if (executing.value && store.executionState.status !== 'running') {
+        executing.value = false
+      }
+    }, 3000)
   }
 }
 
@@ -5125,6 +5202,10 @@ $panel-header-height: 44px;
   font-size: 12px;
   height: 34px;
   box-sizing: border-box;
+  // 虚拟列表按固定 34px 定位每一行, 内容一旦换行就会溢出压到下一行。
+  // 强制单行 + 溢出省略, 保证行高与 item-size 一致。
+  white-space: nowrap;
+  overflow: hidden;
 
   &:last-child { border-bottom: none; }
 
@@ -5160,11 +5241,17 @@ $panel-header-height: 44px;
   .log-node {
     color: #555;
     flex-shrink: 0;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .log-message {
     color: #888;
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .log-metrics {
@@ -5172,6 +5259,9 @@ $panel-header-height: 44px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     flex-shrink: 0;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     opacity: 0.85;
   }
 }

@@ -168,21 +168,30 @@ export function useWebSocket<TMessage = unknown>(
     }
 
     status.value = reconnectAttempts > 0 ? 'reconnecting' : 'connecting'
+    let sock: WebSocket
     try {
-      ws = new WebSocket(buildAbsoluteWsUrl(target), protocols)
+      sock = new WebSocket(buildAbsoluteWsUrl(target), protocols)
     } catch (e) {
       console.error('[useWebSocket] 创建连接失败', e)
       status.value = 'closed'
       return
     }
+    ws = sock
 
-    ws.onopen = (ev) => {
+    // ⚠️ 所有事件处理都绑定到**本次创建的 socket 实例** (sock), 而不是模块级 ws。
+    // 原因 (2026-10-24 走查发现): connect() 会先 close 旧连接再建新连接, 而旧连接的
+    // onclose 是异步触发的 —— 它执行 `ws = null` 时, 模块级 ws 已经指向**新连接**,
+    // 于是新连接被误置空 → send() 因 `ws?.readyState !== OPEN` 直接返回 false →
+    // subscribe 消息发不出去 → 表现是「执行了但什么都没发生」(WS 状态却显示已连接)。
+    sock.onopen = (ev) => {
+      if (ws !== sock) return
       reconnectAttempts = 0
       status.value = 'open'
       onOpen?.(ev)
     }
 
-    ws.onmessage = (ev) => {
+    sock.onmessage = (ev) => {
+      if (ws !== sock) return
       let parsed: TMessage
       try {
         parsed = typeof ev.data === 'string'
@@ -196,17 +205,21 @@ export function useWebSocket<TMessage = unknown>(
       onMessage?.(parsed, ev)
     }
 
-    ws.onerror = (ev) => {
+    sock.onerror = (ev) => {
+      if (ws !== sock) return
       onError?.(ev)
     }
 
-    ws.onclose = (ev) => {
-      ws = null
+    sock.onclose = (ev) => {
       if (intentionalClose || unmounted) {
+        if (ws === sock) ws = null
         status.value = 'closed'
         onClose?.(ev)
         return
       }
+      // 已被更新的连接取代 —— 旧连接的关闭事件不再影响当前状态, 也不触发重连
+      if (ws !== sock) return
+      ws = null
       if (shouldReconnect() && reconnectAttempts < maxReconnectAttempts) {
         reconnectAttempts += 1
         status.value = 'reconnecting'
@@ -222,12 +235,13 @@ export function useWebSocket<TMessage = unknown>(
     clearReconnectTimer()
     intentionalClose = true
     if (ws) {
+      const sock = ws
+      ws = null
       try {
-        ws.close()
+        sock.close()
       } catch {
         // 忽略
       }
-      ws = null
     }
     status.value = 'closed'
   }

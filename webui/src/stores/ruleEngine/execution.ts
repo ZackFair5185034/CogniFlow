@@ -15,17 +15,31 @@ export interface ExecutionState {
   status: 'idle' | 'running' | 'success' | 'failed'
   progress: number
   executionId: number | null
-  logs: Array<{
-    level: string
-    timestamp: string
-    node_type?: string
-    message: string
-    duration_ms?: number
-    /** 节点输出指标（如 detections 数量、数据量等） */
-    metrics?: Record<string, number>
-  }>
+  logs: ExecutionLog[]
   nodeStates: Record<string, string>
 }
+
+/**
+ * 单条执行日志。
+ *
+ * `id` 是必填的 —— 视图层用 vue-virtual-scroller 渲染日志列表,
+ * 该库默认按 `keyField='id'` 取键, 取不到就直接抛
+ * "Key is undefined on item" → 整个列表一条都渲染不出来 (2026-10-24 走查发现)。
+ */
+export interface ExecutionLog {
+  /** 全局递增序号 —— 作为虚拟列表的唯一键 */
+  id: number
+  level: string
+  timestamp: string
+  node_type?: string
+  message: string
+  duration_ms?: number
+  /** 节点输出指标（如 detections 数量、数据量等） */
+  metrics?: Record<string, number>
+}
+
+/** 写入日志时的入参 —— id 由 store 统一分配, 调用方不用关心 */
+export type ExecutionLogInput = Omit<ExecutionLog, 'id'>
 
 export const useRuleExecutionStore = defineStore('ruleExecution', () => {
   /**
@@ -43,14 +57,25 @@ export const useRuleExecutionStore = defineStore('ruleExecution', () => {
   })
 
   /** P1-H: 日志批合并 — 100ms 内多条 log 合成一次 triggerRef */
-  let pendingLogs: ExecutionState['logs'] = []
+  let pendingLogs: ExecutionLog[] = []
   let logsFlushTimer: ReturnType<typeof setTimeout> | null = null
   const LOGS_BATCH_INTERVAL_MS = 100
 
+  /** 日志序号 —— 作为虚拟列表的唯一键, 全局递增不重复 */
+  let logIdSeq = 0
+
   function flushPendingLogs() {
     if (pendingLogs.length === 0) return
-    // 浅 ref: 直接 push 到内部数组, 然后 triggerRef
-    executionState.value.logs.push(...pendingLogs)
+    // ⚠️ 必须**换引用**而不是就地 push (2026-10-24 走查发现)。
+    //
+    // 视图层用的是 `computed(() => store.executionState.logs)` —— 返回的是数组本身。
+    // Vue 的 refreshComputed 只在 `hasChanged(value, oldValue)` 为真时才通知依赖,
+    // 而 hasChanged 对数组比的是引用。就地 push 后引用不变 → computed 重算后
+    // 判定「值没变」→ **不通知依赖** → 模板永远停在「暂无执行日志」。
+    // (节点状态能正常回显是因为它是字符串, 值变了就满足 hasChanged。)
+    //
+    // 换新数组引用后 hasChanged 为真 → 依赖被通知 → 列表按 100ms 批节奏刷新。
+    executionState.value.logs = [...executionState.value.logs, ...pendingLogs]
     pendingLogs = []
     logsFlushTimer = null
     triggerRef(executionState)
@@ -61,9 +86,11 @@ export const useRuleExecutionStore = defineStore('ruleExecution', () => {
     triggerRef(executionState)
   }
 
-  function addExecutionLog(log: ExecutionState['logs'][0]) {
+  function addExecutionLog(log: ExecutionLogInput) {
     // P1-H: 100ms 批合并 — YOLO 30FPS 推流时, 一次推送可能 N 条 log
-    pendingLogs.push(log)
+    // id 在此统一分配: 虚拟列表按 id 取键, 缺了就渲染不出来
+    logIdSeq += 1
+    pendingLogs.push({ ...log, id: logIdSeq })
     if (logsFlushTimer === null) {
       logsFlushTimer = setTimeout(flushPendingLogs, LOGS_BATCH_INTERVAL_MS)
     }
