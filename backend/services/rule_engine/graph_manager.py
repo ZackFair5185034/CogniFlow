@@ -402,6 +402,13 @@ class GraphManager:
                 items = [(k, v) for k, v in input_ports.items()]
             else:
                 items = [(p.get("name"), p) for p in input_ports]
+            # 节点显式声明的连线端口也算「已连接」
+            declared = (node.get("data") or {}).get("connections") or {}
+            if isinstance(declared, dict):
+                known = {name for name, _ in items}
+                for port_name in declared:
+                    if port_name not in known:
+                        items.append((port_name, {"required": True}))
             for port_name, port in items:
                 required = (port or {}).get("required", False)
                 if required and (node_id, port_name) not in target_handle_pairs:

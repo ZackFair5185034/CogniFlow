@@ -512,6 +512,8 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
           ...n.data,
           // P2-A: 把禁用状态持久化到 data.disabled
           disabled: disabledNodeIds.value.has(n.id),
+          // 连线关系持久化到 data.connections(后端 _resolve_inputs 读取)
+          connections: n.data?.connections ?? {},
         }
       }))),
       edges_json: JSON.stringify(edges.value.map(e => ({
@@ -763,11 +765,16 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
 
   // ============ 节点操作 ============
 
+  // 节点 id 自增序号 —— 旧实现用 `node_${Date.now()}`, 同一毫秒内创建两个节点
+  // 会拿到相同 id(快速添加连点两次即触发), 导致后一个节点覆盖前一个。
+  let _nodeSeq = 0
+
   function createNode(
     def: NodeDefinition,
     position: { x: number; y: number }
   ): boolean {
-    const id = `node_${Date.now()}`
+    _nodeSeq += 1
+    const id = `node_${Date.now()}_${_nodeSeq}`
     const newNode: Node<RuleNodeData> = {
       id,
       type: 'ruleNode',
@@ -956,6 +963,45 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
 
   // ============ 边操作 ============
 
+  // 边 id 自增序号 —— 保证同一毫秒内连续创建的边 id 不重复
+  let _edgeSeq = 0
+
+  /**
+   * 写入 / 清除节点的 connections 记录。
+   *
+   * `data.connections` = {目标端口名: {node_id, output}} —— 承载「目标端口 <- 哪个节点的
+   * 哪个输出」这一连线关系。端口元数据(data.inputs / data.outputs)只描述端口本身,
+   * 两者职责分离: 后端 `_resolve_inputs` 读 connections 取上游数据,
+   * 前端 RuleNode 读 inputs/outputs 渲染手柄。
+   */
+  function _setConnection(edge: {
+    source: string; target: string
+    sourceHandle?: string | null; targetHandle?: string | null
+  }): void {
+    const targetNode = nodes.value.find((n) => n.id === edge.target)
+    if (!targetNode?.data) return
+    const portName = edge.targetHandle ?? ''
+    if (!portName) return
+    if (!targetNode.data.connections) {
+      targetNode.data.connections = {}
+    }
+    targetNode.data.connections[portName] = {
+      node_id: edge.source,
+      output: edge.sourceHandle ?? 'result',
+    }
+  }
+
+  /** 清除节点的 connections 记录(边被删除时调用) */
+  function _clearConnection(edge: {
+    target: string; targetHandle?: string | null
+  }): void {
+    const targetNode = nodes.value.find((n) => n.id === edge.target)
+    if (!targetNode?.data?.connections) return
+    const portName = edge.targetHandle ?? ''
+    if (!portName) return
+    delete targetNode.data.connections[portName]
+  }
+
   /** 添加边 */
   function addEdge(connection: {
     source: string; target: string
@@ -970,7 +1016,7 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     )
     if (dup) return false
     const newEdge = {
-      id: `edge_${Date.now()}`,
+      id: `edge_${Date.now()}_${_edgeSeq++}`,
       source: connection.source,
       target: connection.target,
       sourceHandle: connection.sourceHandle ?? undefined,
@@ -981,6 +1027,8 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     edges.value = [...edges.value, newEdge]
     _indexAddEdge(newEdge)
     triggerRef(_connectedHandleVersion)
+    // 写入目标节点的 connections —— 后端 _resolve_inputs 据此取上游数据
+    _setConnection(newEdge)
     _recordEdgeAddHistory(newEdge)
     return true
   }
@@ -989,6 +1037,7 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     const target = edges.value.find(e => e.id === edgeId)
     edges.value = edges.value.filter(e => e.id !== edgeId)
     if (target) _indexRemoveEdge(target)
+    if (target) _clearConnection(target)
     triggerRef(_connectedHandleVersion)
     if (target) _recordEdgeRemoveHistory(target)
   }
@@ -999,6 +1048,7 @@ export const useRuleGraphStore = defineStore('ruleGraph', () => {
     const removed = edges.value.filter(e => idSet.has(e.id))
     edges.value = edges.value.filter(e => !idSet.has(e.id))
     for (const e of removed) _indexRemoveEdge(e)
+    for (const e of removed) _clearConnection(e)
     triggerRef(_connectedHandleVersion)
     if (removed.length > 0) _recordEdgesRemoveHistory(removed)
   }

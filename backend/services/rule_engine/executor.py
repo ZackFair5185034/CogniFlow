@@ -641,7 +641,14 @@ class RuleGraphExecutor:
         flat_config = node_data.get("config") or node_data.get("params", {})
         params = flat_config if isinstance(flat_config, dict) else {}
         # 输入端口连接信息
-        inputs_config = node_data.get("inputs", {})
+        # 新契约: data.connections = {目标端口名: {node_id, output}}
+        # 旧契约: data.inputs 为 dict 时同样兼容(存量图)
+        # 端口元数据(data.inputs 为数组)不含连线信息, 不能当连接配置用。
+        inputs_config = node_data.get("connections")
+        if not isinstance(inputs_config, dict):
+            inputs_config = node_data.get("inputs")
+        if not isinstance(inputs_config, dict):
+            inputs_config = {}
 
         # 更新状态为 running
         context.set_node_status(node_id, "running")
@@ -798,12 +805,27 @@ class RuleGraphExecutor:
 
         从已完成的节点结果或默认值中获取输入。
         支持 {{variable}} 语法变量插值。
+
+        Args:
+            inputs_config: 端口连接配置。
+                新契约 `data.connections`: {端口名: {node_id, output}}；
+                旧契约 `data.inputs` 为 dict 时同构兼容；
+                若传入 list(端口元数据数组), 视为无连接信息, 返回空字典。
+            context: 执行上下文
+
+        Returns:
+            {端口名: 输入值}；未解析到的端口不出现在结果中。
         """
         inputs = {}
 
+        # 容错: 前端历史版本把 data.inputs 存成端口元数据数组, 直接调 .items() 会崩
+        # (实测导致 54 个节点全部崩溃、0 输出)
+        if not isinstance(inputs_config, dict):
+            return inputs
+
         for port_name, config in inputs_config.items():
             if not isinstance(config, dict):
-                config = {}
+                continue
             # 优先从连接的节点获取
             if config.get("node_id"):
                 source_node = config["node_id"]
@@ -812,7 +834,7 @@ class RuleGraphExecutor:
             # 其次使用默认值（支持 {{variable}} 变量插值）
             elif "value" in config:
                 inputs[port_name] = self._interpolate(config["value"], context)
-            # 否则为 None
+            # 既无连线也无默认值: 不写入该键, 让下游的输入校验尽早暴露缺失
 
         return inputs
 

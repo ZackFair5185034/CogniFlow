@@ -296,6 +296,13 @@ export interface RuleNodeData {
   inputs?: NodePort[]
   /** 输出端口定义 */
   outputs?: NodePort[]
+  /**
+   * 端口连线关系 - 目标端口名 -> 上游节点与上游输出端口。
+   *
+   * 与 `inputs`/`outputs`(端口元数据数组, 用于渲染手柄)职责分离。
+   * 后端 `_resolve_inputs` 读取此字段解析上游数据。
+   */
+  connections?: Record<string, { node_id: string; output: string }>
   /** 配置 Schema */
   configSchema?: Record<string, ConfigSchemaProperty>
   /** 节点配置值 */
