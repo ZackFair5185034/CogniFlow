@@ -96,21 +96,26 @@ class RuleScheduler:
                 trigger_data=trigger_config,
             )
 
-            # 异步执行 (锁生命周期 = 触发瞬间, 实际执行独立 task, 不阻塞下次触发到来判断)
-            # 注: 锁释放时机 = 本函数 return 时. 真实业务 execute 在 create_task 里跑,
-            #   下次 Cron 触发能正确检测 lock.locked() == True 跳过.
-            asyncio.create_task(
-                executor.execute(
+            # 直接 await 执行 —— 锁的生命周期覆盖**整个执行过程**。
+            # 旧实现用 create_task 让函数提前返回, finally 里的 lock.release()
+            # 随即释放, 互斥完全失效(下次 Cron 触发照样再跑一份, 重复推理浪费 GPU)。
+            try:
+                await executor.execute(
                     graph_data=graph_data,
                     execution_id=execution_id,
                     trigger_type="timer",
                     trigger_data=trigger_config,
                 )
-            )
-            logger.info(
-                f"[RuleScheduler] 规则图 {graph_id} 定时执行已触发, "
-                f"execution_id={execution_id}"
-            )
+                logger.info(
+                    f"[RuleScheduler] 规则图 {graph_id} 定时执行完成, "
+                    f"execution_id={execution_id}"
+                )
+            except Exception as e:
+                # 执行期异常不能逃出, 否则锁释放路径会被跳过(死锁)
+                logger.error(
+                    f"[RuleScheduler] 规则图 {graph_id} 定时执行失败: {e}",
+                    exc_info=True,
+                )
         except Exception as e:
             logger.error(f"[RuleScheduler] 定时执行失败 graph_id={graph_id}: {e}")
         finally:

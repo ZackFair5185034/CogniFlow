@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import re
+import threading
 import time
 from collections import defaultdict
 from datetime import datetime
@@ -28,7 +29,9 @@ class RuleGraphExecutor:
     """
 
     # 保存所有进行中的执行上下文（用于取消操作）
+    # 加锁保护: 旧实现是裸 dict, 定时任务与手动执行并发时会竞争
     _active_executions: Dict[int, ExecutionContext] = {}
+    _active_lock = threading.Lock()
 
     # 端口类型兼容性矩阵 - 唯一事实源在 port_types 模块, 此处仅做向后兼容转发
     PORT_COMPATIBILITY = PORT_COMPATIBILITY
@@ -353,12 +356,14 @@ class RuleGraphExecutor:
     @classmethod
     def register_execution(cls, execution_id: int, context: ExecutionContext):
         """注册执行上下文（用于取消操作）。"""
-        cls._active_executions[execution_id] = context
+        with cls._active_lock:
+            cls._active_executions[execution_id] = context
 
     @classmethod
     def unregister_execution(cls, execution_id: int):
         """注销执行上下文。"""
-        cls._active_executions.pop(execution_id, None)
+        with cls._active_lock:
+            cls._active_executions.pop(execution_id, None)
 
     @classmethod
     def cancel_execution(cls, execution_id: int) -> bool:
@@ -367,11 +372,12 @@ class RuleGraphExecutor:
         Returns:
             True 如果执行存在并已请求取消，False 如果执行不存在
         """
-        context = cls._active_executions.get(execution_id)
-        if context:
-            context.request_cancel()
-            return True
-        return False
+        with cls._active_lock:
+            context = cls._active_executions.get(execution_id)
+        if context is None:
+            return False
+        context.request_cancel()
+        return True
 
     async def execute(
         self,
@@ -469,7 +475,8 @@ class RuleGraphExecutor:
 
         # 如果在调用 execute() 之前就已请求取消，需要继承取消状态
         # 注意：必须在 register_execution 之前检查旧的注册状态
-        pre_cancelled = RuleGraphExecutor._active_executions.get(execution_id)
+        with RuleGraphExecutor._active_lock:
+            pre_cancelled = RuleGraphExecutor._active_executions.get(execution_id)
         was_cancelled = pre_cancelled and pre_cancelled.is_cancelled()
 
         # 注册执行上下文（会覆盖旧的）
