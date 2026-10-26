@@ -1,7 +1,4 @@
 <template>
-  <!-- Toast 全局通知 -->
-  <Toast ref="toastRef" />
-
   <!-- 规则设计器 - 顶层全屏页面，不走 App 布局 -->
   <router-view v-if="$route.meta.layout === 'none'" />
 
@@ -10,11 +7,6 @@
     v-else
     class="app-container"
   >
-    <!-- 背景效果 -->
-    <div class="bg-grid" />
-    <div class="bg-glow" />
-    <div class="scanline" />
-
     <!-- 侧边导航 -->
     <aside
       class="sidebar"
@@ -53,7 +45,6 @@
             class="nav-icon"
           />
           <span class="nav-text">{{ item.label }}</span>
-          <span class="nav-indicator" />
         </router-link>
       </nav>
 
@@ -73,6 +64,7 @@
           <span class="time-display">{{ currentTime }}</span>
           <button
             class="action-btn"
+            title="刷新"
             @click="refreshData"
           >
             <SvgIcon name="refresh" />
@@ -95,23 +87,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
-import Toast from '@/components/common/Toast.vue'
-import { registerToast } from '@/utils/toast'
 
 const route = useRoute()
 const isOnline = ref(true)
 const currentTime = ref('')
 const collapsed = ref(false)
-const toastRef = ref<InstanceType<typeof Toast> | null>(null)
-
-// 注册 Toast
-onMounted(() => {
-  if (toastRef.value) {
-    registerToast(toastRef.value)
-  }
-})
 
 const toggleSidebar = () => {
   collapsed.value = !collapsed.value
@@ -161,55 +141,11 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss">
-// App 布局专用样式
-// 公共样式已抽取到 @/style/index.scss
-
 .app-container {
   display: flex;
   height: 100vh;
   overflow: hidden;
   position: relative;
-}
-
-// 背景效果
-.bg-grid {
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
-  background-size: 50px 50px;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.bg-glow {
-  position: fixed;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background:
-    radial-gradient(ellipse at 20% 20%, rgba(0, 240, 255, 0.08) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 80%, rgba(255, 0, 170, 0.06) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: 0;
-  animation: glowPulse 10s ease-in-out infinite;
-}
-
-.scanline {
-  position: fixed;
-  inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0, 0, 0, 0.1) 2px,
-    rgba(0, 0, 0, 0.1) 4px
-  );
-  pointer-events: none;
-  z-index: 1000;
-  opacity: 0.3;
 }
 
 // 侧边栏
@@ -219,41 +155,28 @@ onUnmounted(() => {
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  padding: 20px 0;
   position: relative;
   z-index: 11;
   flex-shrink: 0;
-  transition: width 0.3s ease;
+  transition: width 0.2s ease;
   overflow: visible;
 
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 1px;
-    height: 100%;
-    background: linear-gradient(180deg, var(--accent-cyan), var(--accent-magenta));
-    opacity: 0.5;
-  }
-
   &.collapsed {
-    width: 64px;
+    width: 60px;
 
     .logo-text,
-    .nav-text,
-    .nav-indicator {
+    .nav-text {
       display: none;
     }
 
     .logo {
       justify-content: center;
-      padding: 0 12px 30px;
+      padding: 10px 12px;
     }
 
     .nav-item {
       justify-content: center;
-      padding: 14px;
+      padding: 12px;
     }
 
     .sidebar-footer {
@@ -269,106 +192,94 @@ onUnmounted(() => {
 
 .collapse-btn {
   position: absolute;
-  right: -14px;
+  right: -12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 14px;
-  height: 48px;
+  width: 12px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-left: none;
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 4px 4px 0;
   color: var(--text-muted);
   cursor: pointer;
   z-index: 20;
   padding: 0;
+  transition: color 0.15s;
 
   &:hover {
-    color: var(--accent-cyan);
-    border-color: var(--accent-cyan);
-    border-left: none;
+    color: var(--text-secondary);
   }
 
   svg {
-    width: 12px;
-    height: 12px;
-  }
-
-  &.collapsed svg {
-    transform: translateX(1px);
+    width: 10px;
+    height: 10px;
   }
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 20px 30px;
+  gap: 8px;
+  padding: 4px 4px;
+  height: 48px;
   border-bottom: 1px solid var(--border-color);
 }
 
 .logo-icon {
-  width: 40px;
-  height: 40px;
-  animation: iconPulse 3s ease-in-out infinite;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
 }
 
 .logo-text {
   display: flex;
+  align-items: center;
   flex-direction: column;
+  justify-content: space-around;
+  height: 100%;
 }
 
 .logo-title {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: 1px;
+  letter-spacing: 0.3px;
+  line-height: 1;
 }
 
 .logo-sub {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  color: var(--accent-cyan);
-  letter-spacing: 2px;
+  font-family: var(--font-family-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 1px;
   text-transform: uppercase;
+  line-height: 1;
 }
 
 .nav-menu {
   flex: 1;
-  padding: 20px 0;
+  padding: 10px 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 20px;
+  gap: 10px;
+  padding: 10px 16px;
   margin: 0 8px;
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--text-secondary);
   text-decoration: none;
-  position: relative;
-  transition: all 0.3s ease;
-  overflow: hidden;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 0;
-    background: var(--accent-cyan);
-    transition: height 0.3s ease;
-    border-radius: 0 2px 2px 0;
-  }
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s ease;
 
   &:hover {
     background: var(--bg-hover);
@@ -376,42 +287,20 @@ onUnmounted(() => {
   }
 
   &.active {
-    background: linear-gradient(90deg, rgba(0, 240, 255, 0.1), transparent);
-    color: var(--accent-cyan);
-
-    &::before {
-      height: 24px;
-      box-shadow: var(--glow-cyan);
-    }
-
-    .nav-indicator {
-      opacity: 1;
-      box-shadow: var(--glow-cyan);
-    }
+    background: var(--accent-blue-muted);
+    color: var(--accent-blue);
   }
 }
 
 .nav-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
 }
 
 .nav-text {
-  font-size: 14px;
-  font-weight: 500;
   white-space: nowrap;
-  transition: opacity 0.3s ease;
-}
-
-.nav-indicator {
-  margin-left: auto;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent-cyan);
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.2s ease;
 }
 
 .sidebar-footer {
@@ -423,29 +312,27 @@ onUnmounted(() => {
   border-top: 1px solid var(--border-color);
 
   .status-text {
-    transition: opacity 0.3s ease, width 0.3s ease;
+    transition: opacity 0.2s ease, width 0.2s ease;
     white-space: nowrap;
     overflow: hidden;
   }
 }
 
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--accent-orange);
-  box-shadow: 0 0 10px var(--accent-orange);
+  background: var(--color-warning);
+  flex-shrink: 0;
 
   &.online {
-    background: var(--accent-green);
-    box-shadow: 0 0 10px var(--accent-green);
-    animation: statusPulse 2s ease-in-out infinite;
+    background: var(--color-success);
   }
 }
 
 .status-text {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 11px;
+  font-family: var(--font-family-mono);
+  font-size: 10px;
   color: var(--text-muted);
 }
 
@@ -460,26 +347,14 @@ onUnmounted(() => {
 }
 
 .top-bar {
-  height: 56px;
+  height: 48px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: flex-end;
   padding: 0 20px;
-  position: relative;
   flex-shrink: 0;
-
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--accent-cyan), transparent);
-    opacity: 0.5;
-  }
 }
 
 .top-actions {
@@ -489,46 +364,38 @@ onUnmounted(() => {
 }
 
 .time-display {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-  color: var(--text-secondary);
-  letter-spacing: 0.5px;
-}
-
-.top-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .action-btn {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 
   &:hover {
     background: var(--bg-hover);
-    border-color: var(--accent-cyan);
-    color: var(--accent-cyan);
+    color: var(--text-secondary);
   }
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: 15px;
+    height: 15px;
   }
 }
 
 .content-area {
   flex: 1;
-  padding: 12px 16px;
+  padding: 16px 20px;
   overflow-y: auto;
   position: relative;
   background: var(--bg-primary);
@@ -539,7 +406,7 @@ onUnmounted(() => {
   }
 
   &::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
+    background: transparent;
   }
 
   &::-webkit-scrollbar-thumb {
@@ -552,25 +419,10 @@ onUnmounted(() => {
   }
 }
 
-@keyframes glowPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-
-@keyframes iconPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
-
-@keyframes statusPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
 // 页面切换淡入淡出
 .page-fade-enter-active,
 .page-fade-leave-active {
-  transition: opacity 0.25s ease;
+  transition: opacity 0.2s ease;
 }
 
 .page-fade-enter-from,

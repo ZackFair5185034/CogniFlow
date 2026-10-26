@@ -1,0 +1,1674 @@
+// -*- coding: utf-8 -*-
+/**
+ * 规则引擎图状态 (P1-A 拆分)
+ *
+ * 独立子 store — 管理画布与图相关的所有 state:
+ *   - 节点定义 (nodeDefinitions, availableModels)
+ *   - 图元数据 (graphMeta)
+ *   - 节点/边 (nodes, edges) + 选中/连接索引 (connectedHandleIndex, nodeById)
+ *   - 展开状态 (expandedNodeIds)
+ *   - 禁用状态 (disabledNodeIds)
+ *   - 画布交互 (viewportZoom, isDragging, isSelectionBoxActive)
+ *   - LOD (currentGlobalLod, baseLodLevelMap)
+ *   - 历史栈 (historyStack, historyIndex, isHistoryPaused, lastSavedHistoryIndex)
+ *
+ * 跨子 store 写入:
+ *   - loadGraph / importFromJSON 解析 variables_json 后写入 variables store
+ *   - saveGraph 读 variables store 写回 backend
+ *   - duplicateAsNewGraph 同上
+ */
+
+import { defineStore } from 'pinia'
+import { ref, computed, shallowRef, triggerRef, markRaw, toRaw, reactive } from 'vue'
+import { ruleEngineApi, modelApi } from '@/api'
+import type {
+  NodeDefinition as NodeDefinitionBase,
+  GraphNode as GraphNodeBase,
+  GraphEdge as GraphEdgeBase,
+  RuleNodeData,
+  VariableType,
+  VariableDefaultValue
+} from '@/types/api'
+import type { Node, Edge } from '@vue-flow/core'
+import { MarkerType } from '@vue-flow/core'
+import { getDefaultConfig, cloneForHistory } from './_helpers'
+import { useRuleVariablesStore } from './variables'
+import type { Variable } from './variables'
+
+// ============ 类型别名（兼容旧代码）============
+
+export type NodeDefinition = NodeDefinitionBase
+export type GraphNode = GraphNodeBase
+export type GraphEdge = GraphEdgeBase
+
+/** 规则图元数据 */
+export interface GraphMeta {
+  id: number
+  name: string
+  description?: string
+  is_active: boolean
+  version?: string
+  thumbnail?: string
+}
+
+/**
+ * 对齐模式 (P1-2 2026-06-19)
+ * - 'left' / 'right' / 'top' / 'bottom': 对齐到边界
+ * - 'h-center' / 'v-center': 居中
+ * - 'distribute-h' / 'distribute-v': 等距分布 (至少 3 个节点)
+ */
+export type AlignMode =
+  | 'left' | 'right' | 'top' | 'bottom'
+  | 'h-center' | 'v-center'
+  | 'distribute-h' | 'distribute-v'
+
+export const useRuleGraphStore = defineStore('ruleGraph', () => {
+  // ============ 状态 ============
+
+  /** 节点定义列表（节点面板数据） */
+  const nodeDefinitions = ref<NodeDefinition[]>([])
+
+  /** 规则图元数据 */
+  const graphMeta = ref<GraphMeta | null>(null)
+
+  /** 规则图节点 - 唯一数据源，VueFlow 监听此 ref 变化。
+   * 使用 shallowRef 避免对每个节点内部 (data/position/dimensions) 都建深代理：
+   * 节点数据是 VueFlow 内部管理的异构树，深代理无意义且在 30+ 节点时
+   * 严重拖累响应式追踪。改内部属性后需 triggerRef() 触发响应。
+   */
+  const nodes = shallowRef<Node<RuleNodeData>[]>([])
+
+  /** 规则图边 - 同上原因用 shallowRef。 */
+  const edges = shallowRef<Edge[]>([])
+
+  /**
+   * 展开的节点 ID 集合 (LOD 2 节点内嵌配置)
+   *
+   * Phase 17.1+: 取代右侧 NodeConfigEditor 面板.
+   * - 双击节点 → 加入此 Set → 该节点 LOD 强制升到 2 (无视 zoom)
+   * - 再次双击 / 删除节点 / 点击空白 → 从 Set 移除 → 退回 zoom 决定的 LOD
+   * - 多节点可同时展开 (用户编辑 2 个节点时, 对比配置很常见)
+   *
+   * Phase 19.3+: 语义反转 = "已折叠节点"
+   */
+  const expandedNodeIds = shallowRef<Set<string>>(new Set())
+
+  /** 可用模型列表（供 model-select widget 使用） */
+  const availableModels = ref<Array<{ id: number; name: string }>>([])
+
+  // ---- Undo/Redo 栈 ----
+  // Phase B 任务3: 混合 history (snapshot + move entry), 拖拽松手不再克隆整图
+  // - snapshot: 完整克隆, 用于非拖拽操作 (创建/删除/连接/粘贴)
+  // - move: 单节点位置变更, 拖拽松手时记录, undo 时只改该节点 position
+  const historyStack = ref<Array<
+    | { type: 'snapshot'; nodes: GraphNode[]; edges: GraphEdge[] }
+    | { type: 'move'; nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }
+    | { type: 'groupMove'; moves: Array<{ nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }> }
+    | { type: 'addEdge'; edge: GraphEdge }
+    | { type: 'removeEdge'; edge: GraphEdge }
+    | { type: 'removeEdges'; edges: GraphEdge[] }
+  >>([])
+  const historyIndex = ref(-1)
+  const isHistoryPaused = ref(false)
+  const maxHistorySize = 20
+
+  // P0-2 (2026-06-19): 最近一次成功保存对应的 history 索引.
+  //   dirty = (historyIndex !== lastSavedHistoryIndex), 配合 beforeunload 提示 + 草稿自动保存.
+  //   比"对比 nodes JSON 字符串"更便宜 — history 索引变化即可, 不必序列化.
+  const lastSavedHistoryIndex = ref(-1)
+
+  // ============ 画布交互状态 ============
+
+  /** 当前画布缩放级别 (LOD 决策依据) */
+  const viewportZoom = ref(1)
+  /** 拖动中标记 (锁定 LOD, 避免切换抖动破坏 v-memo) */
+  const isDragging = ref(false)
+  /** 框选拖拽中 (同样锁定 LOD) */
+  const isSelectionBoxActive = ref(false)
+
+  // ============ 计算属性 ============
+
+  /**
+   * 全局已连接 handle 索引 (Phase 17.2 P1-F: 增量维护)
+   *
+   * 之前 (Phase B 任务2): computed 每次 edges.value 变化全量重建 Set
+   * 现在: 手动维护 _connectedHandleIndex Set, addEdge/removeEdge/loadGraph/undo/redo
+   *       显式 add/delete, 用 readonly() 暴露避免外部 mutate.
+   *
+   * key 格式: `${nodeId}:${handleId}:${direction}`, direction = 'source' | 'target'
+   */
+  const _connectedHandleIndex = new Set<string>()
+  const _connectedHandleVersion = shallowRef(0)  // 触发 computed/下游依赖
+
+  /** PERF-8 (2026-06-19): 维护"已索引的 edge id"辅助 Set, 供 _indexRebuild diff 使用 */
+  const _indexedEdgeIds = new Set<string>()
+
+  /**
+   * 已索引的边 id → 边对象 (Task 15, 2026-10-24)
+   *
+   * 用途: _indexRebuild 要把「被删掉的边」从句柄索引里摘掉, 必须知道那条边的
+   * source/target/handle 信息。旧实现用 `edges.value.find(e => e.id === oldId)` 找,
+   * 但被删的边此时**已经不在 edges.value 里** → find 永远返回 undefined →
+   * 句柄索引残留 → 换图后上一张图用过的端口仍显示"已连接", 且连线校验会拒绝重连。
+   *
+   * 同时把 _indexRebuild 从 O(E²) 降为 O(E)。
+   */
+  const _indexedEdges = new Map<string, { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }>()
+
+  // FIX (BUG-4 2026-06-19): 节点配置变更的响应式信号
+  // 之前 updateNodeConfig 不 trigger, NodeConfigEditor (LOD 2 内嵌) 的 computed 链断裂.
+  //
+  // Task 14 (2026-10-24): 改为**按节点粒度**的版本号 Map。
+  // 旧实现是全局计数器 —— 改 A 节点的参数会让所有节点的 Editor computed 全部失效,
+  // 80 节点图上每敲一个键就是 80 次无谓重算。reactive Map 的 get/set 只通知该 key 的依赖,
+  // 只有被改的那个节点会重算。
+  const _configVersionMap = reactive(new Map<string, number>())
+
+  /** 配置变更总次数 (诊断用) —— 不再作为响应式触发器, 见 _configVersionMap */
+  const _configVersion = shallowRef(0)
+
+  /**
+   * 读取某节点的配置版本号 —— 组件在 computed 里读它建立**按节点**的响应式依赖。
+   *
+   * @param nodeId 节点 id
+   * @returns 该节点的配置变更次数 (从未改过为 0)
+   */
+  function configVersionOf(nodeId: string): number {
+    return _configVersionMap.get(nodeId) ?? 0
+  }
+
+  function _indexAddEdge(e: { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) {
+    if (e.sourceHandle) {
+      _connectedHandleIndex.add(`${e.source}:${e.sourceHandle}:source`)
+    }
+    if (e.targetHandle) {
+      _connectedHandleIndex.add(`${e.target}:${e.targetHandle}:target`)
+    }
+    _indexedEdgeIds.add(e.id)
+    _indexedEdges.set(e.id, e)
+  }
+
+  function _indexRemoveEdge(e: { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }) {
+    if (e.sourceHandle) {
+      _connectedHandleIndex.delete(`${e.source}:${e.sourceHandle}:source`)
+    }
+    if (e.targetHandle) {
+      _connectedHandleIndex.delete(`${e.target}:${e.targetHandle}:target`)
+    }
+    _indexedEdgeIds.delete(e.id)
+    _indexedEdges.delete(e.id)
+  }
+
+  /**
+   * 全量重建索引 (loadGraph / undo snapshot 路径调用)
+   * PERF-8 (2026-06-19): diff 模式 — 只 add/remove 变更的边, 不再 O(2E) clear + 重建
+   * Task 15 (2026-10-24): 移除边时从 _indexedEdges 按 id 取回端口信息 (O(1)),
+   *   不再用 edges.value.find (O(E) → 整体 O(E²)), 且修掉了「被删边找不到 → 索引残留」。
+   */
+  function _indexRebuild() {
+    const oldIds = _indexedEdgeIds
+    const newIds = new Set<string>()
+    for (const e of edges.value) newIds.add(e.id)
+
+    // 1) 移除被删的边
+    for (const oldId of oldIds) {
+      if (!newIds.has(oldId)) {
+        const oldEdge = _indexedEdges.get(oldId)
+        if (oldEdge) _indexRemoveEdge(oldEdge)
+      }
+    }
+    // 2) 加入新增的边
+    for (const e of edges.value) {
+      if (!oldIds.has(e.id)) {
+        _indexAddEdge(e)
+      }
+    }
+  }
+
+  /**
+   * 数据层框选命中 - 返回命中节点 id。
+   *
+   * 旧实现走 DOM 查询 (`.vue-flow__node[data-id]` + getBoundingClientRect),
+   * 有两个问题:
+   *   1. **框不到视口外的节点** —— DOM 里根本没有它们的元素 (纯缺陷, 与节点数量无关);
+   *   2. 每次框选结束都要对所有可见节点做 getBoundingClientRect, 强制布局。
+   *
+   * 现在直接遍历节点数据判定, O(N) 且与渲染无关。
+   *
+   * 命中判定: 节点锚点 (position, 即节点左上角) 落在矩形内。
+   * 注: 这是相对改造前「节点盒与矩形相交(partial)」的**语义收窄** ——
+   *   框选矩形需要盖住节点左上角才算命中。矩形宽高为 0 时视为空选区。
+   */
+  function nodesInRect(rect: {
+    x: number; y: number; width: number; height: number
+  }): string[] {
+    // 反向拖拽 → 宽高为负, 取绝对值归一化; 宽或高为 0 → 退化选区, 无命中
+    const w = Math.abs(rect.width)
+    const h = Math.abs(rect.height)
+    if (w <= 0 || h <= 0) return []
+    const left = Math.min(rect.x, rect.x + rect.width)
+    const top = Math.min(rect.y, rect.y + rect.height)
+    const right = Math.max(rect.x, rect.x + rect.width)
+    const bottom = Math.max(rect.y, rect.y + rect.height)
+
+    const hit: string[] = []
+    for (const node of nodes.value) {
+      const cx = node.position?.x ?? 0
+      const cy = node.position?.y ?? 0
+      if (cx >= left && cx <= right && cy >= top && cy <= bottom) {
+        hit.push(node.id)
+      }
+    }
+    return hit
+  }
+
+  /** 暴露的只读 connectedHandleIndex — computed 包装避免外部直接 mutate */
+  const connectedHandleIndex = computed<ReadonlySet<string>>(() => {
+    void _connectedHandleVersion.value
+    return _connectedHandleIndex
+  })
+
+  /** O(1) 查询 handle 是否已连接. 取代 RuleNode 内部 O(E) 扫描. */
+  function isHandleConnected(
+    nodeId: string,
+    handleId: string,
+    direction: 'source' | 'target'
+  ): boolean {
+    return connectedHandleIndex.value.has(`${nodeId}:${handleId}:${direction}`)
+  }
+
+  /**
+   * 节点 ID → node O(1) 查找 (computed)
+   * 2026-06-21 修复: 去掉 lazy dirty 优化
+   *   原实现用 _nodeByIdDirty flag, false 时直接 return 缓存 Map, 不访问 nodes.value,
+   *   导致 Vue computed 依赖追踪断裂 — createNode 改 nodes.value 后 computed 不重算.
+   */
+  function _nodeByIdMarkDirty() { /* 空函数保留避免改动调用点 */ }
+  const nodeById = computed<Map<string, Node<RuleNodeData>>>(() => {
+    const map = new Map<string, Node<RuleNodeData>>()
+    for (const n of nodes.value) {
+      map.set(n.id, n)
+    }
+    return map
+  })
+
+  /**
+   * 选中节点 id 集合 —— 增量维护 (Task 14)
+   *
+   * 旧实现: 每次 select change 都 applyVueFlowNodeChanges + 整体替换 nodes 数组,
+   *   500 节点图上点一下 = 全数组克隆 + VueFlow 整图 vdom diff。
+   * 新实现: 只 mutate 目标节点的 data.selected + 增删本集合, nodes 数组引用不变。
+   *
+   * 用 reactive(Set) 而非 shallowRef(Set): Vue 的集合代理按 key 精确通知,
+   *   删除一个 id 不会让其他 id 的依赖失效。
+   */
+  const selectedIds = reactive(new Set<string>())
+
+  /**
+   * 增量设置节点选中态 —— 不替换 nodes 数组引用。
+   *
+   * @param nodeId 节点 id
+   * @param selected 是否选中
+   */
+  function setNodeSelected(nodeId: string, selected: boolean) {
+    const node = nodeById.value.get(nodeId)
+    if (node?.data) {
+      ;(node.data as RuleNodeData).selected = selected
+    }
+    if (selected) {
+      selectedIds.add(nodeId)
+    } else {
+      selectedIds.delete(nodeId)
+    }
+  }
+
+  /** 清空选中集合 (加载新图时用) */
+  function clearSelection() {
+    selectedIds.clear()
+  }
+
+  /** 是否可以撤销 */
+  const canUndo = computed(() => historyIndex.value > 0)
+
+  /** 是否可以重做 */
+  const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
+
+  /**
+   * 配置类修改标记 (2026-10-24)。
+   *
+   * `updateNodeConfig` 不写历史栈 —— 每按一次键就克隆全图快照太贵, 也会把
+   * 撤销栈冲垮。但它必须能被 `isDirty` 看见, 否则「改了参数以为保存了」
+   * 实际没保存。这个独立标志位参与 isDirty 计算。
+   */
+  const _configDirty = shallowRef(false)
+
+  /**
+   * 变更计数 (Task 15) —— 每次图变更自增。
+   *
+   * 用途: 草稿自动保存需要「有任意改动就重置防抖计时器」的信号。
+   * - `isDirty` 是布尔量: 连续两次改动它都保持 true, watch 它不会二次触发;
+   * - `historyIndex` 只覆盖结构类改动, 覆盖不到 `updateNodeConfig` 这类配置改动。
+   * 所以另设一个「每次改动必自增」的计数器作为统一变更信号。
+   */
+  const _dirtyTick = shallowRef(0)
+
+  /** 标记为未保存 */
+  function markDirty(): void {
+    _configDirty.value = true
+    _dirtyTick.value++
+  }
+
+  /** 清除未保存标记(保存成功后调用) */
+  function clearDirty(): void {
+    _configDirty.value = false
+    lastSavedHistoryIndex.value = historyIndex.value
+  }
+
+  /** P0-2 (2026-06-19): 当前是否有未保存改动 */
+  const isDirty = computed(
+    () => historyIndex.value !== lastSavedHistoryIndex.value || _configDirty.value
+  )
+
+  /** 是否有节点 */
+  const hasNodes = computed(() => nodes.value.length > 0)
+
+  /** 锁定期间的 LOD 缓存, drag 期间维持稳定 (避免切换抖动破坏 v-memo) */
+  const lodLevelMapCache = new Map<string, 0 | 1>()
+
+  /**
+   * LOD 展开阈值 (Task 16: 0.65 → 0.75)。
+   *
+   * 提高阈值 = 中等缩放级别下展开的节点更少 → 挂载的 NodeConfigEditor
+   * (每个带 el-select + el-tooltip + el-scrollbar) 更少 → 缩放时的长任务更短。
+   */
+  const LOD_EXPAND_THRESHOLD = 0.75
+
+  /** 全局稳定的 LOD 等级 (Phase 19.3+: 单阈值两级) */
+  const currentGlobalLod = ref<0 | 1>(1)
+
+  /**
+   * 桶化 zoom 值用于缓存命中 (Phase 17.3 修复 P0-A 短路 bug)
+   * 旧实现 zoom 是连续小数几乎永远不 ==, 桶化到 0.1 精度后同桶复用.
+   */
+  function bucketZoom(z: number): number {
+    return Math.round(z * 10) / 10
+  }
+
+  // PERF-2 修复 (2026-06-19): 缓存 key 改用 length + firstId + lastId 代替引用相等
+  let cachedBaseLodRef: {
+    zoomBucket: number
+    zoom: number
+    expandedRef: typeof expandedNodeIds.value
+    nodesLength: number
+    firstId: string | undefined
+    lastId: string | undefined
+    isLodLocked: boolean
+    globalLod: 0 | 1
+  } | null = null
+  let cachedBaseLodMap: Map<string, 0 | 1> = new Map()
+  const baseLodLevelMap = computed<Map<string, 0 | 1>>(() => {
+    const zoom = viewportZoom.value
+    const isLodLocked = isDragging.value || isSelectionBoxActive.value
+    const expandedRef = expandedNodeIds.value
+    const nodesRef = nodes.value
+
+    if (!isLodLocked) {
+      const cur = currentGlobalLod.value
+      let next: 0 | 1 = cur
+      if (cur === 0 && zoom >= LOD_EXPAND_THRESHOLD) next = 1
+      else if (cur === 1 && zoom < LOD_EXPAND_THRESHOLD) next = 0
+      if (next !== cur) currentGlobalLod.value = next
+    }
+    const globalLod = currentGlobalLod.value
+
+    const zoomBucket = bucketZoom(zoom)
+    if (
+      cachedBaseLodRef &&
+      cachedBaseLodRef.zoomBucket === zoomBucket &&
+      cachedBaseLodRef.isLodLocked === isLodLocked &&
+      cachedBaseLodRef.nodesLength === nodesRef.length &&
+      cachedBaseLodRef.firstId === nodesRef[0]?.id &&
+      cachedBaseLodRef.lastId === nodesRef[nodesRef.length - 1]?.id &&
+      cachedBaseLodRef.expandedRef === expandedRef &&
+      cachedBaseLodRef.globalLod === globalLod
+    ) {
+      return cachedBaseLodMap
+    }
+
+    const map = new Map<string, 0 | 1>()
+    for (const n of nodesRef) {
+      if (isLodLocked) {
+        const cached = lodLevelMapCache.get(n.id) as 0 | 1 | undefined
+        map.set(n.id, cached ?? globalLod)
+      } else {
+        map.set(n.id, globalLod)
+      }
+    }
+
+    if (!isLodLocked) {
+      lodLevelMapCache.clear()
+      for (const [k, v] of map) lodLevelMapCache.set(k, v)
+    }
+    cachedBaseLodRef = {
+      zoomBucket,
+      zoom,
+      expandedRef,
+      nodesLength: nodesRef.length,
+      firstId: nodesRef[0]?.id,
+      lastId: nodesRef[nodesRef.length - 1]?.id,
+      isLodLocked,
+      globalLod,
+    }
+    cachedBaseLodMap = map
+    return map
+  })
+
+  /** 保留旧 lodLevelMap 名称作为兼容导出 */
+  const lodLevelMap = baseLodLevelMap
+
+  /** O(1) 查询节点 LOD 等级 */
+  function getLodLevel(nodeId: string): 0 | 1 {
+    return baseLodLevelMap.value.get(nodeId) ?? 1
+  }
+
+  /** 按类别分组的节点定义 */
+  const nodeDefinitionsByCategory = computed(() => {
+    const map: Record<string, NodeDefinition[]> = {}
+    for (const def of nodeDefinitions.value) {
+      if (!map[def.category]) map[def.category] = []
+      map[def.category].push(def)
+    }
+    return map
+  })
+
+  // ============ 节点执行状态 (2026-10-24) ============
+
+  /**
+   * 节点运行期状态表: node_id -> 'idle' | 'running' | 'success' | 'failed'。
+   *
+   * 为什么不用 `node.data.status`:
+   *   `nodes` 是 shallowRef, 就地改 `node.data.status` 不会触发 VueFlow 重算
+   *   (节点数组 identity 没变, VueFlow 的 watch 不触发), 状态就永远点不亮。
+   *   独立 Map + 整体换引用, 订阅它的组件按需重渲染, 代价 O(1)/节点。
+   */
+  const nodeStatusMap = shallowRef<Map<string, string>>(new Map())
+
+  /** 读取节点运行期状态(未设置时视为 idle) */
+  function getNodeStatus(nodeId: string): string {
+    return nodeStatusMap.value.get(nodeId) ?? 'idle'
+  }
+
+  /**
+   * 设置节点运行期状态。
+   *
+   * @param nodeId 节点 ID
+   * @param status 'idle' | 'running' | 'success' | 'failed'
+   */
+  function setNodeStatus(nodeId: string, status: string): void {
+    const next = new Map(nodeStatusMap.value)
+    next.set(nodeId, status)
+    nodeStatusMap.value = next
+  }
+
+  /** 清空所有节点运行期状态 */
+  function clearNodeStatuses(): void {
+    nodeStatusMap.value = new Map()
+  }
+
+  // ============ 节点禁用 (P2-A 2026-06-19) ============
+
+  /**
+   * 禁用节点集合. 禁用的节点执行时被跳过 (后端 executor 已支持 skipped 机制).
+   * 视觉: RuleNode.vue 检测 is-disabled 类, 半透明 + 灰边.
+   */
+  const disabledNodeIds = shallowRef<Set<string>>(new Set())
+
+  /** O(1) 查询节点是否禁用 */
+  function isNodeDisabled(nodeId: string): boolean {
+    return disabledNodeIds.value.has(nodeId)
+  }
+
+  /** 切换节点禁用状态 */
+  function toggleNodeDisabled(nodeId: string): boolean {
+    const next = new Set(disabledNodeIds.value)
+    let nowDisabled: boolean
+    if (next.has(nodeId)) {
+      next.delete(nodeId)
+      nowDisabled = false
+    } else {
+      next.add(nodeId)
+      nowDisabled = true
+    }
+    disabledNodeIds.value = next
+    return nowDisabled
+  }
+
+  // ============ 数据加载 ============
+
+  /** 获取节点定义列表 */
+  async function fetchNodeDefinitions() {
+    try {
+      const res = await ruleEngineApi.getNodeDefinitions()
+      nodeDefinitions.value = res.data
+      return res.data
+    } catch (err) {
+      console.error('加载节点定义失败:', err)
+      return []
+    }
+  }
+
+  /** 加载可用模型列表 */
+  async function fetchModels() {
+    try {
+      const res = await modelApi.list()
+      availableModels.value = res.data as Array<{ id: number; name: string }>
+    } catch (err) {
+      console.error('加载模型列表失败:', err)
+    }
+  }
+
+  /**
+   * 加载规则图 - 从 API 获取并解析为 VueFlow 可用的节点/边格式。
+   *
+   * 数据规范：
+   * - n.type 始终归一化为 'ruleNode'（VueFlow 组件类型）
+   * - 原始业务类型（如 yolo_model）存储在 n.data.type 中
+   */
+  async function loadGraph(id: number) {
+    const res = await ruleEngineApi.getGraphDetail(id)
+    const data = res.data
+
+    // 换图 = 旧选中态失效 (Task 14: 选中集合是增量维护的, 必须显式清空)
+    selectedIds.clear()
+
+    graphMeta.value = {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      is_active: data.is_active,
+      version: data.version,
+      thumbnail: data.thumbnail
+    }
+
+    // 解析节点：标准化 type 字段，补充必要属性
+    nodes.value = (data.nodes ?? []).map((n: GraphNode) => {
+      const isVueFlowType = n.type === 'ruleNode' || n.type === 'rule-node'
+      return markRaw({
+        id: n.id,
+        type: 'ruleNode',
+        position: n.position ?? { x: 0, y: 0 },
+        data: {
+          ...(n.data ?? {}),
+          type: isVueFlowType ? (n.data?.type ?? 'unknown') : n.type,
+          id: n.id
+        } as RuleNodeData
+      })
+    })
+    _nodeByIdMarkDirty()
+
+    // 解析边
+    edges.value = (data.edges ?? []).map((e: GraphEdge) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.source_handle,
+      targetHandle: e.target_handle,
+      type: 'default',
+      animated: false,
+      markerEnd: MarkerType.ArrowClosed
+    }))
+    _indexRebuild()
+    triggerRef(_connectedHandleVersion)
+
+    // P2-A: 从节点 data.disabled 恢复禁用状态
+    const disabledIds = new Set<string>()
+    for (const n of (data.nodes ?? []) as GraphNode[]) {
+      const nodeData = (n as any).data ?? {}
+      if (nodeData.disabled === true) {
+        disabledIds.add(n.id)
+      }
+    }
+    disabledNodeIds.value = disabledIds
+
+    // 跨子 store: 解析 variables
+    const variablesStore = useRuleVariablesStore()
+    if (data.variables_json) {
+      try {
+        const vars = JSON.parse(data.variables_json) as Record<string, {
+          type?: string; defaultValue?: VariableDefaultValue; description?: string
+        }>
+        variablesStore.setVariables(Object.entries(vars).map(([name, config]) => ({
+          name,
+          type: (config.type as VariableType) ?? 'STRING',
+          defaultValue: config.defaultValue ?? '',
+          description: config.description ?? ''
+        })))
+      } catch {
+        variablesStore.setVariables([])
+      }
+    } else if (data.variables) {
+      const vars = data.variables as Record<string, {
+        type?: VariableType
+        defaultValue?: VariableDefaultValue
+        description?: string
+      }>
+      variablesStore.setVariables(Object.entries(vars).map(([name, config]) => ({
+        name,
+        type: config.type ?? 'STRING',
+        defaultValue: config.defaultValue,
+        description: config.description ?? ''
+      })))
+    }
+
+    saveHistory()
+    // 载入的是服务端已保存的图, 视为干净状态
+    clearDirty()
+    return data
+  }
+
+  // ============ 保存 ============
+
+  /**
+   * 保存规则图 - 将节点/边序列化为 JSON 字符串写入后端。
+   */
+  async function saveGraph() {
+    if (!graphMeta.value) return
+
+    const variablesStore = useRuleVariablesStore()
+    const varsObj: Record<string, {
+      type: VariableType; defaultValue: VariableDefaultValue; description: string
+    }> = {}
+    for (const v of variablesStore.variables) {
+      varsObj[v.name] = {
+        type: v.type,
+        defaultValue: v.defaultValue ?? null,
+        description: v.description ?? ''
+      }
+    }
+
+    await ruleEngineApi.updateGraph(graphMeta.value.id, {
+      name: graphMeta.value.name,
+      nodes_json: JSON.stringify(nodes.value.map(n => ({
+        id: n.id,
+        type: n.data?.type ?? 'unknown',
+        position: n.position,
+        data: {
+          ...n.data,
+          // P2-A: 把禁用状态持久化到 data.disabled
+          disabled: disabledNodeIds.value.has(n.id),
+          // 连线关系持久化到 data.connections(后端 _resolve_inputs 读取)
+          connections: n.data?.connections ?? {},
+        }
+      }))),
+      edges_json: JSON.stringify(edges.value.map(e => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        source_handle: e.sourceHandle,
+        target_handle: e.targetHandle
+      }))),
+      variables_json: JSON.stringify(varsObj)
+    })
+
+    saveHistory()
+    // 保存成功: 清除脏标记(含配置类改动)
+    clearDirty()
+  }
+
+  // ============ 草稿 (P0-2 2026-06-19) ============
+
+  /**
+   * 保存草稿到 localStorage (Task 15: 载荷瘦身)。
+   *
+   * 旧实现直接序列化 `nodes.value` / `edges.value` 原始对象 —— 里面塞着 VueFlow
+   * 的内部字段 (dimensions / handleBounds / computedPosition / internals / events ...),
+   * 500 节点图序列化出来轻易上百 KB, localStorage 只有 ~5MB 配额, 写入失败还被
+   * catch 静默吞掉 → 草稿根本没存上, 用户以为有草稿保护其实没有。
+   *
+   * 现在只保留业务字段: 节点 (id / 组件类型 / 位置 / data) + 边 (id / 端点 / 端口)。
+   * 恢复路径 (store.nodes = draft.nodes) 只需要这些。
+   */
+  function saveDraftToLocalStorage(graphId: number): boolean {
+    try {
+      const variablesStore = useRuleVariablesStore()
+      const payload = {
+        nodes: nodes.value.map((n) => ({
+          id: n.id,
+          // 组件类型 ('ruleNode') —— 恢复后 VueFlow 才知道用哪个组件渲染
+          type: n.type,
+          position: n.position,
+          data: { ...(n.data ?? {}) } as RuleNodeData,
+        })),
+        edges: edges.value.map((e) => ({
+          id: e.id,
+          source: e.source,
+          target: e.target,
+          sourceHandle: e.sourceHandle,
+          targetHandle: e.targetHandle,
+          type: e.type ?? 'default',
+        })),
+        variables: variablesStore.variables,
+        graphName: graphMeta.value?.name,
+        savedAt: Date.now(),
+      }
+      localStorage.setItem(`cogniflow:rule-graph:${graphId}:draft`, JSON.stringify(payload))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  function loadDraftFromLocalStorage(graphId: number): {
+    nodes: Node<RuleNodeData>[]; edges: Edge[]; variables: Variable[]
+    graphName?: string; savedAt: number
+  } | null {
+    try {
+      const raw = localStorage.getItem(`cogniflow:rule-graph:${graphId}:draft`)
+      if (!raw) return null
+      const payload = JSON.parse(raw)
+      if (!Array.isArray(payload.nodes)) return null
+      return payload
+    } catch {
+      return null
+    }
+  }
+
+  function clearLocalStorageDraft(graphId: number): void {
+    try {
+      localStorage.removeItem(`cogniflow:rule-graph:${graphId}:draft`)
+    } catch {
+      // 静默
+    }
+  }
+
+  // ============ 导入导出 JSON (P1-3 2026-06-19) ============
+
+  function exportToJSON(): string {
+    const variablesStore = useRuleVariablesStore()
+    const payload = {
+      graphName: graphMeta.value?.name || 'untitled',
+      graphDescription: graphMeta.value?.description,
+      nodes: nodes.value.map((n) => ({
+        id: n.id,
+        type: n.data?.type ?? 'unknown',
+        position: { x: n.position.x, y: n.position.y },
+        data: n.data,
+      })),
+      edges: edges.value.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        source_handle: e.sourceHandle,
+        target_handle: e.targetHandle,
+      })),
+      variables: variablesStore.variables,
+      exportedAt: new Date().toISOString(),
+      version: '1.0.0',
+    }
+    return JSON.stringify(payload, null, 2)
+  }
+
+  function importFromJSON(text: string): string {
+    const payload = JSON.parse(text)
+    if (!Array.isArray(payload.nodes) || !Array.isArray(payload.edges)) {
+      throw new Error('JSON 格式无效：缺少 nodes/edges 数组')
+    }
+    nodes.value = payload.nodes.map((n: any) =>
+      markRaw({
+        id: n.id,
+        type: 'ruleNode',
+        position: n.position ?? { x: 0, y: 0 },
+        data: {
+          ...(n.data ?? {}),
+          type: n.type ?? n.data?.type ?? 'unknown',
+          id: n.id,
+        } as RuleNodeData,
+      })
+    )
+    _nodeByIdMarkDirty()
+    edges.value = payload.edges.map((e: any) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.source_handle ?? e.sourceHandle,
+      targetHandle: e.target_handle ?? e.targetHandle,
+      type: 'default',
+      animated: false,
+      markerEnd: MarkerType.ArrowClosed,
+    }))
+    _indexRebuild()
+    triggerRef(_connectedHandleVersion)
+    const variablesStore = useRuleVariablesStore()
+    variablesStore.setVariables(Array.isArray(payload.variables) ? payload.variables : [])
+    if (graphMeta.value && payload.graphName) {
+      graphMeta.value = { ...graphMeta.value, name: payload.graphName }
+    }
+    saveHistory()
+    return payload.graphName || 'untitled'
+  }
+
+  /**
+   * 复制当前图为新图 (另存为)。
+   */
+  async function duplicateAsNewGraph(newName?: string): Promise<number> {
+    const variablesStore = useRuleVariablesStore()
+    const name = newName || `${graphMeta.value?.name || 'untitled'} (副本)`
+    const res = await ruleEngineApi.createGraph({
+      name,
+      description: graphMeta.value?.description || undefined,
+      nodes_json: JSON.stringify(nodes.value.map((n) => ({
+        id: n.id,
+        type: n.data?.type ?? 'unknown',
+        position: n.position,
+        data: n.data,
+      }))),
+      edges_json: JSON.stringify(edges.value.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target,
+        source_handle: e.sourceHandle,
+        target_handle: e.targetHandle,
+      }))),
+      variables_json: JSON.stringify(
+        variablesStore.variables.reduce((acc: Record<string, any>, v) => {
+          acc[v.name] = {
+            type: v.type,
+            defaultValue: v.defaultValue ?? null,
+            description: v.description || '',
+          }
+          return acc
+        }, {})
+      ),
+    })
+    return (res.data as any).id as number
+  }
+
+  // ============ 自动布局 (P2-C 2026-06-19) ============
+
+  /**
+   * 简单 DAG 自动布局 (Sugiyama-lite):
+   * 1. Kahn 拓扑分层
+   * 2. 同层节点沿 X 轴均匀分布
+   * 3. 不同层沿 Y 轴递增
+   */
+  function autoLayoutGraph(options?: {
+    nodeSpacing?: number
+    levelSpacing?: number
+    startX?: number
+    startY?: number
+  }): Array<{ id: string; position: { x: number; y: number } }> {
+    const NODE_W = options?.nodeSpacing ?? 320
+    const LEVEL_H = options?.levelSpacing ?? 180
+    const startX = options?.startX ?? 100
+    const startY = options?.startY ?? 100
+
+    const nodeArr = nodes.value
+    if (nodeArr.length === 0) return []
+
+    const adj = new Map<string, string[]>()
+    const inDeg = new Map<string, number>()
+    for (const n of nodeArr) {
+      adj.set(n.id, [])
+      inDeg.set(n.id, 0)
+    }
+    for (const e of edges.value) {
+      if (adj.has(e.source) && adj.has(e.target)) {
+        adj.get(e.source)!.push(e.target)
+        inDeg.set(e.target, (inDeg.get(e.target) ?? 0) + 1)
+      }
+    }
+
+    const levels: string[][] = []
+    const remaining = new Map(inDeg)
+    const placed = new Set<string>()
+    while (placed.size < nodeArr.length) {
+      const layer: string[] = []
+      for (const [id, d] of remaining) {
+        if (d === 0) layer.push(id)
+      }
+      if (layer.length === 0) {
+        for (const [id] of remaining) layer.push(id)
+      }
+      layer.sort((a, b) => {
+        const na = nodeArr.find((n) => n.id === a)
+        const nb = nodeArr.find((n) => n.id === b)
+        return (na?.position.y ?? 0) - (nb?.position.y ?? 0)
+      })
+      levels.push(layer)
+      for (const id of layer) {
+        placed.add(id)
+        remaining.delete(id)
+        for (const t of adj.get(id) ?? []) {
+          if (remaining.has(t)) {
+            remaining.set(t, remaining.get(t)! - 1)
+          }
+        }
+      }
+    }
+
+    const maxLevelWidth = Math.max(...levels.map((l) => l.length)) * NODE_W
+    const updates: Array<{ id: string; position: { x: number; y: number } }> = []
+    for (let li = 0; li < levels.length; li++) {
+      const layer = levels[li]
+      const layerWidth = layer.length * NODE_W
+      const offsetX = startX + (maxLevelWidth - layerWidth) / 2
+      layer.forEach((id, idx) => {
+        updates.push({
+          id,
+          position: {
+            x: offsetX + idx * NODE_W,
+            y: startY + li * LEVEL_H,
+          },
+        })
+      })
+    }
+    return updates
+  }
+
+  function applyAutoLayout(): number {
+    const updates = autoLayoutGraph()
+    if (updates.length === 0) return 0
+    setNodesPositions(updates, true, false, false)
+    return updates.length
+  }
+
+  // ============ 节点操作 ============
+
+  // 节点 id 自增序号 —— 旧实现用 `node_${Date.now()}`, 同一毫秒内创建两个节点
+  // 会拿到相同 id(快速添加连点两次即触发), 导致后一个节点覆盖前一个。
+  let _nodeSeq = 0
+
+  function createNode(
+    def: NodeDefinition,
+    position: { x: number; y: number }
+  ): boolean {
+    _nodeSeq += 1
+    const id = `node_${Date.now()}_${_nodeSeq}`
+    const newNode: Node<RuleNodeData> = {
+      id,
+      type: 'ruleNode',
+      position: { ...position },
+      data: {
+        id,
+        type: def.type,
+        label: def.label,
+        category: def.category,
+        description: def.description,
+        inputs: def.inputs,
+        outputs: def.outputs,
+        configSchema: def.config_schema,
+        config: getDefaultConfig(def.config_schema),
+        status: 'idle',
+        selected: false
+      } as unknown as RuleNodeData
+    }
+    nodes.value = [...nodes.value, markRaw(newNode)]
+    _nodeByIdMarkDirty()
+    saveHistory()
+    return true
+  }
+
+  /**
+   * 更新节点配置 - 内部 mutate + 触发该节点的配置版本号（精确信号）。
+   *
+   * FIX (BUG-4 2026-06-19): 不 triggerRef(nodes), 仅精确触发配置变更信号
+   * Task 14 (2026-10-24): 信号从全局计数器改为按节点粒度, 避免改一个节点
+   *   触发全图所有节点配置区的重算。
+   */
+  function updateNodeConfig(nodeId: string, key: string, value: VariableDefaultValue) {
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (node?.data) {
+      if (!node.data.config) {
+        node.data.config = {} as Record<string, VariableDefaultValue>
+      }
+      node.data.config[key] = value
+      _configVersionMap.set(nodeId, (_configVersionMap.get(nodeId) ?? 0) + 1)
+      _configVersion.value++
+      // 配置改动要标脏: 旧实现不写历史栈, isDirty 看不到它
+      // (用户改了参数以为保存了, 实际没保存)
+      markDirty()
+    }
+  }
+
+  /** 批量更新节点位置 (路径 B: 自研拖动专用) */
+  function setNodesPositions(
+    updates: Array<{ id: string; position: { x: number; y: number } }>,
+    recordHistory = true,
+    skipTrigger = false,
+    rawWrite = false,
+  ): void {
+    if (updates.length === 0) return
+    const updateMap = new Map(updates.map((u) => [u.id, u.position]))
+
+    const moves: Array<{ nodeId: string; from: { x: number; y: number }; to: { x: number; y: number } }> = []
+    let anyChange = false
+    for (const node of nodes.value) {
+      const newPos = updateMap.get(node.id)
+      if (newPos) {
+        if (rawWrite) {
+          const raw = toRaw(node.position)
+          const oldX = raw.x
+          const oldY = raw.y
+          if (oldX !== newPos.x || oldY !== newPos.y) {
+            raw.x = newPos.x
+            raw.y = newPos.y
+            anyChange = true
+            if (recordHistory) {
+              moves.push({ nodeId: node.id, from: { x: oldX, y: oldY }, to: { ...newPos } })
+            }
+          }
+        } else {
+          const fromX = node.position.x
+          const fromY = node.position.y
+          if (fromX !== newPos.x || fromY !== newPos.y) {
+            node.position.x = newPos.x
+            node.position.y = newPos.y
+            anyChange = true
+            if (recordHistory) {
+              moves.push({ nodeId: node.id, from: { x: fromX, y: fromY }, to: { ...newPos } })
+            }
+          }
+        }
+      }
+    }
+    if (!anyChange) return
+
+    if (recordHistory && !isHistoryPaused.value && moves.length > 0) {
+      historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+      historyStack.value.push({ type: 'groupMove', moves })
+      historyIndex.value = historyStack.value.length - 1
+      if (historyStack.value.length > maxHistorySize) {
+        historyStack.value.shift()
+        historyIndex.value--
+      }
+    }
+
+    if (!skipTrigger) {
+      triggerRef(nodes)
+    }
+  }
+
+  /**
+   * 删除节点并清理关联边 / 选中状态 / 历史记录。
+   */
+  function removeNode(nodeId: string) {
+    nodes.value = nodes.value.filter(n => n.id !== nodeId)
+    _nodeByIdMarkDirty()
+    edges.value = edges.value.filter(e => e.source !== nodeId && e.target !== nodeId)
+    selectedIds.delete(nodeId)
+    if (expandedNodeIds.value.has(nodeId)) {
+      expandedNodeIds.value.delete(nodeId)
+      triggerRef(expandedNodeIds)
+    }
+    saveHistory()
+  }
+
+  /** 批量删除节点 (Phase B 任务4) */
+  function removeNodes(nodeIds: string[]) {
+    if (nodeIds.length === 0) return
+    const idSet = new Set(nodeIds)
+    nodes.value = nodes.value.filter(n => !idSet.has(n.id))
+    _nodeByIdMarkDirty()
+    const removedEdges = edges.value.filter(e => idSet.has(e.source) || idSet.has(e.target))
+    edges.value = edges.value.filter(e => !idSet.has(e.source) && !idSet.has(e.target))
+    for (const e of removedEdges) _indexRemoveEdge(e)
+    triggerRef(_connectedHandleVersion)
+    for (const id of idSet) selectedIds.delete(id)
+    if (expandedNodeIds.value.size > 0) {
+      let changed = false
+      for (const id of idSet) {
+        if (expandedNodeIds.value.has(id)) {
+          expandedNodeIds.value.delete(id)
+          changed = true
+        }
+      }
+      if (changed) triggerRef(expandedNodeIds)
+    }
+    saveHistory()
+  }
+
+  /** 切换节点折叠状态 (Phase 19.3+: 语义反转) */
+  function toggleNodeExpanded(nodeId: string) {
+    if (expandedNodeIds.value.has(nodeId)) {
+      expandedNodeIds.value.delete(nodeId)
+    } else {
+      expandedNodeIds.value.add(nodeId)
+    }
+    triggerRef(expandedNodeIds)
+  }
+
+  /**
+   * 收起全部节点 (点击画布空白处触发)。
+   *
+   * ⚠️ expandedNodeIds 存的是「**已折叠**的节点 id」(名字与语义相反, 见 Phase 19.3+ 反转,
+   *   消费端确认见 RuleNode.vue `isCollapsed = expandedNodeIds.has(id)`)。
+   *   所以「收起全部」= 把所有节点 id 都放进去, **不是** clear()。
+   *
+   * 修复 (2026-09-12): 原实现是 clear(), 等于「全部展开」, 与函数名恰好相反。
+   *   用户点空白本意是收起所有展开的节点以切回画布视角, 实际却把所有节点都展开了。
+   */
+  function collapseAllExpanded() {
+    if (nodes.value.length === 0) return
+    let changed = false
+    for (const n of nodes.value) {
+      if (!expandedNodeIds.value.has(n.id)) {
+        expandedNodeIds.value.add(n.id)
+        changed = true
+      }
+    }
+    // 原地变更 + triggerRef: 与 removeNode / removeNodes / toggleNodeExpanded 一致,
+    // 避免重新赋值导致外部捕获的 Set 引用失效
+    if (changed) triggerRef(expandedNodeIds)
+  }
+
+  function syncExpandedNodeIds() {
+    triggerRef(expandedNodeIds)
+  }
+
+  /**
+   * 展开全部节点。
+   *
+   * 同上语义反转: 「展开全部」= 清空「已折叠」集合。
+   *
+   * 修复 (2026-09-12): 原实现是 new Set(所有节点 id), 等于「全部收起」, 与函数名相反。
+   *   这两个函数体此前正好互换 (collapseAllExpanded 做了展开、expandAll 做了收起)。
+   */
+  function expandAll() {
+    if (expandedNodeIds.value.size === 0) return
+    expandedNodeIds.value.clear()
+    triggerRef(expandedNodeIds)
+  }
+
+  // ============ 边操作 ============
+
+  // 边 id 自增序号 —— 保证同一毫秒内连续创建的边 id 不重复
+  let _edgeSeq = 0
+
+  /**
+   * 写入 / 清除节点的 connections 记录。
+   *
+   * `data.connections` = {目标端口名: {node_id, output}} —— 承载「目标端口 <- 哪个节点的
+   * 哪个输出」这一连线关系。端口元数据(data.inputs / data.outputs)只描述端口本身,
+   * 两者职责分离: 后端 `_resolve_inputs` 读 connections 取上游数据,
+   * 前端 RuleNode 读 inputs/outputs 渲染手柄。
+   */
+  function _setConnection(edge: {
+    source: string; target: string
+    sourceHandle?: string | null; targetHandle?: string | null
+  }): void {
+    const targetNode = nodes.value.find((n) => n.id === edge.target)
+    if (!targetNode?.data) return
+    const portName = edge.targetHandle ?? ''
+    if (!portName) return
+    if (!targetNode.data.connections) {
+      targetNode.data.connections = {}
+    }
+    targetNode.data.connections[portName] = {
+      node_id: edge.source,
+      output: edge.sourceHandle ?? 'result',
+    }
+  }
+
+  /** 清除节点的 connections 记录(边被删除时调用) */
+  function _clearConnection(edge: {
+    target: string; targetHandle?: string | null
+  }): void {
+    const targetNode = nodes.value.find((n) => n.id === edge.target)
+    if (!targetNode?.data?.connections) return
+    const portName = edge.targetHandle ?? ''
+    if (!portName) return
+    delete targetNode.data.connections[portName]
+  }
+
+  /** 添加边 */
+  function addEdge(connection: {
+    source: string; target: string
+    sourceHandle?: string | null; targetHandle?: string | null
+  }): boolean {
+    if (connection.source === connection.target) return false
+    const dup = edges.value.some((e) =>
+      e.source === connection.source &&
+      e.target === connection.target &&
+      (e.sourceHandle ?? null) === (connection.sourceHandle ?? null) &&
+      (e.targetHandle ?? null) === (connection.targetHandle ?? null)
+    )
+    if (dup) return false
+    const newEdge = {
+      id: `edge_${Date.now()}_${_edgeSeq++}`,
+      source: connection.source,
+      target: connection.target,
+      sourceHandle: connection.sourceHandle ?? undefined,
+      targetHandle: connection.targetHandle ?? undefined,
+      type: 'default',
+      animated: false
+    }
+    edges.value = [...edges.value, newEdge]
+    _indexAddEdge(newEdge)
+    triggerRef(_connectedHandleVersion)
+    // 写入目标节点的 connections —— 后端 _resolve_inputs 据此取上游数据
+    _setConnection(newEdge)
+    _recordEdgeAddHistory(newEdge)
+    return true
+  }
+
+  function removeEdge(edgeId: string) {
+    const target = edges.value.find(e => e.id === edgeId)
+    edges.value = edges.value.filter(e => e.id !== edgeId)
+    if (target) _indexRemoveEdge(target)
+    if (target) _clearConnection(target)
+    triggerRef(_connectedHandleVersion)
+    if (target) _recordEdgeRemoveHistory(target)
+  }
+
+  function removeEdges(edgeIds: string[]) {
+    if (edgeIds.length === 0) return
+    const idSet = new Set(edgeIds)
+    const removed = edges.value.filter(e => idSet.has(e.id))
+    edges.value = edges.value.filter(e => !idSet.has(e.id))
+    for (const e of removed) _indexRemoveEdge(e)
+    for (const e of removed) _clearConnection(e)
+    triggerRef(_connectedHandleVersion)
+    if (removed.length > 0) _recordEdgesRemoveHistory(removed)
+  }
+
+  // ============ 节点对齐 (P1-2 2026-06-19) ============
+
+  function _alignSelectedNodesImpl(
+    mode: AlignMode,
+    selectedFlowNodes: Array<{ id: string; position: { x: number; y: number } }>,
+    screenToFlowCoordinate: (pt: { x: number; y: number }) => { x: number; y: number }
+  ): number {
+    if (selectedFlowNodes.length < 2) return 0
+    const ids = selectedFlowNodes.map((n) => n.id)
+
+    interface Box { id: string; x: number; y: number; w: number; h: number }
+    const boxes: Box[] = []
+    for (const n of selectedFlowNodes) {
+      const el = document.querySelector<HTMLElement>(`.vue-flow__node[data-id="${n.id}"]`)
+      if (!el) continue
+      const r = el.getBoundingClientRect()
+      const tl = screenToFlowCoordinate({ x: r.left, y: r.top })
+      const br = screenToFlowCoordinate({ x: r.right, y: r.bottom })
+      boxes.push({
+        id: n.id,
+        x: tl.x,
+        y: tl.y,
+        w: br.x - tl.x,
+        h: br.y - tl.y,
+      })
+    }
+    if (boxes.length < 2) return 0
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const b of boxes) {
+      if (b.x < minX) minX = b.x
+      if (b.y < minY) minY = b.y
+      if (b.x + b.w > maxX) maxX = b.x + b.w
+      if (b.y + b.h > maxY) maxY = b.y + b.h
+    }
+    const midX = (minX + maxX) / 2
+    const midY = (minY + maxY) / 2
+
+    const updates: Array<{ id: string; position: { x: number; y: number } }> = []
+    for (const b of boxes) {
+      let nx = b.x
+      let ny = b.y
+      switch (mode) {
+        case 'left':
+          nx = minX
+          break
+        case 'right':
+          nx = maxX - b.w
+          break
+        case 'top':
+          ny = minY
+          break
+        case 'bottom':
+          ny = maxY - b.h
+          break
+        case 'h-center':
+          nx = midX - b.w / 2
+          break
+        case 'v-center':
+          ny = midY - b.h / 2
+          break
+        case 'distribute-h': {
+          if (boxes.length < 3) break
+          const sorted = [...boxes].sort((a, b) => a.x - b.x)
+          const first = sorted[0]
+          const last = sorted[sorted.length - 1]
+          const span = (last.x + last.w / 2) - (first.x + first.w / 2)
+          const step = span / (sorted.length - 1)
+          const idx = sorted.findIndex((s) => s.id === b.id)
+          if (idx > 0 && idx < sorted.length - 1) {
+            nx = (first.x + first.w / 2) + step * idx - b.w / 2
+          }
+          break
+        }
+        case 'distribute-v': {
+          if (boxes.length < 3) break
+          const sorted = [...boxes].sort((a, b) => a.y - b.y)
+          const first = sorted[0]
+          const last = sorted[sorted.length - 1]
+          const span = (last.y + last.h / 2) - (first.y + first.h / 2)
+          const step = span / (sorted.length - 1)
+          const idx = sorted.findIndex((s) => s.id === b.id)
+          if (idx > 0 && idx < sorted.length - 1) {
+            ny = (first.y + first.h / 2) + step * idx - b.h / 2
+          }
+          break
+        }
+      }
+      if (nx !== b.x || ny !== b.y) {
+        updates.push({ id: b.id, position: { x: nx, y: ny } })
+      }
+    }
+    void ids
+    if (updates.length === 0) return 0
+
+    setNodesPositions(updates, true, false, false)
+    return updates.length
+  }
+
+  function alignSelectedNodes(
+    mode: AlignMode,
+    screenToFlowCoordinate: (pt: { x: number; y: number }) => { x: number; y: number }
+  ): number {
+    const selected = _getSelectedNodesFn ? _getSelectedNodesFn() : []
+    return _alignSelectedNodesImpl(mode, selected, screenToFlowCoordinate)
+  }
+
+  /**
+   * P1-2 (2026-06-19): store 不直接依赖 useVueFlow, 但 alignSelectedNodes 需要 selected 节点.
+   * RuleCanvas 在 onMounted 时注入回调 (避免 store → composable 反向依赖)
+   */
+  let _getSelectedNodesFn: (() => Array<{ id: string; position: { x: number; y: number } }>) | null = null
+  function setSelectedNodesGetter(fn: typeof _getSelectedNodesFn) {
+    _getSelectedNodesFn = fn
+  }
+
+  // ============ Undo/Redo ============
+
+  function _recordEdgeAddHistory(edge: GraphEdge) {
+    if (isHistoryPaused.value) return
+    historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+    historyStack.value.push({ type: 'addEdge', edge: { ...edge } })
+    historyIndex.value = historyStack.value.length - 1
+    if (historyStack.value.length > maxHistorySize) {
+      historyStack.value.shift()
+      historyIndex.value--
+    }
+  }
+  function _recordEdgeRemoveHistory(edge: GraphEdge) {
+    if (isHistoryPaused.value) return
+    historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+    historyStack.value.push({ type: 'removeEdge', edge: { ...edge } })
+    historyIndex.value = historyStack.value.length - 1
+    if (historyStack.value.length > maxHistorySize) {
+      historyStack.value.shift()
+      historyIndex.value--
+    }
+  }
+  function _recordEdgesRemoveHistory(removedEdges: GraphEdge[]) {
+    if (isHistoryPaused.value) return
+    if (removedEdges.length === 0) return
+    historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+    historyStack.value.push({ type: 'removeEdges', edges: removedEdges.map(e => ({ ...e })) })
+    historyIndex.value = historyStack.value.length - 1
+    if (historyStack.value.length > maxHistorySize) {
+      historyStack.value.shift()
+      historyIndex.value--
+    }
+  }
+
+  function saveHistory() {
+    if (isHistoryPaused.value) return
+    historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+    historyStack.value.push({
+      type: 'snapshot',
+      nodes: cloneForHistory(nodes.value) as any,
+      edges: edges.value.map(e => ({ ...e, selected: false })),
+    })
+    historyIndex.value = historyStack.value.length - 1
+    if (historyStack.value.length > maxHistorySize) {
+      historyStack.value.shift()
+      historyIndex.value--
+    }
+    // Task 15: 结构性变更也要自增变更计数 (草稿自动保存靠它重置防抖计时器)
+    _dirtyTick.value++
+  }
+
+  function recordMoveHistory(nodeId: string, from: { x: number; y: number }, to: { x: number; y: number }) {
+    if (isHistoryPaused.value) return
+    if (from.x === to.x && from.y === to.y) return
+    historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
+    historyStack.value.push({ type: 'move', nodeId, from: { ...from }, to: { ...to } })
+    historyIndex.value = historyStack.value.length - 1
+    if (historyStack.value.length > maxHistorySize) {
+      historyStack.value.shift()
+      historyIndex.value--
+    }
+  }
+
+  function undo() {
+    if (!canUndo.value) return
+    historyIndex.value--
+    applyHistoryEntry(historyStack.value[historyIndex.value], 'undo')
+  }
+
+  function redo() {
+    if (!canRedo.value) return
+    historyIndex.value++
+    applyHistoryEntry(historyStack.value[historyIndex.value], 'redo')
+  }
+
+  function applyHistoryEntry(
+    entry: typeof historyStack.value[number],
+    direction: 'undo' | 'redo',
+  ) {
+    if (entry.type === 'snapshot') {
+      nodes.value = JSON.parse(JSON.stringify(entry.nodes))
+      _nodeByIdMarkDirty()
+      edges.value = JSON.parse(JSON.stringify(entry.edges))
+      _indexRebuild()
+      triggerRef(_connectedHandleVersion)
+    } else if (entry.type === 'move') {
+      const targetPos = direction === 'undo' ? entry.from : entry.to
+      const node = nodes.value.find(n => n.id === entry.nodeId)
+      if (node) {
+        node.position = { ...targetPos }
+        triggerRef(nodes)
+      }
+    } else if (entry.type === 'addEdge') {
+      if (direction === 'undo') {
+        edges.value = edges.value.filter(e => e.id !== entry.edge.id)
+        _indexRemoveEdge(entry.edge)
+      } else {
+        edges.value = [...edges.value, entry.edge]
+        _indexAddEdge(entry.edge)
+      }
+      triggerRef(_connectedHandleVersion)
+    } else if (entry.type === 'removeEdge') {
+      if (direction === 'undo') {
+        edges.value = [...edges.value, entry.edge]
+        _indexAddEdge(entry.edge)
+      } else {
+        edges.value = edges.value.filter(e => e.id !== entry.edge.id)
+        _indexRemoveEdge(entry.edge)
+      }
+      triggerRef(_connectedHandleVersion)
+    } else if (entry.type === 'removeEdges') {
+      if (direction === 'undo') {
+        edges.value = [...edges.value, ...entry.edges]
+        for (const e of entry.edges) _indexAddEdge(e)
+      } else {
+        const idSet = new Set(entry.edges.map(e => e.id))
+        edges.value = edges.value.filter(e => !idSet.has(e.id))
+        for (const e of entry.edges) _indexRemoveEdge(e)
+      }
+      triggerRef(_connectedHandleVersion)
+    } else {
+      const updates = entry.moves.map(m => ({
+        id: m.nodeId,
+        position: { ...(direction === 'undo' ? m.from : m.to) },
+      }))
+      setNodesPositions(updates, false)
+    }
+  }
+
+  function pauseHistory() {
+    isHistoryPaused.value = true
+  }
+
+  function unpauseHistory() {
+    isHistoryPaused.value = false
+    saveHistory()
+  }
+
+  function resumeHistory() {
+    isHistoryPaused.value = false
+  }
+
+  // ============ 辅助函数 ============
+
+  /** 获取节点类型对应的分类名称。 */
+  function getNodeCategory(type: string): string {
+    const def = nodeDefinitions.value.find(d => d.type === type)
+    return def?.category ?? 'action'
+  }
+
+  // ============ LOD 状态 (Phase LOD-1) ============
+
+  /** 自节流 setViewportZoom — 同一帧内多次合并为 1 次 ref.set */
+  let setViewportZoomRafId = 0
+  let pendingZoomValue = 1
+  function setViewportZoom(z: number) {
+    pendingZoomValue = z
+    if (setViewportZoomRafId) return
+    setViewportZoomRafId = requestAnimationFrame(() => {
+      setViewportZoomRafId = 0
+      viewportZoom.value = pendingZoomValue
+    })
+  }
+
+  function setDragging(v: boolean) {
+    isDragging.value = v
+  }
+
+  function setSelectionBoxActive(v: boolean) {
+    isSelectionBoxActive.value = v
+  }
+
+  // ============ 导出 ============
+  return {
+    // 状态
+    nodeDefinitions,
+    graphMeta,
+    nodes,
+    edges,
+    expandedNodeIds,
+    availableModels,
+    historyStack,
+    historyIndex,
+    isHistoryPaused,
+    maxHistorySize,
+    lastSavedHistoryIndex,
+    viewportZoom,
+    isDragging,
+    isSelectionBoxActive,
+    disabledNodeIds,
+    currentGlobalLod,
+
+    // 计算属性
+    connectedHandleIndex,
+    nodeById,
+    canUndo,
+    canRedo,
+    isDirty,
+    markDirty,
+    clearDirty,
+    hasNodes,
+    nodeDefinitionsByCategory,
+    lodLevelMap,
+    getLodLevel,
+    configVersion: _configVersion,
+    configVersionOf,
+    dirtyTick: _dirtyTick,
+
+    // 数据层框选命中 (Task 16)
+    nodesInRect,
+
+    // 选中态 (Task 14: 增量维护)
+    selectedIds,
+    setNodeSelected,
+    clearSelection,
+
+    // 数据加载
+    fetchNodeDefinitions,
+    fetchModels,
+    loadGraph,
+    saveGraph,
+
+    // 草稿 (P0-2)
+    saveDraftToLocalStorage,
+    loadDraftFromLocalStorage,
+    clearLocalStorageDraft,
+
+    // 导入导出 (P1-3)
+    exportToJSON,
+    importFromJSON,
+    duplicateAsNewGraph,
+
+    // 自动布局 (P2-C)
+    autoLayoutGraph,
+    applyAutoLayout,
+
+    // 节点操作
+    createNode,
+    updateNodeConfig,
+    setNodesPositions,
+    removeNode,
+    removeNodes,
+    toggleNodeExpanded,
+    collapseAllExpanded,
+    syncExpandedNodeIds,
+    expandAll,
+    isHandleConnected,
+
+    // 节点运行期状态 (2026-10-24)
+    nodeStatusMap,
+    getNodeStatus,
+    setNodeStatus,
+    clearNodeStatuses,
+
+    // 节点禁用 (P2-A)
+    isNodeDisabled,
+    toggleNodeDisabled,
+
+    // 边操作
+    addEdge,
+    removeEdge,
+    removeEdges,
+
+    // Undo/Redo
+    saveHistory,
+    recordMoveHistory,
+    undo,
+    redo,
+    pauseHistory,
+    unpauseHistory,
+    resumeHistory,
+
+    // 节点对齐 (P1-2)
+    alignSelectedNodes,
+    setSelectedNodesGetter,
+
+    // 辅助函数
+    getNodeCategory,
+
+    // LOD (Phase LOD-1)
+    setViewportZoom,
+    setDragging,
+    setSelectionBoxActive,
+  }
+})

@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-info">
-        <h2>模型训练</h2>
+        <h2 class="cf-gradient-text text-2xl font-semibold">模型训练</h2>
         <span class="subtitle">实时监控训练进度</span>
       </div>
       <div class="header-actions">
@@ -93,13 +93,13 @@
                 label="CPU"
               />
               <el-option
-                v-if="deviceInfo.available"
+                v-if="deviceInfo.available && deviceInfo.device === 'cuda'"
                 value="cuda"
                 :label="`GPU (${deviceInfo.device_name})`"
               />
             </el-select>
             <span
-              v-if="deviceInfo.available"
+              v-if="deviceInfo.available && deviceInfo.device === 'cuda'"
               class="device-hint"
             >
               推荐使用 GPU
@@ -108,7 +108,7 @@
               v-else
               class="device-hint"
             >
-              将使用 CPU 训练
+              将使用 CPU 训练（未检测到 NVIDIA GPU，PyTorch 训练不支持 DirectML）
             </span>
           </div>
 
@@ -282,11 +282,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
 import { trainingApi, modelApi, atlasApi } from '@/api'
-import SvgIcon from '@/components/SvgIcon.vue'
 import type { TrainingJobResponse, ModelResponse, AtlasResponse } from '@/types/api'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const jobs = ref<TrainingJobResponse[]>([])
 const models = ref<ModelResponse[]>([])
@@ -309,8 +307,6 @@ const startForm = ref({
   device: 'cpu',
   pretrained_model: 'yolov8s.pt',
 })
-
-let ws: WebSocket | null = null
 
 const statusText: Record<string, string> = {
   pending: '等待中',
@@ -412,18 +408,15 @@ const handleStop = async (job: TrainingJobResponse) => {
   }
 }
 
-const connectWebSocket = () => {
-  ws = new WebSocket(`/ws/training`)
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-    if (data.type === 'training_update') {
+// WebSocket (P1-B, 2026-09-11): 使用统一 composable, 自动重连 + 卸载清理
+useWebSocket<{ type: string }>({
+  url: '/ws/training',
+  onMessage: (msg) => {
+    if (msg.type === 'training_update') {
       loadJobs()
     }
-  }
-  ws.onclose = () => {
-    setTimeout(connectWebSocket, 3000)
-  }
-}
+  },
+})
 
 // 轮询进度
 let progressPollingTimer: number | null = null
@@ -467,13 +460,13 @@ const stopProgressPolling = () => {
 
 onMounted(() => {
   Promise.all([loadJobs(), loadModels(), loadAtlases(), loadDeviceInfo()])
-  connectWebSocket()
+  // WebSocket 由 composable 自动建立 (P1-B, 2026-09-11)
   // 启动轮询
   startProgressPolling()
 })
 
 onUnmounted(() => {
-  if (ws) ws.close()
+  // useWebSocket composable 已在 onUnmounted 内部自动 close (P1-B)
   stopProgressPolling()
 })
 </script>
@@ -496,11 +489,7 @@ onUnmounted(() => {
 }
 
 .header-info h2 {
-  @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  // cf-gradient-text + text-2xl font-semibold 已上移到 class
 }
 
 .header-info .subtitle {
@@ -523,14 +512,14 @@ onUnmounted(() => {
   }
 
   &.running .dot {
-    @apply bg-[var(--accent-cyan)];
-    box-shadow: 0 0 8px var(--accent-cyan);
+    @apply bg-[var(--accent-blue)];
+    box-shadow: 0 0 8px var(--accent-blue);
     animation: pulse 2s infinite;
   }
 
   &.completed .dot {
-    @apply bg-[var(--accent-green)];
-    box-shadow: 0 0 8px var(--accent-green);
+    @apply bg-[var(--color-success)];
+    box-shadow: 0 0 8px var(--color-success);
   }
 }
 
@@ -587,7 +576,7 @@ onUnmounted(() => {
   @apply w-7 h-7 flex items-center justify-center bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded text-[var(--text-secondary)] cursor-pointer transition-all;
 
   &:hover {
-    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+    @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
   }
 
   svg {
@@ -603,12 +592,12 @@ onUnmounted(() => {
   @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-lg p-3 transition-all;
 
   &:hover {
-    @apply border-[var(--accent-cyan)];
+    @apply border-[var(--accent-blue)];
   }
 
   &.active {
-    @apply border-[var(--accent-cyan)];
-    box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+    @apply border-[var(--accent-blue)];
+    box-shadow: 0 0 15px rgba(34, 211, 238, 0.15);
   }
 }
 
@@ -617,7 +606,7 @@ onUnmounted(() => {
 }
 
 .job-id {
-  @apply font-mono text-xs font-semibold text-[var(--accent-cyan)];
+  @apply font-mono text-xs font-semibold text-[var(--accent-blue)];
 }
 
 .job-status {
@@ -628,15 +617,15 @@ onUnmounted(() => {
   }
 
   &.running {
-    @apply bg-[rgba(0,240,255,0.2)] text-[var(--accent-cyan)];
+    @apply bg-[rgba(34, 211, 238, 0.2)] text-[var(--accent-blue)];
   }
 
   &.completed {
-    @apply bg-[rgba(0,255,136,0.2)] text-[var(--accent-green)];
+    @apply bg-[rgba(52, 217, 123,0.2)] text-[var(--color-success)];
   }
 
   &.failed {
-    @apply bg-[rgba(255,68,102,0.2)] text-[#ff4466];
+    @apply bg-[rgba(255,68,102,0.2)] text-[var(--color-danger)];
   }
 }
 
@@ -657,16 +646,16 @@ onUnmounted(() => {
 
   &.pending { @apply bg-[var(--text-muted)]; }
   &.downloading {
-    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
-    box-shadow: 0 0 8px var(--accent-cyan);
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-blue));
+    box-shadow: 0 0 8px var(--accent-blue);
     animation: downloadPulse 1.5s ease-in-out infinite;
   }
   &.running {
-    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
-    box-shadow: 0 0 8px var(--accent-cyan);
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-blue));
+    box-shadow: 0 0 8px var(--accent-blue);
   }
-  &.completed { @apply bg-[var(--accent-green)]; }
-  &.failed { @apply bg-[#ff4466]; }
+  &.completed { @apply bg-[var(--color-success)]; }
+  &.failed { @apply bg-[var(--color-danger)]; }
 }
 
 @keyframes downloadPulse {
@@ -716,11 +705,11 @@ onUnmounted(() => {
 }
 
 .live-badge {
-  @apply flex items-center gap-1 font-mono text-[10px] text-[#ff4466] tracking-wider;
+  @apply flex items-center gap-1 font-mono text-[10px] text-[var(--color-danger)] tracking-wider;
 }
 
 .live-dot {
-  @apply w-1 h-1 rounded-full bg-[#ff4466];
+  @apply w-1 h-1 rounded-full bg-[var(--color-danger)];
   animation: livePulse 1s infinite;
 }
 
@@ -745,13 +734,13 @@ onUnmounted(() => {
   }
 
   .stat-value.status-running {
-    @apply text-[var(--accent-cyan)];
-    text-shadow: 0 0 8px var(--accent-cyan);
+    @apply text-[var(--accent-blue)];
+    text-shadow: 0 0 8px var(--accent-blue);
   }
 
   .stat-value.status-downloading {
-    @apply text-[var(--accent-orange)];
-    text-shadow: 0 0 8px var(--accent-orange);
+    @apply text-[var(--color-warning)];
+    text-shadow: 0 0 8px var(--color-warning);
   }
 }
 
@@ -760,7 +749,7 @@ onUnmounted(() => {
 }
 
 .progress-percent {
-  @apply font-mono text-lg font-bold text-[var(--accent-cyan)] min-w-12 text-right;
+  @apply font-mono text-lg font-bold text-[var(--accent-blue)] min-w-12 text-right;
 }
 
 .realtime-message {
@@ -785,7 +774,7 @@ onUnmounted(() => {
 }
 
 .panel-icon {
-  @apply w-4 h-4 text-[var(--accent-cyan)];
+  @apply w-4 h-4 text-[var(--accent-blue)];
 }
 
 </style>

@@ -2,7 +2,7 @@
 /**
  * CogniFlow 动画定义
  *
- * 所有 @keyframes 动画，供其他模块引用。
+ * 仅保留功能性动画，移除所有装饰性动画（脉冲、发光等）。
  */
 @keyframes fadeInUp {
   from {
@@ -27,31 +27,8 @@
   }
 }
 
-// 图标脉冲
-@keyframes iconPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
-
-// 状态点脉冲
-@keyframes statusPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-// 加载动画
+// 加载旋转 — "Cogni" 认知循环
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-// LIVE 点动画
-@keyframes livePulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.5; transform: scale(0.8); }
-}
-
-// 背景光晕动画
-@keyframes glowPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
-}

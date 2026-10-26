@@ -63,8 +63,9 @@ class ClassName:
 
 ```
 CogniFlow/
+├── app.py                       # 应用入口
 ├── backend/                      # FastAPI 后端
-│   ├── app.py                   # 应用入口
+│   ├── __init__.py
 │   ├── database.py              # SQLAlchemy ORM + SQLite
 │   ├── schemas.py               # Pydantic 模型
 │   ├── websocket_manager.py     # WebSocket 管理
@@ -87,21 +88,35 @@ CogniFlow/
 │   │   ├── websocket.py        # 通用 WebSocket
 │   │   ├── simple_detector.py  # 简单检测器
 │   │   └── detection_dataset.py # 检测数据集
-│   └── services/
-│       └── rule_engine/         # 规则引擎核心
-│           ├── executor.py      # Kahn 拓扑排序 + 层内并行
-│           ├── graph_manager.py # 图 CRUD + 验证
-│           ├── registry.py      # 节点注册表
-│           ├── scheduler.py     # Cron 定时调度
-│           ├── websocket_manager.py # 规则 WS 推送
-│           └── nodes/          # 节点实现
-│               ├── triggers.py    # 触发器
-│               ├── conditions.py  # 条件
-│               ├── actions.py     # 动作
-│               ├── logic.py      # 逻辑
-│               └── ...
+│   ├── services/
+│   │   └── rule_engine/         # 规则引擎核心
+│   │       ├── executor.py      # Kahn 拓扑排序 + 层内并行
+│   │       ├── graph_manager.py # 图 CRUD + 验证
+│   │       ├── models.py        # 数据模型定义
+│   │       ├── exceptions.py    # 异常定义
+│   │       ├── registry.py      # 节点注册表
+│   │       ├── scheduler.py     # Cron 定时调度
+│   │       ├── websocket_manager.py # 规则 WS 推送
+│   │       └── nodes/          # 节点实现
+│   │           ├── base.py            # 节点基类
+│   │           ├── triggers.py        # 触发器
+│   │           ├── conditions.py      # 条件
+│   │           ├── actions.py         # 动作
+│   │           ├── logic.py           # 逻辑
+│   │           ├── detection_nodes.py # 检测节点
+│   │           ├── input_nodes.py     # 输入节点
+│   │           ├── output_nodes.py    # 输出节点
+│   │           └── processing_nodes.py # 处理节点
+│   ├── utils/                  # 工具模块
+│   │   ├── frame_buffer.py     # 帧缓冲区
+│   │   └── frame_extract_manager.py # 帧提取管理
+│   ├── test_export/            # 导出测试数据
+│   │   ├── images/
+│   │   └── labels/
+│   └── tests/                  # 单元测试
+│       └── test_rule_engine/
 ├── engine/                     # 核心视觉感知包
-│   ├── __init__.py            # 包初始化，27 个公开接口
+│   ├── __init__.py            # 包初始化
 │   ├── config/                 # 配置模块
 │   │   ├── schema.py          # 配置数据类
 │   │   └── default.yaml       # 默认配置
@@ -119,13 +134,19 @@ CogniFlow/
 │   │   │   └── trainer/       # 训练器
 │   │   └── control/           # 控制接口
 │   │       └── input_emulator/ # 输入模拟
+│   ├── models/                 # 模型定义
+│   │   ├── encoder/
+│   │   └── heads/
+│   ├── utils/                  # 工具函数
 │   └── annotation/             # 标注工具
 ├── webui/                      # Vue3 前端
 │   ├── src/
 │   │   ├── api/              # API 调用封装
 │   │   ├── components/       # 公共组件
+│   │   ├── icons/            # SVG 图标集
 │   │   ├── router/           # 路由配置（9 条路由）
 │   │   ├── stores/           # Pinia 状态管理
+│   │   ├── types/            # TypeScript 类型定义
 │   │   ├── utils/            # 工具函数
 │   │   ├── views/            # 页面组件（9 个页面）
 │   │   ├── style/            # 深色主题设计系统
@@ -208,14 +229,38 @@ Closes #123
 - 使用 `pytest` 框架
 - 测试文件放在 `tests/` 目录
 - 覆盖率目标：核心模块 > 80%
+- **运行规则引擎测试必须用 `PYTHONPATH=.`**：backend 测试用 `from backend.xxx import` 但项目无 conftest/pyproject.toml，`backend/` 不在 `sys.path`。命令：`PYTHONPATH=. python -m pytest backend/tests/`
+- **已知遗留失败**：无（2026-10-24 改造后后端 0 failed）。
+  - `test_node_executors.py::TestImagePreprocessorNode::test_fallback_when_cv2_missing` 原为长期遗留失败（假设 cv2 不可用，但环境 cv2 已装 → 走正常错误路径）。已于 2026-10-24 修正为用 `sys.modules['cv2'] = None` 精确模拟「cv2 不可用」，在任何环境下都测同一条降级分支。
+  - 注：原 docs 提到的 5 个 test_api/test_atlas.py 测试文件已不存在（`backend/tests/test_api/` 目录被清理），不再计入遗留失败。
+- **测试基线**（2026-10-24 改造 + 走查轮修复后）：
+  - 后端：`PYTHONPATH=. .\.venv\Scripts\python.exe -m pytest backend/tests/ tests/ -q` → **373 passed / 0 failed**
+  - 前端：`cd webui; node_modules\.bin\vitest.cmd run` → **136 passed（17 个测试文件）**
+  - 类型检查：`node_modules\.bin\vue-tsc.cmd --noEmit` → **0 error**
+  - 端到端：`PYTHONPATH=. .\.venv\Scripts\python.exe scripts\e2e\rule_engine_business_flow.py` → **退出码 0**
+  - 规模基线：`cd webui; node ..\scripts\perf\rule_canvas_scale_bench.mjs` → 500 节点索引构建 < 50ms（实测最大 1.00ms）
 
-## 6. 依赖管理
+## 6. 文档维护
+
+- **统一格式**：所有设计文档均为 Markdown（`.md`），位于 `docs/*-md/` 目录
+- **目录结构**：
+  - `docs/research-md/` — 架构设计、技术调研（10 份）
+  - `docs/guides-md/` — 使用指南（3 份）
+  - `docs/plans-md/` — 迭代计划（4 份）
+  - `docs/archives-md/` — 已完成阶段归档（15 份）
+  - `docs/dev-md/` — 开发参考（节点手册等）
+  - `docs/文档中心.md` — 顶级入口
+- **总览索引**：`docs/research-md/rule-engine-index.md`（项目入口，含阶段规划、节点清单、状态评估）
+- **HTML → MD 转换器**（仅历史保留）：`scripts/docs/html_to_md.py`（基于 `html.parser`，支持标题/表格/列表/代码块/加粗/多语言嗅探）
+- **直接编辑 MD**：2026-06-03 起 HTML 源已清空，新文档直接编辑 MD 文件
+
+## 7. 依赖管理
 
 - 使用 `requirements.txt` 管理依赖
 - 开发依赖放在 `extras_require["dev"]`
 - 定期更新依赖版本
 
-## 7. WebUI 前端规范
+## 8. WebUI 前端规范
 
 ### 7.1 技术栈
 
@@ -233,15 +278,17 @@ webui/
 ├── src/
 │   ├── api/               # API 调用封装
 │   ├── components/        # 公共组件
+│   ├── icons/             # SVG 图标集
 │   ├── router/            # 路由配置
 │   ├── stores/            # Pinia 状态管理
+│   ├── types/             # TypeScript 类型定义
 │   ├── utils/             # 工具函数
 │   ├── views/             # 页面组件
 │   ├── App.vue            # 根组件
 │   └── main.ts            # 入口文件
 ├── public/                # 静态资源
 ├── uno.config.ts          # UnoCSS 配置
-├── eslint.config.mjs      # ESLint 9 配置
+├── eslint.config.ts       # ESLint 9 配置（Flat Config）
 ├── vite.config.ts         # Vite 配置
 ├── tsconfig.json          # TypeScript 配置
 └── package.json
@@ -257,34 +304,36 @@ style/
 ├── _animations.scss        # @keyframes 动画定义
 ├── _element-plus-vars.scss # Element Plus CSS 变量主题
 ├── _element-plus.scss      # Element Plus 全局样式覆盖
-├── _common.scss            # .ui-* 组件样式
 └── index.scss              # 主入口，@use 导入所有模块
 ```
 
+> **ENG 修正 (2026-09-12)**：原文档列的 `_common.scss` **已不存在**（2026-06-18 其内容全部迁到 `uno.config.ts` 的 shortcut）。
+> 按钮/卡片/标签等组件类现在**只**定义在 `uno.config.ts`，不在 SCSS 文件里。
+
 #### 按钮体系
 
-全局统一的 `.ui-btn` 按钮体系，定义在 `_common.scss`：
+全局按钮类定义在 **`uno.config.ts` 的 `shortcuts`**（不是 SCSS）：
 
-| 类名 | 用途 | 说明 |
-|------|------|------|
-| `.ui-btn` | 默认按钮 | `padding: 10px 20px`，`font-size: 14px`，`border-radius: 8px`，透明背景+边框 |
-| `.ui-btn-primary` | 主操作按钮 | 青色渐变背景 |
-| `.ui-btn-success` | 成功操作 | 绿色渐变背景 |
-| `.ui-btn-danger` | 危险操作 | 红色渐变背景 |
-| `.ui-btn-small` | 紧凑按钮 | `padding: 4px 8px`，`font-size: 13px` |
-| `.ui-btn-icon` | 图标按钮 | 36×36 方形，透明背景 |
-| `.ui-tag` | 标签 | `.ui-tag-cyan`、`.ui-tag-green`、`.ui-tag-yellow`、`.ui-tag-magenta` |
-| `.ui-card` | 卡片容器 | 背景+边框+圆角，悬停顶部渐变条 |
-| `.ui-input` | 输入框 | 全宽，深色背景 |
-| `.ui-badge` | 徽章 | mono 字体，等宽显示 |
-| `.ui-scrollbar` | 滚动条 | 统一滚动条样式 |
+| 类名 | 用途 | 实际实现 |
+|------|------|----------|
+| `ui-btn` | 默认按钮 | 13px / `px-4 py-2` / 6px 圆角 / 卡片底+边框 |
+| `ui-btn-primary` | 主操作按钮 | 品牌青底 + **深墨字**（`--on-vibrant`） |
+| `ui-btn-success` / `ui-btn-danger` | 语义操作 | 语义色底 + 深墨字 |
+| `ui-btn-small` / `ui-btn-xs` / `ui-btn-sm` | 紧凑尺寸 | `ui-btn-sm` 是**修饰符**，与基础类组合用 |
+| `ui-btn-secondary` | 次要按钮 | 低对比底色，hover 点亮品牌青（修饰符） |
+| `ui-btn-icon` | 图标按钮 | 34×34 方形，透明底 |
+| `ui-card` / `ui-card-header` / `ui-card-content` | 卡片 | 背景+边框+圆角 |
+| `ui-tag` / `ui-tag-blue|green|yellow|red` | 标签 | 语义底 + 语义字 |
+| `ui-input` / `ui-badge` / `ui-scrollbar` | 输入/徽章/滚动条 | — |
 
 **使用规范：**
-- 页面主操作按钮使用 `.ui-btn .ui-btn-primary`
-- 工具栏/卡片内操作使用 `.ui-btn .ui-btn-small`
-- 不允许在视图组件中覆盖 `.ui-btn` 的 padding、border-radius 等基础样式
-- 图标按钮使用 `.ui-btn-icon`
-- Element Plus 的 `el-button--text` 已全局统一样式为青色
+- 页面主操作按钮使用 `ui-btn ui-btn-primary`
+- 工具栏/卡片内操作使用 `ui-btn ui-btn-small`
+- 修饰符必须与基础类组合：`class="ui-btn ui-btn-primary ui-btn-sm"`
+  （`ui-btn-sm` / `ui-btn-secondary` 内部用 `!` 强制覆盖，避免 UnoCSS 生成顺序影响结果）
+- **亮色底（品牌青/语义色）上一律用 `text-[var(--on-vibrant)]`，禁止 `text-white`**
+  —— 白字在 `#22d3ee` 上仅 1.81:1，在 v1 蓝 `#5898ff` 上也仅 2.86:1，均不可读
+- 不允许在视图组件中覆盖基础类的 padding、border-radius
 
 **页面头部结构规范：**
 ```html
@@ -307,7 +356,7 @@ style/
 }
 .header-info h2 {
   @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
+  background: linear-gradient(90deg, var(--text-primary), var(--accent));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -317,8 +366,10 @@ style/
 }
 ```
 
+> 实际写法更简单：直接用 `cf-gradient-text` shortcut（`uno.config.ts` 已定义，6 个视图在用），无需手写 SCSS 块。
+
 - 根容器使用 `gap-4`（16px）与子元素间距
-- 页面标题统一使用渐变色文字（text → accent-cyan）
+- 页面标题统一使用渐变色文字：`class="cf-gradient-text text-2xl font-semibold"`
 - 副标题使用 `text-muted`，左侧 `ml-3` 与标题保持间距
 - 右侧操作按钮统一使用 `ui-btn-primary`
 
@@ -326,54 +377,54 @@ style/
 
 UnoCSS 是原子化 CSS 引擎，提供即时按需编译。所有原子化样式直接使用 UnoCSS/Tailwind 工具类，scoped SCSS 仅用于复杂结构样式。
 
-**前缀规范：`cf-`（CogniFlow）**
+**前缀规范：`ui-`（组件类）与 `cf-`（框架类）**
 
-所有项目级快捷方式统一使用 `cf-` 前缀，定义在 `uno.config.ts` 的 `shortcuts` 中。
+> **ENG 修正 (2026-09-12)**：原文档声称"所有项目级快捷方式统一使用 `cf-` 前缀"，
+> 并列出 34 个 `cf-*`。**实测其中 31 个不存在，且全项目 0 处使用**。
+> 实际生效的是 `ui-*` 系列（`ui-btn` 70 处 / `ui-card` 28 处…）。
+> 文档与实现对齐后如下；**新代码请按此表写**。
 
-**快捷方式完整列表：**
+**一、`ui-*` 组件类（`uno.config.ts` 定义，实际在用）**
 
-| 名称 | 用途 | 实际样式 |
-|------|------|----------|
-| `cf-btn` | 默认按钮 | 胶囊形卡片边框按钮 |
-| `cf-btn-primary` | 主操作按钮 | 黑色胶囊背景 |
-| `cf-btn-brand` | 品牌强调按钮 | 青色渐变背景 |
-| `cf-btn-small` | 紧凑按钮 | 小尺寸胶囊 |
-| `cf-btn-icon` | 图标按钮 | 40×40 圆形透明 |
-| `cf-card` | 卡片容器 | 背景+边框+圆角 |
-| `cf-card-header` | 卡片头部 | flex+分隔线 |
-| `cf-card-content` | 卡片内容区 | p-6 |
-| `cf-flex` | flex 容器 | `flex` |
-| `cf-flex-col` | 纵向 flex | `flex flex-col` |
-| `cf-items-center` | 垂直居中 | `items-center` |
-| `cf-justify-center` | 水平居中 | `justify-center` |
-| `cf-justify-between` | 两端对齐 | `justify-between` |
-| `cf-gap-2` ~ `cf-gap-6` | 间距 | `gap-2` ~ `gap-6` |
-| `cf-text-xs` ~ `cf-text-lg` | 文字层级 | 14~20px 不同字重 |
-| `cf-text-muted` | 次要文字 | `text-[var(--text-muted)]` |
-| `cf-text-secondary` | 辅助文字 | `text-[var(--text-secondary)]` |
-| `cf-font-mono` | 等宽字体 | JetBrains Mono |
-| `cf-font-bold` | 加粗 | `font-bold` |
-| `cf-badge` | 徽章 | mono+边框+大写 |
-| `cf-input` | 输入框 | 全宽+边框+聚焦态 |
-| `cf-animate-fade-in` | 淡入动画 | fadeIn keyframes |
-| `cf-transition` | 通用过渡 | `transition-all duration-200` |
-| `cf-page-header` | 页面头部 | flex+间隙+不缩放 |
-| `cf-dialog-overlay` | 对话框遮罩 | 固定定位+模糊 |
-| `cf-dialog-panel` | 对话框面板 | 最大宽度 450px |
-| `cf-table-wrapper` | 表格容器 | 横向滚动 |
-| `cf-toolbar` | 工具栏 | flex+两端对齐 |
-| `cf-content-area` | 内容区 | flex-1+溢出隐藏 |
-| `cf-panel` | 侧边面板 | 固定宽度+背景 |
-| `cf-loading` | 加载状态 | 绝对定位居中 |
-| `cf-empty` | 空状态 | 居中+内边距 |
-| `cf-scroll-y` | 纵向滚动 | `overflow-y-auto` |
-| `cf-scrollbar` | 滚动条样式 | 1.5px 宽度 |
+| 名称 | 用途 |
+|------|------|
+| `ui-btn` | 按钮基类（13px / `px-4 py-2` / 6px 圆角 / 卡片底） |
+| `ui-btn-primary` / `ui-btn-success` / `ui-btn-danger` | 语义按钮，亮底 + 深墨字 |
+| `ui-btn-secondary` | 次要按钮（修饰符，hover 点亮品牌青） |
+| `ui-btn-small` / `ui-btn-xs` / `ui-btn-sm` | 紧凑尺寸（后两者为修饰符，`ui-btn-sm` 用 `!` 强制覆盖） |
+| `ui-btn-icon` | 图标按钮（34×34） |
+| `ui-card` / `ui-card-header` / `ui-card-content` | 卡片容器 / 头部 / 内容区 |
+| `ui-tag` + `ui-tag-blue` / `-green` / `-yellow` / `-red` | 标签及语义变体 |
+| `ui-input` | 输入框（全宽，深色底，聚焦青边） |
+| `ui-badge` | 徽章（mono 字体） |
+| `ui-scrollbar` | 滚动条样式 |
+
+**二、`cf-*` 框架类（仅这两个体系在用，共 6 个）**
+
+| 名称 | 用途 |
+|------|------|
+| `cf-gradient-text` | 页面标题渐变文字（6 个视图在用） |
+| `cf-loading` / `cf-loading--overlay` / `cf-loading__container` / `cf-loading__ring` / `cf-loading__text` | LoadingSpinner 子元素 |
+
+**三、`--cat-*` 节点分类色板（规则引擎专用，定义在 `_variables.scss`）**
+
+6 类各三个令牌：`--cat-<name>`（主色）/ `--cat-<name>-bg`（18% 底）/ `--cat-<name>-fg`（chip 文字）。
+
+| 分类 | 主色 |
+|------|------|
+| `input` / `detection` / `processing` | `#58e49e` / `#58bae4` / `#e4c158` |
+| `action` / `logic` / `output` | `#e48b58` / `#b158e4` / `#e4586b` |
+
+> 注意 `detection` 原为 `#00f0FF`，因品牌强调色改用青色而**让位**，改为 `#58bae4`。
+> 分类色必须在 CSS 里用 `var(--cat-*)`；JS canvas 绘图（如小地图、`ctx.strokeStyle`）
+> 用 hex 字面量，因为 `var()` 在 canvas API 上不解析。
 
 **使用示例：**
 ```html
-<button class="cf-btn">默认按钮</button>
-<button class="cf-btn-primary">主要按钮</button>
-<div class="cf-card">卡片内容</div>
+<button class="ui-btn ui-btn-primary">主要按钮</button>
+<button class="ui-btn ui-btn-secondary ui-btn-sm">次要小按钮</button>
+<h2 class="cf-gradient-text text-2xl font-semibold">页面标题</h2>
+<div class="ui-card">卡片内容</div>
 ```
 
 **样式迁移原则：**
@@ -544,20 +595,31 @@ const jobs = res.data as TrainingJobResponse[]
 
 ```scss
 :root {
-  // CogniFlow 品牌主色替换 EP 默认蓝色
-  --el-color-primary: #00f0ff;
-  --el-text-color-primary: #ffffff;
-  --el-text-color-regular: #d0d0e0;
-  --el-text-color-secondary: #8888aa;
-  --el-text-color-placeholder: #555566;
-  --el-border-color: #2a2a3a;
-  --el-border-color-light: #222230;
-  --el-fill-color-blank: #0a0a0f;
-  --el-bg-color: #0a0a0f;
-  --el-bg-color-page: #0a0a0f;
+  // CogniFlow 品牌主色替换 EP 默认蓝色（v2: 品牌青 #22d3ee）
+  --el-color-primary: #22d3ee;
+  --el-text-color-primary: #e8e8f0;
+  --el-text-color-regular: #c2c2d4;
+  --el-text-color-secondary: #9a9ab2;
+  --el-text-color-placeholder: #8585a0;
+  --el-border-color: #2e2e3c;
+  --el-border-color-light: #262632;
+  --el-fill-color-blank: #0b0b10;
+  --el-bg-color: #0b0b10;
+  --el-bg-color-page: #0b0b10;
   --el-bg-color-overlay: #1a1a24;
 }
 ```
+
+> ⚠️ **亮色 primary 底上的前景必须改深墨色**：EP 默认在 primary 底放白字
+> （`--el-color-white`），而品牌青是亮色，白字在上面对比度仅 **1.81:1**。
+> 凡是「primary 底 + 文字/图标」的 EP 组件，前景统一用 `var(--on-vibrant)`（`#04161a`）：
+>
+> ```scss
+> .el-checkbox__input.is-checked .el-checkbox__inner::after { border-color: var(--on-vibrant) !important; }
+> .el-switch.is-checked .el-switch__action { background: var(--on-vibrant) !important; }
+> ```
+>
+> （`el-button` 不受影响：`_element-plus.scss` 已把 `.el-button` 重置为透明底。）
 
 全局 `:deep()` 样式覆盖（背景/边框/下拉面板，放在 `src/style/_element-plus.scss` 中）：
 
@@ -576,7 +638,7 @@ const jobs = res.data as TrainingJobResponse[]
 }
 // el-button link 类型（AtlasList 等操作按钮）
 .el-button.is-link {
-  color: var(--accent-cyan) !important;
+  color: var(--accent) !important;
 }
 ```
 
@@ -589,7 +651,7 @@ const jobs = res.data as TrainingJobResponse[]
 ### 7.6 ESLint 规则
 
 ```javascript
-// eslint.config.mjs 核心规则
+// eslint.config.ts 核心规则
 {
   '@typescript-eslint/no-explicit-any': 'warn',
   '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
@@ -621,137 +683,183 @@ pnpm lint:fix       # ESLint 自动修复
 
 ## 8. 文档规范
 
-### 8.1 文档类型
+> **ENG-P0-1 修复 (2026-06-19)**: 之前 §8 要求"所有文档用 HTML"违反 §6 + 实际现状
+> (全 docs/*-md/*.md). 改写为 MD 版, 与 §6 目录约定一致.
 
-项目文档按用途分为五类，每类有明确的定位和编写要求：
+### 8.1 文档类型与目录
+
+项目文档按用途分为五类（与 §6 一致）：
 
 | 类型 | 目录 | 用途 | 示例 |
 |------|------|------|------|
-| **用户文档** | `docs/guides/` | 面向最终用户的操作手册 | 功能使用、配置说明 |
-| **开发文档** | `docs/dev/` | 面向开发者的技术参考 | API 文档、架构说明 |
-| **设计文档** | `docs/design/` | 面向设计师的规范说明 | UI 规范、交互流程 |
-| **研究文档** | `docs/research/` | 探索性文档 | 技术调研、方案对比 |
-| **归档文档** | `docs/archives/` | 历史版本保留 | 旧版本说明 |
+| **用户文档** | `docs/guides-md/` | 面向最终用户的操作手册 | 功能使用、配置说明 |
+| **开发文档** | `docs/dev-md/` | 面向开发者的技术参考 | 节点手册、API 文档 |
+| **计划文档** | `docs/plans-md/` | 迭代计划和待办清单 | 规则引擎迭代计划 |
+| **研究文档** | `docs/research-md/` | 探索性文档 | 技术调研、方案对比 |
+| **归档文档** | `docs/archives-md/` | 已完成阶段归档 | 旧版本说明 |
 
-**README.md 除外**，所有文档一律使用 **HTML** 编写，禁止使用 Markdown。
+> 总览索引：`docs/research-md/rule-engine-index.md`（项目入口，含阶段规划、节点清单、状态评估）
+> HTML → MD 转换器（仅历史保留）：`scripts/docs/html_to_md.py`
+> 直接编辑 MD：2026-06-03 起 HTML 源已清空，新文档直接编辑 MD 文件
 
-**原因：** Markdown 在复杂布局、样式控制和嵌入交互内容时能力有限，HTML 可提供更精细的控制和一致性。
+### 8.2 编写规范
 
-### 8.2 HTML 文档编写规范
+- **格式**：所有文档使用 **Markdown** 编写（`README.md` 除外，README 仍 MD）
+- **编码**：UTF-8，文件头可加 `<!-- -*- coding: utf-8 -*- -->` 注释
+- **目录约定**：见 §6
+- **命名**：中文标题 + 英文文件名均可，建议 kebab-case（例：`rule-engine-overview.md`）
+- **语言**：技术术语保留英文，注释/说明用中文
+- **commit 规范**：Git commit message 使用 `docs:` 前缀
 
-**文件组织：**
-```
-docs/
-├── css/
-│   └── main.css          # 文档全局样式（必须）
-├── guides/               # 用户文档
-├── dev/                  # 开发文档
-├── design/               # 设计文档
-├── research/             # 研究文档
-├── archives/            # 归档文档
-└── index.html           # 文档首页入口
-```
-
-**文件命名：**
-- 使用 kebab-case 小写字母 + 连字符（例：`user-guide.html`、`api-reference.html`）
-- 避免使用中文文件名
-- 每个文档目录下应有 `index.html` 作为入口
-
-**HTML 文档头部结构：**
-```html
-<!-- -*- coding: utf-8 -*- -->
-<!--
-  功能名称 - 功能简述
-
-  文档用途说明，包含适用读者、前置条件。
--->
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>功能名称 - CogniFlow 文档</title>
-  <link rel="stylesheet" href="../css/main.css">
-</head>
-<body>
-  <div class="doc-container">
-    <!-- 文档内容 -->
-  </div>
-</body>
-</html>
-```
-
-**内容结构规范：**
-
-每个 HTML 文档应按以下层级组织内容：
-
-1. **文档标题**（`.doc-title`）— 文档主标题，仅一个
-2. **文档副标题**（`.doc-subtitle`）— 文档目的和范围说明
-3. **章节**（`.doc-section`）— 按逻辑划分的内容区块
-4. **章节标题**（`.doc-section-title`）— 章节小标题
-5. **段落、列表、表格、代码块**— 具体内容
-
-**禁止事项：**
-- 禁止使用内联 `style` 属性，所有样式必须在 `docs/css/main.css` 中定义
-- 禁止使用 `<font>`、`<center>` 等废弃标签
-- 禁止使用表格做布局（仅用于展示结构化数据）
-- 禁止在文档中硬编码颜色值，统一使用 CSS 变量
-
-**可复用样式类（定义在 `docs/css/main.css`）：**
-
-| 类名 | 用途 |
-|------|------|
-| `.doc-container` | 文档主体容器，居中，最大宽度 900px |
-| `.doc-title` | 文档主标题，渐变色文字 |
-| `.doc-subtitle` | 文档副标题，次要文字色 |
-| `.doc-section` | 内容章节区块，margin-bottom: 32px |
-| `.doc-section-title` | 章节标题，青色下划线分隔 |
-| `.doc-table` | 表格，全宽，深色主题 |
-| `.doc-code` / `.doc-code-block` | 代码块，等宽字体，深色背景 |
-| `.doc-list` | 无序列表，青色圆点前缀 |
-| `.doc-badge` | 徽章，mono 字体，青色边框 |
-| `.doc-divider` | 水平分割线 |
-
-### 8.3 样式编写规范
-
-**文件：`docs/css/main.css`**
-
-- 文件头部包含中文注释说明文件用途
-- 所有颜色使用 CSS 变量，禁止硬编码十六进制值
-- 选择器尽量简短，避免三层以上的嵌套
-- 响应式布局使用相对单位（em、rem、%），避免固定像素值
-
-**CSS 变量命名约定（docs 专用）：**
-```css
-/* 文档专用变量放在 [data-doc] 作用域下 */
-[data-doc] {
-  --doc-bg-primary: #0a0a0f;
-  --doc-text-primary: #ffffff;
-  --doc-accent: #00f0ff;
-}
-```
-
-### 8.4 编写流程
-
-1. **规划** — 确定文档属于哪类（用户/开发/设计/研究），决定放在哪个目录
-2. **编写** — 按 8.2 的头部结构创建 HTML 文件，引用 `docs/css/main.css`
-3. **自审** — 检查是否有内联样式、硬编码颜色、废弃标签
-4. **更新入口** — 如有必要，更新对应目录的 `index.html` 添加链接
-5. **提交** — Git commit message 使用 `docs:` 前缀
-
-### 8.5 评审清单
+### 8.3 评审清单
 
 提交文档前逐项检查：
 
-- [ ] 文件放在正确目录（guides/dev/design/research/archives）
-- [ ] 使用 `.html` 扩展名，非 `.md`
-- [ ] 头部包含中文注释说明文档用途
-- [ ] 引用了 `docs/css/main.css`
-- [ ] 无内联 `style` 属性
-- [ ] 无硬编码十六进制颜色值
-- [ ] 无废弃 HTML 标签
-- [ ] 有对应的 `index.html` 入口链接（若是子文档）
+- [ ] 文件放在正确目录（`*-md/` 子目录）
+- [ ] 使用 `.md` 扩展名
+- [ ] 内部交叉引用使用相对路径
+- [ ] 中文注释完整（不依赖代码自解释）
+- [ ] commit message 用 `docs:` 前缀
 
 ## 9. 许可证
 
 MIT License
+
+<!-- rtk-instructions v2 -->
+# RTK (Rust Token Killer) - Token-Optimized Commands
+
+## Golden Rule
+
+**Always prefix commands with `rtk`**. If RTK has a dedicated filter, it uses it. If not, it passes through unchanged. This means RTK is always safe to use.
+
+**Important**: Even in command chains with `&&`, use `rtk`:
+```bash
+# ❌ Wrong
+git add . && git commit -m "msg" && git push
+
+# ✅ Correct
+rtk git add . && rtk git commit -m "msg" && rtk git push
+```
+
+## RTK Commands by Workflow
+
+### Build & Compile (80-90% savings)
+```bash
+rtk cargo build         # Cargo build output
+rtk cargo check         # Cargo check output
+rtk cargo clippy        # Clippy warnings grouped by file (80%)
+rtk tsc                 # TypeScript errors grouped by file/code (83%)
+rtk lint                # ESLint/Biome violations grouped (84%)
+rtk prettier --check    # Files needing format only (70%)
+rtk next build          # Next.js build with route metrics (87%)
+```
+
+### Test (60-99% savings)
+```bash
+rtk cargo test          # Cargo test failures only (90%)
+rtk go test             # Go test failures only (90%)
+rtk jest                # Jest failures only (99.5%)
+rtk vitest              # Vitest failures only (99.5%)
+rtk playwright test     # Playwright failures only (94%)
+rtk pytest              # Python test failures only (90%)
+rtk rake test           # Ruby test failures only (90%)
+rtk rspec               # RSpec test failures only (60%)
+rtk test <cmd>          # Generic test wrapper - failures only
+```
+
+### Git (59-80% savings)
+```bash
+rtk git status          # Compact status
+rtk git log             # Compact log (works with all git flags)
+rtk git diff            # Compact diff (80%)
+rtk git show            # Compact show (80%)
+rtk git add             # Ultra-compact confirmations (59%)
+rtk git commit          # Ultra-compact confirmations (59%)
+rtk git push            # Ultra-compact confirmations
+rtk git pull            # Ultra-compact confirmations
+rtk git branch          # Compact branch list
+rtk git fetch           # Compact fetch
+rtk git stash           # Compact stash
+rtk git worktree        # Compact worktree
+```
+
+Note: Git passthrough works for ALL subcommands, even those not explicitly listed.
+
+### GitHub (26-87% savings)
+```bash
+rtk gh pr view <num>    # Compact PR view (87%)
+rtk gh pr checks        # Compact PR checks (79%)
+rtk gh run list         # Compact workflow runs (82%)
+rtk gh issue list       # Compact issue list (80%)
+rtk gh api              # Compact API responses (26%)
+```
+
+### JavaScript/TypeScript Tooling (70-90% savings)
+```bash
+rtk pnpm list           # Compact dependency tree (70%)
+rtk pnpm outdated       # Compact outdated packages (80%)
+rtk pnpm install        # Compact install output (90%)
+rtk npm run <script>    # Compact npm script output
+rtk npx <cmd>           # Compact npx command output
+rtk prisma              # Prisma without ASCII art (88%)
+```
+
+### Files & Search (60-75% savings)
+```bash
+rtk ls <path>           # Tree format, compact (65%)
+rtk read <file>         # Code reading with filtering (60%)
+rtk grep <pattern>      # Search grouped by file (75%). Format flags (-c, -l, -L, -o, -Z) run raw.
+rtk find <pattern>      # Find grouped by directory (70%)
+```
+
+### Analysis & Debug (70-90% savings)
+```bash
+rtk err <cmd>           # Filter errors only from any command
+rtk log <file>          # Deduplicated logs with counts
+rtk json <file>         # JSON structure without values
+rtk deps                # Dependency overview
+rtk env                 # Environment variables compact
+rtk summary <cmd>       # Smart summary of command output
+rtk diff                # Ultra-compact diffs
+```
+
+### Infrastructure (85% savings)
+```bash
+rtk docker ps           # Compact container list
+rtk docker images       # Compact image list
+rtk docker logs <c>     # Deduplicated logs
+rtk kubectl get         # Compact resource list
+rtk kubectl logs        # Deduplicated pod logs
+```
+
+### Network (65-70% savings)
+```bash
+rtk curl <url>          # Compact HTTP responses (70%)
+rtk wget <url>          # Compact download output (65%)
+```
+
+### Meta Commands
+```bash
+rtk gain                # View token savings statistics
+rtk gain --history      # View command history with savings
+rtk discover            # Analyze Claude Code sessions for missed RTK usage
+rtk proxy <cmd>         # Run command without filtering (for debugging)
+rtk init                # Add RTK instructions to CLAUDE.md
+rtk init --global       # Add RTK to ~/.claude/CLAUDE.md
+```
+
+## Token Savings Overview
+
+| Category | Commands | Typical Savings |
+|----------|----------|-----------------|
+| Tests | vitest, playwright, cargo test | 90-99% |
+| Build | next, tsc, lint, prettier | 70-87% |
+| Git | status, log, diff, add, commit | 59-80% |
+| GitHub | gh pr, gh run, gh issue | 26-87% |
+| Package Managers | pnpm, npm, npx | 70-90% |
+| Files | ls, read, grep, find | 60-75% |
+| Infrastructure | docker, kubectl | 85% |
+| Network | curl, wget | 65-70% |
+
+Overall average: **60-90% token reduction** on common development operations.
+<!-- /rtk-instructions -->

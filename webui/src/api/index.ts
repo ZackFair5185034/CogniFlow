@@ -1,4 +1,10 @@
 import axios from 'axios'
+import type {
+  DetectImageResponse,
+  PortCompatibilityResponse,
+  RuleGraphDetail,
+  RuleGraphValidateResult,
+} from '@/types/api'
 
 const api = axios.create({
   baseURL: '/api',
@@ -103,8 +109,20 @@ export const annotationApi = {
 export const modelApi = {
   list: () => api.get('/models'),
   get: (id: number) => api.get(`/models/${id}`),
-  create: (data: { name: string; version?: string; file_path?: string; atlas_id?: number }) => api.post('/models', data),
-  update: (id: number, data: { name?: string; version?: string; metrics?: object }) => api.put(`/models/${id}`, data),
+  create: (data: {
+    name: string
+    version?: string
+    file_path?: string
+    pretrained_model?: string
+    atlas_id?: number | null
+  }) => api.post('/models', data),
+  update: (id: number, data: {
+    name?: string
+    version?: string
+    pretrained_model?: string
+    atlas_id?: number | null
+    metrics?: object
+  }) => api.put(`/models/${id}`, data),
   delete: (id: number) => api.delete(`/models/${id}`),
   setBest: (id: number) => api.post(`/models/${id}/set-best`),
   getDownloadUrl: (id: number) => `/api/models/${id}/download`,
@@ -116,6 +134,9 @@ export const modelApi = {
     })
   },
   getTrainingHistory: (id: number) => api.get(`/models/${id}/training-history`),
+  exportAsync: (id: number, data: { target_format: string; half: boolean }) => api.post(`/models/${id}/export`, data),
+  /** 获取模型训练类别名列表（Phase 14 起，yolo_trigger/conditions class_names 自动填充用） */
+  getCategories: (id: number) => api.get<string[]>(`/models/${id}/categories`),
 }
 
 // Training API
@@ -141,19 +162,27 @@ export const launchApi = {
 
 // Inference API
 export const inferenceApi = {
-  detectImage: (file: File, modelId: number, confThreshold: number = 0.25) => {
+  detectImage: (file: File, modelId: number, confThreshold: number = 0.25, device?: string, precision?: string, format?: string) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post(`/inference/detect/image?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
+    let url = `/inference/detect/image?model_id=${modelId}&conf_threshold=${confThreshold}`
+    if (device) url += `&device=${device}`
+    if (precision) url += `&precision=${precision}`
+    if (format) url += `&format=${format}`
+    return api.post<DetectImageResponse>(url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000,
     })
   },
   // 流式视频检测
-  detectVideoStream: (file: File, modelId: number, confThreshold: number = 0.25) => {
+  detectVideoStream: (file: File, modelId: number, confThreshold: number = 0.25, device?: string, precision?: string, format?: string) => {
     const formData = new FormData()
     formData.append('file', file)
-    return api.post(`/inference/detect/video/stream?model_id=${modelId}&conf_threshold=${confThreshold}`, formData, {
+    let url = `/inference/detect/video/stream?model_id=${modelId}&conf_threshold=${confThreshold}`
+    if (device) url += `&device=${device}`
+    if (precision) url += `&precision=${precision}`
+    if (format) url += `&format=${format}`
+    return api.post(url, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 60000, // 上传视频需要更长超时
     })
@@ -162,8 +191,13 @@ export const inferenceApi = {
   stopVideoStream: (jobId: string) => api.post(`/inference/detect/stop/${jobId}`),
   listTrainedModels: () => api.get('/inference/models'),
   listInferenceJobs: () => api.get('/inference/jobs'),
-  rerunInferenceJob: (jobId: string, modelId: number, confThreshold: number = 0.25) =>
-    api.post(`/inference/jobs/${jobId}/rerun?model_id=${modelId}&conf_threshold=${confThreshold}`),
+  rerunInferenceJob: (jobId: string, modelId: number, confThreshold: number = 0.25, device?: string, format?: string, precision?: string) => {
+    let url = `/inference/jobs/${jobId}/rerun?model_id=${modelId}&conf_threshold=${confThreshold}`
+    if (device) url += `&device=${device}`
+    if (format) url += `&format=${format}`
+    if (precision) url += `&precision=${precision}`
+    return api.post(url)
+  },
   clearInferenceJobs: () => api.delete('/inference/jobs'),
 }
 
@@ -172,10 +206,15 @@ export const ruleEngineApi = {
   // 节点定义
   getNodeDefinitions: () => api.get('/rule-engine/nodes/definitions'),
 
+  // 端口类型兼容矩阵(后端唯一事实源, 前端不得硬编码)
+  getPortCompatibility: () =>
+    api.get<PortCompatibilityResponse>('/rule-engine/port-compatibility'),
+
   // 规则图 CRUD
   listGraphs: () => api.get('/rule-engine/graphs'),
   getGraph: (id: number) => api.get(`/rule-engine/graphs/${id}`),
-  getGraphDetail: (id: number) => api.get(`/rule-engine/graphs/${id}/detail`),
+  getGraphDetail: (id: number) =>
+    api.get<RuleGraphDetail>(`/rule-engine/graphs/${id}/detail`),
   createGraph: (data: {
     name: string
     description?: string
@@ -197,7 +236,8 @@ export const ruleEngineApi = {
   updateThumbnail: (id: number, thumbnail: string) =>
     api.patch(`/rule-engine/graphs/${id}/thumbnail`, null, { params: { thumbnail } }),
   deleteGraph: (id: number) => api.delete(`/rule-engine/graphs/${id}`),
-  validateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/validate`),
+  validateGraph: (id: number) =>
+    api.post<RuleGraphValidateResult>(`/rule-engine/graphs/${id}/validate`),
   activateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/activate`),
   deactivateGraph: (id: number) => api.post(`/rule-engine/graphs/${id}/deactivate`),
   getWebhookUrl: (id: number) => api.get(`/rule-engine/graphs/${id}/webhook-url`),
@@ -207,9 +247,15 @@ export const ruleEngineApi = {
     graph_id: number
     trigger_type?: string
     trigger_data?: object
+    /** 延后启动: 只登记执行记录, 等 WebSocket 订阅后再调 startExecution */
+    defer_start?: boolean
   }) => api.post('/rule-engine/execute', data),
 
-  // 执行历史
+  // 启动一个已登记但未开始的执行(配合 defer_start 消除 WS 订阅竞态)
+  startExecution: (executionId: number) =>
+    api.post(`/rule-engine/executions/${executionId}/start`),
+
+  // 执行历史 (P2-D 2026-06-19: 复用于回放对话框)
   listExecutions: (graphId?: number, limit?: number) =>
     api.get('/rule-engine/executions', { params: { graph_id: graphId, limit } }),
   getExecution: (id: number) => api.get(`/rule-engine/executions/${id}`),

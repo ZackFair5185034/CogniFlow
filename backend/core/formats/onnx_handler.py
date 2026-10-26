@@ -78,6 +78,15 @@ class OnnxModelHandler(BaseModelHandler):
             model_path, sess_options=sess_options, providers=providers
         )
 
+        # 诊断日志：确认实际使用的执行提供器
+        import logging
+        _logger = logging.getLogger("cogniflow")
+        _actual_providers = self._session.get_providers()
+        _logger.info(
+            "ONNX 模型已加载: %s, 请求设备=%s, 实际执行提供器=%s",
+            model_path, device, _actual_providers,
+        )
+
         # 获取输入输出信息
         self._input_name = self._session.get_inputs()[0].name
         self._input_shape = self._session.get_inputs()[0].shape
@@ -85,6 +94,12 @@ class OnnxModelHandler(BaseModelHandler):
 
         # 提取元数据
         self._extract_metadata()
+
+        # 帧计时计数器（用于周期性诊断日志）
+        self._frame_count = 0
+        self._preprocess_total_ms = 0.0
+        self._infer_total_ms = 0.0
+        self._postprocess_total_ms = 0.0
 
     def _extract_metadata(self) -> None:
         """提取 ONNX 模型元数据。"""
@@ -137,23 +152,55 @@ class OnnxModelHandler(BaseModelHandler):
         if self._session is None:
             raise RuntimeError("模型未加载，请先调用 load()")
 
-        start_time = time.time()
+        import logging
+        _logger = logging.getLogger("cogniflow")
+
+        t0 = time.time()
 
         # 预处理
         input_data = self._preprocess(image)
+        t1 = time.time()
 
         # 推理
         outputs = self._session.run(self._output_names, {self._input_name: input_data})
-
-        inference_ms = (time.time() - start_time) * 1000
+        t2 = time.time()
 
         # 后处理
         detections = self._postprocess(outputs, conf)
+        t3 = time.time()
+
+        preprocess_ms = (t1 - t0) * 1000
+        infer_ms = (t2 - t1) * 1000
+        postprocess_ms = (t3 - t2) * 1000
+        total_ms = (t3 - t0) * 1000
+
+        # 累计计时，每 30 帧输出一次诊断
+        self._frame_count += 1
+        self._preprocess_total_ms += preprocess_ms
+        self._infer_total_ms += infer_ms
+        self._postprocess_total_ms += postprocess_ms
+
+        if self._frame_count % 30 == 0:
+            n = self._frame_count
+            avg_pre = self._preprocess_total_ms / n
+            avg_inf = self._infer_total_ms / n
+            avg_post = self._postprocess_total_ms / n
+            avg_total = avg_pre + avg_inf + avg_post
+            _logger.info(
+                "ONNX 帧诊断 #%d: 预处理=%.1fms(%.0f%%), 推理=%.1fms(%.0f%%), "
+                "后处理=%.1fms(%.0f%%), 总=%.1fms, 提供器=%s",
+                n,
+                avg_pre, avg_pre / avg_total * 100,
+                avg_inf, avg_inf / avg_total * 100,
+                avg_post, avg_post / avg_total * 100,
+                avg_total,
+                self._metadata.get("execution_provider", "?"),
+            )
 
         return InferenceResult(
             detections=detections,
             num_detections=len(detections),
-            inference_ms=inference_ms,
+            inference_ms=total_ms,
             metadata=self._metadata.copy(),
         )
 

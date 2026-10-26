@@ -1,10 +1,25 @@
 <template>
+  <!--
+    v-memo (Phase B + LOD-1): 拖拽时只让 wrapper transform 变化,
+    节点壳内部 vdom 完全跳过 patch, 50 节点场景渲染开销从 O(N) 降到 O(1).
+    依赖选择依据: 拖动时 data.id/status/category 都不变.
+    lodLevel 也在依赖里: 缩放/展开切换时强制 patch 一次, 之后稳定.
+    selected 走 VueFlow wrapper 的 CSS class, 不需列入依赖.
+  -->
   <div
+    v-memo="[data.id, nodeStatus, data.category, lodLevel, isExpanded, hasMissingRequired, isDisabled]"
+    v-bind="$attrs"
     class="rule-node"
-    :class="[`category-${data.category}`, { selected }]"
-    @contextmenu.prevent="handleContextMenu"
+    :class="[`category-${data.category}`, `lod-${lodLevel}`, { expanded: isCollapsed, 'missing-required': hasMissingRequired, 'is-disabled': isDisabled }]"
+    :data-status="nodeStatus"
+    :data-lod="lodLevel"
+    :data-expanded="isCollapsed ? 'true' : 'false'"
+    :data-missing-required="hasMissingRequired ? 'true' : 'false'"
+    :data-disabled="isDisabled ? 'true' : 'false'"
+    @contextmenu.prevent="emit('contextmenu', $event)"
+    @dblclick.stop="emit('dblclick', $event)"
   >
-    <!-- 标题栏 -->
+    <!-- ========== LOD 0/1 通用: 标题栏 ========== -->
     <div class="node-header">
       <div
         class="node-icon"
@@ -14,249 +29,156 @@
       </div>
       <div class="node-title">
         <span class="node-label">{{ data.label || data.type }}</span>
-        <span class="node-type">{{ data.type }}</span>
+        <!-- P1-1 (2026-06-19): 必填端口未连警告 (LOD 1+) -->
+        <span
+          v-if="hasMissingRequired && lodLevel >= 1"
+          class="missing-required-badge"
+          :title="missingRequiredTitle"
+        >⚠ {{ missingRequiredHandles.length }}</span>
       </div>
-    </div>
-
-    <!-- 配置控件区域 -->
-    <div
-      v-if="hasConfig"
-      class="node-body"
-    >
-      <div
-        v-for="(schema, key) in configProperties"
-        :key="key"
-        class="node-field"
+      <!-- Phase 19.5+: 单节点折叠/展开按钮 (替代工具栏全局按钮) -->
+      <button
+        v-if="lodLevel >= 1"
+        class="node-collapse-btn"
+        :title="isCollapsed ? '展开节点' : '折叠节点 (隐藏内嵌配置)'"
+        @click.stop="toggleSelf"
+        @dblclick.stop
       >
-        <label class="field-label">{{ schema.title || key }}</label>
-        <div class="field-control">
-          <!-- Slider -->
-          <template v-if="schema.widget === 'slider'">
-            <el-slider
-              :model-value="getNodeValue(key) as number"
-              :min="schema.minimum"
-              :max="schema.maximum"
-              :step="schema.step"
-              @update:model-value="updateConfig(key, $event)"
-            />
-            <span class="slider-value">{{ getNodeValue(key) }}</span>
-          </template>
-
-          <!-- Number -->
-          <template v-else-if="schema.widget === 'number'">
-            <el-input-number
-              :model-value="getNodeValue(key) as number"
-              :min="schema.minimum"
-              :max="schema.maximum"
-              :step="schema.step"
-              :controls="false"
-              class="number-input"
-              @update:model-value="updateConfig(key, $event)"
-            />
-          </template>
-
-          <!-- Dropdown -->
-          <template v-else-if="schema.widget === 'dropdown'">
-            <el-select
-              :model-value="getNodeValue(key)"
-              class="select-input"
-              @update:model-value="updateConfig(key, $event)"
-            >
-              <el-option
-                v-for="opt in schema.enum"
-                :key="opt"
-                :value="opt"
-                :label="opt"
-              />
-            </el-select>
-          </template>
-
-          <!-- Model Select -->
-          <template v-else-if="schema.widget === 'model-select'">
-            <el-select
-              :model-value="getNodeValue(key)"
-              class="select-input model-select"
-              placeholder="选择模型..."
-              @update:model-value="updateConfig(key, $event)"
-            >
-              <el-option
-                v-for="model in availableModels"
-                :key="model.id"
-                :value="model.id"
-                :label="model.name"
-              />
-            </el-select>
-          </template>
-
-          <!-- Textarea -->
-          <template v-else-if="schema.widget === 'textarea'">
-            <el-input
-              :model-value="(getNodeValue(key) as string | number | null) ?? ''"
-              type="textarea"
-              :placeholder="schema.description || ''"
-              :rows="2"
-              class="textarea-input"
-              @update:model-value="updateConfig(key, $event)"
-            />
-          </template>
-
-          <!-- Code -->
-          <template v-else-if="schema.widget === 'code'">
-            <el-input
-              :model-value="(getNodeValue(key) as string | number | null) ?? ''"
-              type="textarea"
-              :placeholder="schema.description || ''"
-              :rows="2"
-              class="code-input"
-              @update:model-value="updateConfig(key, $event)"
-            />
-          </template>
-
-          <!-- Checkbox -->
-          <template v-else-if="schema.widget === 'checkbox'">
-            <el-checkbox
-              :model-value="!!getNodeValue(key)"
-              @update:model-value="updateConfig(key, $event)"
-            >
-              {{ schema.description || '' }}
-            </el-checkbox>
-          </template>
-
-          <!-- Text / Default -->
-          <template v-else>
-            <el-input
-              :model-value="String(getNodeValue(key) ?? '')"
-              :placeholder="schema.description || ''"
-              class="text-input"
-              @update:model-value="updateConfig(key, $event)"
-            />
-          </template>
-
-          <!-- 变量绑定按钮 -->
-          <button
-            v-if="schema.widget !== 'checkbox'"
-            class="var-bind-btn"
-            title="绑定变量"
-            @click.stop="toggleVarMenu(key)"
-          >
-            📎
-          </button>
-
-          <!-- 变量下拉菜单 -->
-          <div
-            v-if="activeVarMenu === key && variables.length > 0"
-            class="var-dropdown"
-          >
-            <div
-              v-for="v in variables"
-              :key="v.name"
-              class="var-option"
-              @click="bindVariable(key, v.name)"
-            >
-              {{ formatVarRef(v.name) }}
-            </div>
-          </div>
-        </div>
-      </div>
+        <SvgIcon :name="isCollapsed ? 'expand-all' : 'collapse-all'" />
+      </button>
     </div>
 
-    <!-- 底部配置摘要 -->
-    <div
-      v-if="configSummary"
-      class="node-footer"
-    >
-      <span class="summary-text">{{ configSummary }}</span>
-    </div>
-
-    <!-- 端口区域 - 左进右出 -->
-    <div class="node-ports">
-      <!-- 左侧输入端口 -->
+    <!-- ========== LOD 1: 端口区域 + 端口名 (LOD 0 隐藏) ==========
+         Phase 17.1+: 显示端口名 label (老大反馈: 不知道连接点是什么意思)
+         紧凑显示: input 在 Handle 右侧, output 在 Handle 左侧 -->
+    <template v-if="lodLevel >= 1">
       <div
-        v-if="data.inputs?.length"
-        class="ports-side inputs"
+        v-if="(data.inputs?.length || 0) > 0 || (data.outputs?.length || 0) > 0"
+        class="node-ports"
       >
         <div
           v-for="input in data.inputs"
-          :key="input.name"
-          class="port-item"
+          :key="'in-' + input.name"
+          class="port-item port-in"
+          :class="{ 'is-missing-required': input.required && !isInputConnected(input.name) }"
         >
           <Handle
             :id="input.name"
             type="target"
             :position="Position.Left"
-            :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`]"
+            :class="['node-handle', `type-${(input.type ?? 'any').toLowerCase()}`, { 'is-connected': isInputConnected(input.name), 'is-missing-required': input.required && !isInputConnected(input.name) }]"
           />
-          <span class="port-label">{{ input.label || input.name }}</span>
+          <span
+            v-if="input.label || input.name"
+            class="port-label"
+            :title="input.label || input.name"
+          >
+            {{ input.label || input.name }}
+            <!-- P1-1 (2026-06-19): 必填端口加 * -->
+            <span
+              v-if="input.required"
+              class="required-marker"
+            >*</span>
+          </span>
         </div>
-      </div>
-
-      <!-- 右侧输出端口 -->
-      <div
-        v-if="data.outputs?.length"
-        class="ports-side outputs"
-      >
         <div
           v-for="output in data.outputs"
-          :key="output.name"
-          class="port-item"
+          :key="'out-' + output.name"
+          class="port-item port-out"
         >
-          <span class="port-label">{{ output.label || output.name }}</span>
+          <span
+            v-if="output.label || output.name"
+            class="port-label"
+            :title="output.label || output.name"
+          >{{ output.label || output.name }}</span>
           <Handle
             :id="output.name"
             type="source"
             :position="Position.Right"
-            :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`]"
+            :class="['node-handle', `type-${(output.type ?? 'any').toLowerCase()}`, { 'is-connected': isOutputConnected(output.name) }]"
           />
         </div>
       </div>
-    </div>
+    </template>
 
-    <!-- 执行状态指示 -->
+    <!-- 执行状态指示 (所有级别) -->
     <div
-      v-if="data.status"
+      v-if="nodeStatus && nodeStatus !== 'idle'"
       class="node-status"
     >
       <div
         class="status-indicator"
-        :class="data.status"
+        :class="nodeStatus"
+        :title="statusTitle"
       />
     </div>
 
-    <!-- 删除按钮 -->
-    <button
-      class="node-delete-btn"
-      title="删除节点"
-      @click.stop="props.onDelete?.(data.id)"
+    <!-- ========== 节点内嵌配置 (Phase 19.3+: 默认全展开显示, 双击折叠到 200px) ==========
+         2026-06-21 修复: 移除 @mousedown.stop
+           原因: .stop 会 stopPropagation, 导致 mousedown 无法冒泡到
+           .vue-flow__viewport 上的 d3-drag handler, 用户抓配置区拖不动节点.
+           保留 @click.stop / @dblclick.stop: 防止点击配置时触发节点选中/折叠切换.
+           拖拽排除由 useCogniFlowDrag.ts 的 d3-drag filter 兜底:
+           `if (target.closest('.node-config-section')) return false`
+
+         PERF (2026-09-11): 增加 lodLevel >= 1 门控 —— LOD 0 (zoom < 0.75, Task 16 由 0.65 上调) 真卸载配置区.
+           原因: NodeConfigEditor 会挂载 Element Plus 表单控件 + el-tooltip + el-scrollbar,
+           每个 el-select 额外产生 2 个 el-popper. 实测 49 个可见节点 = 49 el-select /
+           98 el-popper / 49 el-scrollbar. 这些实例在布局变化时集体重算 (floating-ui
+           autoUpdate 视口测量 + el-scrollbar update), 实测滚轮缩放每次触发 ~320ms 长任务.
+           LOD 0 下配置区本就被 CSS 隐藏 (.lod-0 .node-config-section { display: none }),
+           故卸载对视觉零影响, 但消除了全部实例与其更新开销.
+           实测: 全览(80 节点, LOD 0) 缩放长任务 4×320ms → 0.
+           注意: LOD 1 起配置区可见, 必须保留挂载 (加载期成本来源不在此门控).
+
+         PERF (2026-09-11) 第二刀: 传 lazy 给 NodeConfigEditor, 消除加载期长任务。
+           上面只解决了缩放; LOD 1 下 49 个节点仍各挂载 ~4 个 EP 控件, 加载实测
+           单个 3323ms 长任务 / 长任务总计 3822ms。lazy 后未交互的节点只渲染纯文本
+           预览 (label + 值), 首次 pointerdown 才实例化完整控件。
+           实测: 加载长任务总计 3822ms → 711ms, 最大单任务 3323ms → 263ms。 -->
+    <div
+      v-if="isExpanded && lodLevel >= 1"
+      class="node-config-section"
+      @click.stop
+      @dblclick.stop
     >
-      ×
-    </button>
+      <NodeConfigEditor
+        mode="inline"
+        lazy
+        :node-id="data.id"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
-import SvgIcon from '@/components/SvgIcon.vue'
+/**
+ * RuleNode - 节点壳 (Phase LOD-2)
+ *
+ * 三级 LOD 渲染:
+ *   LOD 0 (zoom < 0.5): 仅标题 + 类型图标 (极小, 不可连边)
+ *   LOD 1 (0.5 ≤ zoom < 1.0): 标题 + 类型图标 + 端口 (无摘要, 清爽)
+ *   LOD 2 (zoom ≥ 1.0 或双击展开): 完整内嵌配置 NodeConfigEditor
+ *
+ * v-memo 依赖: [data.id, data.status, data.category, lodLevel]
+ * - 拖动时所有字段不变 → v-memo 命中 → 0 patch
+ * - lodLevel 在依赖里: 缩放/展开切换时强制 patch 一次, 之后稳定
+ * - selected 走 CSS (outline) 不触发组件更新
+ * - summaryText 已被移除 (Phase 17.1+), 不再是依赖
+ */
+import { computed } from 'vue'
+import { Position, Handle } from '@vue-flow/core'
+import { useRuleEngineStore } from '@/stores/ruleEngine'
+import NodeConfigEditor from './NodeConfigEditor.vue'
 
-/** 节点配置值类型（排除 boolean/null，文本输入无法处理） */
-type NodeConfigValue = string | number | boolean | null
-
-interface ConfigSchemaProperty {
-  type: string
-  title?: string
-  description?: string
-  default?: NodeConfigValue
-  minimum?: number
-  maximum?: number
-  step?: number
-  enum?: string[]
-  widget?: string
-}
+defineOptions({ inheritAttrs: false })
 
 interface Port {
   name: string
   label?: string
   type: string
+  /** P1-1 (2026-06-19): 端口是否必填, 未连时显示 ⚠️ */
+  required?: boolean
 }
 
 interface NodeData {
@@ -267,192 +189,273 @@ interface NodeData {
   description?: string
   inputs?: Port[]
   outputs?: Port[]
-  configSchema?: {
-    properties?: Record<string, ConfigSchemaProperty>
-  }
-  config?: Record<string, NodeConfigValue>
   status?: string
+  /** P2-A (2026-06-19): 节点是否禁用 (执行时跳过) */
+  disabled?: boolean
 }
 
-// 删除按钮点击回调 - 通过 props 传入
 const props = defineProps<{
   data: NodeData
   selected?: boolean
-  onDelete?: (nodeId: string) => void
+  /** LOD 等级 0/1 (由父组件 RuleCanvas 计算传入, 可选 — 内部会用 store 回退) */
+  lodLevel?: 0 | 1
 }>()
 
 const emit = defineEmits<{
-  (e: 'update:config', key: string, value: string | number | boolean | null): void
-  (e: 'delete', nodeId: string): void
   (e: 'contextmenu', event: MouseEvent): void
+  /**
+   * 双击节点 → 父组件 RuleCanvas 调 store.toggleNodeExpanded(id) 进入 LOD 2
+   * 用 .stop 阻止冒泡到 VueFlow, 避免触发框选/拖拽
+   */
+  (e: 'dblclick', event: MouseEvent): void
 }>()
 
-function handleContextMenu(event: MouseEvent) {
-  event.preventDefault()
-  emit('contextmenu', event)
+const store = useRuleEngineStore()
+
+// ============ 状态指示器 tooltip ============
+
+/**
+ * 节点运行期状态。
+ *
+ * 2026-10-24: 状态从 graph store 的 nodeStatusMap 读取, 不再读 `data.status` ——
+ * `nodes` 是 shallowRef, 就地改 data.status 不会让 VueFlow 重算,
+ * 结果执行状态永远点不亮。独立 Map 换引用后订阅它的组件按需重渲染。
+ */
+const nodeStatus = computed(() => store.getNodeStatus(props.data.id))
+
+const statusTitle = computed(() => {
+  switch (nodeStatus.value) {
+    case 'running': return '正在执行...'
+    case 'success': return '执行成功'
+    case 'failed': return '执行失败'
+    case 'timeout': return '执行超时'
+    default: return ''
+  }
+})
+
+// ============ LOD 默认值 + 派生属性 ============
+
+/**
+ * LOD 等级: 优先使用 prop (父组件计算传入), 否则从 store 全局 map 查询.
+ * 来自 store 时是响应式的 — 缩放切换会触发重新计算.
+ */
+const lodLevel = computed<0 | 1>(() => {
+  if (props.lodLevel !== undefined) return props.lodLevel
+  // Phase 19.7+: 选中状态走 VueFlow 官方 API (selectedNodeIds), 不再从 store 读
+  return store.getLodLevel(props.data.id)
+})
+
+/**
+ * 节点是否处于"全展开"状态 (端口+配置+标题都显示, 280px 宽).
+ * 语义 (Phase 19.3+): 默认全展开, 双击 -> 折叠到 200px (只保留标题+端口, 隐藏配置).
+ * 反转历史: Phase 17.1~19.2 是默认折叠+双击展开, Phase 19.3 老大拍板默认展开.
+ */
+const isExpanded = computed<boolean>(() => {
+  // expandedNodeIds 集合保留 API 名字, 但语义反转为"折叠中的节点"
+  return !store.expandedNodeIds.has(props.data.id)
+})
+
+/**
+ * 节点是否处于"折叠"状态 (双击触发的, 配置区 hidden, 200px 宽).
+ * 这是 .expanded CSS 修饰符的开关 — CSS 期望折叠态 = 激活 .expanded class.
+ * isExpanded 和 isCollapsed 必须严格互补, 避免 CSS 误用.
+ */
+const isCollapsed = computed<boolean>(() => {
+  return store.expandedNodeIds.has(props.data.id)
+})
+
+// Phase 19.5+: 节点自身折叠/展开 (节点右上角按钮)
+function toggleSelf() {
+  store.toggleNodeExpanded(props.data.id)
 }
 
-// 可用模型（model-select用）
-const configProperties = computed((): Record<string, ConfigSchemaProperty> => {
-  return props.data.configSchema?.properties ?? Object.create(null) as Record<string, ConfigSchemaProperty>
-})
+// ============ Handle 连接状态 (store 全局索引 O(1) 查询) ============
 
-// 是否有配置
-const hasConfig = computed(() => {
-  return Object.keys(configProperties.value).length > 0
-})
+function isInputConnected(handleId: string): boolean {
+  return store.isHandleConnected(props.data.id, handleId, 'target')
+}
 
-// 节点配置（合并默认值）
-const nodeConfig = computed((): Record<string, NodeConfigValue> => {
-  const defaults: Record<string, NodeConfigValue> = {}
-  const schema = props.data.configSchema?.properties ?? {}
-  for (const [key, prop] of Object.entries(schema)) {
-    if ((prop as ConfigSchemaProperty).default !== undefined) {
-      defaults[key] = (prop as ConfigSchemaProperty).default as NodeConfigValue
+function isOutputConnected(handleId: string): boolean {
+  return store.isHandleConnected(props.data.id, handleId, 'source')
+}
+
+// ============ P1-1 (2026-06-19): 未连必填端口检测 ============
+
+/**
+ * 必填输入端口的 handle id 列表 (未连时)
+ * 触发器节点通常无 input ports, 不参与校验
+ */
+const missingRequiredHandles = computed<string[]>(() => {
+  if (!props.data.inputs) return []
+  const missing: string[] = []
+  for (const input of props.data.inputs) {
+    if (input.required && !isInputConnected(input.name)) {
+      missing.push(input.name)
     }
   }
-  return { ...defaults, ...(props.data.config as Record<string, NodeConfigValue>) }
+  return missing
 })
 
-/** 获取节点配置值（辅助方法，解决动态索引类型推断问题） */
-function getNodeValue(key: string): string | number | boolean | null {
-  return (nodeConfig.value as Record<string, string | number | boolean | null>)[key] ?? null
-}
+/** 节点是否有缺失必填输入端口 */
+const hasMissingRequired = computed(() => missingRequiredHandles.value.length > 0)
 
-// 可用模型（model-select用）
-const availableModels = inject<Array<{ id: number; name: string }>>('availableModels', [])
-
-// 可用变量列表（从父组件注入）
-interface Variable {
-  name: string
-  type: string
-}
-const variables = inject<Variable[]>('variables', [])
-
-// 变量绑定菜单状态
-const activeVarMenu = ref<string | null>(null)
-
-function toggleVarMenu(key: string) {
-  activeVarMenu.value = activeVarMenu.value === key ? null : key
-}
-
-function bindVariable(key: string, varName: string) {
-  // 将变量插入到当前字段值中
-  const currentValue = nodeConfig.value[key] || ''
-  const varRef = `{{${varName}}}`
-  // 如果已有变量引用则替换，否则追加
-  const newValue = currentValue
-    ? currentValue + varRef
-    : varRef
-  updateConfig(key, newValue)
-  activeVarMenu.value = null
-}
-
-// 格式化变量引用显示
-function formatVarRef(name: string) {
-  return `{{${name}}}`
-}
-
-// 底部配置摘要
-const configSummary = computed(() => {
-  const parts: string[] = []
-  const schema = props.data.configSchema || {}
-  const config = nodeConfig.value
-
-  // 关键配置项：model_id, confidence, threshold 等
-  const summaryKeys = ['model_id', 'confidence', 'iou_threshold', 'max_detections', 'device',
-                        'interval_ms', 'delay_ms', 'expression', 'method', 'url']
-
-  for (const key of summaryKeys) {
-    if (schema.properties?.[key] && config[key] !== undefined) {
-      const val = config[key]
-      const label = schema.properties[key]?.title || key
-      if (val !== '' && val !== null && val !== undefined) {
-        // 截断过长值
-        const displayVal = String(val).length > 12
-          ? `${String(val).slice(0, 10)}...`
-          : String(val)
-        parts.push(`${label}: ${displayVal}`)
-      }
-    }
-  }
-
-  return parts.slice(0, 3).join(' | ') // 最多显示3项
+/** 节点标题旁 ⚠️ tooltip 详情 */
+const missingRequiredTitle = computed(() => {
+  if (!hasMissingRequired.value) return ''
+  return `缺失必填输入端口: ${missingRequiredHandles.value.join(', ')}`
 })
 
-// 更新配置
-function updateConfig(key: string, value: string | number | boolean | null) {
-  emit('update:config', key, value)
-}
+// ============ P2-A (2026-06-19): 节点禁用状态 ============
+
+/** 节点是否处于禁用态 (执行时被跳过) */
+const isDisabled = computed(() => {
+  // 双数据源: data.disabled (持久化) 或 store.disabledNodeIds (UI 即时)
+  if (props.data.disabled === true) return true
+  return store.isNodeDisabled(props.data.id)
+})
 </script>
 
 <style scoped lang="scss">
-.rule-node,
-:deep(.vue-flow__node) {
-  overflow: visible !important;
-}
-
+/* ============================================
+ * 终极轻量节点壳样式 (Phase B 重构)
+ * ============================================ */
 .rule-node {
   background: linear-gradient(180deg, #2d2d30 0%, #252528 100%);
   border: 1px solid #404044;
   border-radius: 6px;
-  min-width: 200px;
-  max-width: 280px;
+  width: 280px;  /* Phase 19.3+: LOD 1 默认 280px 全展开 (端口+配置+标题) */
   font-size: 12px;
   color: #e0e0e0;
   position: relative;
-  transition: all 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
     0 2px 8px rgba(0,0,0,0.3);
-  /* 连接点和删除按钮需要溢出显示，但不能影响布局 */
-  overflow: visible;
-}
-
-/* 确保节点容器不裁剪子元素 */
-.rule-node-wrapper {
-  overflow: visible;
-}
-
-/* Handle 使用 overflow: visible 避免被裁剪 */
-.vue-flow__handle {
+  /* === 合成层隔离 (Tier 0 性能优化) ===
+     - contain: layout style  隔离子树对外部布局/样式影响
+       (注意: 不加 paint, paint containment 等同 overflow:hidden, 会裁切超出
+        节点壳的 Handle 圆 → 老大反馈"只能看到半个圆")
+     - 2026-06-21 修复: 移除永久的 will-change/translateZ(0)/backface-visibility:hidden.
+       这三件套会强制元素进入独立 GPU 合成层, 浏览器对合成层文字禁用
+       subpixel 抗锯齿, 导致节点文字永久性"糊" (用户 2026-06-21 反馈).
+       仅在拖动期临时启用, 兼顾拖动平滑 + 静态期文字清晰. */
+  contain: layout style;
   overflow: visible !important;
+  /* ========== 2026-06-19: 节点默认 cursor ==========
+     Vue Flow 默认给 .vue-flow__node 设了 cursor: grab,
+     但我们 2026-06-19 限制了拖动只在 .node-header 触发,
+     因此节点的"非标题栏"区域不应再显示 grab, 否则误导用户.
+     此处显式覆盖回 default, 标题栏 .node-header 单独设 grab. */
+  cursor: default;
 }
 
-.rule-node:hover {
-  border-color: #505055;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.08),
-    0 4px 16px rgba(0,0,0,0.4);
+/* 拖动期间彻底关闭 transition,避免每帧补间触发样式重算 */
+.vue-flow__node.dragging .rule-node,
+.vue-flow__node.selected.dragging .rule-node {
+  transition: none !important;
+  /* 2026-06-21: 移除所有 GPU 合成层 hack (will-change/translateZ/backface-visibility).
+     用户明确要求完全去掉 — 文字清晰度优先, 即使牺牲部分拖动平滑度. */
 }
 
-.rule-node.selected {
-  border-color: #00f0ff;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.08),
-    0 0 0 1px rgba(0,240,255,0.3),
-    0 4px 16px rgba(0,0,0,0.4);
+/* P2-I (Phase 17.1): 节点状态切换瞬间禁用 transition
+   执行期 50 节点从 idle → running → success 时, transition 期间浏览器 schedule paint
+   ~3-5ms/帧. 选中态/拖动态走 .dragging/.selected 锁;
+   这里补一刀: data-status 变化时也立即生效, 不补间. */
+.rule-node[data-status='running'],
+.rule-node[data-status='success'],
+.rule-node[data-status='failed'] {
+  transition: none !important;
 }
 
-/* 标题栏 - 使用背景色区分类型 */
+/* 标题栏 */
 .node-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
+  /* 2026-06-19: 标题栏 cursor 用 default, 用户明确反馈不喜欢小手样式 */
+  cursor: default;
 }
 
-.category-input .node-header { background: linear-gradient(90deg, rgba(76,255,76,0.2), rgba(76,255,76,0.05)); }
-.category-detection .node-header { background: linear-gradient(90deg, rgba(0,240,255,0.2), rgba(0,240,255,0.05)); }
-.category-processing .node-header { background: linear-gradient(90deg, rgba(255,255,76,0.2), rgba(255,255,76,0.05)); }
-.category-action .node-header { background: linear-gradient(90deg, rgba(255,127,76,0.2), rgba(255,127,76,0.05)); }
-.category-logic .node-header { background: linear-gradient(90deg, rgba(220,79,220,0.2), rgba(220,79,220,0.05)); }
-.category-output .node-header { background: linear-gradient(90deg, rgba(255,76,76,0.2), rgba(255,76,76,0.05)); }
+/* 展开按钮 (LOD 1 提示) */
+.node-expand-btn {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: rgba(34, 211, 238, 0.1);
+    border-color: rgba(34, 211, 238, 0.3);
+    color: var(--accent);
+  }
+}
+
+/* ========== 2026-06-19: 端口区 cursor ==========
+     端口区本身不参与拖动, 但因内嵌 Handle 的 crosshair,
+     鼠标进入 .node-ports 应保持 default. */
+.node-ports {
+  cursor: default;
+}
+
+/* ========== 2026-06-19: 配置区 cursor ==========
+     内嵌配置 (LOD 2) 的输入控件需要 text 样式,
+     但因为 .node-config-section 的 mousedown 已 .stop 阻止冒泡,
+     不会触发拖动, cursor 自然继承 .rule-node 的 default.
+     这里加 cursor: text 让用户明确知道这是输入区. */
+.node-config-section {
+  cursor: text;
+}
+
+/* ========== LOD 0 极简模式 ========== */
+.rule-node.lod-0 {
+  width: 120px;
+  min-height: 32px;
+  border-radius: 4px;
+  box-shadow: none;
+
+  .node-header {
+    padding: 4px 8px;
+    border-bottom: none;
+  }
+  .node-icon {
+    width: 16px;
+    height: 16px;
+  }
+  .node-icon svg { width: 10px; height: 10px; }
+  .node-label { font-size: 11px; }
+  .node-ports { display: none; }
+  .node-config-section { display: none; }   // 极简模式隐藏配置
+}
+
+/* ========== 折叠修饰符 (Phase 19.3+: expanded 类 = 折叠态) ========== */
+/*
+ * 默认 LOD 1 节点 280px 全展开 (端口+配置+标题).
+ * 双击 -> 节点加进 expandedNodeIds -> .expanded 修饰符激活 -> 折叠到 200px (隐藏配置).
+ * 设计取舍: 折叠态保留端口, 用户仍能继续接线.
+ *           节点壳宽度变化 (200px <-> 280px) 走 v-memo, 拖动期 0 性能损失.
+ */
+.rule-node.lod-1.expanded {
+  width: 200px;
+
+  .node-config-section {
+    display: none;  // 折叠态强制隐藏配置区
+  }
+}
 
 .node-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
   display: flex;
   align-items: center;
@@ -461,394 +464,341 @@ function updateConfig(key: string, value: string | number | boolean | null) {
 }
 
 .node-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
-
-.category-input .node-icon { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
-.category-detection .node-icon { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
-.category-processing .node-icon { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
-.category-action .node-icon { background: rgba(255, 127, 76, 0.2); color: #FF7F4C; }
-.category-logic .node-icon { background: rgba(220, 79, 220, 0.2); color: #DC4FDC; }
-.category-output .node-icon { background: rgba(255, 76, 76, 0.2); color: #FF4C4C; }
 
 .node-title {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .node-label {
   font-weight: 600;
-  font-size: 13px;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.node-type {
-  font-size: 10px;
-  color: #888;
-  font-family: monospace;
-}
-
-/* 配置区域 */
-.node-body {
-  padding: 8px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: rgba(0,0,0,0.15);
-  border-bottom: 1px solid rgba(255,255,255,0.03);
-}
-
-.node-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.field-label {
-  font-size: 10px;
-  color: #777;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.field-control {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* 输入控件样式 */
-.text-input,
-.number-input,
-.select-input {
-  flex: 1;
-  background: #1a1a1c;
-  border: 1px solid #3a3a3c;
-  border-radius: 4px;
-  padding: 5px 8px;
   font-size: 12px;
-  color: #e0e0e0;
-  min-width: 0;
-}
-
-.text-input:focus,
-.number-input:focus,
-.select-input:focus {
-  outline: none;
-  border-color: #00f0ff;
-}
-
-.slider-input {
-  flex: 1;
-  height: 4px;
-  background: #3a3a4a;
-  border-radius: 2px;
-  -webkit-appearance: none;
-}
-
-.slider-input::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
-  background: #00f0ff;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.slider-value {
-  font-size: 11px;
-  color: #00f0ff;
-  min-width: 32px;
-  text-align: right;
-  font-family: monospace;
-}
-
-.select-input {
-  cursor: pointer;
-}
-
-/* Textarea / Code */
-.textarea-input,
-.code-input {
-  flex: 1;
-  width: 100%;
-  background: #1a1a24;
-  border: 1px solid #3a3a4a;
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-size: 11px;
-  color: #e0e0e0;
-  font-family: monospace;
-  resize: vertical;
-  min-height: 40px;
-}
-
-.code-input {
-  background: #0a0a12;
-  min-height: 36px;
-}
-
-.textarea-input:focus,
-.code-input:focus {
-  outline: none;
-  border-color: #00f0ff;
-}
-
-
-/* Checkbox */
-.checkbox-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-
-.checkbox-input {
-  width: 14px;
-  height: 14px;
-  cursor: pointer;
-  accent-color: #00f0ff;
-}
-
-.checkbox-label {
-  font-size: 11px;
-  color: #aaa;
-}
-
-/* 变量绑定按钮 */
-.var-bind-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  color: #888;
-  flex-shrink: 0;
-}
-
-.var-bind-btn:hover {
-  background: #3a3a4a;
-  color: #00f0ff;
-}
-
-/* 变量下拉菜单 */
-.var-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  background: #2a2a3a;
-  border: 1px solid #3a3a4a;
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  z-index: 100;
-  min-width: 120px;
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.var-option {
-  padding: 6px 10px;
-  font-size: 11px;
-  font-family: monospace;
-  color: #00f0ff;
-  cursor: pointer;
-}
-
-.var-option:hover {
-  background: #3a3a4a;
-}
-
-.field-control {
-  position: relative;
-  flex-wrap: wrap;
-}
-
-/* 底部配置摘要 */
-.node-footer {
-  padding: 4px 12px;
-  background: #16161e;
-  border-top: 1px solid #2a2a3a;
-  border-radius: 0 0 8px 8px;
-}
-
-.summary-text {
-  font-size: 10px;
-  color: #777;
-  font-family: monospace;
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   display: block;
 }
 
+// Phase 19.5+: 节点右上角折叠/展开按钮
+.node-collapse-btn {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  color: #c0c0c8;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  &:hover {
+    background: rgba(34, 211, 238, 0.15);
+    border-color: var(--accent-blue, var(--accent));
+    color: var(--accent);
+  }
+
+  &:active {
+    transform: scale(0.92);
+  }
+}
+
+/* 分类头部渐变 */
+.category-input .node-header { background: linear-gradient(90deg, var(--cat-input-bg), transparent); }
+.category-detection .node-header { background: linear-gradient(90deg, var(--cat-detection-bg), transparent); }
+.category-processing .node-header { background: linear-gradient(90deg, var(--cat-processing-bg), transparent); }
+.category-action .node-header { background: linear-gradient(90deg, var(--cat-action-bg), transparent); }
+.category-logic .node-header { background: linear-gradient(90deg, var(--cat-logic-bg), transparent); }
+.category-output .node-header { background: linear-gradient(90deg, var(--cat-output-bg), transparent); }
+
+/* 分类图标颜色 */
+.category-input .node-icon { background: var(--cat-input-bg); color: var(--cat-input); }
+.category-detection .node-icon { background: var(--cat-detection-bg); color: var(--cat-detection); }
+.category-processing .node-icon { background: var(--cat-processing-bg); color: var(--cat-processing); }
+.category-action .node-icon { background: var(--cat-action-bg); color: var(--cat-action); }
+.category-logic .node-icon { background: var(--cat-logic-bg); color: var(--cat-logic); }
+.category-output .node-icon { background: var(--cat-output-bg); color: var(--cat-output); }
+
+/* 节点摘要 — Phase 17.1+ 已移除, 删死样式 */
+
+/* 节点悬停态 */
+.rule-node:hover {
+  border-color: #505055;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 4px 16px rgba(0,0,0,0.4);
+}
+
+/* 节点执行状态高亮 */
+.rule-node[data-status='running'] {
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 rgba(34, 211, 238, 0.15),
+    0 0 0 1px rgba(34, 211, 238, 0.4),
+    0 0 18px rgba(34, 211, 238, 0.25);
+}
+.rule-node[data-status='success'] {
+  border-color: var(--color-success);
+  box-shadow:
+    inset 0 1px 0 rgba(52, 217, 123, 0.12),
+    0 0 0 1px rgba(52, 217, 123, 0.3),
+    0 0 12px rgba(52, 217, 123, 0.18);
+}
+.rule-node[data-status='failed'] {
+  border-color: var(--color-danger);
+  box-shadow:
+    inset 0 1px 0 rgba(242, 85, 95, 0.12),
+    0 0 0 1px rgba(242, 85, 95, 0.3),
+    0 0 14px rgba(242, 85, 95, 0.2);
+}
+.rule-node[data-status='timeout'] {
+  border-color: var(--color-warning);
+  box-shadow:
+    inset 0 1px 0 rgba(255,165,0,0.12),
+    0 0 0 1px rgba(255,165,0,0.3),
+    0 0 14px rgba(255,165,0,0.2);
+}
+
+/* ========== 节点内嵌配置区 (Phase 19.3+: 默认显示, 折叠态 hidden) ========== */
+.node-config-section {
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.12);
+  max-height: 320px;        // 防止节点太高遮住其他节点
+  overflow-y: auto;         // 配置项多时节点内滚动
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    &:hover { background: rgba(255, 255, 255, 0.2); }
+  }
+}
+
 /* 端口区域 */
 .node-ports {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 0;
-  min-height: 24px;
-}
-
-/* 端口区域垂直居中分布 */
-.ports-side {
+  padding: 6px 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 12px 0;
-}
-
-/* 单端口时垂直居中，多端口时均匀分布 */
-.ports-side.inputs {
-  justify-content: center;
-}
-
-.ports-side.outputs {
-  justify-content: center;
-  align-items: flex-end;
+  gap: 4px;
 }
 
 .port-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 4px 0;
+  padding: 0 8px;
+  min-height: 20px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  /* 关键: .port-item 是 Handle 的父容器, 自身不应拦截鼠标事件,
+     否则 mousedown 会落在 .port-item 而不是 .vue-flow__handle, 导致
+     d3-drag filter 检测不到 handle, VueFlow Handle 的 onPointerDown 也不触发. */
+  pointer-events: none;
+  /* 必须: 让 Handle 的 position: absolute 相对于 port-item 而非 node wrapper,
+     VueFlow 默认 .vue-flow__handle-right { top: 50% } 把所有右侧 handle 叠在节点中央,
+     多个 handle 互相重叠导致 elementFromPoint 只能命中最后一个. */
   position: relative;
 }
 
-/* VueFlow Handle 样式 - 确保连接点定位在节点边框上 */
-.node-handle {
-  width: 14px !important;
-  height: 14px !important;
-  background: #1e1e2e !important;
-  border: 2px solid #5a5a6a !important;
-  border-radius: 50% !important;
-  cursor: crosshair !important;
-  transition: all 0.15s ease !important;
+/* 端口文字 label (Phase 17.1+: 显示端口名, 让用户知道连接点是什么)
+   - 紧凑字号 10px
+   - input: Handle 在左 label 在右 (默认顺序, 跟 flex 流向一致)
+   - output: label 在左 Handle 在右 (见模板, span 在前 Handle 在后) */
+.port-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+  pointer-events: none;        // 不拦截 Handle 鼠标事件
+  font-family: 'JetBrains Mono', 'Menlo', monospace;  // 等宽字体让名字对齐
   flex-shrink: 0;
 }
 
-/* 强制 Handle 定位到节点边框（边缘贴齐，无偏移） */
-:deep(.vue-flow__handle-left) {
-  left: -7px !important;
-  transform: none !important;
-}
-
-:deep(.vue-flow__handle-right) {
-  right: -7px !important;
-  transform: none !important;
-}
-
-/* 确保 handle 容器不裁剪 */
+/* 但 Handle 必须能接收事件 */
 :deep(.vue-flow__handle) {
-  position: absolute !important;
+  pointer-events: all !important;
 }
 
-.node-handle:hover {
-  width: 16px !important;
-  height: 16px !important;
-  border-color: #00f0ff !important;
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.6) !important;
+.port-in {
+  justify-content: flex-start;
 }
 
-/* 端口类型颜色 — 同色可连（Blender风格） */
-.node-handle.type-image    { border-color: #4CFF4C; }   /* 绿色 */
-.node-handle.type-bbox     { border-color: #00f0FF; }   /* 青色 */
-.node-handle.type-mask     { border-color: #00f0FF; }   /* 青色 */
-.node-handle.type-scores   { border-color: #FF7F4C; }   /* 橙色 */
-.node-handle.type-trigger  { border-color: #DC4FDC; }   /* 紫色 */
-.node-handle.type-control  { border-color: #DC4FDC; }   /* 紫色 */
-.node-handle.type-int      { border-color: #3B82F6; }   /* 蓝色 */
-.node-handle.type-float    { border-color: #14B8A6; }  /* 青色 */
-.node-handle.type-boolean  { border-color: #FF4C4C; }   /* 红色 */
-.node-handle.type-string   { border-color: #8B5CF6; }   /* 紫色 */
-.node-handle.type-array    { border-color: #FFFF4C; }   /* 黄色 */
-.node-handle.type-object   { border-color: #FFFF4C; }   /* 黄色 */
-.node-handle.type-model    { border-color: #888888; }   /* 灰色 */
-.node-handle.type-any      { border-color: #E0E0E0; }   /* 浅灰 */
-
-/* 已连接端口：类型色 + 绿色边框叠加，不覆盖类型色本身 */
-.node-handle.vue-flow-handle-connected {
-  border-color: #00ff88 !important;
-  background: #1e1e2e !important;
+.port-out {
+  justify-content: flex-end;
 }
 
-.port-label {
-  font-size: 12px;
-  color: #aaa;
-  white-space: nowrap;
+/* Handle (节点连接点) */
+:deep(.vue-flow__handle) {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #404044;
+  background: #1a1a20;
+  transition: border-color 0.15s, background 0.15s;
+  overflow: visible !important;
+}
+
+/* 显式确认 Handle 在有 connectable 标识时允许事件穿透。
+   VueFlow 自带 CSS 中 .vue-flow__handle.connectable 设置 pointer-events: all，
+   但 scoped :deep() 选择器优先级可能意外占优，此处重声明以确保交互性 */
+:deep(.vue-flow__handle.connectable) {
+  pointer-events: all;
+  cursor: crosshair;
+}
+
+/* ========== P2-B (2026-06-19): 端口吸附高亮 ==========
+   全局开关: 当用户在拖连线时, 所有 handles 放大 + 发光
+   .is-connecting 由 RuleCanvas 加到 .vue-flow 容器 */
+:deep(.vue-flow.is-connecting) .vue-flow__handle.connectable {
+  width: 14px !important;
+  height: 14px !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.4), 0 0 12px rgba(34, 211, 238, 0.6);
+  animation: handle-pulse 1s ease-in-out infinite;
+}
+
+@keyframes handle-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.4), 0 0 12px rgba(34, 211, 238, 0.6); }
+  50% { box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.7), 0 0 18px rgba(34, 211, 238, 0.9); }
+}
+
+:deep(.vue-flow__handle.type-image) { border-color: var(--cat-input); }
+:deep(.vue-flow__handle.type-bbox) { border-color: var(--cat-detection); }
+:deep(.vue-flow__handle.type-model) { border-color: var(--color-warning); }
+:deep(.vue-flow__handle.type-string) { border-color: var(--cat-processing); }
+:deep(.vue-flow__handle.type-control),
+:deep(.vue-flow__handle.type-trigger) { border-color: var(--cat-logic); }
+:deep(.vue-flow__handle.type-any) { border-color: #888; }
+
+:deep(.vue-flow__handle.is-connected) {
+  background: currentColor;
+}
+
+/* ========== P1-1 (2026-06-19): 未连必填端口视觉提示 ========== */
+
+/* 必填端口的 * 标记 */
+.required-marker {
+  color: var(--color-danger);
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+/* 必填未连的 handle: 红框 + 呼吸光晕 */
+:deep(.vue-flow__handle.is-missing-required) {
+  border-color: var(--color-danger) !important;
+  border-width: 2px !important;
+  box-shadow: 0 0 0 2px rgba(255, 82, 82, 0.25), 0 0 8px rgba(255, 82, 82, 0.6);
+  animation: required-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes required-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 82, 82, 0.25), 0 0 8px rgba(255, 82, 82, 0.6); }
+  50% { box-shadow: 0 0 0 3px rgba(255, 82, 82, 0.4), 0 0 14px rgba(255, 82, 82, 0.9); }
+}
+
+/* 节点标题旁的 ⚠️ 徽标 */
+.missing-required-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(255, 82, 82, 0.15);
+  border: 1px solid rgba(255, 82, 82, 0.4);
+  color: var(--color-danger);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: help;
+  flex-shrink: 0;
+}
+
+/* 节点整体: 有缺失必填时标题栏轻微红色提示 */
+.rule-node.missing-required .node-header {
+  background: linear-gradient(90deg, rgba(255, 82, 82, 0.12), rgba(255, 82, 82, 0.04));
+}
+
+/* 拖动期间 Vue Flow 默认 .vue-flow__node.dragging 会设 grabbing, 同样覆盖为 default
+   (用户 2026-06-19 反馈不喜欢任何小手样式, 拖动期间保持普通箭头) */
+:deep(.vue-flow__node.dragging),
+:deep(.vue-flow__node.dragging) .rule-node {
+  cursor: default !important;
+}
+
+/* ========== P2-A (2026-06-19): 节点禁用样式 ========== */
+.rule-node.is-disabled {
+  opacity: 0.4;
+  filter: grayscale(0.7);
+  border-style: dashed;
+  /* 阻止 hover 抬升感, 让"已禁用"更明显 */
+  transition: opacity 0.15s ease;
+}
+
+.rule-node.is-disabled:hover {
+  opacity: 0.6;
+  border-color: #888;
+  box-shadow: none;
+}
+
+/* 禁用节点标题旁加 [已禁用] 标识 */
+.rule-node.is-disabled .node-label::after {
+  content: ' ⏸';
+  color: #888;
+  font-size: 10px;
   margin-left: 4px;
 }
 
-/* 执行状态 */
+/* 状态指示器 */
 .node-status {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
+  pointer-events: none;
 }
 
 .status-indicator {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #666;
 }
 
 .status-indicator.running {
-  background: #00f0ff;
-  animation: pulse 1s infinite;
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(34, 211, 238, 0.7);
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
 .status-indicator.success {
-  background: #4CFF4C;
+  background: var(--color-success);
+  box-shadow: 0 0 6px rgba(52, 217, 123, 0.6);
 }
 
 .status-indicator.failed {
-  background: #FF4C4C;
+  background: var(--color-danger);
+  box-shadow: 0 0 6px rgba(242, 85, 95, 0.6);
+}
+
+.status-indicator.timeout {
+  background: var(--color-warning);
+  box-shadow: 0 0 6px rgba(255, 165, 0, 0.6);
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.85); }
 }
-
-/* 删除按钮 */
-.node-delete-btn {
-  position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #ff4c4c;
-  border: 2px solid #1e1e2e;
-  color: #fff;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.7;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover {
-    opacity: 1;
-    transform: scale(1.1);
-  }
-
-  /* 选中时始终显示删除按钮 */
-  .selected & {
-    opacity: 0.9;
-  }
-}
-
 </style>

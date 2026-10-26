@@ -59,6 +59,7 @@
         <div class="hotkey-hints">
           <span class="hint"><kbd>S</kbd> 保存</span>
           <span class="hint"><kbd>Z</kbd> 撤销</span>
+          <span class="hint"><kbd>DEL</kbd> 删除选中</span>
           <span class="hint"><kbd>← A</kbd> 上一页 <kbd>D →</kbd> 下一页</span>
         </div>
       </div>
@@ -241,15 +242,13 @@
           @mouseup="handleMouseUp"
           @mouseleave="handleMouseUp"
         />
+        <LoadingSpinner
+          v-if="loading"
+          overlay
+          text="加载图片中..."
+        />
         <div
-          v-if="imageLoading"
-          class="canvas-loading"
-        >
-          <div class="loading-spinner" />
-          <span>加载图片中...</span>
-        </div>
-        <div
-          v-if="!currentImage && !imageLoading"
+          v-if="!currentImage && !loading"
           class="canvas-overlay"
         >
           <div class="no-image">
@@ -379,10 +378,10 @@
           </button>
           <button
             class="ui-btn ui-btn-primary"
-            :disabled="creatingCategory"
+            :disabled="creating"
             @click="handleCreateCategory"
           >
-            {{ creatingCategory ? '创建中...' : '创建' }}
+            {{ creating ? '创建中...' : '创建' }}
           </button>
         </div>
       </div>
@@ -423,7 +422,7 @@
               ref="importFileInput"
               type="file"
               accept=".json,application/json"
-              style="display: none"
+              class="hidden"
               @change="onImportFileSelected"
             >
           </div>
@@ -491,11 +490,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
 import { categoryApi, annotationApi, atlasApi } from '@/api'
-import SvgIcon from '@/components/SvgIcon.vue'
 import type { AnnotationResponse } from '@/types/api'
 import type { CategoryNode } from '@/api'
 
@@ -538,10 +533,10 @@ const localAnnotations = ref<Annotation[]>([])
 const selectedCategoryId = ref<number | null>(null)
 const selectedAnnotationIndex = ref<number | null>(null)
 
-const imageLoading = ref(false)
+const loading = ref(false)
 const saving = ref(false)
 const showCategoryDialog = ref(false)
-const creatingCategory = ref(false)
+const creating = ref(false)
 const categoryForm = ref({ name: '', color: '#FF0000', is_directory: false, parent_id: null as number | null })
 
 // 导入导出状态
@@ -818,7 +813,7 @@ const loadCategories = async () => {
 }
 
 const loadImage = async (id: number) => {
-  imageLoading.value = true
+  loading.value = true
   try {
     const res = await fetch(`/api/images/${id}`)
     if (!res.ok) throw new Error('图片不存在')
@@ -832,7 +827,7 @@ const loadImage = async (id: number) => {
     ElMessage.error('加载图片失败')
     console.error(error)
   } finally {
-    imageLoading.value = false
+    loading.value = false
   }
 }
 
@@ -892,7 +887,7 @@ const initCanvas = () => {
   }
   img.onerror = () => {
     ElMessage.error('图片加载失败')
-    imageLoading.value = false
+    loading.value = false
   }
   img.src = getImageUrl(currentImage.value.file_path)
 }
@@ -1114,7 +1109,7 @@ const handleCreateCategory = async () => {
     return
   }
 
-  creatingCategory.value = true
+  creating.value = true
   try {
     await categoryApi.create({
       name: categoryForm.value.name,
@@ -1130,7 +1125,7 @@ const handleCreateCategory = async () => {
     const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '创建失败'
     ElMessage.error(msg)
   } finally {
-    creatingCategory.value = false
+    creating.value = false
   }
 }
 
@@ -1195,6 +1190,11 @@ const handleKeyDown = (e: KeyboardEvent) => {
   if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') {
     nextImage()
   }
+
+  if (e.key === 'Delete' && selectedAnnotationIndex.value !== null) {
+    e.preventDefault()
+    removeAnnotation(selectedAnnotationIndex.value)
+  }
 }
 
 watch(image_id, (newId) => {
@@ -1245,8 +1245,8 @@ onUnmounted(() => {
 
 .nav-info {
   font-family: 'JetBrains Mono', monospace;
-  @apply text-sm text-[var(--accent-cyan)] px-3 py-1 rounded;
-  background: rgba(0, 240, 255, 0.1);
+  @apply text-sm text-[var(--accent-blue)] px-3 py-1 rounded;
+  background: rgba(34, 211, 238, 0.1);
 }
 
 .hotkey-hints {
@@ -1273,7 +1273,7 @@ onUnmounted(() => {
 }
 
 .stat-value.done {
-  @apply text-[var(--accent-green)];
+  @apply text-[var(--color-success)];
 }
 
 .stat-sep {
@@ -1287,17 +1287,17 @@ onUnmounted(() => {
 
 .stat-fill {
   @apply h-full rounded-full transition-all duration-500;
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-blue));
 }
 
 .stat-pct {
   @apply text-xs font-mono font-semibold min-w-[2.5em] text-right;
-  @apply text-[var(--accent-cyan)];
+  @apply text-[var(--accent-blue)];
   transition: color 0.3s;
 }
 
 .stat-pct.done {
-  @apply text-[var(--accent-green)];
+  @apply text-[var(--color-success)];
 }
 
 .hint {
@@ -1347,8 +1347,8 @@ onUnmounted(() => {
 }
 
 .category-item.active {
-  background: rgba(0, 240, 255, 0.1);
-  @apply border-[var(--accent-cyan)];
+  background: rgba(34, 211, 238, 0.1);
+  @apply border-[var(--accent-blue)];
 }
 
 .cat-color {
@@ -1374,7 +1374,7 @@ onUnmounted(() => {
 
 .breadcrumb-item {
   @apply text-[var(--text-secondary)] cursor-pointer;
-  @apply hover:text-[var(--accent-cyan)];
+  @apply hover:text-[var(--accent-blue)];
 }
 
 .breadcrumb-item.active {
@@ -1397,7 +1397,7 @@ onUnmounted(() => {
 
 .dir-item {
   @apply flex items-center gap-2 p-1.5 rounded-md cursor-pointer;
-  @apply text-sm text-[var(--accent-yellow)];
+  @apply text-sm text-[var(--color-warning)];
 }
 
 .dir-item:hover {
@@ -1456,8 +1456,8 @@ onUnmounted(() => {
 }
 
 .tag-item.active {
-  background: rgba(0, 240, 255, 0.1);
-  @apply border-[var(--accent-cyan)];
+  background: rgba(34, 211, 238, 0.1);
+  @apply border-[var(--accent-blue)];
 }
 
 .tag-color {
@@ -1484,23 +1484,6 @@ onUnmounted(() => {
   cursor: crosshair;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
   background: #1a1a24;
-}
-
-.canvas-loading {
-  @apply absolute inset-0 flex flex-col items-center justify-center;
-  background: rgba(0, 0, 0, 0.7);
-  @apply gap-4;
-}
-
-.loading-spinner {
-  @apply w-10 h-10 rounded-full;
-  border: 3px solid var(--border-color);
-  border-top-color: var(--accent-cyan);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .canvas-overlay {
@@ -1536,8 +1519,8 @@ onUnmounted(() => {
   }
 
   &.selected {
-    background: rgba(0, 240, 255, 0.08);
-    border-color: rgba(0, 240, 255, 0.4);
+    background: rgba(34, 211, 238, 0.08);
+    border-color: rgba(34, 211, 238, 0.4);
   }
 
   &.pending {
@@ -1579,7 +1562,7 @@ onUnmounted(() => {
 
   &:hover {
     background: rgba(255, 68, 102, 0.15);
-    color: #ff4466;
+    color: var(--color-danger);
   }
 
   svg {
@@ -1655,7 +1638,7 @@ onUnmounted(() => {
   }
 
   input:focus {
-    @apply outline-none border-[var(--accent-cyan)];
+    @apply outline-none border-[var(--accent-blue)];
   }
 }
 
@@ -1685,11 +1668,11 @@ onUnmounted(() => {
 }
 
 .toggle-btn:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--text-primary)];
+  @apply border-[var(--accent-blue)] text-[var(--text-primary)];
 }
 
 .toggle-btn.active {
-  @apply border-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)] text-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.1)] text-[var(--accent-blue)];
 }
 
 .parent-path {
@@ -1750,8 +1733,8 @@ onUnmounted(() => {
 }
 
 .import-dropzone:hover {
-  border-color: var(--accent-cyan);
-  background: rgba(0, 240, 255, 0.05);
+  border-color: var(--accent-blue);
+  background: rgba(34, 211, 238, 0.05);
 }
 
 .import-dropzone svg {
@@ -1778,7 +1761,7 @@ onUnmounted(() => {
 
 .preview-stat .stat-count {
   @apply text-xl font-bold font-mono;
-  color: var(--accent-cyan);
+  color: var(--accent-blue);
 }
 
 .preview-stat .stat-label {
@@ -1804,7 +1787,7 @@ onUnmounted(() => {
 
 .import-error {
   @apply text-sm p-2 rounded;
-  color: #ff4466;
+  color: var(--color-danger);
   background: rgba(255, 68, 102, 0.1);
 }
 

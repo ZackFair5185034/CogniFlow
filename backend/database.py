@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     UniqueConstraint,
+    Index,
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, backref
 from sqlalchemy.pool import StaticPool
@@ -33,6 +34,7 @@ class Atlas(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    models = relationship("Model", back_populates="atlas", cascade="all, delete-orphan")
     images = relationship("Image", back_populates="atlas", cascade="all, delete-orphan")
 
 
@@ -111,7 +113,7 @@ class Model(Base):
     precision = Column(String(10), default="fp32")  # 推理精度: fp32/fp16/int8
     input_shape = Column(String(50), nullable=True)  # 输入尺寸，如 "640x640"
 
-    atlas = relationship("Atlas", back_populates=None)
+    atlas = relationship("Atlas", back_populates="models")
     inference_jobs = relationship("InferenceJob", back_populates="model", cascade="all, delete-orphan")
     files = relationship("ModelFile", back_populates="model", cascade="all, delete-orphan")
 
@@ -165,6 +167,10 @@ class RuleGraph(Base):
     is_active = Column(Boolean, default=False)
     cron_expression = Column(String(100), nullable=True)  # 定时触发 Cron 表达式
     thumbnail = Column(Text, nullable=True)  # Base64 缩略图快照
+    webhook_api_key = Column(String(64), nullable=True)  # Webhook API Key 认证
+    # P0-B (2026-09-11): 图 schema 版本号, 用于迁移框架识别需要升级的图。
+    # 旧图默认为 1 (与 CURRENT_SCHEMA_VERSION 一致, 无需迁移)。
+    schema_version = Column(Integer, default=1, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -174,6 +180,10 @@ class RuleGraph(Base):
 class ExecutionHistory(Base):
     """执行历史模型 - 记录每次规则执行的详情。"""
     __tablename__ = "execution_history"
+    __table_args__ = (
+        Index('ix_execution_history_graph_id', 'graph_id'),
+        Index('ix_execution_history_status', 'status'),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     graph_id = Column(Integer, ForeignKey("rule_graph.id", ondelete="CASCADE"), nullable=False)
@@ -192,6 +202,9 @@ class ExecutionHistory(Base):
 class NodeExecutionLog(Base):
     """节点执行记录模型 - 记录每个节点的执行详情。"""
     __tablename__ = "node_execution_log"
+    __table_args__ = (
+        Index('ix_node_execution_log_execution_id', 'execution_id'),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     execution_id = Column(Integer, ForeignKey("execution_history.id", ondelete="CASCADE"), nullable=False)
@@ -203,6 +216,8 @@ class NodeExecutionLog(Base):
     error_message = Column(Text, nullable=True)
     start_time = Column(DateTime, default=datetime.utcnow)
     end_time = Column(DateTime, nullable=True)
+    duration_ms = Column(Integer, nullable=True)  # 执行耗时（毫秒）
+    metrics_json = Column(Text, nullable=True)  # 指标数据（如检测数、数据量等）
 
     execution = relationship("ExecutionHistory", back_populates="node_logs")
 
@@ -270,6 +285,31 @@ def init_db():
     _migrate_add_column("inference_job", "device", "VARCHAR(20) DEFAULT 'cpu'")
     _migrate_add_column("inference_job", "precision", "VARCHAR(10) DEFAULT 'fp32'")
     _migrate_add_column("inference_job", "used_format", "VARCHAR(20) DEFAULT 'yolo_pt'")
+
+    # 迁移 P0-B (2026-09-11): 为 rule_graph 添加 schema_version 列 (无 Alembic 过渡)
+    try:
+        from backend.services.rule_engine.migrations import ensure_rule_graph_schema_column
+        ensure_rule_graph_schema_column()
+    except Exception as e:  # noqa: BLE001 - 容错，列已存在或表尚未创建均允许
+        import logging as _logging
+        _logging.getLogger(__name__).warning("ensure_rule_graph_schema_column 失败: %s", e)
+
+    # 迁移：Phase 11.1 节点执行指标端到端链路（2026-06-04 验收发现 P0 缺口）
+    # _save_node_log 写 duration_ms / metrics_json 但表缺这两列导致执行失败
+    _migrate_add_column("node_execution_log", "duration_ms", "INTEGER")
+    _migrate_add_column("node_execution_log", "metrics_json", "TEXT")
+
+    # 迁移：rule_graph 表新增字段
+    _migrate_add_column("rule_graph", "cron_expression", "VARCHAR(100)")
+    _migrate_add_column("rule_graph", "thumbnail", "TEXT")
+    _migrate_add_column("rule_graph", "webhook_api_key", "VARCHAR(64)")
+
+    # 迁移：model 表新增字段（多格式支持）
+    _migrate_add_column("model", "format", "VARCHAR(20) DEFAULT 'yolo_pt'")
+    _migrate_add_column("model", "available_formats", "TEXT DEFAULT '[]'")
+    _migrate_add_column("model", "device_preference", "VARCHAR(20) DEFAULT 'auto'")
+    _migrate_add_column("model", "precision", "VARCHAR(10) DEFAULT 'fp32'")
+    _migrate_add_column("model", "input_shape", "VARCHAR(50)")
 
 
 def _migrate_add_column(table: str, column: str, column_def: str):

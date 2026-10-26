@@ -128,8 +128,20 @@ node_modules
 .playwright-cli/
 .playwright-mcp/
 
-# Claude
-.claude/
+# vib coding
+**/.claude/
+**/.omc/
+**/.rtk/
+**/.codegraph/
+.superpowers/
+# oh-my-claudecode skill plugin 输出 (非项目资产, ENG-P0-2 2026-06-19)
+docs/superpowers/
+
+# Brainstorm / debug screenshots
+brainstorm-*.png
+canvas-initial.png
+cleanup-image-input.png
+nodes-*.png
 
 # Uploads (runtime data)
 uploads/

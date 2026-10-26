@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-info">
-        <h2>模型管理</h2>
+        <h2 class="cf-gradient-text text-2xl font-semibold">模型管理</h2>
         <span class="subtitle">管理训练模型</span>
       </div>
       <button
@@ -16,16 +16,13 @@
     </div>
 
     <!-- 模型列表 -->
-    <div
-      class="ui-card"
-      style="width: 100%; min-width: 0;"
-    >
+    <div class="ui-card w-full min-w-0">
       <div class="table-wrapper">
         <el-table
           v-loading="loading"
           :data="models"
           :row-class-name="tableRowClassName"
-          style="width: 100%"
+          class="w-full"
         >
           <el-table-column
             prop="id"
@@ -207,15 +204,15 @@
                 <!-- 直接显示第1个操作 -->
                 <el-button
                   class="action-text"
-                  @click.stop="handleAction('rename', row)"
+                  @click.stop="handleAction('rename', row as ModelResponse)"
                 >
                   编辑
                 </el-button>
                 <!-- 收纳剩余操作 -->
                 <el-dropdown
-                  v-if="getVisibleActions(row).length > 0"
+                  v-if="getVisibleActions(row as ModelResponse).length > 0"
                   trigger="click"
-                  @command="(cmd: string) => handleAction(cmd, row)"
+                  @command="(cmd: string) => handleAction(cmd, row as ModelResponse)"
                 >
                   <el-button class="action-text">
                     更多
@@ -223,7 +220,7 @@
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item
-                        v-for="action in getVisibleActions(row)"
+                        v-for="action in getVisibleActions(row as ModelResponse)"
                         :key="action.command"
                         :command="action.command"
                         :divided="action.command === 'delete'"
@@ -294,10 +291,6 @@
               clearable
               class="full-width"
             >
-              <el-option
-                :value="null"
-                label="不关联图集"
-              />
               <el-option
                 v-for="atlas in atlases"
                 :key="atlas.id"
@@ -370,7 +363,7 @@
               ref="fileInputRef"
               type="file"
               accept=".pt,.pth,.onnx"
-              style="display: none"
+              class="hidden"
               @change="handleFileChange"
             >
             <button
@@ -585,11 +578,9 @@
 </template>
 
 <script setup lang="ts">
-import {computed, onMounted, ref} from 'vue'
-import {ElMessage, ElMessageBox} from 'element-plus'
-import {atlasApi, modelApi} from '@/api'
-import SvgIcon from '@/components/SvgIcon.vue'
+import { atlasApi, modelApi } from '@/api'
 import type {ModelResponse, AtlasResponse} from '@/types/api'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 const models = ref<ModelResponse[]>([])
 const atlases = ref<AtlasResponse[]>([])
@@ -611,7 +602,35 @@ const exportStatus = ref<'idle' | 'starting' | 'loading' | 'saving' | 'completed
 const exportProgress = ref(0)
 const exportMessage = ref('')
 const exportId = ref<string | null>(null)
-let exportWs: WebSocket | null = null
+
+// 导出进度 WebSocket (P1-B, 2026-09-11): 使用统一 composable
+// - autoConnect:false: 拿到 export_id 后手动 connect
+// - reconnect:false: 导出是一次性任务, 不重连
+const exportWs = useWebSocket<{
+  type: string
+  data: { status: string; progress: number; message: string }
+}>({
+  url: () => (exportId.value ? `/ws/export/${exportId.value}` : ''),
+  autoConnect: false,
+  reconnect: false,
+  onMessage: (msg) => {
+    if (msg.type === 'export_update') {
+      const data = msg.data
+      exportStatus.value = data.status as typeof exportStatus.value
+      exportProgress.value = data.progress
+      exportMessage.value = data.message
+
+      if (data.status === 'completed') {
+        ElMessage.success('导出完成')
+        exporting.value = false
+        loadModels()
+      } else if (data.status === 'error') {
+        ElMessage.error(data.message)
+        exporting.value = false
+      }
+    }
+  },
+})
 
 const exportStatusText = computed(() => {
   const map: Record<string, string> = {
@@ -753,6 +772,10 @@ const handleUploadSubmit = async () => {
     ElMessage.warning('请选择模型文件')
     return
   }
+  if (!selectedModel.value) {
+    ElMessage.warning('请先选择模型')
+    return
+  }
   uploading.value = true
   try {
     await modelApi.upload(selectedModel.value.id, uploadFile.value)
@@ -828,6 +851,10 @@ const handleRenameSubmit = async () => {
     ElMessage.warning('请输入模型名称')
     return
   }
+  if (!renameTarget.value) {
+    ElMessage.warning('请先选择要编辑的模型')
+    return
+  }
   renaming.value = true
   try {
     await modelApi.update(renameTarget.value.id, {
@@ -869,58 +896,12 @@ const handleExport = (row: ModelResponse) => {
 
 // 关闭导出弹窗
 const handleExportClose = () => {
-  if (exportWs) {
-    exportWs.close()
-    exportWs = null
-  }
+  exportWs.close()
+  exportId.value = null
   showExportDialog.value = false
   exportStatus.value = 'idle'
   exportProgress.value = 0
   exportMessage.value = ''
-}
-
-// 连接导出进度 WebSocket
-const connectExportWs = (exportId: string) => {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = window.location.host
-  const wsUrl = `${protocol}//${host}/ws/export/${exportId}`
-
-  exportWs = new WebSocket(wsUrl)
-
-  exportWs.onopen = () => {
-    // 连接已建立
-  }
-
-  exportWs.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data)
-      if (msg.type === 'export_update') {
-        const data = msg.data
-        exportStatus.value = data.status
-        exportProgress.value = data.progress
-        exportMessage.value = data.message
-
-        if (data.status === 'completed') {
-          ElMessage.success('导出完成')
-          exporting.value = false
-          loadModels()
-        } else if (data.status === 'error') {
-          ElMessage.error(data.message)
-          exporting.value = false
-        }
-      }
-    } catch (e) {
-      console.error('解析导出消息失败', e)
-    }
-  }
-
-  exportWs.onerror = (error) => {
-    console.error('导出 WebSocket 错误', error)
-  }
-
-  exportWs.onclose = () => {
-    exportWs = null
-  }
 }
 
 const handleExportSubmit = async () => {
@@ -939,7 +920,7 @@ const handleExportSubmit = async () => {
       exportStatus.value = 'starting'
       exportProgress.value = 0
       exportMessage.value = '正在连接...'
-      connectExportWs(res.data.export_id)
+      exportWs.connect()
     }
   } catch (error: unknown) {
     const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '导出失败'
@@ -970,11 +951,7 @@ onMounted(() => {
 }
 
 .header-info h2 {
-  @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  // cf-gradient-text + text-2xl font-semibold 已上移到 class
 }
 
 .header-info .subtitle {
@@ -1025,7 +1002,7 @@ onMounted(() => {
 }
 
 .id-badge {
-  @apply font-mono text-xs text-[var(--accent-cyan)] px-2 py-1 bg-[rgba(0,240,255,0.1)] rounded;
+  @apply font-mono text-xs text-[var(--accent-blue)] px-2 py-1 bg-[rgba(34, 211, 238, 0.1)] rounded;
 }
 
 .name-cell {
@@ -1033,15 +1010,15 @@ onMounted(() => {
 }
 
 .model-icon {
-  @apply w-5 h-5 text-[var(--accent-magenta)];
+  @apply w-5 h-5 text-[var(--accent-blue)];
 }
 
 .version-badge {
-  @apply font-mono text-xs px-2 py-1 bg-[rgba(255,221,0,0.1)] text-[var(--accent-yellow)] border border-[rgba(255,221,0,0.3)] rounded;
+  @apply font-mono text-xs px-2 py-1 bg-[rgba(234,179,8,0.1)] text-[var(--color-warning)] border border-[rgba(234,179,8,0.3)] rounded;
 }
 
 .best-badge {
-  @apply inline-flex items-center gap-1 text-xs px-2 py-1 bg-[rgba(0,255,136,0.1)] text-[var(--accent-green)] border border-[rgba(0,255,136,0.3)] rounded;
+  @apply inline-flex items-center gap-1 text-xs px-2 py-1 bg-[rgba(52, 217, 123,0.1)] text-[var(--color-success)] border border-[rgba(52, 217, 123,0.3)] rounded;
 
   svg {
     @apply w-3 h-3;
@@ -1053,11 +1030,11 @@ onMounted(() => {
   white-space: nowrap;
 
   &.trained {
-    @apply bg-[rgba(0,255,136,0.1)] text-[var(--accent-green)] border border-[rgba(0,255,136,0.3)];
+    @apply bg-[rgba(52, 217, 123,0.1)] text-[var(--color-success)] border border-[rgba(52, 217, 123,0.3)];
   }
 
   &.untrained {
-    @apply bg-[rgba(255,136,102,0.1)] text-[#ff4466] border border-[rgba(255,136,102,0.3)];
+    @apply bg-[rgba(239,68,68,0.1)] text-[var(--color-danger)] border border-[rgba(239,68,68,0.3)];
   }
 }
 
@@ -1074,11 +1051,11 @@ onMounted(() => {
 }
 
 .metric-value {
-  @apply font-mono text-xs text-[var(--accent-cyan)];
+  @apply font-mono text-xs text-[var(--accent-blue)];
 }
 
 .metric-value {
-  @apply font-mono text-sm text-[var(--accent-cyan)];
+  @apply font-mono text-sm text-[var(--accent-blue)];
 }
 
 .time-badge {
@@ -1099,7 +1076,7 @@ onMounted(() => {
 }
 
 .action-text {
-  @apply flex items-center gap-1 text-[var(--accent-cyan)] text-xs font-medium bg-transparent border-none cursor-pointer p-0 transition-all;
+  @apply flex items-center gap-1 text-[var(--accent-blue)] text-xs font-medium bg-transparent border-none cursor-pointer p-0 transition-all;
 
   &:hover {
     opacity: 0.75;
@@ -1199,8 +1176,8 @@ onMounted(() => {
 
   input:focus,
   select:focus {
-    @apply outline-none border-[var(--accent-cyan)];
-    box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+    @apply outline-none border-[var(--accent-blue)];
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.1);
   }
 
   input::placeholder {
@@ -1235,7 +1212,7 @@ onMounted(() => {
   @apply inline-flex items-center gap-2.5 px-6 py-4 bg-[var(--bg-secondary)] border-2 border-dashed border-[var(--border-color)] rounded-xl text-[var(--text-secondary)] text-sm cursor-pointer transition-all;
 
   &:hover {
-    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+    @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
   }
 
   svg {
@@ -1260,7 +1237,7 @@ onMounted(() => {
   }
 
   &.is-default {
-    @apply text-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)] border border-[rgba(0,240,255,0.3)];
+    @apply text-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.1)] border border-[rgba(34, 211, 238, 0.3)];
   }
 }
 
@@ -1282,9 +1259,9 @@ onMounted(() => {
   @apply text-sm font-medium;
 
   &.idle { @apply text-[var(--text-muted)]; }
-  &.starting, &.loading { @apply text-[var(--accent-cyan)]; }
-  &.saving { @apply text-[var(--accent-yellow)]; }
-  &.completed { @apply text-[var(--accent-green)]; }
+  &.starting, &.loading { @apply text-[var(--accent-blue)]; }
+  &.saving { @apply text-[var(--color-warning)]; }
+  &.completed { @apply text-[var(--color-success)]; }
   &.error { @apply text-red-400; }
 }
 
@@ -1300,9 +1277,9 @@ onMounted(() => {
   @apply h-full rounded-full transition-all duration-300;
 
   &.idle { @apply bg-[var(--bg-secondary)]; }
-  &.starting, &.loading { @apply bg-[var(--accent-cyan)]; }
-  &.saving { @apply bg-[var(--accent-yellow)]; }
-  &.completed { @apply bg-[var(--accent-green)]; }
+  &.starting, &.loading { @apply bg-[var(--accent-blue)]; }
+  &.saving { @apply bg-[var(--color-warning)]; }
+  &.completed { @apply bg-[var(--color-success)]; }
   &.error { @apply bg-red-400; }
 }
 
@@ -1319,11 +1296,11 @@ onMounted(() => {
   @apply inline-flex items-center gap-1 px-2 py-1 rounded text-xs bg-[var(--bg-secondary)] text-[var(--text-secondary)];
 
   &.is-default {
-    @apply text-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)] border border-[rgba(0,240,255,0.25)];
+    @apply text-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.1)] border border-[rgba(34, 211, 238, 0.25)];
   }
 
   .default-tag {
-    @apply text-[10px] px-1 py-0 rounded bg-[var(--accent-cyan)] text-black;
+    @apply text-[10px] px-1 py-0 rounded bg-[var(--accent-blue)] text-black;
   }
 }
 

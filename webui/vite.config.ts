@@ -1,5 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
+/// <reference types="vitest" />
 import vue from '@vitejs/plugin-vue'
+import VueDevTools from 'vite-plugin-vue-devtools'
 import UnoCSS from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
@@ -12,6 +14,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       vue(),
+      VueDevTools(),
       UnoCSS(),
       AutoImport({
         imports: [
@@ -23,6 +26,23 @@ export default defineConfig(({ mode }) => {
           {
             'element-plus': ['ElMessage', 'ElMessageBox', 'ElNotification', 'ElLoadingDirective'],
           },
+          // VueFlow 核心
+          {
+            '@vue-flow/core': [
+              'useVueFlow',
+              'MarkerType',
+              'SelectionMode',
+              'VueFlow',
+              'Handle',
+              'Position',
+            ],
+          },
+          {
+            '@vue-flow/controls': ['Controls'],
+          },
+          {
+            '@vue-flow/minimap': ['MiniMap'],
+          },
           // Pinia stores
           {
             '@/stores/ruleEngine': ['useRuleEngineStore'],
@@ -32,6 +52,8 @@ export default defineConfig(({ mode }) => {
             '@/utils/toast': ['registerToast'],
           },
         ],
+        // 让 auto-import 在 <template> 里也生效 (e.g. <VueFlow :selection-mode="SelectionMode.Partial">)
+        includeTemplate: true,
         // API 模块按需显式导入（named exports 无法自动按名导入）
         eslintrc: {
           enabled: true,
@@ -39,11 +61,23 @@ export default defineConfig(({ mode }) => {
         dts: 'src/auto-imports.d.ts',
       }),
       Components({
-        // Element Plus 组件自动导入
+        // Element Plus + VueFlow 组件自动导入
         resolvers: [
           (name) => {
             if (name.startsWith('El')) {
               return { name, from: 'element-plus' }
+            }
+            // VueFlow 核心组件
+            if (['VueFlow', 'Handle'].includes(name)) {
+              return { name, from: '@vue-flow/core' }
+            }
+            // VueFlow 小地图
+            if (name === 'MiniMap') {
+              return { name, from: '@vue-flow/minimap' }
+            }
+            // VueFlow 控制按钮
+            if (name === 'Controls') {
+              return { name, from: '@vue-flow/controls' }
             }
           },
         ],
@@ -63,22 +97,22 @@ export default defineConfig(({ mode }) => {
 
     server: {
       host: '0.0.0.0',
-      port: Number(env.VITE_PORT) || 5173,
+      port: Number(env.VITE_PORT),
       proxy: {
         '/api': {
-          target: env.VITE_API_TARGET || 'http://localhost:8000',
+          target: env.VITE_API_TARGET,
           changeOrigin: true,
         },
         '/uploads': {
-          target: env.VITE_API_TARGET || 'http://localhost:8000',
+          target: env.VITE_API_TARGET,
           changeOrigin: true,
         },
         '/inference_output': {
-          target: env.VITE_API_TARGET || 'http://localhost:8000',
+          target: env.VITE_API_TARGET,
           changeOrigin: true,
         },
         '/ws': {
-          target: env.VITE_API_TARGET?.replace('http://', 'ws://') || 'ws://localhost:8000',
+          target: env.VITE_API_TARGET,
           ws: true,
         },
       },
@@ -115,6 +149,11 @@ export default defineConfig(({ mode }) => {
 
     optimizeDeps: {
       include: ['vue', 'vue-router', 'pinia', 'element-plus', 'axios'],
+    },
+
+    test: {
+      globals: true,
+      environment: 'happy-dom',
     },
   }
 })

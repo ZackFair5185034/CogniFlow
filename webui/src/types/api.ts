@@ -42,7 +42,7 @@ export interface ImageResponse {
   id: number
   atlas_id: number
   file_path: string
-  directory?: string
+  directory: string | null  // 根目录为 null
   width?: number
   height?: number
   annotated: boolean
@@ -113,6 +113,24 @@ export interface ModelFileResponse {
   created_at: string
 }
 
+/** 模型类别元数据 */
+export interface ModelCategory {
+  id?: number
+  name: string
+  color?: string
+}
+
+/** 模型指标 - 已知字段类型化, 未知字段保留 unknown */
+export interface ModelMetrics {
+  mAP50?: number
+  mAP50_95?: number
+  precision?: number
+  recall?: number
+  num_classes?: number
+  categories?: ModelCategory[]
+  [key: string]: unknown
+}
+
 /** 模型响应 */
 export interface ModelResponse {
   id: number
@@ -124,7 +142,7 @@ export interface ModelResponse {
   device_preference?: string
   precision?: string
   atlas_id?: number
-  metrics?: Record<string, unknown>
+  metrics?: ModelMetrics
   is_best: boolean
   created_at: string
   files: ModelFileResponse[]
@@ -173,20 +191,31 @@ export interface InferenceLoadStatus {
 
 // ============ Inference ============
 
-/** 检测结果项 */
+/** 推理检测结果项 - 单个目标 */
 export interface DetectionItem {
-  bbox: number[]
+  bbox: [number, number, number, number]  // [x1, y1, x2, y2]
+  class_id: number
+  class_name: string
   confidence: number
-  category_id: number
-  category_name?: string
 }
 
-/** 图片检测响应 */
+/** 类别配置项 (来自后端) */
+export interface CategoryConfig {
+  id?: number
+  name: string
+  color?: string
+}
+
+/** 图片检测响应 - 与 backend/routers/inference.py:detect_image 返回一致 */
 export interface DetectImageResponse {
+  success: boolean
+  original_image?: string
+  result_image?: string
+  result_image_base64: string
   detections: DetectionItem[]
-  image_width: number
-  image_height: number
-  inference_time: number
+  num_detections: number
+  categories?: CategoryConfig[]
+  used_format?: string | null
 }
 
 /** 推理任务记录 */
@@ -216,7 +245,7 @@ export interface InferenceJob {
 export interface NodePort {
   name: string
   type: string
-  label: string
+  label?: string
 }
 
 /** 节点定义 */
@@ -228,24 +257,108 @@ export interface NodeDefinition {
   icon?: string
   inputs: NodePort[]
   outputs: NodePort[]
-  config_schema: Record<string, unknown>
+  config_schema: Record<string, ConfigSchemaProperty>
 }
 
-/** 规则图节点 */
+/** 变量类型 */
+export type VariableType = 'STRING' | 'NUMBER' | 'BOOLEAN' | 'IMAGE' | 'BBOX'
+
+/** 变量默认值类型 */
+export type VariableDefaultValue = string | number | boolean | (string | number)[] | null
+
+/** 节点配置 Schema 属性 */
+export interface ConfigSchemaProperty {
+  type: string
+  title?: string
+  description?: string
+  default?: VariableDefaultValue
+  minimum?: number
+  maximum?: number
+  step?: number
+  enum?: string[]
+  widget?: string
+  visible?: string
+  /** multiselect 控件是否允许用户输入自定义选项（不限于 enum） */
+  allow_create?: boolean
+  /** 是否隐藏该字段（true = 在 UI 中不渲染） */
+  hidden?: boolean
+}
+
+/** 规则图节点数据 */
+export interface RuleNodeData {
+  /** 节点类型标识 */
+  type: string
+  /** 节点显示名称 */
+  label?: string
+  /** 节点分类 */
+  category: string
+  /** 节点功能描述（来自节点定义, 用于属性面板展示） */
+  description?: string
+  /** 输入端口定义 */
+  inputs?: NodePort[]
+  /** 输出端口定义 */
+  outputs?: NodePort[]
+  /**
+   * 端口连线关系 - 目标端口名 -> 上游节点与上游输出端口。
+   *
+   * 与 `inputs`/`outputs`(端口元数据数组, 用于渲染手柄)职责分离。
+   * 后端 `_resolve_inputs` 读取此字段解析上游数据。
+   */
+  connections?: Record<string, { node_id: string; output: string }>
+  /** 配置 Schema */
+  configSchema?: Record<string, ConfigSchemaProperty>
+  /** 节点配置值 */
+  config?: Record<string, VariableDefaultValue>
+  /** 执行状态 */
+  status?: 'idle' | 'running' | 'success' | 'failed'
+  /** 是否选中 */
+  selected?: boolean
+  /** 是否拖拽中 */
+  dragging?: boolean
+  /** 节点配置区展开状态（用于内联配置折叠/展开） */
+  configExpanded?: boolean
+}
+
+/** 规则图节点 - 用于存储和传输 */
 export interface GraphNode {
   id: string
   type: string
   position: { x: number; y: number }
-  data: Record<string, unknown>
+  data: RuleNodeData
 }
 
-/** 规则图连接边 */
+/** 规则图连接边 - 用于存储和传输 */
 export interface GraphEdge {
   id: string
   source: string
   target: string
   source_handle?: string
   target_handle?: string
+}
+
+/**
+ * 端口类型兼容矩阵响应。
+ *
+ * 后端 `backend/services/rule_engine/port_types.py` 是矩阵的唯一事实源。
+ */
+export interface PortCompatibilityResponse {
+  /** 源类型 -> 兼容的目标类型列表 */
+  matrix: Record<string, string[]>
+  /** 全部端口类型 */
+  types: string[]
+}
+
+/**
+ * 规则图校验结果。
+ *
+ * 后端返回 `{valid, errors[], error}`; `error` 是单条错误的向后兼容字段。
+ */
+export interface RuleGraphValidateResult {
+  valid: boolean
+  /** 逐条错误信息 */
+  errors: string[]
+  /** 单条错误(向后兼容) */
+  error?: string | null
 }
 
 /** 规则图基础 */
@@ -271,6 +384,7 @@ export interface RuleGraphResponse extends RuleGraphBase {
 export interface RuleGraphDetail extends RuleGraphResponse {
   nodes: GraphNode[]
   edges: GraphEdge[]
+  variables?: Record<string, unknown>
 }
 
 /** 执行触发请求 */

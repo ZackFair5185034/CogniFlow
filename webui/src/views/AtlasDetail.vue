@@ -10,7 +10,7 @@
         返回列表
       </button>
       <div class="atlas-info">
-        <h2>{{ atlas?.name }}</h2>
+        <h2 class="cf-gradient-text text-xl font-semibold truncate">{{ atlas?.name }}</h2>
         <span
           v-if="atlas?.description"
           class="atlas-desc"
@@ -21,13 +21,13 @@
         <template v-if="batchMode || selectedImages.length > 0">
           <span class="selected-count">已选 {{ selectedImages.length }}</span>
           <button
-            class="ui-btn ui-btn-sm"
+            class="ui-btn ui-btn-xs"
             @click="selectAllImages"
           >
             全选
           </button>
           <button
-            class="ui-btn ui-btn-sm"
+            class="ui-btn ui-btn-xs"
             @click="clearSelection"
           >
             取消
@@ -50,34 +50,45 @@
               :value="dir"
             />
           </el-select>
-          <button
-            class="ui-btn ui-btn-sm"
+          <el-dropdown
+            trigger="click"
             :disabled="selectedImages.length === 0"
-            @click="handleBatchMoveDirectory"
           >
-            <SvgIcon name="folder" />
-            移动
-          </button>
-          <button
-            class="ui-btn ui-btn-sm"
-            :disabled="selectedImages.length === 0"
-            @click="handleBatchDownload"
-          >
-            <SvgIcon name="download" />
-            下载
-          </button>
-          <button
-            class="ui-btn ui-btn-sm danger"
-            :disabled="selectedImages.length === 0"
-            @click="handleBatchDelete"
-          >
-            <SvgIcon name="trash" />
-            删除
-          </button>
+            <button
+              class="ui-btn ui-btn-xs"
+              :disabled="selectedImages.length === 0"
+            >
+              <SvgIcon name="menu" />
+              更多
+              <SvgIcon name="chevron-down" />
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="handleBatchMoveDirectory">
+                  <SvgIcon name="folder" />
+                  移动到目录
+                </el-dropdown-item>
+                <el-dropdown-item @click="handleBatchDownload">
+                  <SvgIcon name="download" />
+                  打包下载
+                </el-dropdown-item>
+                <el-dropdown-item
+                  divided
+                  @click="handleBatchDelete"
+                >
+                  <SvgIcon
+                    name="trash"
+                    class="text-red-500"
+                  />
+                  <span class="text-red-500">删除选中</span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
         <button
           v-if="batchMode"
-          class="ui-btn ui-btn-sm"
+          class="ui-btn ui-btn-xs"
           @click="exitBatchMode"
         >
           退出批量
@@ -110,14 +121,14 @@
         type="file"
         accept="image/*"
         multiple
-        style="display: none"
+        class="hidden"
         @change="handleFileSelect"
       >
       <input
         ref="videoInputRef"
         type="file"
         accept="video/*"
-        style="display: none"
+        class="hidden"
         @change="handleVideoSelect"
       >
     </div>
@@ -172,7 +183,7 @@
             </div>
             <div
               class="sort-wrapper"
-              @click="showSortMenu = !showSortMenu"
+              @click.stop="showSortMenu = !showSortMenu"
             >
               <span class="sort-label">
                 {{ sortConfig.by === 'created_at' ? '创建时间' : '名称' }}
@@ -235,7 +246,7 @@
           class="images-content"
         >
           <div
-            v-loading="loadingImages"
+            v-loading="loading"
             class="images-grid-wrapper"
           >
             <div class="images-grid">
@@ -249,12 +260,16 @@
                   :class="{ selected: batchMode && isImageSelected(img.id) }"
                 >
                   <!-- 复选框 - 仅在批量模式下显示 -->
-                  <el-checkbox
+                  <div
                     v-if="batchMode"
-                    :model-value="isImageSelected(img.id)"
-                    @update:model-value="toggleImageSelection(img.id)"
-                    @click.stop
-                  />
+                    class="checkbox-layer"
+                  >
+                    <el-checkbox
+                      :model-value="isImageSelected(img.id)"
+                      @update:model-value="toggleImageSelection(img.id)"
+                      @click.stop
+                    />
+                  </div>
                   <img
                     :src="getImageUrl(img.file_path)"
                     :alt="getFileName(img.file_path)"
@@ -275,15 +290,12 @@
                     class="image-name"
                     :title="getFileName(img.file_path)"
                   >{{ getFileName(img.file_path) }}</span>
-                  <div
-                    v-if="img.directory"
-                    class="image-dir-row"
-                  >
-                    <span class="image-dir">{{ img.directory }}</span>
-                    <div
-                      class="image-actions"
-                      @click.stop
-                    >
+                  <div class="image-bottom-row">
+                    <span
+                      v-if="img.directory"
+                      class="image-dir"
+                    >{{ img.directory }}</span>
+                    <div class="image-actions">
                       <button
                         class="img-action-btn"
                         title="下载"
@@ -311,7 +323,7 @@
               </div>
             </div>
             <div
-              v-if="!loadingImages && images.length === 0"
+              v-if="!loading && images.length === 0"
               class="empty-state"
             >
               <div class="empty-icon">
@@ -399,7 +411,10 @@
               :class="['dir-item', { active: dir === selectedDirectory }]"
             >
               <div class="dir-info">
-                <SvgIcon name="folder" class="dir-icon" />
+                <SvgIcon
+                  name="folder"
+                  class="dir-icon"
+                />
                 <span class="dir-name">{{ dir }}</span>
               </div>
               <div class="dir-actions">
@@ -485,12 +500,14 @@
           <h3>图片详情</h3>
           <div class="dialog-actions">
             <el-button
+              v-if="selectedImage"
               link
               @click="handleAnnotateImage(selectedImage)"
             >
               标注
             </el-button>
             <el-button
+              v-if="selectedImage"
               link
               @click="handleDeleteImage(selectedImage)"
             >
@@ -712,9 +729,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi, imageApi } from '@/api'
 import type { AtlasResponse, ImageResponse } from '@/types/api'
 
@@ -727,7 +741,7 @@ const videoInputRef = ref<HTMLInputElement | null>(null)
 const atlas = ref<AtlasResponse | null>(null)
 const images = ref<ImageResponse[]>([])
 const directories = ref<string[]>([])
-const loadingImages = ref(false)
+const loading = ref(false)
 const activeTab = ref('images')
 const selectedDirectory = ref('')
 const sortConfig = ref<{ by: string; order: 'asc' | 'desc' }>({ by: 'created_at', order: 'desc' })
@@ -823,7 +837,7 @@ const loadAtlas = async () => {
 }
 
 const loadImages = async () => {
-  loadingImages.value = true
+  loading.value = true
   try {
     const directory = selectedDirectory.value || undefined
     const res = await atlasApi.getImages(id, directory, pagination.value.page, pagination.value.page_size, sortConfig.value.by, sortConfig.value.order)
@@ -834,7 +848,7 @@ const loadImages = async () => {
     ElMessage.error('加载图片失败')
     console.error('[DEBUG] loadImages error:', error)
   } finally {
-    loadingImages.value = false
+    loading.value = false
   }
 }
 
@@ -1013,14 +1027,14 @@ const handleDeleteDirectory = async (dir: string) => {
   }
 }
 
-const handleAnnotateImage = (img: { id: number }) => {
+const handleAnnotateImage = (img: ImageResponse) => {
   const query: Record<string, string> = selectedDirectory.value ? { directory: selectedDirectory.value } : {}
   query.sort_by = sortConfig.value.by
   query.sort_order = sortConfig.value.order
   router.push({ path: `/annotate/${img.id}`, query })
 }
 
-const handleDeleteImage = async (img: { file_path: string; id: number }) => {
+const handleDeleteImage = async (img: ImageResponse) => {
   try {
     await ElMessageBox.confirm(
       `确定删除图片 "${getFileName(img.file_path)}" 吗？此操作不可撤销。`,
@@ -1166,15 +1180,27 @@ const getFileName = (filePath: string) => {
   return filePath.split(/[\\/]/).pop() || ''
 }
 
+// 点击外部关闭排序下拉菜单
+const handleClickOutside = () => {
+  if (showSortMenu.value) {
+    showSortMenu.value = false
+  }
+}
+
 onMounted(() => {
   // 从 URL 查询参数恢复目录筛选状态
   const dirFromQuery = route.query.directory as string | undefined
   if (dirFromQuery) {
     selectedDirectory.value = dirFromQuery
   }
+  document.addEventListener('click', handleClickOutside)
   loadAtlas()
   loadImages()
   loadDirectories()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
@@ -1195,7 +1221,7 @@ onMounted(() => {
 }
 
 .back-btn:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
 }
 
 .back-btn svg {
@@ -1207,11 +1233,7 @@ onMounted(() => {
 }
 
 .atlas-info h2 {
-  @apply text-xl font-semibold truncate;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  // cf-gradient-text + text-xl font-semibold truncate 已上移到 class
 }
 
 .atlas-desc {
@@ -1223,7 +1245,7 @@ onMounted(() => {
 }
 
 .selected-count {
-  @apply text-xs font-medium text-[var(--accent-cyan)] mr-1;
+  @apply text-xs font-medium text-[var(--accent-blue)] mr-1;
 }
 
 .batch-divider {
@@ -1232,15 +1254,24 @@ onMounted(() => {
 
 .batch-dir-select {
   @apply text-xs;
-  width: 140px;
+  width: 120px;
+}
+
+.batch-dir-select :deep(.el-input__wrapper) {
+  padding: 2px 8px;
+}
+
+.batch-dir-select :deep(.el-input__inner) {
+  height: 24px;
+  font-size: 12px;
 }
 
 .ui-btn.danger {
-  @apply text-[#ff4466];
+  @apply text-[var(--color-danger)];
 }
 
 .ui-btn.danger:hover {
-  @apply border-[#ff4466];
+  @apply border-[var(--color-danger)];
 }
 
 /* 内容网格 */
@@ -1282,9 +1313,9 @@ onMounted(() => {
 }
 
 .tab-btn.active {
-  background: rgba(0, 240, 255, 0.1);
-  border-color: rgba(0, 240, 255, 0.3);
-  @apply text-[var(--accent-cyan)];
+  background: rgba(34, 211, 238, 0.1);
+  border-color: rgba(34, 211, 238, 0.3);
+  @apply text-[var(--accent-blue)];
 }
 
 .tab-btn .count {
@@ -1311,7 +1342,7 @@ onMounted(() => {
 }
 
 .sort-wrapper:hover {
-  @apply border-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)];
 }
 
 .sort-label {
@@ -1319,7 +1350,7 @@ onMounted(() => {
 }
 
 .sort-arrow {
-  @apply inline-flex items-center justify-center min-w-[1.2em] text-[var(--accent-cyan)] font-medium;
+  @apply inline-flex items-center justify-center min-w-[1.2em] text-[var(--accent-blue)] font-medium;
 }
 
 .sort-dropdown {
@@ -1331,11 +1362,11 @@ onMounted(() => {
 }
 
 .sort-option:hover {
-  @apply bg-[var(--bg-hover)] text-[var(--accent-cyan)];
+  @apply bg-[var(--bg-hover)] text-[var(--accent-blue)];
 }
 
 .sort-option.active {
-  @apply text-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)];
+  @apply text-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.1)];
 }
 
 .sort-divider {
@@ -1347,7 +1378,7 @@ onMounted(() => {
 }
 
 .action-btn:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
 }
 
 .action-btn svg {
@@ -1355,7 +1386,7 @@ onMounted(() => {
 }
 
 .action-btn.danger:hover {
-  @apply border-[#ff4466] text-[#ff4466];
+  @apply border-[var(--color-danger)] text-[var(--color-danger)];
 }
 
 /* 图片网格 */
@@ -1397,7 +1428,7 @@ onMounted(() => {
 }
 
 .page-btn:hover:not(:disabled) {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
 }
 
 .page-btn:disabled {
@@ -1405,41 +1436,37 @@ onMounted(() => {
 }
 
 .page-current {
-  @apply px-3 py-1.5 font-mono text-sm text-[var(--accent-cyan)];
+  @apply px-3 py-1.5 font-mono text-sm text-[var(--accent-blue)];
 }
 
 .image-card {
-  @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl overflow-hidden cursor-pointer transition-all;
+  @apply bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-md overflow-hidden cursor-pointer transition-all;
 }
 
 .image-card:hover {
-  @apply border-[var(--accent-cyan)];
-  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.12);
+  @apply border-[var(--accent-blue)];
+  box-shadow: 0 2px 8px rgba(34, 211, 238, 0.12);
 }
 
 .image-wrapper {
   @apply relative overflow-hidden;
   aspect-ratio: 1;
-  background: var(--bg-secondary);  /* 占位暗色，避免图片加载前闪白 */
-}
-
-/* 选中状态 */
-.image-wrapper.selected {
-  @apply ring-2 ring-[var(--accent-cyan)] ring-offset-2 ring-offset-[var(--bg-card)];
-}
-
-/* 复选框样式 */
-.checkbox-wrapper {
-  @apply absolute top-2 left-2 z-10 cursor-pointer;
-}
-
-.checkbox-wrapper input[type="checkbox"] {
-  @apply w-5 h-5 cursor-pointer accent-[var(--accent-cyan)];
+  background: var(--bg-secondary);
 }
 
 .image-wrapper img {
   @apply w-full h-full object-cover;
-  background: var(--bg-secondary);  /* 图片加载完成前不闪白 */
+  background: var(--bg-secondary);
+}
+
+/* 选中状态 */
+.image-wrapper.selected {
+  @apply ring-2 ring-[var(--accent-blue)] ring-offset-2 ring-offset-[var(--bg-card)];
+}
+
+/* 复选框层 - 绝对定位覆盖在图片左上角 */
+.checkbox-layer {
+  @apply absolute top-2 left-2 z-10;
 }
 
 .image-overlay {
@@ -1459,11 +1486,11 @@ onMounted(() => {
 }
 
 .annotated-badge {
-  @apply absolute bottom-2 left-2 w-2 h-2 rounded-full bg-[var(--accent-green)] shadow-[0_0_6px_var(--accent-green)];
+  @apply absolute bottom-2 left-2 w-2 h-2 rounded-full bg-[var(--color-success)] shadow-[0_0_6px_var(--color-success)];
 }
 
 .image-info {
-  @apply p-3;
+  @apply p-2;
   @apply flex flex-col gap-1;
 }
 
@@ -1471,32 +1498,32 @@ onMounted(() => {
   @apply text-xs text-[var(--text-primary)] truncate block w-full min-w-0;
 }
 
-.image-dir-row {
-  @apply flex items-center justify-between gap-2;
+.image-bottom-row {
+  @apply flex items-center min-h-0;
 }
 
 .image-dir {
-  @apply text-[11px] text-[var(--text-muted)] truncate;
+  @apply text-[10px] text-[var(--text-muted)] truncate flex-shrink min-w-0 mr-auto;
 }
 
 .image-actions {
-  @apply flex items-center gap-1;
+  @apply flex items-center gap-0.5 flex-shrink-0 ml-auto;
 }
 
 .img-action-btn {
-  @apply w-5 h-5 flex items-center justify-center rounded text-[var(--text-muted)] cursor-pointer transition-all bg-transparent border-none;
+  @apply w-5 h-5 flex items-center justify-center rounded text-[var(--text-muted)] cursor-pointer transition-all bg-transparent border-none p-0;
 }
 
 .img-action-btn svg {
-  @apply w-3.5 h-3.5;
+  @apply w-3 h-3;
 }
 
 .img-action-btn:hover {
-  @apply text-[var(--accent-cyan)] bg-[var(--bg-hover)];
+  @apply text-[var(--accent-blue)] bg-[var(--bg-hover)];
 }
 
 .img-action-btn.danger:hover {
-  @apply text-[#ff4466] bg-[var(--bg-hover)];
+  @apply text-[var(--color-danger)];
 }
 
 /* 目录管理 */
@@ -1539,11 +1566,11 @@ onMounted(() => {
 }
 
 .dir-item:hover {
-  @apply border-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)];
 }
 
 .dir-item.active {
-  @apply border-[var(--accent-cyan)] bg-[var(--bg-hover)];
+  @apply border-[var(--accent-blue)] bg-[var(--bg-hover)];
 }
 
 .dir-info {
@@ -1551,7 +1578,7 @@ onMounted(() => {
 }
 
 .dir-icon {
-  @apply w-5.5 h-5.5 text-[var(--accent-yellow)];
+  @apply w-5.5 h-5.5 text-[var(--color-warning)];
 }
 
 .dir-name {
@@ -1605,20 +1632,20 @@ onMounted(() => {
 
 .info-value.id {
   font-family: 'JetBrains Mono', monospace;
-  @apply text-[var(--accent-cyan)];
+  @apply text-[var(--accent-blue)];
 }
 
 .info-value.success {
-  @apply text-[var(--accent-green)];
+  @apply text-[var(--color-success)];
 }
 
 /* 上传提示 */
 .upload-tip {
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.05), rgba(255, 0, 170, 0.05));
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.05), rgba(242, 85, 95, 0.05));
 }
 
 .tip-header {
-  @apply flex items-center gap-2.5 p-4 text-sm font-semibold text-[var(--accent-yellow)];
+  @apply flex items-center gap-2.5 p-4 text-sm font-semibold text-[var(--color-warning)];
   border-bottom: 1px solid var(--border-color);
 
   svg {
@@ -1636,7 +1663,7 @@ onMounted(() => {
 
 .tip-list li::before {
   content: '›';
-  @apply absolute left-0 text-[var(--accent-cyan)];
+  @apply absolute left-0 text-[var(--accent-blue)];
 }
 
 /* 空状态 */
@@ -1749,8 +1776,8 @@ onMounted(() => {
 }
 
 .status-tag.annotated {
-  background: rgba(0, 255, 136, 0.15);
-  @apply text-[var(--accent-green)];
+  background: rgba(52, 217, 123, 0.15);
+  @apply text-[var(--color-success)];
 }
 
 .status-tag.pending {
@@ -1772,7 +1799,7 @@ onMounted(() => {
 }
 
 .save-btn {
-  @apply px-4 py-1.5 bg-[var(--accent-cyan)] border-none rounded-md text-black text-xs font-semibold cursor-pointer transition-all;
+  @apply px-4 py-1.5 bg-[var(--accent-blue)] border-none rounded-md text-black text-xs font-semibold cursor-pointer transition-all;
 }
 
 .save-btn:hover {
@@ -1788,7 +1815,7 @@ onMounted(() => {
 }
 
 .cancel-btn:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+  @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
 }
 
 .edit-dir-btn {
@@ -1796,7 +1823,7 @@ onMounted(() => {
 }
 
 .edit-dir-btn:hover {
-  @apply text-[var(--accent-cyan)] bg-[var(--bg-hover)];
+  @apply text-[var(--accent-blue)] bg-[var(--bg-hover)];
 }
 
 .edit-dir-btn svg {
@@ -1817,7 +1844,7 @@ onMounted(() => {
 }
 
 .video-meta .meta-value {
-  @apply text-sm font-medium font-mono text-[var(--accent-cyan)];
+  @apply text-sm font-medium font-mono text-[var(--accent-blue)];
 }
 
 .extract-config {
@@ -1836,14 +1863,6 @@ onMounted(() => {
   @apply text-xs text-[var(--text-muted)];
 }
 
-.ui-btn-secondary {
-  @apply bg-[var(--bg-secondary)] border-[var(--border-color)] text-[var(--text-primary)];
-}
-
-.ui-btn-secondary:hover {
-  @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
-}
-
 /* 提取进度对话框 */
 .extract-progress-dialog .dialog-content {
   @apply flex flex-col gap-5;
@@ -1858,9 +1877,9 @@ onMounted(() => {
 }
 
 .progress-status.pending { @apply text-[var(--text-muted)]; }
-.progress-status.processing { @apply text-[var(--accent-cyan)]; }
-.progress-status.completed { @apply text-[var(--accent-green)]; }
-.progress-status.failed { @apply text-[#ff4466]; }
+.progress-status.processing { @apply text-[var(--accent-blue)]; }
+.progress-status.completed { @apply text-[var(--color-success)]; }
+.progress-status.failed { @apply text-[var(--color-danger)]; }
 
 .progress-count {
   @apply text-sm font-mono text-[var(--text-secondary)];
@@ -1875,7 +1894,7 @@ onMounted(() => {
 }
 
 .progress-fill {
-  @apply h-full bg-gradient-to-r from-[var(--accent-cyan)] to-[var(--accent-magenta)] rounded-full transition-all duration-300 ease-out;
+  @apply h-full bg-gradient-to-r from-[var(--accent-blue)] to-[var(--accent-blue)] rounded-full transition-all duration-300 ease-out;
 }
 
 .progress-hint {
@@ -1883,7 +1902,7 @@ onMounted(() => {
 }
 
 .progress-error {
-  @apply text-xs text-[#ff4466] text-center;
+  @apply text-xs text-[var(--color-danger)] text-center;
 }
 
 </style>

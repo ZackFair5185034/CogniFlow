@@ -9,12 +9,20 @@ NodeRegistry 负责：
 2. 管理节点执行器实例（供执行引擎调用）
 3. 提供按类别查询节点的能力
 """
+import logging
+import os
 from typing import Dict, List, Optional, Type
 
 from backend.services.rule_engine.models import (
     NodeDefinition, CategoryInfo, CATEGORIES, CATEGORY_COLORS
 )
 from .nodes.base import BaseExecutor
+
+logger = logging.getLogger(__name__)
+
+# 开发模式开关：ENV=production 时为 False, 其他情况均为 True
+# 用于决定节点重复注册时是 raise (开发环境) 还是 warn (生产环境)
+_DEV_MODE: bool = os.getenv("ENV", "development") != "production"
 
 
 class NodeRegistry:
@@ -42,6 +50,9 @@ class NodeRegistry:
 
         Args:
             executor_class: 节点执行器类（必须继承 BaseExecutor）
+
+        Raises:
+            ValueError: 开发环境下, 重复注册同名节点类型时抛出
         """
         if not issubclass(executor_class, BaseExecutor):
             raise ValueError(f"{executor_class} must inherit from BaseExecutor")
@@ -50,7 +61,48 @@ class NodeRegistry:
         if not node_type:
             raise ValueError(f"Node class {executor_class.__name__} must define node_type")
 
+        # P0-C (2026-09-11): 重复注册检测。dev 抛 ValueError 强制发现漏注册;
+        # prod 仅 warn, 允许覆盖（避免历史版本节点类型消失导致启动失败）
+        if node_type in self._executors:
+            existing = self._executors[node_type]
+            existing_origin = f"{existing.__module__}.{existing.__name__}"
+            new_origin = f"{executor_class.__module__}.{executor_class.__name__}"
+            msg = (
+                f"节点类型 '{node_type}' 已被 {existing_origin} 注册，"
+                f"现被 {new_origin} 覆盖"
+            )
+            if _DEV_MODE:
+                raise ValueError(msg)
+            logger.warning(msg)
+
         self._executors[node_type] = executor_class
+
+    def unregister(self, node_type: str) -> Optional[Type[BaseExecutor]]:
+        """注销节点类型。仅供测试使用。
+
+        Args:
+            node_type: 节点类型标识
+
+        Returns:
+            被注销的节点类, 不存在则返回 None
+        """
+        return self._executors.pop(node_type, None)
+
+    def log_registered_nodes(self) -> None:
+        """启动期输出所有已注册节点清单, 便于排查漏注册 / 误覆盖。
+
+        按类别分组, 标注节点类型总数。
+        """
+        by_category: Dict[str, List[str]] = {}
+        for cls in self._executors.values():
+            cat = cls.category.value if hasattr(cls, "category") else "unknown"
+            by_category.setdefault(cat, []).append(cls.node_type)
+
+        total = len(self._executors)
+        logger.info("=== 已注册节点清单 (共 %d 个) ===", total)
+        for cat in sorted(by_category):
+            types = sorted(by_category[cat])
+            logger.info("  [%s] (%d): %s", cat, len(types), ", ".join(types))
 
     def get(self, node_type: str) -> Optional[Type[BaseExecutor]]:
         """获取节点执行器类。
@@ -113,6 +165,7 @@ class NodeRegistry:
                         "type": port.type,
                         "label": port.name,
                         "description": port.description,
+                        "required": port.required,  # P1-1 (2026-06-19): 前端必填未连提示需要此字段
                     }
                     for name, port in defn.inputs.items()
                 ],
@@ -137,6 +190,7 @@ class NodeRegistry:
                         "enum": prop.enum,
                         "widget": prop.widget,
                         "required": prop.required,
+                        "allow_create": prop.allow_create,
                     }
                     for key, prop in defn.config_schema.items()
                 } if defn.config_schema else {},
@@ -159,6 +213,7 @@ class NodeRegistry:
                     "type": port.type,
                     "label": port.name,
                     "description": port.description,
+                    "required": port.required,  # P1-1 (2026-06-19): 与 get_definitions 保持一致
                 }
                 for name, port in defn.inputs.items()
             ],
@@ -233,9 +288,11 @@ def init_builtin_executors() -> NodeRegistry:
     - output: SaveResult, Notification, Display
 
     Returns:
-        已注册内置节点的注册表实例
+        已注册内置节点的注册表实例（即全局单例）
     """
-    registry = NodeRegistry()
+    # 修复 2026-06-04 验收发现的 P1：在单例上注册而非新建临时实例，
+    # 否则 executor 用 get_registry() 拿不到节点（会全部报"未知节点类型"）
+    registry = get_registry()
 
     # 避免重复注册
     if registry.list_types():
@@ -281,11 +338,17 @@ def init_builtin_executors() -> NodeRegistry:
         FilterNode,
         TrackerNode,
         ImagePreprocessorNode,
+        TemplateNode,
+        MergeDetectionsNode,
+        RoiExtractNode,
     )
     registry.register(CategoryEncodeNode)
     registry.register(FilterNode)
     registry.register(TrackerNode)
     registry.register(ImagePreprocessorNode)
+    registry.register(TemplateNode)
+    registry.register(MergeDetectionsNode)
+    registry.register(RoiExtractNode)
 
     # ===== 动作类节点 =====
     from .nodes.actions import (
@@ -334,5 +397,8 @@ def init_builtin_executors() -> NodeRegistry:
     registry.register(SaveResultNode)
     registry.register(NotificationNode)
     registry.register(DisplayNode)
+
+    # P0-C (2026-09-11): 启动清单输出, 便于排查漏注册 / 重复覆盖
+    registry.log_registered_nodes()
 
     return registry

@@ -26,6 +26,16 @@ class RuleScheduler:
         self._scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
         # graph_id -> job_id 映射
         self._job_map: Dict[int, str] = {}
+        # BE-P0-3 修复 (2026-06-19): 每图独立的 asyncio.Lock, 防止 Cron 间隔 < 执行耗时
+        #   触发同图三份并发执行 (重复推理浪费 GPU / 共享节点状态被并发改写 /
+        #   WS 推送日志交错). 用 Lock 而非 bool 标记, 二次触发直接 skip 语义最简单.
+        self._running_locks: Dict[int, asyncio.Lock] = {}
+
+    def _get_lock(self, graph_id: int) -> asyncio.Lock:
+        """懒创建每图 lock (在事件循环内调用)."""
+        if graph_id not in self._running_locks:
+            self._running_locks[graph_id] = asyncio.Lock()
+        return self._running_locks[graph_id]
 
     @classmethod
     def get_instance(cls) -> "RuleScheduler":
@@ -46,7 +56,28 @@ class RuleScheduler:
             logger.info("[RuleScheduler] 调度器已停止")
 
     async def _execute_graph(self, graph_id: int, trigger_config: dict):
-        """执行规则图（异步后台）。"""
+        """执行规则图（异步后台）。
+
+        BE-P0-3 (2026-06-19): 同图已有执行中, 二次触发直接 skip (不排队, 不取消旧).
+        默认策略 = skip. 锁带超时释放兜底 (asyncio.wait_for 60s), 防异常未释放永久死锁.
+        """
+        lock = self._get_lock(graph_id)
+        if lock.locked():
+            logger.info(
+                f"[RuleScheduler] 规则图 {graph_id} 已有执行中, 二次触发 skip "
+                f"(trigger={trigger_config.get('cron', 'manual')})"
+            )
+            return
+
+        # 加锁入口: 用 wait_for 防死锁兜底
+        try:
+            await asyncio.wait_for(lock.acquire(), timeout=60.0)
+        except asyncio.TimeoutError:
+            logger.error(
+                f"[RuleScheduler] 规则图 {graph_id} 锁获取超时 (>60s), 跳过本次触发"
+            )
+            return
+
         db = SessionLocal()
         try:
             manager = GraphManager(db)
@@ -65,20 +96,31 @@ class RuleScheduler:
                 trigger_data=trigger_config,
             )
 
-            # 异步执行
-            asyncio.create_task(
-                executor.execute(
+            # 直接 await 执行 —— 锁的生命周期覆盖**整个执行过程**。
+            # 旧实现用 create_task 让函数提前返回, finally 里的 lock.release()
+            # 随即释放, 互斥完全失效(下次 Cron 触发照样再跑一份, 重复推理浪费 GPU)。
+            try:
+                await executor.execute(
                     graph_data=graph_data,
                     execution_id=execution_id,
                     trigger_type="timer",
                     trigger_data=trigger_config,
                 )
-            )
-            logger.info(f"[RuleScheduler] 规则图 {graph_id} 定时执行已触发，execution_id={execution_id}")
+                logger.info(
+                    f"[RuleScheduler] 规则图 {graph_id} 定时执行完成, "
+                    f"execution_id={execution_id}"
+                )
+            except Exception as e:
+                # 执行期异常不能逃出, 否则锁释放路径会被跳过(死锁)
+                logger.error(
+                    f"[RuleScheduler] 规则图 {graph_id} 定时执行失败: {e}",
+                    exc_info=True,
+                )
         except Exception as e:
             logger.error(f"[RuleScheduler] 定时执行失败 graph_id={graph_id}: {e}")
         finally:
             db.close()
+            lock.release()
 
     def add_timer_job(self, graph_id: int, cron_expression: str):
         """添加定时任务。

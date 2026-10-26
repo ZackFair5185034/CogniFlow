@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-info">
-        <h2>模型测试</h2>
+        <h2 class="cf-gradient-text text-2xl font-semibold">模型测试</h2>
         <span class="subtitle">图片/视频检测</span>
       </div>
       <!-- 模式切换 Tab -->
@@ -184,7 +184,7 @@
                   ref="fileInputRef"
                   type="file"
                   accept="image/*"
-                  style="display: none"
+                  class="hidden"
                   @change="handleFileSelect"
                 >
                 <div class="upload-hint">
@@ -215,7 +215,7 @@
                   ref="streamInputRef"
                   type="file"
                   accept="video/*"
-                  style="display: none"
+                  class="hidden"
                   @change="handleStreamSelect"
                 >
                 <div class="upload-hint">
@@ -242,8 +242,7 @@
             </el-button>
             <el-button
               v-else
-              class="detect-btn"
-              type="danger"
+              class="detect-btn stop-btn"
               @click="stopVideoDetection"
             >
               停止检测
@@ -497,13 +496,11 @@
           </div>
 
           <!-- 加载状态（图片检测用） -->
-          <div
+          <LoadingSpinner
             v-else-if="detecting"
-            class="result-loading"
-          >
-            <div class="loading-spinner" />
-            <span>图片检测中...</span>
-          </div>
+            overlay
+            text="图片检测中..."
+          />
 
           <!-- 空状态 -->
           <div
@@ -618,11 +615,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { inferenceApi, trainingApi } from '@/api'
 import { StreamClient, type StreamFrame, type StreamStats } from '@/utils/streamClient'
-import SvgIcon from '@/components/SvgIcon.vue'
+import { inferenceApi, trainingApi } from '@/api'
 import type { ModelResponse } from '@/types/api'
 
 // 状态
@@ -694,20 +688,26 @@ const availableDevices = computed(() => {
   }))
 })
 
-// 可用格式列表（从选中的模型获取）
+// 可用格式列表（从选中的模型获取，按设备兼容性过滤可选项）
 const availableFormats = computed(() => {
   const model = selectedModel.value
   if (!model?.files?.length) return []
-  return model.files.map((f: unknown) => ({
+
+  const currentDevice = device.value
+  const compatibleFormats: string[] | null = currentDevice !== 'auto' && currentDevice !== 'cpu'
+    ? (DEVICE_FORMAT_MAP[currentDevice] ?? null)
+    : null
+
+  return model.files.map((f) => ({
     value: f.format,
     label: f.format.toUpperCase(),
     is_default: f.is_default,
-    disabled: false
+    disabled: compatibleFormats !== null && !compatibleFormats.includes(f.format),
   }))
 })
 
 const resultImage = ref<string | null>(null)
-const detections = ref<unknown[]>([])
+const detections = ref<Detection[]>([])
 const imageSize = ref({ width: 0, height: 0 })
 const zoomLevel = ref(1)
 
@@ -777,9 +777,16 @@ interface ConsoleEntry {
   data: unknown
   expanded: boolean
 }
+
+/** 推理检测结果 - 单个目标的边界框与类别信息 */
+interface Detection {
+  bbox: [number, number, number, number]  // [x1, y1, x2, y2]
+  class_id: number
+  class_name: string
+  confidence: number
+}
 const consoleExpanded = ref(false)
 const consoleEntries = ref<ConsoleEntry[]>([])
-const consoleBodyRef = ref<HTMLDivElement | null>(null)
 let nextEntryId = 0
 
 const addConsoleEntry = (source: ConsoleEntry['source'], summary: string, data: unknown, frameId?: number) => {
@@ -874,6 +881,36 @@ const canStreamDetect = computed(() => {
 
 const selectedModel = computed(() => {
   return trainedModels.value.find(m => m.id === selectedModelId.value)
+})
+
+// 设备切换时自动调整格式选择
+watch(device, (newDevice) => {
+  if (newDevice === 'auto' || newDevice === 'cpu') return
+  const model = selectedModel.value
+  if (!model?.files?.length) return
+  const compatibleFormats = DEVICE_FORMAT_MAP[newDevice]
+  if (!compatibleFormats) return
+  const available = model.files.filter((f) => compatibleFormats.includes(f.format))
+  if (available.length === 1) {
+    modelFormat.value = available[0].format
+  } else if (available.length === 0) {
+    modelFormat.value = 'auto'
+  }
+})
+
+// 模型切换时重置格式选择，并考虑当前设备的兼容性
+watch(selectedModel, () => {
+  modelFormat.value = 'auto'
+  const curDevice = device.value
+  if (curDevice === 'auto' || curDevice === 'cpu') return
+  const model = selectedModel.value
+  if (!model?.files?.length) return
+  const compatibleFormats = DEVICE_FORMAT_MAP[curDevice]
+  if (!compatibleFormats) return
+  const available = model.files.filter((f) => compatibleFormats.includes(f.format))
+  if (available.length === 1) {
+    modelFormat.value = available[0].format
+  }
 })
 
 const canDetect = computed(() => {
@@ -1151,7 +1188,7 @@ const startDetection = async () => {
         // 构建类别颜色映射（来自模型配置，使用数组索引作为 key）
         if (res.data.categories) {
           const colors: Record<number, string> = {}
-          res.data.categories.forEach((cat: unknown, idx: number) => {
+          res.data.categories.forEach((cat, idx) => {
             colors[idx] = cat.color || '#FF0000'
           })
           categoryColors.value = colors
@@ -1457,11 +1494,7 @@ onUnmounted(() => {
 }
 
 .header-info h2 {
-  @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  // cf-gradient-text 已抽到 uno.config.ts
 }
 
 /* Tab 切换 */
@@ -1482,7 +1515,7 @@ onUnmounted(() => {
   }
 
   &.active {
-    @apply bg-[var(--accent-cyan)] text-black;
+    @apply bg-[var(--accent-blue)] text-black;
   }
 }
 
@@ -1511,7 +1544,7 @@ onUnmounted(() => {
 }
 
 .panel-icon {
-  @apply w-4 h-4 text-[var(--accent-cyan)];
+  @apply w-4 h-4 text-[var(--accent-blue)];
 }
 
 .panel-header h3 {
@@ -1544,7 +1577,7 @@ onUnmounted(() => {
   @apply w-full h-1.5 bg-[var(--bg-secondary)] rounded-lg appearance-none cursor-pointer;
 
   &::-webkit-slider-thumb {
-    @apply w-3.5 h-3.5 bg-[var(--accent-cyan)] rounded-full appearance-none cursor-pointer;
+    @apply w-3.5 h-3.5 bg-[var(--accent-blue)] rounded-full appearance-none cursor-pointer;
   }
 }
 
@@ -1556,7 +1589,7 @@ onUnmounted(() => {
   @apply border-2 border-dashed border-[var(--border-color)] rounded-lg p-6 text-center cursor-pointer transition-all;
 
   &.dragging {
-    @apply border-[var(--accent-cyan)] bg-[rgba(0,240,255,0.05)];
+    @apply border-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.05)];
   }
 
   &.disabled {
@@ -1573,21 +1606,32 @@ onUnmounted(() => {
 }
 
 .file-name {
-  @apply text-sm text-[var(--accent-cyan)] truncate max-w-full;
+  @apply text-sm text-[var(--accent-blue)] truncate max-w-full;
 }
 
 :deep(.detect-btn) {
-  @apply w-full py-2.5 text-sm font-medium rounded-lg mt-2;
-  background: var(--accent-cyan) !important;
-  border-color: var(--accent-cyan) !important;
+  @apply w-full text-sm font-medium rounded-lg mt-2;
+  min-height: 42px;
+  background: var(--accent-blue) !important;
+  border-color: var(--accent-blue) !important;
   color: black !important;
 
   &:hover:not(:disabled) {
-    background: #00d4e0 !important;
+    background: var(--accent-blue) !important;
   }
 
   &:disabled {
     @apply opacity-50 cursor-not-allowed;
+  }
+}
+
+:deep(.detect-btn.stop-btn) {
+  background: var(--color-danger) !important;
+  border-color: var(--color-danger) !important;
+  color: var(--on-vibrant) !important;
+
+  &:hover:not(:disabled) {
+    background: var(--color-danger-hover, var(--color-danger)) !important;
   }
 }
 
@@ -1602,7 +1646,7 @@ onUnmounted(() => {
 }
 
 .result-count {
-  @apply text-xs text-[var(--accent-cyan)] px-2.5 py-1 bg-[rgba(0,240,255,0.1)] rounded-full;
+  @apply text-xs text-[var(--accent-blue)] px-2.5 py-1 bg-[rgba(34, 211, 238, 0.1)] rounded-full;
 }
 
 .result-image-wrapper {
@@ -1651,7 +1695,7 @@ onUnmounted(() => {
 .zoom-btn {
   @apply w-7 h-7 flex items-center justify-center bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-sm font-bold cursor-pointer;
   &:hover {
-    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+    @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
   }
 }
 
@@ -1659,17 +1703,6 @@ onUnmounted(() => {
   @apply font-mono text-xs text-[var(--text-secondary)] min-w-[3.5rem] text-center;
 }
 
-.result-loading {
-  @apply flex-1 flex flex-col items-center justify-center gap-4;
-
-  .loading-spinner {
-    @apply w-10 h-10 border-3 border-[var(--border-color)] border-t-[var(--accent-cyan)] rounded-full animate-spin;
-  }
-
-  span {
-    @apply text-sm text-[var(--text-muted)];
-  }
-}
 
 /* 视频检测样式 */
 .empty-result {
@@ -1713,7 +1746,7 @@ onUnmounted(() => {
 }
 
 .det-conf {
-  @apply text-[var(--accent-cyan)] font-mono;
+  @apply text-[var(--accent-blue)] font-mono;
 }
 
 .det-bbox {
@@ -1763,7 +1796,7 @@ onUnmounted(() => {
   left: 0;
   top: 0;
   height: 100%;
-  background: rgba(0, 240, 255, 0.2);
+  background: rgba(34, 211, 238, 0.2);
   border-radius: 3px;
   transition: width 0.5s ease;
 }
@@ -1773,10 +1806,10 @@ onUnmounted(() => {
   left: 0;
   top: 0;
   height: 100%;
-  background: var(--accent-cyan);
+  background: var(--accent-blue);
   border-radius: 3px;
   transition: width 0.3s ease;
-  box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
   z-index: 1;
 }
 
@@ -1797,7 +1830,7 @@ onUnmounted(() => {
 .ctrl-btn {
   @apply w-7 h-7 flex items-center justify-center bg-transparent border border-[var(--border-color)] rounded text-[var(--text-secondary)] cursor-pointer transition-all;
   &:hover {
-    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+    @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
   }
   svg {
     @apply w-3.5 h-3.5;
@@ -1811,7 +1844,7 @@ onUnmounted(() => {
 .ctrl-btn-sm {
   @apply w-5 h-5 flex items-center justify-center bg-transparent border border-[var(--border-color)] rounded text-[var(--text-muted)] text-xs cursor-pointer transition-all;
   &:hover:not(:disabled) {
-    @apply border-[var(--accent-cyan)] text-[var(--accent-cyan)];
+    @apply border-[var(--accent-blue)] text-[var(--accent-blue)];
   }
   &:disabled {
     @apply opacity-30 cursor-not-allowed;
@@ -1819,13 +1852,13 @@ onUnmounted(() => {
 }
 
 .fps-value {
-  @apply text-xs font-mono text-[var(--accent-cyan)] min-w-[3rem] text-center;
+  @apply text-xs font-mono text-[var(--accent-blue)] min-w-[3rem] text-center;
 }
 
 .stream-complete {
   @apply flex items-center justify-center p-3 border-t border-[var(--border-color)];
   background: var(--bg-secondary);
-  color: var(--accent-green);
+  color: var(--color-success);
   font-size: 13px;
 }
 
@@ -1844,7 +1877,7 @@ onUnmounted(() => {
 }
 
 .stat-value {
-  @apply text-sm font-mono font-semibold text-[var(--accent-cyan)];
+  @apply text-sm font-mono font-semibold text-[var(--accent-blue)];
 }
 
 /* ===== 监控台样式 ===== */
@@ -1874,7 +1907,7 @@ onUnmounted(() => {
   z-index: 2;
 
   &:hover {
-    background: rgba(0, 240, 255, 0.15);
+    background: rgba(34, 211, 238, 0.15);
   }
 }
 
@@ -1898,7 +1931,7 @@ onUnmounted(() => {
 }
 
 .console-count {
-  @apply text-xs px-1.5 py-0.5 rounded bg-[rgba(0,240,255,0.1)] text-[var(--accent-cyan)];
+  @apply text-xs px-1.5 py-0.5 rounded bg-[rgba(34, 211, 238, 0.1)] text-[var(--accent-blue)];
 }
 
 .console-header-right {
@@ -1909,7 +1942,7 @@ onUnmounted(() => {
   @apply text-xs px-2 py-0.5 rounded border border-[var(--border-color)] bg-transparent text-[var(--text-muted)] cursor-pointer;
 
   &:hover {
-    @apply border-[#ff4466] text-[#ff4466];
+    @apply border-[var(--color-danger)] text-[var(--color-danger)];
   }
 }
 
@@ -1950,13 +1983,13 @@ onUnmounted(() => {
   @apply text-[10px] px-1.5 py-0.5 rounded flex-shrink-0 font-medium;
 
   &.src-image {
-    background: rgba(0, 240, 255, 0.15);
-    color: var(--accent-cyan);
+    background: rgba(34, 211, 238, 0.15);
+    color: var(--accent-blue);
   }
 
   &.src-video {
     background: rgba(255, 221, 0, 0.15);
-    color: var(--accent-yellow);
+    color: var(--color-warning);
   }
 }
 
@@ -1973,7 +2006,7 @@ onUnmounted(() => {
   }
 
   &:hover {
-    @apply text-[var(--accent-cyan)] bg-[rgba(0,240,255,0.1)];
+    @apply text-[var(--accent-blue)] bg-[rgba(34, 211, 238, 0.1)];
   }
 
   svg {
@@ -2016,7 +2049,7 @@ onUnmounted(() => {
 .clear-btn {
   @apply text-xs px-2 py-0.5 rounded border border-[var(--border-color)] bg-transparent text-[var(--text-muted)] cursor-pointer;
   &:hover {
-    @apply border-[#ff4466] text-[#ff4466];
+    @apply border-[var(--color-danger)] text-[var(--color-danger)];
   }
 }
 
@@ -2077,7 +2110,7 @@ onUnmounted(() => {
 
 .rerun-link {
   @apply flex-shrink-0 text-xs cursor-pointer whitespace-nowrap;
-  color: var(--accent-cyan);
+  color: var(--accent-blue);
 
   &.disabled {
     @apply cursor-not-allowed;

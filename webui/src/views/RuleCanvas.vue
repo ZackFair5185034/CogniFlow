@@ -1,11 +1,16 @@
 <template>
-  <div class="rule-canvas-fullscreen">
-    <!-- 顶部工具栏 -->
+  <div
+  class="rule-canvas-fullscreen"
+  :class="{ 'large-graph-mode': largeGraphMode, 'huge-graph-mode': hugeGraphMode }"
+>
+    <!-- 顶部工具栏 (2026-06-19 重设计: 视觉层级 + 分组清晰度) -->
     <header class="canvas-header">
+      <!-- ========== 左侧: 身份区 ========== -->
       <div class="header-left">
         <button
-          class="icon-btn back-btn"
+          class="tb-icon-btn back-btn"
           title="返回规则列表"
+          aria-label="返回规则列表"
           @click="goBack"
         >
           <SvgIcon name="back" />
@@ -16,146 +21,332 @@
             type="text"
             class="rule-name-input"
             placeholder="规则名称..."
+            aria-label="规则名称"
             @blur="handleNameChange"
             @keyup.enter="handleNameChange"
           />
           <span
             class="rule-status-badge"
             :class="{ active: graph?.is_active }"
+            :title="graph?.is_active ? '规则图已激活' : '规则图未激活'"
           >
+            <span class="status-dot" />
             {{ graph?.is_active ? '运行中' : '已停止' }}
           </span>
         </div>
       </div>
 
+      <!-- ========== 中部: 编辑工具区 ========== -->
       <div class="header-center">
-        <div class="tool-group">
+        <!-- 组 1: 历史 (Undo / Redo) -->
+        <div class="tb-group">
           <button
-            class="icon-btn"
+            class="tb-icon-btn"
             :disabled="!canUndo"
             title="撤销 (Ctrl+Z)"
-            @click="handleUndo"
+            aria-label="撤销"
+            @click="store.undo()"
           >
             <SvgIcon name="undo" />
           </button>
           <button
-            class="icon-btn"
+            class="tb-icon-btn"
             :disabled="!canRedo"
             title="重做 (Ctrl+Y)"
-            @click="handleRedo"
+            aria-label="重做"
+            @click="store.redo()"
           >
             <SvgIcon name="redo" />
           </button>
         </div>
 
-        <div class="tool-divider" />
+        <div class="tb-divider" />
 
-        <div class="tool-group">
+        <!-- 组 2: 视图控制 (缩放 / 网格 / 吸附 / 小地图 / 自动布局) -->
+        <div class="tb-group">
           <button
-            class="icon-btn"
-            title="放大"
-            @click="zoomIn"
-          >
-            <SvgIcon name="zoom-in" />
-          </button>
-          <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button
-            class="icon-btn"
+            class="tb-icon-btn"
             title="缩小"
+            aria-label="缩小"
             @click="zoomOut"
           >
             <SvgIcon name="zoom-out" />
           </button>
+          <span
+            ref="zoomLevelEl"
+            class="zoom-level"
+            title="当前缩放"
+          >100%</span>
           <button
-            class="icon-btn"
+            class="tb-icon-btn"
+            title="放大"
+            aria-label="放大"
+            @click="zoomIn"
+          >
+            <SvgIcon name="zoom-in" />
+          </button>
+          <button
+            class="tb-icon-btn"
             title="适应画布"
+            aria-label="适应画布"
             @click="() => fitView()"
           >
             <SvgIcon name="fit-view" />
           </button>
-        </div>
-
-        <div class="tool-divider" />
-
-        <div class="tool-group">
+          <div class="tb-divider tb-divider-thin" />
           <button
-            class="icon-btn"
+            class="tb-icon-btn"
             :class="{ active: showGrid }"
             title="显示网格"
+            aria-label="显示网格"
             @click="showGrid = !showGrid"
           >
             <SvgIcon name="grid" />
           </button>
           <button
-            class="icon-btn"
+            class="tb-icon-btn"
             :class="{ active: snapGrid }"
             title="网格吸附"
+            aria-label="网格吸附"
             @click="snapGrid = !snapGrid"
           >
             <SvgIcon name="snap" />
           </button>
           <button
-            class="icon-btn"
+            class="tb-icon-btn"
             :class="{ active: showMiniMap }"
             title="小地图"
+            aria-label="小地图"
             @click="showMiniMap = !showMiniMap"
           >
             <SvgIcon name="minimap" />
           </button>
+          <button
+            class="tb-icon-btn"
+            :disabled="!hasNodes"
+            title="一键自动布局 (拓扑分层 + 均匀分布)"
+            aria-label="自动布局"
+            @click="handleAutoLayout"
+          >
+            <SvgIcon name="layout" />
+          </button>
+        </div>
+
+        <div class="tb-divider" />
+
+        <!-- 组 3: 节点对齐 / 等距分布 (≥2 选中时启用)
+             2026-09-12 折叠为下拉: 原 9 个常驻图标按钮占 290px, 使中部工具栏总宽
+             达 753px 而可用仅 639px, 与左右两区发生碰撞 (实测左侧压住规则名输入框,
+             ws-status 压住右侧操作按钮且被压扁到 53px 高)。折叠后中部降至 495px。 -->
+        <div class="tb-group">
+          <el-dropdown
+            trigger="click"
+            placement="bottom-start"
+            :disabled="!canAlign"
+            @command="(cmd: string) => handleAlign(cmd as AlignMode)"
+          >
+            <button
+              class="tb-icon-btn tb-align-menu"
+              :disabled="!canAlign"
+              title="对齐 / 等距分布 (需选中 ≥2 个节点)"
+              aria-label="对齐与等距分布"
+            >
+              <SvgIcon name="align-left" />
+              <SvgIcon
+                name="chevron-down"
+                class="tb-align-menu__caret"
+              />
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  command="left"
+                  :disabled="!canAlign"
+                >
+                  左对齐
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="h-center"
+                  :disabled="!canAlign"
+                >
+                  水平居中
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="right"
+                  :disabled="!canAlign"
+                >
+                  右对齐
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="top"
+                  divided
+                  :disabled="!canAlign"
+                >
+                  顶对齐
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="v-center"
+                  :disabled="!canAlign"
+                >
+                  垂直居中
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="bottom"
+                  :disabled="!canAlign"
+                >
+                  底对齐
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="distribute-h"
+                  divided
+                  :disabled="!canDistribute"
+                >
+                  水平等距 (≥3 个)
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="distribute-v"
+                  :disabled="!canDistribute"
+                >
+                  垂直等距 (≥3 个)
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+
+        <!-- WebSocket 连接状态 (紧凑型, 放最右) -->
+        <div
+          class="ws-status"
+          :class="{ connected: wsConnected }"
+          :title="wsConnected ? 'WebSocket 已连接' : 'WebSocket 未连接'"
+        >
+          <span class="ws-dot" />
+          <span class="ws-label">{{ wsConnected ? '已连接' : '未连接' }}</span>
         </div>
       </div>
 
+      <!-- ========== 右侧: 操作区 (主操作最右, 最显眼) ========== -->
       <div class="header-right">
         <button
-          class="action-btn secondary"
-          @click="handleValidate"
+          class="tb-icon-btn palette-toggle-btn"
+          :class="{ active: showPalette }"
+          :title="showPalette ? '收起节点面板' : '展开节点面板'"
+          aria-label="切换节点面板"
+          @click="showPalette = !showPalette"
         >
-          <SvgIcon name="check" />
-          校验
+          <SvgIcon name="panel-left" />
         </button>
+
+        <!-- Task 13: 右侧属性面板开关 (窄屏时自动收起, 给画布让出空间) -->
         <button
-          class="action-btn secondary"
-          :disabled="saving"
-          @click="handleSave"
+          class="tb-icon-btn"
+          :class="{ active: rightPanelVisible }"
+          :title="rightPanelVisible ? '收起属性面板' : '展开属性面板'"
+          aria-label="切换属性面板"
+          @click="toggleRightPanel"
         >
-          <SvgIcon name="save" />
-          {{ saving ? '保存中...' : '保存' }}
+          <SvgIcon name="edit" />
         </button>
-        <button
-          class="action-btn primary"
-          :disabled="executing || !hasNodes"
-          @click="handleExecute"
-        >
-          <SvgIcon name="play" />
-          {{ executing ? '执行中...' : '执行' }}
-        </button>
+
+        <div class="tb-divider" />
+
+        <!-- 二级操作: 导入/导出/复制 -->
+        <div class="header-right-secondary">
+          <button
+            class="tb-text-btn"
+            title="从 JSON 文件导入"
+            aria-label="导入"
+            @click="triggerImport"
+          >
+            <SvgIcon name="upload" />
+            <span>导入</span>
+          </button>
+          <input
+            ref="importFileInput"
+            type="file"
+            accept=".json,application/json"
+            class="hidden"
+            @change="handleImportFile"
+          >
+          <button
+            class="tb-text-btn"
+            title="导出当前图为 JSON 文件"
+            aria-label="导出"
+            @click="handleExport"
+          >
+            <SvgIcon name="download" />
+            <span>导出</span>
+          </button>
+          <button
+            class="tb-text-btn"
+            title="复制为新规则图"
+            aria-label="复制为新"
+            @click="handleDuplicateAsNew"
+          >
+            <SvgIcon name="copy" />
+            <span>复制为新</span>
+          </button>
+          <button
+            class="tb-text-btn"
+            title="校验规则图"
+            aria-label="校验"
+            @click="handleValidate"
+          >
+            <SvgIcon name="check" />
+            <span>校验</span>
+          </button>
+        </div>
+
+        <div class="tb-divider" />
+
+        <!-- 主操作: 保存 + 执行 (执行最右, accent 渐变) -->
+        <div class="header-right-primary">
+          <button
+            class="tb-text-btn tb-text-btn--save"
+            :disabled="saving"
+            :title="saving ? '保存中...' : '保存 (Ctrl+S)'"
+            aria-label="保存"
+            @click="handleSave"
+          >
+            <SvgIcon v-if="!saving" name="save" />
+            <span v-if="!saving">保存</span>
+            <span v-else class="loading-text">
+              <span class="loading-spinner" />
+              保存中
+            </span>
+          </button>
+          <button
+            class="tb-text-btn tb-text-btn--execute"
+            :disabled="executing || !hasNodes"
+            :title="executing ? '执行中...' : '执行规则图 (Enter)'"
+            aria-label="执行"
+            @click="handleExecute"
+          >
+            <SvgIcon v-if="!executing" name="play" />
+            <span v-if="!executing">执行</span>
+            <span v-else class="loading-text">
+              <span class="loading-spinner" />
+              执行中
+            </span>
+          </button>
+        </div>
       </div>
     </header>
 
     <!-- 主体区域 -->
     <div class="canvas-body">
-      <!-- 左侧节点面板 -->
+      <!-- 左侧节点面板 (折叠时整段隐藏 — 完全收纳) -->
       <aside
+        v-show="showPalette"
         class="node-palette"
-        :class="{ collapsed: !showPalette }"
       >
-        <button
-          class="collapse-btn"
-          :class="{ collapsed: !showPalette }"
-          :title="showPalette ? '收起面板' : '展开面板'"
-          @click="showPalette = !showPalette"
-        >
-          <SvgIcon :name="showPalette ? 'chevron-left' : 'chevron-right'" />
-        </button>
         <div
-          v-show="showPalette"
           class="palette-header"
         >
           <h3>节点库</h3>
         </div>
 
         <div
-          v-show="showPalette"
           class="palette-search"
         >
           <el-input
@@ -165,18 +356,41 @@
             class="search-input"
             @input="handleSearchInput"
           />
-          <button
+          <el-button
             v-if="nodeSearchQuery"
             class="search-clear"
             title="清除搜索"
             @click="nodeSearchQuery = ''"
           >
             ×
+          </el-button>
+        </div>
+
+        <!-- 端口类型过滤（与文本搜索组合使用；空值=全部） -->
+        <div
+          class="palette-port-filter"
+        >
+          <button
+            class="port-filter-btn"
+            :class="{ active: portTypeFilter.size === 0 }"
+            title="全部（清除过滤）"
+            @click="portTypeFilter = new Set()"
+          >
+            全部
+          </button>
+          <button
+            v-for="pt in portTypeFilterOptions"
+            :key="pt.type"
+            class="port-filter-btn"
+            :class="{ active: portTypeFilter.has(pt.type) }"
+            :title="portTypeFilter.has(pt.type) ? `点击取消 ${pt.type} 过滤` : `仅显示有 ${pt.type} 端口的节点`"
+            @click="togglePortTypeFilter(pt.type)"
+          >
+            {{ pt.label }}
           </button>
         </div>
 
         <div
-          v-show="showPalette"
           class="palette-content"
         >
           <div
@@ -286,20 +500,20 @@
                     label="BBOX"
                   />
                 </el-select>
-                <button
+                <el-button
                   class="var-remove-btn"
                   title="删除变量"
                   @click="removeVariable(index)"
                 >
                   ×
-                </button>
+                </el-button>
               </div>
-              <button
+              <el-button
                 class="add-var-btn"
                 @click="addVariable"
               >
                 <SvgIcon name="plus" /> 添加变量
-              </button>
+              </el-button>
             </div>
           </div>
         </div>
@@ -311,9 +525,15 @@
         class="canvas-wrapper"
       >
         <!-- VueFlow 画布 -->
+        <!-- Phase 17.5 配置说明:
+             - selectionKeyCode=true → useKeyPress(true) 永真, 配合 panOnDrag=false → 空白拖拽=框选
+             - selectNodesOnDrag=false → 拖节点不动, 必须框选才能多选
+             - selectionMode=Partial → 框与节点相交即命中 (不用完全包含)
+             - 自绘框 (custom-selection-rect) + 延迟计算 (handleSelectionEnd 一次性算命中) -->
         <div
           ref="flowContainer"
           class="flow-container"
+          :class="{ panning: isPanning }"
           @drop="handleDrop"
           @dragover.prevent
           @dragenter.prevent
@@ -324,43 +544,49 @@
         >
           <VueFlow
             ref="vueFlowRef"
-            v-model:nodes="nodes"
-            v-model:edges="edges"
+            :nodes="nodes"
+            :edges="edges"
             :node-types="nodeTypes"
             :default-edge-options="defaultEdgeOptions"
             :connection-line-style="connectionLineStyle"
             :snap-to-grid="false"
             :snap-grid="[gridSize, gridSize]"
-            fit-view-on-init
-            :pan-on-drag="[]"
+            :default-viewport="{ x: 0, y: 0, zoom: 0.75 }"
+            :pan-on-drag="false"
             :pan-on-scroll="true"
             :zoom-on-scroll="true"
-            :min-zoom="0.1"
-            :max-zoom="4"
-            :nodes-draggable="true"
+            :min-zoom="0.3"
+            :max-zoom="1.5"
+            :nodes-draggable="false"
             :nodes-connectable="true"
             :elements-selectable="true"
-            :select-nodes-on-drag="true"
+            :auto-connect="false"
+            :only-render-visible-elements="true"
+            :select-nodes-on-drag="false"
+            :selection-key-code="true"
+            :multi-selection-key-code="['Control', 'Meta', 'Shift']"
             :selection-mode="SelectionMode.Partial"
             :connection-radius="20"
             :is-valid-connection="isValidConnection"
+            :class="{ 'is-connecting': isConnecting }"
             @node-click="handleNodeClick"
-            @node-drag-stop="handleNodeDragStop"
-            @pane-click="handlePaneClick"
             @connect="handleConnect"
-            @move="handlePan"
-            @zoom="handleZoom"
+            @connect-start="handleConnectStart"
+            @connect-end="handleConnectEnd"
+            @viewport-change="handleZoom"
             @nodes-change="handleNodesChange"
             @edges-change="handleEdgesChange"
+            @node-double-click="handleNodeDoubleClick"
             @node-context-menu="(e: NodeMouseEvent) => handleContextMenu(e.event as MouseEvent, e.node, 'node')"
             @pane-context-menu="(e: MouseEvent) => handleContextMenu(e, null, 'pane')"
             @edge-context-menu="(e: EdgeMouseEvent) => handleContextMenu(e.event as MouseEvent, e.edge, 'edge')"
             @node-delete="handleNodeDelete"
-            @selection-change="handleSelectionChange"
+            @selection-start="handleSelectionStart"
+            @selection-end="handleSelectionEnd"
           >
-            <!-- 小地图 -->
+            <!-- 小地图 (Phase B 任务5: shouldShowMiniMap 自动策略) -->
             <MiniMap
-              v-if="showMiniMap"
+              v-if="shouldShowMiniMap"
               position="bottom-right"
               :node-color="miniMapNodeColor"
               :node-stroke-width="2"
@@ -372,10 +598,37 @@
             <Controls position="bottom-left" />
           </VueFlow>
 
+          <!-- Phase 17.5: 自绘框选矩形 (替代 VueFlow 内部 UserSelection) -->
+          <!-- 必须在 VueFlow 之外但同一 pane 容器内, 坐标 = 容器坐标 (减过 flowContainer.getBoundingClientRect 偏移),
+               与 vue-flow 内部 userSelectionRect 约定一致 → 自绘框视觉与命中区域完全重合 -->
+          <div
+            v-if="customSelectionRect"
+            class="custom-selection-rect"
+            :class="{ additive: isAdditiveSelection }"
+            :style="{
+              left: customSelectionRect.x + 'px',
+              top: customSelectionRect.y + 'px',
+              width: customSelectionRect.width + 'px',
+              height: customSelectionRect.height + 'px'
+            }"
+          />
+          <!-- Phase 18: 框选时模式角标 (让老大立刻知道是覆盖还是加选) -->
+          <div
+            v-if="customSelectionRect"
+            class="selection-mode-hint"
+            :class="{ additive: isAdditiveSelection }"
+            :style="{
+              left: (customSelectionRect.x + 4) + 'px',
+              top: (customSelectionRect.y - 22) + 'px'
+            }"
+          >
+            {{ isAdditiveSelection ? '➕ 加选 (Ctrl)' : '☐ 替换' }}
+          </div>
+
           
           <!-- 空画布提示 -->
           <div
-            v-if="nodes.length === 0 && !isLoading"
+            v-if="nodes.length === 0 && !loading"
             class="empty-state"
           >
             <div class="empty-icon">
@@ -384,7 +637,7 @@
             <h3>开始设计规则流程</h3>
             <p>从左侧拖拽节点到画布，或双击节点快速添加</p>
             <div class="quick-add-nodes">
-              <button
+              <el-button
                 v-for="node in quickAddNodes"
                 :key="node.type"
                 class="quick-add-btn"
@@ -397,19 +650,31 @@
                   <SvgIcon :name="node.category" />
                 </span>
                 {{ node.label }}
-              </button>
+              </el-button>
             </div>
           </div>
 
           <!-- 加载状态 -->
-          <div
-            v-if="isLoading"
-            class="loading-state"
-          >
-            <div class="spinner" />
-            <span>加载规则图...</span>
-          </div>
+          <LoadingSpinner
+            v-if="loading"
+            overlay
+            text="加载规则图..."
+          />
         </div>
+      </div>
+
+      <!-- 右侧栏 (Task 13): 属性面板 + 节点图例
+           常驻而非「选中才出现」—— 布局不跳动, 图例也一直可见(用户靠它认颜色) -->
+      <div
+        v-show="rightPanelVisible"
+        class="canvas-right"
+      >
+        <NodeInspector
+          :node="inspectorNode"
+          :node-id="inspectorNodeId"
+          @close="handleInspectorClose"
+        />
+        <NodeLegend />
       </div>
     </div>
 
@@ -419,7 +684,8 @@
       :class="{ expanded: showExecutionPanel }"
       :style="{
         height: showExecutionPanel ? panelHeight + 'px' : '44px',
-        left: showPalette ? EXPANDED_WIDTH + 'px' : COLLAPSED_WIDTH + 'px'
+        left: showPalette ? EXPANDED_WIDTH + 'px' : COLLAPSED_WIDTH + 'px',
+        right: rightPanelWidth + 'px'
       }"
     >
       <!-- 拖拽调整高度 -->
@@ -440,13 +706,22 @@
           >{{ executionStatusText }}</span>
         </div>
         <div class="execution-actions">
-          <button
+          <!-- P2-D (2026-06-19): 历史回放按钮 -->
+          <el-button
+            v-if="showExecutionPanel"
+            class="icon-btn small"
+            title="历史执行回放"
+            @click.stop="showReplayDialog = true"
+          >
+            <SvgIcon name="history" />
+          </el-button>
+          <el-button
             v-if="showExecutionPanel"
             class="icon-btn small"
             @click.stop="clearLogs"
           >
             <SvgIcon name="trash" />
-          </button>
+          </el-button>
           <SvgIcon
             class="expand-icon"
             :class="{ expanded: showExecutionPanel }"
@@ -474,22 +749,40 @@
         </div>
 
         <div class="logs-list">
-          <div
-            v-for="(log, idx) in executionLogs"
-            :key="idx"
-            class="log-entry"
-            :class="log.level"
+          <!-- P1-H: 虚拟滚动 (vue-virtual-scroller RecycleScroller) —
+               1000+ 日志滚动 60fps, 仅渲染可视区域 + 上下 buffer -->
+          <RecycleScroller
+            v-if="executionLogs.length > 0"
+            class="logs-scroller"
+            :items="executionLogs"
+            :item-size="34"
+            v-slot="{ item }"
           >
-            <span class="log-time">{{ log.timestamp }}</span>
-            <span class="log-level-badge">{{ log.level.toUpperCase() }}</span>
-            <span
-              v-if="log.node_type"
-              class="log-node"
-            >{{ log.node_type }}</span>
-            <span class="log-message">{{ log.message }}</span>
-          </div>
+            <div
+              :key="item.id"
+              class="log-entry"
+              :class="item.level"
+            >
+              <span class="log-time">{{ item.timestamp }}</span>
+              <span class="log-level-badge">{{ item.level.toUpperCase() }}</span>
+              <span
+                v-if="item.node_type"
+                class="log-node"
+              >{{ item.node_type }}</span>
+              <span class="log-message">{{ item.message }}</span>
+              <span
+                v-if="item.metrics && Object.keys(item.metrics).length > 0"
+                class="log-metrics"
+                :title="formatMetrics(item.metrics)"
+              >{{ formatMetrics(item.metrics) }}</span>
+              <span
+                v-if="item.duration_ms != null"
+                class="log-duration"
+              >{{ formatDuration(item.duration_ms) }}</span>
+            </div>
+          </RecycleScroller>
           <div
-            v-if="executionLogs.length === 0"
+            v-else
             class="no-logs"
           >
             暂无执行日志
@@ -498,17 +791,7 @@
       </div>
     </div>
 
-    <!-- Toast 提示 -->
-    <transition name="toast">
-      <div
-        v-if="toast.show"
-        class="toast-notification"
-        :class="toast.type"
-      >
-        {{ toast.message }}
-      </div>
-    </transition>
-
+    
     <!-- 右键菜单 -->
     <div
       v-if="contextMenu.show"
@@ -516,39 +799,47 @@
       :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
       @contextmenu.prevent
     >
-      <template v-if="contextMenu.targetType === 'node'">
+      <!-- Phase 19.6+: 菜单按 selected 决定, 不按 target
+           - selectedCount > 0 -> 复制/剪切/删除 N 项 (作用在选中集)
+           - selectedCount === 0 -> 只显示 粘贴/全选
+           - target 概念废弃: 右键节点/边/空白 都看 selected 集合
+           - icon 映射 (2026-06-18 Phase 19.7+):
+               复制 -> copy, 剪切 -> cut (新增 cut.svg: 剪刀),
+               删除 -> trash, 粘贴 -> paste (新增 paste.svg: 贴板+向下箭头),
+               全选 -> check-square -->
+      <template v-if="contextSelectedCount > 0">
         <div
           class="context-menu-item"
-          @click="handleContextAction('copy')"
+          @click="handleContextAction('copy', $event)"
         >
-          <SvgIcon name="copy" /> 复制
+          <SvgIcon name="copy" /> 复制 {{ contextSelectedCount }} 项
         </div>
         <div
           class="context-menu-item"
-          @click="handleContextAction('cut')"
+          @click="handleContextAction('cut', $event)"
         >
-          <SvgIcon name="cut" /> 剪切
+          <SvgIcon name="cut" /> 剪切 {{ contextSelectedCount }} 项
         </div>
         <div
           class="context-menu-item danger"
-          @click="handleContextAction('delete')"
+          @click="handleContextAction('delete', $event)"
         >
-          <SvgIcon name="delete" /> 删除
+          <SvgIcon name="trash" /> 删除 {{ contextSelectedCount }} 项
         </div>
         <div class="context-menu-divider" />
-      </template>
-      <template v-if="contextMenu.targetType === 'edge'">
+        <!-- P2-A (2026-06-19): 节点禁用/启用 -->
         <div
-          class="context-menu-item danger"
-          @click="handleContextAction('delete')"
+          class="context-menu-item"
+          @click="handleContextAction('toggleDisabled', $event)"
         >
-          <SvgIcon name="delete" /> 删除连线
+          <SvgIcon name="pause" />
+          {{ hasDisabledSelected ? '启用' : '禁用' }} {{ contextSelectedCount }} 项
         </div>
-        <div class="context-menu-divider" />
       </template>
       <div
         class="context-menu-item"
-        @click="handleContextAction('paste')"
+        :class="{ disabled: !hasClipboard }"
+        @click="hasClipboard && handleContextAction('paste', $event)"
       >
         <SvgIcon name="paste" /> 粘贴
       </div>
@@ -556,7 +847,7 @@
         class="context-menu-item"
         @click="handleContextAction('selectAll')"
       >
-        <SvgIcon name="select" /> 全选
+        <SvgIcon name="check-square" /> 全选
       </div>
     </div>
 
@@ -568,131 +859,389 @@
       @contextmenu.prevent="hideContextMenu"
     />
 
-    <!-- 变量绑定菜单 -->
-    <div
-      v-if="varMenu.show"
-      class="var-menu"
-      :style="{ left: varMenu.x + 'px', top: varMenu.y + 'px' }"
-      @click.stop
+    <!-- 变量绑定菜单已废弃: 节点内嵌 📎 按钮接管 (RuleNode.vue:218 activeVarMenu) -->
+
+    <!-- P2-D (2026-06-19): 执行历史回放对话框 -->
+    <el-dialog
+      v-model="showReplayDialog"
+      title="执行历史回放"
+      width="700px"
+      :close-on-click-modal="false"
+      @open="loadHistory"
     >
-      <div class="var-menu-title">
-        插入变量
+      <div v-if="!selectedExecution" class="replay-list">
+        <div v-if="historyLoading" class="replay-loading">加载中...</div>
+        <div v-else-if="historyList.length === 0" class="replay-empty">
+          暂无执行历史
+        </div>
+        <div
+          v-for="exec in historyList"
+          :key="exec.id"
+          class="replay-item"
+          @click="selectExecutionForReplay(exec)"
+        >
+          <div class="replay-item-header">
+            <span class="replay-item-id">#{{ exec.id }}</span>
+            <span
+              class="replay-status-badge"
+              :class="exec.status"
+            >{{ exec.status }}</span>
+            <span class="replay-trigger">{{ exec.trigger_type }}</span>
+          </div>
+          <div class="replay-item-time">
+            {{ formatTime(exec.start_time) }}
+            <span v-if="exec.end_time"> → {{ formatTime(exec.end_time) }}</span>
+          </div>
+          <div v-if="exec.error" class="replay-item-error">{{ exec.error }}</div>
+        </div>
       </div>
-      <div
-        v-if="variables.length === 0"
-        class="var-menu-empty"
-      >
-        暂无变量，请先在左侧添加
+      <div v-else class="replay-detail">
+        <div class="replay-detail-header">
+          <el-button
+            class="ui-btn ui-btn-small"
+            @click="selectedExecution = null"
+          >
+            ← 返回列表
+          </el-button>
+          <span class="replay-detail-title">
+            执行 #{{ selectedExecution.execution.id }} ·
+            <span :class="'replay-status-badge ' + selectedExecution.execution.status">
+              {{ selectedExecution.execution.status }}
+            </span>
+          </span>
+        </div>
+        <div v-if="replayLoading" class="replay-loading">加载节点日志...</div>
+        <div v-else class="replay-logs">
+          <div
+            v-for="(log, idx) in selectedExecution.logs"
+            :key="idx"
+            class="replay-log-row"
+          >
+            <span class="replay-log-index">{{ idx + 1 }}</span>
+            <span
+              class="replay-log-status"
+              :class="log.status"
+            >{{ log.status }}</span>
+            <span class="replay-log-node">{{ log.node_type }}</span>
+            <span class="replay-log-time">{{ formatTime(log.start_time) }}</span>
+            <span v-if="log.duration_ms != null" class="replay-log-duration">
+              {{ log.duration_ms }}ms
+            </span>
+            <span v-if="log.error_message" class="replay-log-error">
+              {{ log.error_message }}
+            </span>
+          </div>
+          <div v-if="selectedExecution.logs.length === 0" class="replay-empty">
+            该执行无节点日志
+          </div>
+        </div>
+        <div class="replay-tip">
+          节点已按本次执行状态高亮（5秒后自动清除）
+        </div>
       </div>
-      <div
-        v-for="v in variables"
-        :key="v.name"
-        class="var-menu-item"
-        @click="insertVariable(v.name)"
-      >
-        📌 {{ v.name }} <span class="var-type-tag">{{ v.type }}</span>
-      </div>
-    </div>
-    <div
-      v-if="varMenu.show"
-      class="var-menu-overlay"
-      @click="hideVariableMenu"
-    />
+      <template #footer>
+        <el-button @click="closeReplay">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { VueFlow, useVueFlow, MarkerType, SelectionMode, type Node, type Edge, type NodeMouseEvent, type EdgeMouseEvent } from '@vue-flow/core'
-import { Controls } from '@vue-flow/controls'
-import { MiniMap } from '@vue-flow/minimap'
+import { throttle, debounce } from 'lodash-es'
+import { nextTick, onBeforeUnmount, onMounted, ref, triggerRef, watch } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
+import { useRuleEngineStore, type RuleNodeData, type NodeDefinition, type AlignMode } from '@/stores/ruleEngine'
+import { useRulePortsStore } from '@/stores/ruleEngine/ports'
+import { storeToRefs } from 'pinia'
 import { ruleEngineApi } from '@/api'
-import { type NodeDefinition } from '@/stores/ruleEngine'
+import type { Node, Edge, NodeMouseEvent, EdgeMouseEvent } from '@vue-flow/core'
+// SelectionMode 在 <template> 里使用（Vue 模板作用域只解析 <script setup> 顶层 binding，
+// auto-import 的全局 const 在 template 中不被 TS 识别），需要显式 import
+import { SelectionMode } from '@vue-flow/core'
+import RuleNode from '@/components/rule-engine/RuleNode.vue'
+// Task 13: 右侧属性面板 + 节点图例
+import NodeInspector from '@/components/rule-engine/NodeInspector.vue'
+import NodeLegend from '@/components/rule-engine/NodeLegend.vue'
+// Phase 17.1+: NodeConfigEditor 已不再用于右侧面板, 改由 RuleNode LOD 2 内嵌使用,
+// RuleNode.vue 自行 import 该组件, RuleCanvas 不再 import.
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
-
-import RuleNode from '@/components/rule-engine/RuleNode.vue'
+import { RecycleScroller } from 'vue-virtual-scroller'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+import { useCogniFlowDrag } from '@/composables/useCogniFlowDrag'
+import { useWebSocket } from '@/composables/useWebSocket'
+// 草稿提示框状态跟踪 —— 卸载时精确关闭自己的弹框, 避免多层叠加
+import {
+  closeDraftPrompt,
+  hasActiveDraftPrompt,
+  openDraftPrompt,
+} from '@/utils/draftPrompt'
+import { ruleCanvasPath } from '@/utils/ruleNavigation'
+import { pickQuickAddNodes } from '@/utils/ruleQuickAdd'
 
 const router = useRouter()
 const route = useRoute()
-const { fitView, addNodes, removeNodes, addEdges, setCenter, screenToFlowCoordinate } = useVueFlow()
+const {
+  fitView,
+  setCenter,
+  screenToFlowCoordinate,
+  userSelectionRect,
+  setViewport,
+  getViewport,
+  addSelectedNodes,
+  addSelectedEdges,
+  removeSelectedNodes,   // Phase 19.7+: 配合 addSelectedNodes 走 VueFlow 官方 diff 链路
+  getSelectedNodes,      // Phase 19.7+: 算 toAdd/toRemove diff 用
+  findNode,
+  applyNodeChanges: applyVueFlowNodeChanges,
+  applyEdgeChanges: applyVueFlowEdgeChanges,
+} = useVueFlow()
+
+// ============ Store 绑定（唯一数据源）============
+const store = useRuleEngineStore()
+// 端口兼容矩阵 store —— 后端下发的唯一事实源
+const portsStore = useRulePortsStore()
+const {
+  nodes,
+  edges,
+  canUndo,
+  canRedo,
+  hasNodes,
+  variables,
+  nodeDefinitions,
+  graphMeta: graph,
+} = storeToRefs(store)
+
+// P1-2 (2026-06-19): 把 selected 节点 getter 注入 store, 让 alignSelectedNodes 能拿到选中集合
+//   避免 store → useVueFlow 反向依赖
+store.setSelectedNodesGetter(() => getSelectedNodes.value as any[])
+
+// 路径 B: 自研拖动接管 (需在 storeToRefs 之后调用，确保 nodes ref 可用)
+useCogniFlowDrag({
+  nodesRef: nodes,
+  getZoom: () => getViewport().zoom,
+  findFlowNode: (id: string) => {
+    // 拿 VueFlow 内部 reactive GraphNode, 改它 .position 触发 getEdges 80 边 path 重算
+    // 不调 setNodes / createGraphNodes, 绕过 80 节点 vdom diff/patch
+    const flowNode = findNode(id) as any
+    return flowNode
+  },
+  // Phase 19.7+: 选中状态全部走 VueFlow 官方 API, 不要直接 mutate flowNode.selected
+  //   (VueFlow 内部管理 flowNode.selected reactive 状态 + DOM .selected class 联动)
+  addSelectedNodes,
+  removeSelectedNodes,
+  getSelectedNodes: () => getSelectedNodes.value as any[],
+  onStart: () => {
+    isNodeDragging.value = true
+    isBatchDragging.value = true   // 拖动期间节流 handleNodesChange
+    store.setDragging(true)         // LOD-1: 拖动期间锁定 LOD 等级
+  },
+  onEnd: () => {
+    isNodeDragging.value = false
+    isBatchDragging.value = false  // 恢复 handleNodesChange
+    store.setDragging(false)        // LOD-1: 解除 LOD 锁定
+  },
+})
+
+// 执行状态（computed 包装，保持模板兼容）
+const executionStatus = computed(() => store.executionState.status)
+const executionProgress = computed(() => store.executionState.progress)
+const executionLogs = computed(() => store.executionState.logs)
+const executionId = computed(() => store.executionState.executionId)
+
+// ---- 模板兼容函数（委托给 Store）----
+
+// 变量管理（模板使用 index，store 使用 name）
+function addVariable() {
+  store.addVariable()
+}
+
+function removeVariable(index: number) {
+  const name = variables.value[index]?.name
+  if (name) store.removeVariable(name)
+}
+
+function updateVariable(index: number, field: string, value: string) {
+  const name = variables.value[index]?.name
+  if (name) store.updateVariable(name, { [field]: value })
+}
 
 // 常量
 const gridSize = 30
 
-// 状态
+// 本地 UI 状态
 const graphId = computed(() => Number(route.params.id))
-const graph = ref<any>(null)
 const graphName = ref('')
-const nodes = ref<any[]>([])
-const edges = ref<any[]>([])
-const nodeDefinitions = ref<NodeDefinition[]>([])
-const selectedNode = ref<any>(null)
-const nodeConfig = ref<any>({})
-// 变量列表 - 支持的类型：STRING/NUMBER/BOOLEAN/IMAGE/BBOX
-const variables = ref<Array<{ name: string; type: string; defaultValue: any; description: string }>>([])
 const showVariables = ref(true)
-const isLoading = ref(false)
+const loading = ref(false)
 const saving = ref(false)
+// 缩略图生成并发防护：连击"保存"时若上一次 captureAndSaveThumbnail 仍在跑，跳过本次。
+// requestIdleCallback 100ms fallback 会让 200ms 内的多次保存都进队列，导致并发。
+const thumbnailInflight = ref(false)
 const executing = ref(false)
 const showPalette = ref(true)
 const showMiniMap = ref(true)
+
+// Phase B 任务5: 大图渲染降级
+const LARGE_GRAPH_NODE_THRESHOLD = 80
+const HUGE_GRAPH_NODE_THRESHOLD = 200
+
+const largeGraphMode = computed(() => nodes.value.length >= LARGE_GRAPH_NODE_THRESHOLD)
+const hugeGraphMode = computed(() => nodes.value.length >= HUGE_GRAPH_NODE_THRESHOLD)
+/** MiniMap 自动策略: 拖拽/框选/大图全部隐藏, 但用户手动 on 仍生效 */
+const shouldShowMiniMap = computed(() => {
+  if (isNodeDragging.value || isSelectionDragging.value) return false
+  // 用户手动 on/off 优先; 默认 (true) 时按 largeGraphMode 自动
+  return showMiniMap.value && !largeGraphMode.value
+})
 const snapGrid = ref(true)
 const showGrid = ref(true)
 const showExecutionPanel = ref(false)
-const executionLogs = ref<any[]>([])
-const executionStatus = ref<'idle' | 'running' | 'success' | 'failed'>('idle')
-const executionProgress = ref(0)
-const executionId = ref<number | null>(null)
 const flowContainer = ref<HTMLElement | null>(null)
 const vueFlowRef = ref<any>(null)
-const canvasWrapper = ref<HTMLElement | null>(null)
-const panX = ref(0)
-const panY = ref(0)
+const isNodeDragging = ref(false)
+// zoomLevel: 仅作为内部值供 zoomIn/zoomOut/quickAddNode 读取, 不参与响应式
+// 模板显示走 zoomLevelEl.textContent (DOM 直写), 见 P0-2
 const zoomLevel = ref(1)
+// zoomLevelEl: 缩放比例 DOM 引用, 走 textContent 直写不走 Vue 响应式
+const zoomLevelEl = ref<HTMLElement | null>(null)
+// 缓存当前显示值, 避免重复设置相同内容触发无谓的 DOM write
+let lastZoomText = '100%'
 const isPanning = ref(false)
-const lastMousePos = ref({ x: 0, y: 0 })
+// BUG-CFL-3 修复: lastMousePos 拆成两个 ref, 避免 pan (屏幕坐标) 与 框选 (容器坐标) 写入冲突
+// - panLastScreen: pan mousemove 用, 跟 screenX/Y 配对 (dx = event.clientX - panLastScreen.x)
+// - selectionLastContainer: 框选 mousemove 用, 跟 selectionStartPos (容器坐标) 配对算 finalRect
+let panLastScreen = { x: 0, y: 0 }
+let selectionLastContainer = { x: 0, y: 0 }
+/** 全局鼠标位置: 任何 mousemove 都更新, 用于快捷键 Ctrl+V 拿鼠标坐标 (KeyboardEvent 没 clientX/Y) */
+const globalMousePos = ref({ x: 0, y: 0 })
 
-// 节点执行状态: nodeId -> 'pending' | 'running' | 'success' | 'failed'
-const nodeStates = ref<Record<string, string>>({})
+// BUG-7 修复 (2026-06-19): 保存 mousemove 回调引用, onBeforeUnmount 才能 remove
+//   (之前匿名箭头函数 addEventListener, 卸载时引用不一致导致 listener 泄漏)
+let trackGlobalMousePos: ((e: MouseEvent) => void) | null = null
+
+// P0-2 (2026-06-19): 草稿自动保存定时器 / beforeunload 句柄
+// Task 15 (2026-10-24): 定时器 → 防抖计时器 (变更后 1.5s 才写, 连续改动只写最后一次)
+let draftSaveTimer: number | null = null
+let trackBeforeUnload: ((e: BeforeUnloadEvent) => string | undefined) | null = null
+
+/** 草稿写入防抖间隔 (毫秒) */
+const DRAFT_SAVE_DEBOUNCE_MS = 1500
+
+/**
+ * 安排一次草稿写入 (1.5s 防抖)。
+ *
+ * 旧实现是 5s 定时器无条件轮询: 用户停下不操作时也在每 5s 做一次全图序列化,
+ * 而序列化的是含 VueFlow 内部字段的原始节点对象 —— 500 节点图一次几十 ms,
+ * 连续拖拽时更是每 5s 一次卡顿。
+ */
+function scheduleDraftSave() {
+  if (!store.isDirty) return
+  if (draftSaveTimer !== null) window.clearTimeout(draftSaveTimer)
+  draftSaveTimer = window.setTimeout(() => {
+    draftSaveTimer = null
+    if (!store.isDirty) return
+    store.saveDraftToLocalStorage(graphId.value)
+  }, DRAFT_SAVE_DEBOUNCE_MS)
+}
 
 // 复制粘贴
-const clipboard = ref<any[]>([])
+/** 剪贴板 payload: 复制/剪切时把节点+关联边+鼠标位置一起记下
+ *
+ * P1-G (Phase 17.1): 改用 JSON 字符串而非结构化对象 — 100 节点 1 次 stringify 替代 100 次,
+ *                    粘贴时 1 次 parse 替代 100 次. 内存中存字符串避免 Vue 把节点数组做深代理.
+ */
+interface ClipboardPayload {
+  nodesJson: string
+  edgesJson: string
+  /** 复制/剪切时鼠标在浏览器视口的屏幕坐标 (event.clientX/Y) */
+  mousePos: { x: number; y: number }
+}
+const clipboard = ref<ClipboardPayload | null>(null)
 const clipboardMode = ref<'copy' | 'cut'>('copy')
 
 // 右键菜单
+// BUG-5 修复 (2026-06-19): target 类型收窄为 Node<RuleNodeData> | Edge | null
+//   之前是 `null as unknown` + handlePaletteContextMenu 存 NodeDefinition, 类型安全丢失
+//   面板右键不存任何对象 (target=null, targetType='pane') → 删除操作走 selected 路径
+//   用显式 Node<RuleNodeData> 避免 VueFlow 默认 Node 泛型递归过深触发 TS2589
 const contextMenu = reactive({
   show: false,
   x: 0,
   y: 0,
-  target: null as unknown,
+  target: null as Node<RuleNodeData> | Edge | null,
   targetType: null as 'node' | 'edge' | 'pane' | null
+})
+
+// Phase 19.6+: 右键菜单按 selected 决定 (废弃 target 概念)
+// Phase 19.7+ 修复: 读 VueFlow 内部 getSelectedNodes, 不再读 store.nodes[i].selected
+//   (shallowRef 死路, 永远 falsy, 导致菜单永远不显示"复制 N 项"等)
+const contextSelectedCount = computed(() => {
+  return (getSelectedNodes.value as any[]).length
+})
+const hasClipboard = computed(() => !!clipboard.value?.nodesJson)
+
+// P2-A (2026-06-19): 选中节点中是否有已禁用的 (用于菜单文本动态切换)
+const hasDisabledSelected = computed(() => {
+  const sel = getSelectedNodes.value as any[]
+  if (sel.length === 0) return false
+  return sel.some((n) => store.isNodeDisabled(n.id))
 })
 
 // 执行日志面板高度
 const panelHeight = ref(200)
 const isResizingPanel = ref(false)
+const panelResizeCleanup = ref<(() => void) | null>(null)
 
-// palette 折叠后的宽度（配合 execution-panel left 动态响应）
+// palette 折叠后的宽度
 const COLLAPSED_WIDTH = 48
 const EXPANDED_WIDTH = 280
 
-// 变量绑定菜单
-const varMenu = reactive({
-  show: false,
-  x: 0,
-  y: 0,
-  fieldKey: '' as string
-})
+// 右侧栏宽度 (属性面板 + 图例) —— 与左侧 palette 同宽, 视觉平衡
+const RIGHT_PANEL_WIDTH = 280
 
-// 撤销/重做
-const historyStack = ref<{ nodes: any[], edges: any[] }[]>([])
-const historyIndex = ref(-1)
-const canUndo = computed(() => historyIndex.value > 0)
-const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
+// 右侧栏是否展开 (用户意图)
+const showRightPanel = ref(true)
+
+/**
+ * 视口宽度 (Task 13 走查补充)。
+ *
+ * 窄窗口下左侧 palette(280) + 右侧栏(280) 会把画布挤到不可用
+ * (实测 640px 视口 → 画布仅剩 ~80px)。因此右侧栏在视口过窄时自动收起。
+ */
+const viewportWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1440)
+
+/**
+ * 低于该视口宽度则自动收起右侧栏。
+ *
+ * 阈值由「画布至少保留 400px 可用宽度」推导:
+ * 左侧 palette 280 + 右侧栏 280 = 560, 560 + 400 = 960。
+ * 取 960 而非整数 1024, 是因为 960 才是真正影响可用性的临界点 ——
+ * 实测 980px 视口下画布仍有 420px, 完全可用, 不该被无谓收起。
+ */
+const RIGHT_PANEL_MIN_VIEWPORT = 960
+
+/** 右侧栏实际可见性 */
+const rightPanelVisible = computed(
+  () => showRightPanel.value && viewportWidth.value >= RIGHT_PANEL_MIN_VIEWPORT
+)
+
+/** 右侧栏实际占位宽度 —— 执行日志面板据此右移, 避免盖住属性面板 */
+const rightPanelWidth = computed(() => (rightPanelVisible.value ? RIGHT_PANEL_WIDTH : 0))
+
+/** 切换右侧栏 —— 视口过窄时给出明确提示 (自动收起无法手动展开) */
+function toggleRightPanel() {
+  if (viewportWidth.value < RIGHT_PANEL_MIN_VIEWPORT) {
+    ElMessage.warning(
+      `窗口过窄 (${viewportWidth.value}px < ${RIGHT_PANEL_MIN_VIEWPORT}px), 属性面板已自动收起以保证画布可用`
+    )
+    showRightPanel.value = false
+    return
+  }
+  showRightPanel.value = !showRightPanel.value
+}
 
 // 节点分类展开状态（reactive，分离避免循环引用）
 const categoryExpanded = reactive({
@@ -716,28 +1265,72 @@ const nodeCategories = computed(() => [
 
 // 节点搜索
 const nodeSearchQuery = ref('')
+// PERF-7 (2026-06-19): debounced 副本, 150ms 静默后才更新, 减少中间态过滤重算
+const debouncedNodeSearchQuery = ref('')
+const _syncSearchDebounced = debounce((v: string) => {
+  debouncedNodeSearchQuery.value = v
+}, 150)
+watch(nodeSearchQuery, (v) => _syncSearchDebounced(v))
+
+// 端口类型过滤：'' 表示全部；常用类型列出按钮，长尾类型通过文本搜索触达
+const portTypeFilter = ref<Set<string>>(new Set())
+/** 切换某端口类型过滤（多选模式：选多个端口类型时节点含任一即匹配） */
+function togglePortTypeFilter(t: string) {
+  const next = new Set(portTypeFilter.value)
+  if (next.has(t)) {
+    next.delete(t)
+  } else {
+    next.add(t)
+  }
+  portTypeFilter.value = next
+}
+const portTypeFilterOptions = [
+  { type: 'IMAGE', label: '图像' },
+  { type: 'BBOX', label: '检测框' },
+  { type: 'MODEL', label: '模型' },
+  { type: 'STRING', label: '字符串' },
+  { type: 'CONTROL', label: '控制' },
+]
+
+/** 节点是否匹配端口类型过滤。空集合视为全匹配；多选时节点含任一即通过。 */
+function matchesPortType(node: NodeDefinition): boolean {
+  const filter = portTypeFilter.value
+  if (filter.size === 0) return true
+  // 任一输入或输出端口匹配任一选中类型即通过
+  const inputMatch = node.inputs?.some((p) => filter.has(p.type)) ?? false
+  const outputMatch = node.outputs?.some((p) => filter.has(p.type)) ?? false
+  return inputMatch || outputMatch
+}
+
 const filteredCategories = computed(() => {
-  const query = nodeSearchQuery.value.trim().toLowerCase()
-  if (!query) {
-    // 无搜索词：显示所有分类和节点，展开状态由用户控制
+  // PERF-7 修复 (2026-06-19): nodeSearchQuery 加 150ms debounce
+  //   之前每次按键触发 computed 重算 (遍历所有 nodeDefinitions 过滤),
+  //   快速打字时 (e.g. 50ms/键) 多次中间态重算, 100+ 节点定义场景下卡顿
+  //   现在 debouncedNodeSearchQuery 在用户停手 150ms 后才更新, 减少中间态
+  const query = debouncedNodeSearchQuery.value.trim().toLowerCase()
+  const hasFilter = query || portTypeFilter.value.size > 0
+  if (!hasFilter) {
     return nodeCategories.value
   }
-  // 搜索模式：展开所有有匹配节点的分类
   return nodeCategories.value
     .map(cat => ({
       ...cat,
-      nodes: cat.nodes.filter((n: any) =>
-        n.label?.toLowerCase().includes(query) ||
-        n.type?.toLowerCase().includes(query) ||
-        n.description?.toLowerCase().includes(query)
-      ),
-      expanded: true // 搜索时强制展开
+      nodes: cat.nodes.filter((n) => {
+        // 文本搜索匹配
+        const matchesQuery = !query ||
+          n.label?.toLowerCase().includes(query) ||
+          n.type?.toLowerCase().includes(query) ||
+          n.description?.toLowerCase().includes(query)
+        // 端口类型匹配
+        const matchesPort = matchesPortType(n)
+        return matchesQuery && matchesPort
+      }),
+      expanded: true
     }))
-    .filter(cat => cat.nodes.length > 0) // 隐藏空分类
+    .filter(cat => cat.nodes.length > 0)
 })
 
 function handleSearchInput() {
-  // 搜索时自动展开所有分类
   if (nodeSearchQuery.value.trim()) {
     Object.keys(categoryExpanded).forEach(key => categoryExpanded[key as keyof typeof categoryExpanded] = true)
   }
@@ -747,11 +1340,133 @@ function toggleCategory(name: string) {
   categoryExpanded[name as keyof typeof categoryExpanded] = !categoryExpanded[name as keyof typeof categoryExpanded]
 }
 
-// 快速添加
-const quickAddNodes = computed(() => nodeDefinitions.value.slice(0, 4))
+// 快速添加 —— 按分类各取一个 (Task 13)
+//
+// 旧实现是 nodeDefinitions.value.slice(0, 4), 取的是注册顺序最靠前的 4 个,
+// 结果全部落在 input / trigger 分类 —— 用户在空画布上根本看不到「检测」「动作」
+// 这类节点, 误以为产品没有这些能力。改为每个分类各出一个代表节点。
+const quickAddNodes = computed(() => pickQuickAddNodes(nodeDefinitions.value))
 
-// 是否有节点
-const hasNodes = computed(() => nodes.value.length > 0)
+// ============ Task 13: 右侧属性面板 ============
+
+/**
+ * 属性面板当前聚焦的节点 id。
+ *
+ * 仅在「恰好选中 1 个节点」时给值 —— 多选或未选中时不显示属性面板,
+ * 否则用户会误以为面板里的参数属于某个具体节点。
+ *
+ * Task 14: 读 store.selectedIds (增量维护的 Set), 不再遍历 VueFlow 内部节点数组。
+ */
+const inspectorNodeId = computed<string | null>(() => {
+  if (store.selectedIds.size !== 1) return null
+  for (const id of store.selectedIds) return id
+  return null
+})
+
+/** 属性面板节点数据 —— 从 store 取, 保证读到最新 config */
+const inspectorNode = computed<RuleNodeData | null>(() => {
+  const id = inspectorNodeId.value
+  if (!id) return null
+  const node = nodes.value.find(n => n.id === id)
+  return (node?.data as RuleNodeData) ?? null
+})
+
+/** 关闭属性面板 → 取消选中 */
+function handleInspectorClose() {
+  const sel = getSelectedNodes.value as any[]
+  if (sel.length > 0) removeSelectedNodes(sel)
+}
+
+// P1-2 (2026-06-19): 对齐按钮可用性 (≥2 选中可对齐, ≥3 选中可等距分布)
+// Task 14: 改读 store.selectedIds —— getSelectedNodes 是对 VueFlow 内部 nodes 的
+//   O(N) 过滤 computed, 拖拽时每帧都会重算。
+const canAlign = computed(() => store.selectedIds.size >= 2)
+const canDistribute = computed(() => store.selectedIds.size >= 3)
+
+function handleAlign(mode: AlignMode) {
+  const moved = store.alignSelectedNodes(mode, screenToFlowCoordinate)
+  if (moved === 0) {
+    ElMessage.info('无可对齐的选中节点（需 ≥2 个）')
+  }
+}
+
+// P2-C (2026-06-19): 一键自动布局
+function handleAutoLayout() {
+  const moved = store.applyAutoLayout()
+  if (moved === 0) {
+    ElMessage.warning('画布无节点')
+  } else {
+    ElMessage.success(`已自动布局 ${moved} 个节点`)
+    // 布局后自动 fitView 让用户看到全貌
+    setTimeout(() => fitView({ duration: 300, padding: 0.15 }), 50)
+  }
+}
+
+// ============ P1-3 (2026-06-19): 导入导出 + 复制为新 ============
+
+const importFileInput = ref<HTMLInputElement | null>(null)
+
+function triggerImport() {
+  importFileInput.value?.click()
+}
+
+async function handleImportFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''  // 清空, 允许同名文件再次触发
+  if (!file) return
+  try {
+    const text = await file.text()
+    const name = store.importFromJSON(text)
+    graphName.value = name
+    ElMessage.success(`已导入: ${name}`)
+  } catch (err: any) {
+    console.error('导入失败:', err)
+    ElMessage.error(`导入失败: ${err?.message || '未知错误'}`)
+  }
+}
+
+function handleExport() {
+  try {
+    const json = store.exportToJSON()
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const safeName = (store.graphMeta?.name || 'rule-graph').replace(/[^\w一-龥-]/g, '_')
+    a.href = url
+    a.download = `${safeName}-${new Date().toISOString().slice(0, 10)}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('已导出为 JSON 文件')
+  } catch (err: any) {
+    console.error('导出失败:', err)
+    ElMessage.error(`导出失败: ${err?.message || '未知错误'}`)
+  }
+}
+
+async function handleDuplicateAsNew() {
+  try {
+    const { value: name } = await ElMessageBox.prompt(
+      '请输入新规则图名称',
+      '复制为新规则图',
+      {
+        inputPlaceholder: '新图名称',
+        inputValue: `${store.graphMeta?.name || 'untitled'} (副本)`,
+        confirmButtonText: '创建',
+        cancelButtonText: '取消',
+      }
+    )
+    const newId = await store.duplicateAsNewGraph(name)
+    ElMessage.success(`已创建新规则图 #${newId}`)
+    // 跳转到新图 —— 旧实现 push(`/rule-engine/${newId}`), 那个路由不存在,
+    // 点「复制为新」后白屏无反应。路径统一由 ruleNavigation 产出。
+    router.push(ruleCanvasPath(newId))
+  } catch {
+    // 用户取消
+  }
+}
 
 // 执行状态文本
 const executionStatusText = computed(() => ({
@@ -761,155 +1476,196 @@ const executionStatusText = computed(() => ({
   failed: '执行失败'
 }[executionStatus.value]))
 
-// 默认边样式 - 使用贝塞尔曲线
+// 默认边样式 - 不设置内联 style（避免与 CSS 三态规则冲突），
+// stroke / stroke-width / stroke-opacity 全部由 .vue-flow__edge-path CSS 控制
 const defaultEdgeOptions = {
   type: 'default',
   animated: false,
   markerEnd: MarkerType.ArrowClosed,
-  style: { stroke: '#00f0ff', strokeWidth: 2 }
 }
 
-// 连接线样式
+// 连接线样式 (用户拖拽新连线时显示)
 const connectionLineStyle = {
-  stroke: '#00f0ff',
-  strokeWidth: 2
+  stroke: 'var(--accent-blue)',
+  strokeWidth: 2,
+  strokeOpacity: 0.7,
+  markerEnd: MarkerType.ArrowClosed
 }
 
 // 节点类型 - 注册自定义节点组件
 const nodeTypes = {
-  ruleNode: RuleNode
+  ruleNode: markRaw(RuleNode)
 } as unknown as Record<string, any>
 
-// 小地图颜色 - 6色分类体系
-function miniMapNodeColor(node: any) {
-  const colors: Record<string, string> = {
-    input: '#4CFF4C',      // input (#4CFF4C)
-    detection: '#00f0FF',  // detection (#00f0FF)
-    processing: '#FFFF4C', // processing (#FFFF4C)
-    action: '#FF7F4C',     // action (#FF7F4C)
-    logic: '#DC4FDC',      // logic (#DC4FDC)
-    output: '#FF4C4C'       // output (#FF4C4C)
-  }
-  return colors[node.category] || '#888'
+// 小地图颜色
+// 分类色板 —— 与 _variables.scss 的 --cat-* 令牌一一对应。
+// 此处保留 hex 字面量(非 var()): 小地图经 SVG 属性传色, var() 在属性上不解析。
+// v2 (2026-09-12): 由 6 个纯霓虹色换为低眩光调; detection 让出品牌青。
+const NODE_CATEGORY_COLORS: Record<string, string> = {
+  input: '#58e49e',
+  detection: '#58bae4',
+  processing: '#e4c158',
+  action: '#e48b58',
+  logic: '#b158e4',
+  output: '#e4586b'
 }
 
-// Toast
-const toast = reactive({ show: false, message: '', type: 'info' as 'success' | 'error' | 'info' })
-
-function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
-  toast.message = message
-  toast.type = type
-  toast.show = true
-  setTimeout(() => { toast.show = false }, 3000)
+function miniMapNodeColor(node: { data?: { category?: string } }) {
+  return NODE_CATEGORY_COLORS[node.data?.category || ''] || '#888'
 }
 
-// WebSocket 连接（Phase 5 实时推送）
-let ws: WebSocket | null = null
-let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-function getWsUrl() {
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${proto}//${window.location.host}/ws/rule-execution`
-}
+// WebSocket 连接（Phase 5 实时推送, P1-B 2026-09-11 改用统一 composable）
+const wsConnected = ref(false)
+/** 待订阅的执行 ID, 由 connectWebSocket(execId) 设置, onOpen 时发送 subscribe */
+let pendingSubscribeId: number | null = null
+
+const { connect: wsConnect, close: wsClose, send: wsSend } = useWebSocket({
+  url: () => {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${proto}//${window.location.host}/ws/rule-execution`
+  },
+  /** 仅在执行进行中时重连; 完成后断开不再尝试 */
+  reconnect: () => executionStatus.value === 'running' && !!executionId.value,
+  onOpen: () => {
+    wsConnected.value = true
+    if (pendingSubscribeId !== null) {
+      wsSend({ action: 'subscribe', execution_id: pendingSubscribeId })
+      pendingSubscribeId = null
+    }
+  },
+  onClose: () => {
+    wsConnected.value = false
+  },
+  onError: () => {
+    wsConnected.value = false
+  },
+  onMessage: (msg) => {
+    handleWsMessage(msg)
+  },
+})
 
 function connectWebSocket(execId: number) {
-  if (ws) {
-    ws.close()
-    ws = null
-  }
-
-  try {
-    ws = new WebSocket(getWsUrl())
-
-    ws.onopen = () => {
-      // 订阅该 execution_id
-      ws?.send(JSON.stringify({ action: 'subscribe', execution_id: execId }))
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data)
-        handleWsMessage(msg)
-      } catch (e) {
-        console.error('[WS] 解析消息失败', e)
-      }
-    }
-
-    ws.onerror = () => {
-      // 自动重连
-      if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
-      wsReconnectTimer = setTimeout(() => {
-        if (executionStatus.value === 'running' && executionId.value) {
-          connectWebSocket(executionId.value)
-        }
-      }, 3000)
-    }
-
-    ws.onclose = () => {
-      ws = null
-    }
-  } catch (e) {
-    console.error('[WS] 连接失败', e)
-  }
+  pendingSubscribeId = execId
+  wsConnect()
 }
 
 function disconnectWebSocket() {
-  if (wsReconnectTimer) {
-    clearTimeout(wsReconnectTimer)
-    wsReconnectTimer = null
-  }
-  if (ws) {
-    ws.close()
-    ws = null
-  }
+  pendingSubscribeId = null
+  wsClose()
 }
 
 function handleWsMessage(msg: any) {
+  // 批量消息: 后端在 16ms 窗口内合并多条消息下发。
+  // 旧实现没有这个分支, 导致批处理窗口内的所有节点事件被丢弃。
+  if (msg?.type === 'batch' && Array.isArray(msg.messages)) {
+    for (const inner of msg.messages) {
+      handleWsMessage(inner)
+    }
+    return
+  }
+
   switch (msg.type) {
     case 'node_started':
-      nodeStates.value[msg.node_id] = 'running'
+      store.setNodeExecutionState(msg.node_id, 'running')
+      store.addExecutionLog({
+        level: 'info',
+        timestamp: formatTime(msg.timestamp),
+        node_type: msg.node_type,
+        message: `开始执行: ${msg.node_type}`
+      })
       break
     case 'node_executed':
-      nodeStates.value[msg.node_id] = 'success'
+      store.setNodeExecutionState(msg.node_id, 'success')
+      store.addExecutionLog({
+        level: 'success',
+        timestamp: formatTime(msg.timestamp),
+        node_type: msg.node_type,
+        message: `${msg.node_type} 执行成功`,
+        duration_ms: msg.duration_ms,
+        metrics: msg.metrics,
+      })
       break
     case 'node_failed':
-      nodeStates.value[msg.node_id] = 'failed'
-      showToast(`节点执行失败: ${msg.error}`, 'error')
+      store.setNodeExecutionState(msg.node_id, 'failed')
+      store.addExecutionLog({
+        level: 'error',
+        timestamp: formatTime(msg.timestamp),
+        node_type: msg.node_type,
+        message: msg.error || '执行失败'
+      })
+      ElMessage.error(`节点执行失败: ${msg.error}`)
+      break
+    case 'node_timeout':
+      // 节点执行超时 — 区别于 node_failed，下游继续执行（断路器模式）
+      store.setNodeExecutionState(msg.node_id, 'timeout')
+      store.addExecutionLog({
+        level: 'warning',
+        timestamp: formatTime(msg.timestamp),
+        node_type: msg.node_type,
+        message: msg.error || `执行超时（${msg.timeout_seconds}s）`
+      })
+      ElMessage.warning(`节点执行超时: ${msg.error || ''}（下游继续执行）`)
       break
     case 'execution_progress':
-      executionProgress.value = msg.progress
+      throttledUpdateProgress(msg.progress)
       break
     case 'execution_complete':
-      executionStatus.value = msg.status === 'completed' ? 'success' : 'failed'
-      executionProgress.value = 100
-      showToast(
-        msg.status === 'completed' ? '执行成功' : `执行失败: ${msg.error || ''}`,
-        msg.status === 'completed' ? 'success' : 'error'
-      )
-      // 重置节点状态
-      setTimeout(() => { nodeStates.value = {} }, 2000)
+      store.setExecutionStatus(msg.status === 'completed' ? 'success' : 'failed')
+      store.setExecutionProgress(100)
+      store.addExecutionLog({
+        level: msg.status === 'completed' ? 'success' : 'error',
+        timestamp: formatTime(msg.timestamp),
+        node_type: '',
+        message: msg.status === 'completed' ? '执行完成' : `执行失败: ${msg.error || ''}`
+      })
+      if (msg.status === 'completed') {
+        ElMessage.success('执行成功')
+      } else {
+        ElMessage.error(`执行失败: ${msg.error || ''}`)
+      }
+      // 日志保留到用户手动清空或下次执行 —— 旧实现 2 秒后自毁,
+      // 用户还没看清结果就没了。节点状态另存在 graph store, 不受影响。
+      // 执行结束 → 解除「执行中」锁定, 执行按钮恢复可用
+      // (旧实现只在 catch 里复位 executing → 成功执行一次后按钮永久禁用)
+      executing.value = false
       disconnectWebSocket()
       break
   }
 }
 
-// 右键菜单操作
-function saveHistory() {
-  historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
-  historyStack.value.push({
-    nodes: JSON.parse(JSON.stringify(nodes.value.map((n: any) => ({ ...n, selected: false, dragging: false })))),
-    edges: JSON.parse(JSON.stringify(edges.value))
-  })
-  historyIndex.value = historyStack.value.length - 1
-  if (historyStack.value.length > 50) {
-    historyStack.value.shift()
-    historyIndex.value--
+/** 格式化时间戳为 HH:mm:ss */
+function formatTime(isoStr?: string) {
+  if (!isoStr) return ''
+  try {
+    const d = new Date(isoStr)
+    return d.toLocaleTimeString('zh-CN', { hour12: false })
+  } catch {
+    return ''
   }
 }
 
+/** 格式化毫秒为可读耗时 */
+function formatDuration(ms: number) {
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+  return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`
+}
+
+/** 格式化节点输出指标为可读字符串（key=value, key=value）。 */
+function formatMetrics(metrics: Record<string, number>): string {
+  return Object.entries(metrics)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(', ')
+}
+
+// 节流进度更新函数
+const throttledUpdateProgress = throttle((progress: number) => {
+  store.setExecutionProgress(progress)
+}, 500)
+
 // 键盘事件处理
 function handleKeyDown(event: KeyboardEvent) {
-  // 忽略输入框内的按键
   const target = event.target as HTMLElement
   if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
     return
@@ -917,265 +1673,712 @@ function handleKeyDown(event: KeyboardEvent) {
 
   const isCtrl = event.ctrlKey || event.metaKey
 
-  // Ctrl+C: 复制
+  // Ctrl/Cmd + S: 保存 (工具栏 title 承诺的快捷键, 此前未实现)
+  if (isCtrl && event.key.toLowerCase() === 's') {
+    event.preventDefault()
+    void handleSave()
+    return
+  }
+
+  // Enter: 执行规则图 (工具栏 title 承诺的快捷键, 此前未实现)
+  if (event.key === 'Enter' && !isCtrl && !executing.value && hasNodes.value) {
+    event.preventDefault()
+    void handleExecute()
+    return
+  }
+
   if (isCtrl && event.key === 'c') {
     event.preventDefault()
     handleCopy()
     return
   }
-
-  // Ctrl+X: 剪切
   if (isCtrl && event.key === 'x') {
     event.preventDefault()
     handleCut()
     return
   }
-
-  // Ctrl+V: 粘贴
   if (isCtrl && event.key === 'v') {
     event.preventDefault()
     handlePaste()
     return
   }
-
-  // Ctrl+Z: 撤销
+  // P0-3 (2026-06-19): Ctrl+D 复制选中 (不删原件, 与 Figma / PowerPoint 一致)
+  //   流程: 复制到剪贴板 + 立即粘贴 → 用户看到复制结果, 原节点保留
+  if (isCtrl && event.key === 'd') {
+    event.preventDefault()
+    handleDuplicate()
+    return
+  }
   if (isCtrl && event.key === 'z' && !event.shiftKey) {
     event.preventDefault()
-    handleUndo()
+    store.undo()
     return
   }
-
-  // Ctrl+Y / Ctrl+Shift+Z: 重做
   if (isCtrl && (event.key === 'y' || (event.key === 'z' && event.shiftKey))) {
     event.preventDefault()
-    handleRedo()
+    store.redo()
     return
   }
-
-  // Delete / Backspace: 删除选中
   if (event.key === 'Delete' || event.key === 'Backspace') {
     event.preventDefault()
     handleDelete()
     return
   }
+  if (isCtrl && event.key === 'a') {
+    event.preventDefault()
+    // 全选所有节点 (VueFlow 1.48 addSelectedNodes 签名接收 GraphNode[] 对象数组)
+    addSelectedNodes(nodes.value as any)
+    return
+  }
+  // P0-3 (2026-06-19): 方向键微调选中节点位置 (1px / Shift+10px)
+  //   与 PowerPoint / Figma 习惯一致: 单步 1px, Shift 大步 10px
+  //   走 recordMoveHistory 单条 move entry (不进 groupMove — groupMove 假设多节点独立位置变化,
+  //   但单键一次微调产生 1 条 history 也够用)
+  if (
+    event.key === 'ArrowUp' || event.key === 'ArrowDown' ||
+    event.key === 'ArrowLeft' || event.key === 'ArrowRight'
+  ) {
+    event.preventDefault()
+    handleNudge(event.key, event.shiftKey)
+    return
+  }
+}
+
+/**
+ * P0-3 (2026-06-19): Ctrl+D 复制选中节点 (不删原件)
+ * 复用 handleCopy + handlePaste, 但绕过剪贴板副作用 (ElMessage 提示)
+ */
+function handleDuplicate() {
+  const selected = getSelectedNodes.value as any[]
+  if (selected.length === 0) {
+    ElMessage.warning('请先选择要复制的节点')
+    return
+  }
+  // 复用 copy 流程 (含 edges 关联复制)
+  handleCopy()
+  // 粘贴后立即清空剪贴板, 避免 Ctrl+V 重复触发
+  // (handlePaste 内部对 cut 模式才清, copy 模式保留; 这里手动清, 避免误重复)
+  const beforeNodesCount = store.nodes.length
+  handlePaste()
+  // handleCopy 写入的 clipboard 留到下次用户显式 Ctrl+V 用
+  // 但若想"Ctrl+D 之后 clipboard 仍是用户的"也可不清 — 保留与 PowerPoint 一致
+  void beforeNodesCount  // 静默 unused
+}
+
+/**
+ * P0-3 (2026-06-19): 方向键微调选中节点位置
+ * @param key 方向键名 ArrowUp/Down/Left/Right
+ * @param bigStep 是否 Shift (10px vs 1px)
+ */
+function handleNudge(key: string, bigStep: boolean) {
+  const selected = getSelectedNodes.value as any[]
+  if (selected.length === 0) return
+  const step = bigStep ? 10 : 1
+  let dx = 0
+  let dy = 0
+  if (key === 'ArrowUp') dy = -step
+  else if (key === 'ArrowDown') dy = step
+  else if (key === 'ArrowLeft') dx = -step
+  else if (key === 'ArrowRight') dx = step
+
+  // 走 setNodesPositions 批量同步, 复用拖动结束的轻量路径
+  // recordMoveHistory=false: 方向键微调频繁, 不进 history (用户预期: 微调是即时反馈, 不是撤销单位)
+  const updates = selected.map((n) => ({
+    id: n.id,
+    position: { x: n.position.x + dx, y: n.position.y + dy },
+  }))
+  store.setNodesPositions(updates, false, false, true)  // recordHistory=false, rawWrite=true
+  // rawWrite=true 走 toRaw 路径, 0 watcher 调度, 60Hz 连按也无压力
+}
+
+/**
+ * 拿到当前已选节点的 bounding box 中心点 (屏幕坐标).
+ * 用于快捷键复制/剪切: 粘贴时按"当前鼠标 - bbox 中心"算偏移.
+ * 不用鼠标位置是因为 Ctrl+C 触发时鼠标可能在画布外, 而 bbox 中心
+ * 永远在选中集内, 跟用户视觉感知一致.
+ */
+function getSelectionBboxCenter(): { x: number; y: number } {
+  const selectedEls = document.querySelectorAll('.vue-flow__node.selected')
+  if (selectedEls.length === 0) return { x: 0, y: 0 }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const el of selectedEls) {
+    const r = el.getBoundingClientRect()
+    if (r.left < minX) minX = r.left
+    if (r.top < minY) minY = r.top
+    if (r.right > maxX) maxX = r.right
+    if (r.bottom > maxY) maxY = r.bottom
+  }
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }
 }
 
 // 复制
-function handleCopy() {
-  const selected = nodes.value.filter((n: any) => n.selected)
+function handleCopy(_event?: MouseEvent) {
+  // Phase 19.6+: 右键菜单按 selected 决定, 不再用 contextMenu.target fallback
+  // Phase 19.7+ 修复: 读 VueFlow 内部 getSelectedNodes (flowNode.selected),
+  //   不再读 store.nodes[i].selected (shallowRef 死路)
+  const selected = getSelectedNodes.value as any[]
   if (selected.length === 0) {
-    showToast('请先选择要复制的节点', 'info')
+    ElMessage.warning('请先选择要复制的节点')
     return
   }
-  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
+  // 收集选中节点之间的边 (源和目标都在选中集)
+  const selectedIds = new Set(selected.map((n) => n.id))
+  const relatedEdges = (edges.value as Edge[]).filter(
+    (e) => selectedIds.has(e.source) && selectedIds.has(e.target)
+  )
+  // 参考点用 selection bbox 中心 (屏幕坐标), 粘贴时用 (当前鼠标 - bbox 中心) / zoom 算偏移
+  // 不用鼠标位置是因快捷键触发时鼠标可能在画布外
+  // P1-G (Phase 17.1): 一次性 stringify 替代每节点独立 stringify+parse
+  // PERF-6 修复 (2026-06-19): 字段裁剪, 100 节点复制省 ~1-2ms
+  //   之前 JSON.stringify(selected) 序列化整个 VueFlow GraphNode, 包含大量内部字段
+  //   (dragging/dimensions/handleBounds/internals/computedPosition/...),
+  //   粘贴时 (handlePaste) 只用 id/position/data, 其它都是浪费.
+  //   走 pickBusinessFields 提业务字段 + 边字段裁剪 (source/target/type/id 4 个够用)
+  clipboard.value = {
+    nodesJson: JSON.stringify(selected.map(pickBusinessFields)),
+    edgesJson: JSON.stringify(relatedEdges.map((e: any) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: e.type,
+      data: e.data,
+      label: e.label,
+      animated: e.animated,
+      style: e.style,
+    }))),
+    mousePos: getSelectionBboxCenter()
+  }
   clipboardMode.value = 'copy'
-  showToast(`已复制 ${selected.length} 个节点`, 'info')
+  ElMessage.success(`已复制 ${selected.length} 个节点`)
+}
+
+/**
+ * PERF-6 (2026-06-19): 提取 GraphNode 业务字段, 剔除 VueFlow 内部 cache
+ * (dragging/dimensions/handleBounds/internals/computedPosition/parentNode/selected
+ *  /events/... 都不参与粘贴重建, 留着只增序列化体积 + CPU)
+ *
+ * 粘贴端 (handlePaste) 只读 id/position/data, 其它字段可省略.
+ * 选留字段: id/type/position/data/label/style/width/height/sourcePosition/targetPosition
+ *  → 覆盖视觉/业务重建所需, 同时排除所有 _-prefixed 内部字段
+ */
+function pickBusinessFields(n: any) {
+  return {
+    id: n.id,
+    type: n.type,
+    position: n.position,
+    data: n.data,
+    label: n.label,
+    style: n.style,
+    width: n.width,
+    height: n.height,
+    sourcePosition: n.sourcePosition,
+    targetPosition: n.targetPosition,
+    // 业务可选字段
+    parentNode: n.parentNode,
+    extent: n.extent,
+    expandParent: n.expandParent,
+  }
 }
 
 // 剪切
-function handleCut() {
-  const selected = nodes.value.filter((n: any) => n.selected)
+function handleCut(_event?: MouseEvent) {
+  // Phase 19.6+: 右键菜单按 selected 决定
+  // Phase 19.7+ 修复: 读 VueFlow 内部 getSelectedNodes (同上 handleCopy)
+  const selected = getSelectedNodes.value as any[]
   if (selected.length === 0) {
-    showToast('请先选择要剪切的节点', 'info')
+    ElMessage.warning('请先选择要剪切的节点')
     return
   }
-  clipboard.value = selected.map((n: any) => JSON.parse(JSON.stringify(n)))
-  clipboardMode.value = 'cut'
-  // 立即删除
-  removeNodes(selected.map((n: any) => n.id))
-  edges.value = edges.value.filter((e: any) =>
-    !selected.some((n: any) => n.id === e.source || n.id === e.target)
+  const selectedIds = new Set(selected.map((n) => n.id))
+  const relatedEdges = (edges.value as Edge[]).filter(
+    (e) => selectedIds.has(e.source) && selectedIds.has(e.target)
   )
-  selected.forEach((n: any) => {
-    const idx = nodes.value.findIndex((node: any) => node.id === n.id)
-    if (idx !== -1) nodes.value.splice(idx, 1)
-  })
-  showToast(`已剪切 ${selected.length} 个节点`, 'info')
+  clipboard.value = {
+    nodesJson: JSON.stringify(selected),
+    edgesJson: JSON.stringify(relatedEdges),
+    mousePos: getSelectionBboxCenter()
+  }
+  clipboardMode.value = 'cut'
+  // 批量删除节点 + 关联边, 避免循环里反复重渲染
+  const nodeIds = selected.map((n) => n.id)
+  store.nodes = store.nodes.filter((n) => !nodeIds.includes(n.id))
+  store.edges = (store.edges as Edge[]).filter(
+    (e) => !nodeIds.includes(e.source) && !nodeIds.includes(e.target)
+  )
+  ElMessage.success(`已剪切 ${selected.length} 个节点`)
 }
 
 // 粘贴
-function handlePaste() {
-  if (clipboard.value.length === 0) {
-    showToast('剪贴板为空', 'info')
+function handlePaste(event?: MouseEvent) {
+  if (!clipboard.value || clipboard.value.nodesJson == null) {
+    ElMessage.warning('剪贴板为空')
     return
   }
 
-  const container = flowContainer.value
-  if (!container) return
+  // P1-G (Phase 17.1): 1 次 parse 100 节点, 替代逐节点 stringify+parse
+  const cp = clipboard.value
+  const srcNodes: any[] = JSON.parse(cp.nodesJson)
+  const srcEdges: any[] = JSON.parse(cp.edgesJson || '[]')
+  const mousePos = cp.mousePos
+  if (srcNodes.length === 0) {
+    ElMessage.warning('剪贴板为空')
+    return
+  }
 
-  const offsetX = 50
-  const offsetY = 50
+  // 计算鼠标偏移 (屏幕坐标 → 画布坐标)
+  // Figma 模式: 偏移 = (当前鼠标 - 复制时鼠标) / 缩放
+  // 优先级: event.clientX/Y > globalMousePos (快捷键场景) > +50/+50 fallback
+  const currentMouse = event
+    ? { x: event.clientX, y: event.clientY }
+    : (globalMousePos.value.x || globalMousePos.value.y
+        ? globalMousePos.value
+        : null)
+  let offsetX = 50
+  let offsetY = 50
+  if (currentMouse) {
+    const zoom = getViewport().zoom
+    const dxScreen = currentMouse.x - mousePos.x
+    const dyScreen = currentMouse.y - mousePos.y
+    offsetX = dxScreen / zoom
+    offsetY = dyScreen / zoom
+  }
 
-  const newNodes = clipboard.value.map((n: any) => {
-    const cloned = JSON.parse(JSON.stringify(n))
+  // 旧 ID → 新 ID 映射 (用于重映射边的 source/target)
+  const idMap = new Map<string, string>()
+  // 防止短时间戳碰撞: 每个节点用序号后缀
+  const ts = Date.now()
+  let seq = 0
+  const newId = () => `node_${ts}_${(seq++).toString(36)}`
+
+  const newNodes: Node<RuleNodeData>[] = srcNodes.map((n: any) => {
+    const newNodeId = newId()
+    idMap.set(n.id, newNodeId)
+    // P1-G: srcNodes 已是 deep cloned JSON, 直接 mutate position + 补充选中态
     return {
-      ...cloned,
-      id: `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-      type: 'ruleNode',  // 确保使用自定义节点组件
+      ...n,
+      id: newNodeId,
+      type: 'ruleNode',
       position: {
         x: n.position.x + offsetX,
         y: n.position.y + offsetY
       },
-      selected: false,
+      // 粘贴时把新节点置为 selected: 视觉高亮, 方便用户继续操作 (拖动/再次粘贴/删除)
+      // 复制粘贴: 原节点保持未选, 粘贴项 selected → 用户一眼看出新增了哪些
+      // 剪切粘贴: 原节点已删, 粘贴项 selected → 用户可立即拖到目标位置
+      selected: true,
       data: {
-        ...(cloned.data || {}),
-        onDelete: handleNodeDelete
+        ...(n.data || {}),
+        id: newNodeId,
+        selected: true
       }
     }
   })
 
-  // 如果是剪切模式，清除原选中节点
+  // 重映射边 — srcEdges 的端点都在复制集中
+  const newEdges: Edge[] = srcEdges.map((e: any) => {
+    const newEdgeId = `edge_${ts}_${(seq++).toString(36)}`
+    return {
+      ...e,
+      id: newEdgeId,
+      source: idMap.get(e.source) ?? e.source,
+      target: idMap.get(e.target) ?? e.target
+    } as Edge
+  })
+
+  // shallowRef 数组必须重新赋值触发响应式
+  // 取消选中所有原节点, 只保留粘贴项 selected: true
+  // Phase 19.7+ 修复: 走 VueFlow 官方 removeSelectedNodes, 不再 mutate store.nodes[i].selected
+  const previouslySelected = getSelectedNodes.value as any[]
+  if (previouslySelected.length > 0) {
+    removeSelectedNodes(previouslySelected)
+  }
+  store.nodes = [...store.nodes, ...newNodes]
+  store.edges = [...(store.edges as Edge[]), ...newEdges]
+
+  // BUG-2 修复 (2026-06-19): VueFlow 选中态由内部 selectedNodeIds 管理,
+  //   写 flowNode.selected / data.selected 已废 (shallowRef + markRaw 也不会触发 DOM .selected class).
+  //   必须走 addSelectedNodes([flowNode, ...]) 同步 VueFlow 内部态 → 粘贴项 outline 高亮.
+  // nextTick 等 VueFlow 把新节点注册到内部 lookup, findNode 才能拿到 reactive flowNode.
+  nextTick(() => {
+    const newFlowNodes: any[] = []
+    for (const n of newNodes) {
+      const flowNode = findNode(n.id) as any
+      if (flowNode) newFlowNodes.push(flowNode)
+    }
+    if (newFlowNodes.length > 0) {
+      addSelectedNodes(newFlowNodes)
+    }
+  })
+
   if (clipboardMode.value === 'cut') {
-    clipboard.value = []
+    clipboard.value = null
   }
 
-  addNodes(newNodes)
-  saveHistory()
-  showToast(`已粘贴 ${newNodes.length} 个节点`, 'info')
+  store.saveHistory()
+  ElMessage.success(`已粘贴 ${newNodes.length} 个节点${newEdges.length > 0 ? `, ${newEdges.length} 条连线` : ''}`)
 }
 
-// 框选变化 - 同步 VueFlow 选中状态到 nodes
-function handleSelectionChange({ nodes: selectedNodes }: any) {
-  // 先清除所有节点的选中状态
-  nodes.value.forEach((n: any) => { n.selected = false })
-  // 再设置当前选中的节点
-  selectedNodes.forEach((n: any) => {
-    const node = nodes.value.find((node: any) => node.id === n.id)
-    if (node) node.selected = true
+// 框选开始 - 设 isBatchDragging 使 handleNodesChange 跳过所有 change (不再 60Hz × N 处理 select)
+function handleSelectionStart(event: any) {
+  isSelectionDragging.value = true
+  isBatchDragging.value = true  // P0: 框选期间节流, handleNodesChange 立即 return
+  store.setSelectionBoxActive(true) // LOD-1: 框选期间锁定 LOD
+
+  // 记录按下点, 供 handleSelectionEnd 判定「点击 vs 拖拽」
+  const downSrc = event as (PointerEvent | MouseEvent | undefined)
+  panePointerDownScreen = downSrc ? { x: downSrc.clientX, y: downSrc.clientY } : null
+
+  // Phase 19.7+: 锁定本次框选模式 (Ctrl/Meta/Shift = 增量加选)
+  // 直接读 PointerEvent 修饰键, 不再用自挂 keydown/keyup ref
+  // (BUG-CFL-2: 两套状态分裂消除; mousedown 瞬间的 PointerEvent 是同源数据, 无需 ref 缓冲)
+  const src = event as (PointerEvent | MouseEvent | undefined)
+  selectionAdditive = !!(src && (src.ctrlKey || src.metaKey || src.shiftKey))
+  isAdditiveSelection.value = selectionAdditive  // 同步视图状态 (角标 + 自绘框颜色)
+
+  // Phase 17.5 (修复版): 延迟计算 + 坐标系修正
+  // - 把 userSelectionRect 设 null → VueFlow Pane onPointerMove 第一行 return, 0 开销
+  // - 坐标转容器坐标系 (减 flowContainer.getBoundingClientRect 偏移),
+  //   与 vue-flow 内部 userSelectionRect 约定一致 → getNodesInside 不再偏移,
+  //   自绘框视觉位置与命中区域一致 (修 BUG-1 + BUG-2)
+  const bounds = flowContainer.value?.getBoundingClientRect()
+  const offsetX = bounds?.left ?? 0
+  const offsetY = bounds?.top ?? 0
+
+  if (event && event.clientX !== undefined) {
+    selectionStartPos = { x: event.clientX - offsetX, y: event.clientY - offsetY }  // 容器坐标
+  } else {
+    // BUG-CFL-3 修复: fallback 用 globalMousePos (屏幕坐标) 转容器坐标, 不再用 lastMousePos
+    //   lastMousePos 已拆, 这里是 selectionStartPos 初始化, 走 globalMousePos 拿屏幕坐标更安全
+    const lp = globalMousePos.value
+    selectionStartPos = (lp.x || lp.y)
+      ? { x: lp.x - offsetX, y: lp.y - offsetY }
+      : { x: 0, y: 0 }
+  }
+  // 关键: 把 userSelectionRect 设为 null, 阻止 VueFlow Pane onPointerMove 跑 getNodesInside
+  userSelectionRect.value = null
+  customSelectionRect.value = { x: selectionStartPos.x, y: selectionStartPos.y, width: 0, height: 0 }
+}
+
+/**
+ * Phase 17.5 (修复版): 框选延迟计算 + 坐标系修正 + 性能优化
+ *
+ * 老大反馈: 框选过程中会有卡顿感, 希望鼠标放开时才计算哪些节点被选中.
+ *
+ * 根因:
+ * - VueFlow Pane 组件的 onPointerMove 60Hz 调 getNodesInside + 设置 selectedNodeIds + emits.nodesChange
+ * - 每次 selectedNodeIds.value 变更触发内部 computed/响应式链 (getSelectedNodes, connectionLookup)
+ * - 80 节点 + 60Hz + 响应式调度 → 单帧 5-15ms 开销 → 明显卡顿
+ *
+ * 修复策略 (B 方案: 画框不卡 + DOM 直接命中):
+ * - @selection-start 触发时立即把 userSelectionRect.value = null
+ *   → VueFlow Pane onPointerMove 第一行 `if (!userSelectionRect.value) return` → 不再 60Hz 跑 O(N)
+ * - 我们自己画框 (customSelectionRect), mousemove 只更新 CSS 位置/尺寸
+ * - @selection-end 触发时:
+ *   1. 用我们自己的 selectionStartPos (容器坐标) + lastMousePos (容器坐标) 算 finalRect
+ *   2. 直接遍历 .vue-flow__node[data-id] DOM 元素, getBoundingClientRect() 拿真实屏幕矩形
+ *      → 容器坐标系下做 AABB 比对 (不依赖 store.dimensions, 也不走画布坐标反变换)
+ *   3. syncSelectionToStoreNodes(hitIds) 一次性写 store + 内部 GraphNode.selected, 数组引用不变
+ *      → 0 vdom diff (修 BUG-4 + BUG-3 + BUG-7)
+ *
+ * 为什么不走 screenToFlowCoordinate (画布坐标) 路线:
+ * - 节点 store.dimensions 不一定被 vue-flow 内部回写, fallback 200x80 比真实 280x222 小
+ *   → 命中区域偏小, 用户必须拖更宽才能框中 (老大反馈: x 轴方向拖更宽才能选中)
+ * - DOM getBoundingClientRect() 拿的是 el.offsetWidth, 跟 vue-flow 内部 nodeToRect 同源
+ *   → 100% 准确, 避免浮点 zoom 反变换误差
+ *
+ * 坐标系说明:
+ * - event.clientX/Y = 屏幕坐标
+ * - flowContainer.getBoundingClientRect().{left,top} = 容器左上角的屏幕偏移
+ * - 容器坐标 = screen - containerOffset (vue-flow 内部 userSelectionRect 用的就是容器坐标)
+ * - customSelectionRect 写入 + AABB 比对都在容器坐标系 → 零坐标系转换
+ */
+
+/** 框选起点 (mousedown 容器坐标) — 用于 mousemove/mouseup 计算 finalRect */
+let selectionStartPos: { x: number; y: number } | null = null
+
+/**
+ * 空白处 pointerdown 的屏幕坐标, 用于在 handleSelectionEnd 里区分「点击」与「拖拽框选」。
+ *
+ * 2026-09-12: 因为 Pane 的 @pane-click 在本项目配置下永不发出 (见 handlePaneClick 处的溯源),
+ * 「点空白收起全部展开节点」只能挂到确实会触发的 selection-end 上。判据用按下/抬起
+ * 的位移距离, 而非 vue-flow 的 userSelectionActive —— 真实点击也会带极小的 pointermove,
+ * 用位移阈值才可靠。
+ */
+let panePointerDownScreen: { x: number; y: number } | null = null
+
+/** 判为「点击」而非「框选拖拽」的位移上限 (px) */
+const PANE_CLICK_MAX_DISTANCE = 5
+
+/**
+ * Phase 18: 框选模式 (覆盖 vs 加选)
+ * - 普通拖框 → 选中集合被新命中完全替换 (老大原行为)
+ * - Ctrl/Meta+拖框 → 保留旧选中, 把新命中并入 (增量加选)
+ *
+ * `selectionAdditive` 锁定 mousedown 瞬间的 Ctrl 状态, 决定最终行为
+ * `isAdditiveSelection` 是 reactive 视图状态, 在拖动期间实时跟随 Ctrl 键,
+ *   用来切换自绘框颜色 + 角标提示 (UX 反馈), 不影响最终行为
+ */
+let selectionAdditive = false
+const isAdditiveSelection = ref(false)
+
+// Phase 19.7+: 删 multiSelectKeyPressed ref + keydown/keyup 监听
+//   (BUG-CFL-2: 消除两套状态分裂, 直接读 PointerEvent 修饰键更可靠)
+//   (顺带修复原 blur 事件类型隐患: onKeyUp 期望 KeyboardEvent, blur 是 FocusEvent)
+
+/**
+ * 自绘框选矩形 — 替代 VueFlow 内部 UserSelection
+ * 用 reactive ref 而非 plain 变量, 因为模板要响应它的变化
+ * mousemove 60Hz 更新 x/y/width/height, 但只走 DOM style 不触发 vue-flow 内部响应式
+ * 坐标: 容器坐标 (与 vue-flow 内部 userSelectionRect 一致, 修 BUG-2)
+ */
+const customSelectionRect = ref<{ x: number; y: number; width: number; height: number } | null>(null)
+
+// 框选结束 - Phase 17.5 (修复版): 一次性算命中 + 同步 store + vue-flow 内部
+function handleSelectionEnd(_event: any) {
+  isSelectionDragging.value = false
+  isBatchDragging.value = false  // P0: 恢复 nodes-change 处理
+  store.setSelectionBoxActive(false) // LOD-1: 解除框选 LOD 锁定
+
+  // 空白处「点击」(而非拖拽框选) → 收起所有已展开的节点
+  //   用户切回画布视角的常见操作。2026-09-12: 由原 handlePaneClick 迁移至此
+  //   (原路径走 @pane-click, 在本项目配置下永不触发, 见 handlePaneClick 处溯源)。
+  //   只做收起, 不动选中态 —— 该区域的选中逻辑有 BUG-CFL-2/3/5 的历史包袱, 不在此处搅动。
+  const upSrc = _event as (PointerEvent | MouseEvent | undefined)
+  const downScreen = panePointerDownScreen
+  panePointerDownScreen = null
+  if (upSrc && downScreen) {
+    const moved = Math.hypot(upSrc.clientX - downScreen.x, upSrc.clientY - downScreen.y)
+    if (moved < PANE_CLICK_MAX_DISTANCE) {
+      store.collapseAllExpanded()
+    }
+  }
+
+  // 提取本帧需要的数据 + 重置状态
+  const start = selectionStartPos
+  // BUG-CFL-3 修复: 读 selectionLastContainer (容器坐标) 而非 lastMousePos (混坐标)
+  const end = selectionLastContainer
+  const isAdditive = selectionAdditive  // 锁定 mousedown 那一刻的 Ctrl 状态
+  selectionStartPos = null
+  selectionAdditive = false  // 重置, 下次框选前都是 false
+  isAdditiveSelection.value = false  // 重置视图状态
+  customSelectionRect.value = null  // 隐藏自绘框
+
+  // BUG-CFL-5 修复: 兜底分支不应动选中 — 用户意图是"框选未发生", 应保留旧选中
+  // (旧代码无条件 syncSelectionToStoreNodes(new Set()) 会清空选中, 与桌面应用约定不符)
+  if (!start || !end) {
+    return
+  }
+
+  // 容器坐标算 finalRect (屏幕坐标 - 容器偏移, 与 vue-flow 内部一致)
+  const containerRect = {
+    x: Math.min(start.x, end.x),
+    y: Math.min(start.y, end.y),
+    width: Math.abs(end.x - start.x),
+    height: Math.abs(end.y - start.y)
+  }
+
+  // 框选太小时处理
+  // BUG-CFL-4 修复: 微小框选 (<3px) 普通模式清空选中, 加选模式保留旧选中
+  // (旧代码直接 return, 既不清空也不保留, 与 macOS Finder 行为不符)
+  if (containerRect.width < 3 && containerRect.height < 3) {
+    if (!isAdditive) {
+      syncSelectionToStoreNodes(new Set())
+    }
+    return
+  }
+
+  // 关键修复: 不依赖 store.nodes[].dimensions (Phase 17.5 诊断确认:
+  //   store.dimensions 不会从 vue-flow 内部回写, fallback 200x80 比真实 280x222 小
+  //   → 命中区域偏小, 用户必须拖更宽才能框中节点)
+  // Task 16: 进一步去掉 DOM 依赖 —— 命中判定完全走数据层 (见下)。
+  const container = flowContainer.value
+  if (!container) return
+  const cBounds = container.getBoundingClientRect()
+
+  // 框选命中: 数据层判定 (Task 16) —— 不再依赖 DOM
+  //
+  // 旧实现遍历 `.vue-flow__node[data-id]` 做 getBoundingClientRect AABB 相交:
+  //   1) 框不到视口外的节点 (DOM 里没有它们的元素) —— 纯缺陷;
+  //   2) 每次框选结束都强制一次布局。
+  // 现在把选区换算到画布坐标, 交给 store.nodesInRect 做 O(N) 数据层判定。
+  //
+  // 坐标换算: 选区起止是容器坐标 → 加容器偏移回屏幕坐标 → screenToFlowCoordinate 转画布坐标。
+  const startFlow = screenToFlowCoordinate({
+    x: cBounds.left + start.x,
+    y: cBounds.top + start.y
   })
+  const endFlow = screenToFlowCoordinate({
+    x: cBounds.left + end.x,
+    y: cBounds.top + end.y
+  })
+  const hitIds = new Set<string>(store.nodesInRect({
+    x: startFlow.x,
+    y: startFlow.y,
+    width: endFlow.x - startFlow.x,
+    height: endFlow.y - startFlow.y
+  }))
+
+  // Phase 18: 加选模式 = 保留旧选中, 合并新命中
+  // 普通模式 = 旧选中被新命中完全替换 (修 BUG-3: 未命中节点的反选)
+  //
+  // Phase 19.7+ 修复: 旧选中读 VueFlow 内部 getSelectedNodes (flowNode.selected),
+  //   不再读 store.nodes[i].selected (shallowRef 死路, 永远 falsy).
+  //   视觉 selected class 走 VueFlow, 旧选中数据源也必须从 VueFlow 拿 — 单一数据源原则
+  let finalIds: Set<string> = hitIds
+  if (isAdditive) {
+    finalIds = new Set<string>(hitIds)
+    const currentlySelected = getSelectedNodes.value as any[]
+    for (const n of currentlySelected) {
+      finalIds.add(n.id)
+    }
+  }
+
+  // 一次性同步: vue-flow 内部 GraphNode.selected (走 addSelectedNodes/removeSelectedNodes 官方 diff)
+  syncSelectionToStoreNodes(finalIds)
+}
+
+/**
+ * 把目标选中集合同步到 vue-flow 内部 GraphNode.selected
+ * (Phase 19.7+ 重构: 走 addSelectedNodes/removeSelectedNodes 官方 API, 不再 mutate)
+ *
+ * - Phase 17.5 旧版: 同时改 store.nodes[i].selected (shallowRef 死路) + flowNode.selected (直接 mutate)
+ *   → 老大反馈 BUG: 框选加选 Ctrl+点 A 时 A 被取消 (shallowRef 属性变化不触发响应式,
+ *   addSelectedNodes 链路被切, 部分节点 selected class 没刷新)
+ * - 新版: 走 VueFlow 官方 diff 语义 — 算 toAdd/toRemove → add/remove
+ *   VueFlow 内部维护 flowNode.selected reactive 状态 + DOM .selected class 联动
+ *
+ * BUG 修复 (Task 14, 2026-10-24): VueFlow 1.48 的 addSelectedNodes 在**非 multi 模式**下
+ *   实际是「替换选中集」语义 —— 实现是 getSelectionChanges(nodeLookup, new Set(传入节点)),
+ *   会把**所有**不在传入集合里的节点置为未选中。
+ *   旧实现只传增量 (toAdd = 最终集合 - 当前集合), 于是:
+ *   「已选中 A, 再框选一个包含 A 的区域」→ A 被 addSelectedNodes([B]) 顺带取消。
+ *   现在传**完整目标集合**, 语义与函数名一致。
+ */
+function syncSelectionToStoreNodes(selectedIds: Set<string>) {
+  const currentlySelected = getSelectedNodes.value as any[]
+  // 需要取消选中的 (不在目标集合里)
+  const toRemove: any[] = []
+  for (const n of currentlySelected) {
+    if (!selectedIds.has(n.id)) toRemove.push(n)
+  }
+  // 需要选中的 = 目标集合里的**全部**节点 (addSelectedNodes 是替换语义, 不能只传增量)
+  const toAdd: any[] = []
+  for (const id of selectedIds) {
+    const flowNode = findNode(id) as any
+    if (flowNode) toAdd.push(flowNode)
+  }
+  if (toRemove.length > 0) removeSelectedNodes(toRemove)
+  if (toAdd.length > 0) addSelectedNodes(toAdd)
 }
 
 // 节点删除按钮点击
 function handleNodeDelete(nodeId: string) {
-  // 使用 VueFlow 的 removeNodes 方法删除节点
-  removeNodes(nodeId)
-  // 同时删除关联的边
-  edges.value = edges.value.filter((e: any) => e.source !== nodeId && e.target !== nodeId)
-  saveHistory()
-  showToast('节点已删除', 'info')
+  store.removeNode(nodeId)
+  ElMessage.info('节点已删除')
 }
 
 // 删除选中
 function handleDelete() {
-  const selectedNodes = nodes.value.filter((n: any) => n.selected)
+  // Phase 19.7+ 修复: 直接用 getSelectedNodes, 不再走 getNodes().filter(n.selected)
+  //   (vfNodes.selected 走的是 reactive flowNode.selected, 应该也行, 但跟其它分支统一语义)
+  const selectedNodes = getSelectedNodes.value as any[]
   const selectedEdges = edges.value.filter((e: any) => e.selected)
 
-  if (selectedNodes.length === 0 && selectedEdges.length === 0) {
-    return
-  }
+  if (selectedNodes.length === 0 && selectedEdges.length === 0) return
 
-  // 删除节点时同步删除关联的边
-  const nodeIds = selectedNodes.map((n: any) => n.id)
-  edges.value = edges.value.filter((e: any) =>
-    !nodeIds.includes(e.source) && !nodeIds.includes(e.target) && !e.selected
-  )
-
-  // 删除节点
-  selectedNodes.forEach((n: any) => {
-    const idx = nodes.value.findIndex((node: any) => node.id === n.id)
-    if (idx !== -1) nodes.value.splice(idx, 1)
-  })
-
-  selectedEdges.forEach((e: any) => {
-    const idx = edges.value.findIndex((edge: any) => edge.id === e.id)
-    if (idx !== -1) edges.value.splice(idx, 1)
-  })
-
-  selectedNode.value = null
-  saveHistory()
-  showToast(`已删除 ${selectedNodes.length} 个节点`, 'info')
+  // Phase B 任务4: 批量删除一次性 (单次 filter + 单次 saveHistory)
+  const nodeIds = selectedNodes.map((n) => n.id)
+  const edgeIds = selectedEdges.map((e) => e.id)
+  if (nodeIds.length > 0) store.removeNodes(nodeIds)
+  if (edgeIds.length > 0) store.removeEdges(edgeIds)
+  ElMessage.success(`已删除 ${selectedNodes.length} 个节点`)
 }
 
 // 右键菜单
-function handleContextMenu(event: MouseEvent, target: Node | Edge | NodeDefinition | null, type: 'node' | 'edge' | 'pane') {
+// BUG-5 修复 (2026-06-19): 签名收窄为 Node<RuleNodeData> | Edge | null
+//   (面板右键走单独的 handlePaletteContextMenu, 不再走这条路径)
+function handleContextMenu(event: MouseEvent, target: Node<RuleNodeData> | Edge | null, type: 'node' | 'edge' | 'pane') {
   event.preventDefault()
   event.stopPropagation()
   contextMenu.show = true
   contextMenu.x = event.clientX
   contextMenu.y = event.clientY
-  contextMenu.target = target
+  // safe: 签名已收窄; reactive() 因 VueFlow Node 泛型递归过深, 赋值处用 as any 桥接
+  contextMenu.target = target as any
   contextMenu.targetType = type
 }
 
-// 节点面板右键菜单
-function handlePaletteContextMenu(event: MouseEvent, node: NodeDefinition) {
+function handlePaletteContextMenu(event: MouseEvent, _node: NodeDefinition) {
+  // BUG-5 修复 (2026-06-19): 不再把 NodeDefinition 存为 target (类型安全 + 避免误删)
+  //   面板右键不操作具体节点, 菜单按 selected 状态显示 (无选中 → 仅显示 selectAll)
   event.preventDefault()
   contextMenu.show = true
   contextMenu.x = event.clientX
   contextMenu.y = event.clientY
-  contextMenu.target = node
+  contextMenu.target = null
   contextMenu.targetType = 'pane'
 }
 
-// 隐藏右键菜单
 function hideContextMenu() {
   contextMenu.show = false
 }
 
-// 隐藏变量菜单
-function hideVariableMenu() {
-  varMenu.show = false
-}
-
-// 插入变量到字段
-function insertVariable(varName: string) {
-  if (!varMenu.fieldKey) return
-  const currentValue = nodeConfig.value[varMenu.fieldKey] || ''
-  // 如果当前值已包含 {{}}，则追加；否则添加 {{varName}}
-  if (currentValue.includes('{{') && currentValue.includes('}}')) {
-    nodeConfig.value[varMenu.fieldKey] = `${currentValue}{{${varName}}}`
-  } else {
-    nodeConfig.value[varMenu.fieldKey] = `{{${varName}}}`
-  }
-  updateConfig(varMenu.fieldKey, nodeConfig.value[varMenu.fieldKey])
-  hideVariableMenu()
-}
+// 已废弃: 变量绑定菜单由 RuleNode.vue 内嵌 📎 按钮接管 (bindVariable/toggleVarMenu)
 
 // 右键菜单操作
-function handleContextAction(action: string) {
-  hideContextMenu()
+function handleContextAction(action: string, event?: MouseEvent) {
   switch (action) {
     case 'copy':
-      if (contextMenu.targetType === 'node') {
-        (nodes.value as unknown as any[]).forEach((n: any) => { n.selected = n.id === (contextMenu.target as any)?.id })
-        handleCopy()
-      }
+      // 复制触发源: 右键时 clientX/Y 即 mousePos
+      handleCopy(event)
+      hideContextMenu()
+      break
+    case 'cut':
+      handleCut(event)
+      hideContextMenu()
       break
     case 'paste':
-      handlePaste()
+      handlePaste(event)
+      hideContextMenu()
       break
     case 'delete':
-      if (contextMenu.targetType === 'node') {
-        (nodes.value as unknown as any[]).forEach((n: any) => { n.selected = n.id === (contextMenu.target as any)?.id })
-      } else if (contextMenu.targetType === 'edge') {
-        (edges.value as unknown as any[]).forEach((e: any) => { e.selected = e.id === (contextMenu.target as any)?.id })
+      // 右键未选中节点/边时, VueFlow 不会自动加 selected 标志,
+      // handleDelete() 依赖 selected 过滤 → 静默失败.
+      // 先把右键目标对象加入 selected, 再委托给 handleDelete()
+      // BUG-5 修复 (2026-06-19): contextMenu.target 类型收窄为 Node | Edge | null
+      //   addSelectedNodes/addSelectedEdges 接收的是 VueFlow 内部 GraphNode/GraphEdge
+      //   (含 computedPosition 等内部字段, 与 public Node/Edge 不完全一致),
+      //   类型签名差异靠 as any 桥接 (内部用 .id 取值, 实际语义安全)
+      if (contextMenu.targetType === 'node' && contextMenu.target) {
+        addSelectedNodes([contextMenu.target as any])
+      } else if (contextMenu.targetType === 'edge' && contextMenu.target) {
+        addSelectedEdges([contextMenu.target as any])
       }
       handleDelete()
+      hideContextMenu()
       break
     case 'selectAll':
-      nodes.value.forEach((n: any) => { n.selected = true })
-      edges.value.forEach((e: any) => { e.selected = true })
+      // 直接传节点对象数组（VueFlow 1.48 签名 GraphNode[]，传 id 字符串会 .id 取值变 undefined 静默失败）
+      addSelectedNodes(nodes.value as any)
+      hideContextMenu()
       break
-  }
-}
-
-// 撤销
-function handleUndo() {
-  if (canUndo.value) {
-    historyIndex.value--
-    const state = historyStack.value[historyIndex.value]
-    nodes.value = JSON.parse(JSON.stringify(state.nodes))
-    edges.value = JSON.parse(JSON.stringify(state.edges))
-  }
-}
-
-// 重做
-function handleRedo() {
-  if (canRedo.value) {
-    historyIndex.value++
-    const state = historyStack.value[historyIndex.value]
-    nodes.value = JSON.parse(JSON.stringify(state.nodes))
-    edges.value = JSON.parse(JSON.stringify(state.edges))
+    case 'toggleDisabled':
+      // P2-A (2026-06-19): 切换选中节点的禁用状态
+      //   如果有任一未禁用 → 全部禁用；否则全部启用 (PowerPoint "Lock" 风格)
+      const sel = getSelectedNodes.value as any[]
+      const anyEnabled = sel.some((n) => !store.isNodeDisabled(n.id))
+      sel.forEach((n) => {
+        const shouldDisable = anyEnabled
+        const isCurrentlyDisabled = store.isNodeDisabled(n.id)
+        if (shouldDisable && !isCurrentlyDisabled) {
+          store.toggleNodeDisabled(n.id)
+        } else if (!shouldDisable && isCurrentlyDisabled) {
+          store.toggleNodeDisabled(n.id)
+        }
+      })
+      ElMessage.success(anyEnabled ? `已禁用 ${sel.length} 个节点` : `已启用 ${sel.length} 个节点`)
+      hideContextMenu()
+      break
   }
 }
 
@@ -1194,81 +2397,163 @@ function zoomOut() {
   setCenter(rect.width / 2, rect.height / 2, { zoom: zoomLevel.value / 1.2, duration: 200 })
 }
 
+// 未保存时离开页面给出提示
+// 2026-10-24: isDirty 现在能看见配置类改动(updateNodeConfig 单独标脏),
+// 之前改参数不标脏, 用户以为保存了其实没保存
+onBeforeRouteLeave((_to, _from, next) => {
+  if (store.isDirty) {
+    const confirmed = window.confirm('规则图有未保存的修改，确定离开吗？')
+    if (!confirmed) {
+      next(false)
+      return
+    }
+  }
+  next()
+})
+
 // 生命周期
 onMounted(async () => {
-  await loadGraph()
-  await loadNodeDefinitions()
-  saveHistory()
+  loading.value = true
+  // 视口宽度跟踪 (Task 13): 窄窗口自动收起右侧栏, 保证画布可用面积
+  const onViewportResize = () => {
+    viewportWidth.value = window.innerWidth
+  }
+  onViewportResize()
+  window.addEventListener('resize', onViewportResize)
+  onBeforeUnmount(() => window.removeEventListener('resize', onViewportResize))
+  // 各 API 调用独立 try-catch，防止单点失败阻塞后续加载
+  try {
+    await store.loadGraph(graphId.value)
+    graphName.value = store.graphMeta?.name || ''
+  } catch (err) {
+    console.error('加载规则图失败:', err)
+    ElMessage.error('加载规则图失败')
+  }
+  try {
+    await store.fetchNodeDefinitions()
+    store.saveHistory()
+  } catch (err) {
+    console.error('加载节点定义失败:', err)
+  }
+  try {
+    await store.fetchModels()
+  } catch (err) {
+    console.error('加载模型列表失败:', err)
+  }
+  loading.value = false
+  // 执行状态回填: WS 消息 → 节点状态(旧实现只写 executionState.nodeStates,
+  // 节点视觉读的是 data.status, 两边对不上, 执行状态永远不点亮)
+  store.setNodeStateSink((nodeId: string, state: string) => {
+    store.setNodeStatus(nodeId, state)
+  })
   // 键盘事件
   window.addEventListener('keydown', handleKeyDown)
+  // 全局鼠标位置追踪 — 快捷键 Ctrl+V 没有 MouseEvent, 需要 lastMousePos
+  // BUG-7 修复 (2026-06-19): 之前匿名箭头函数 addEventListener, onBeforeUnmount
+  //   无法 remove (引用不一致). 改用命名句柄 + 闭包变量, 卸载时正确清理.
+  trackGlobalMousePos = (e: MouseEvent) => {
+    globalMousePos.value = { x: e.clientX, y: e.clientY }
+  }
+  window.addEventListener('mousemove', trackGlobalMousePos)
+
+  // P0-2 (2026-06-19): localStorage 草稿恢复对话框
+  //   加载完图后, 若存在草稿, 弹 ElMessageBox 让用户选择"恢复草稿 / 放弃"
+  //   恢复时把 store.nodes/edges/variables 直接替换并 triggerRef, saveHistory 一条 snapshot
+  try {
+    const draft = store.loadDraftFromLocalStorage(graphId.value)
+    if (draft && draft.nodes && draft.nodes.length > 0) {
+      const ageMs = Date.now() - (draft.savedAt || 0)
+      const ageMin = Math.round(ageMs / 60000)
+      const ageText = ageMin < 1 ? '刚刚' : `${ageMin} 分钟前`
+      // 记录本次弹框的序号 —— 卸载时据此精确关闭, 避免多层叠加
+      const draftPromptSeq = openDraftPrompt()
+      try {
+        await ElMessageBox.confirm(
+          `检测到 ${ageText} 的未保存草稿 (${draft.nodes.length} 节点, ${draft.edges?.length || 0} 边)。是否恢复？`,
+          '恢复草稿',
+          { confirmButtonText: '恢复', cancelButtonText: '放弃', type: 'warning' }
+        )
+        // 用户选恢复: 替换 store 状态
+        store.nodes = draft.nodes as any
+        store.edges = (draft.edges || []) as any
+        if (draft.variables) store.variables = draft.variables as any
+        // P0-2: 重建 connectedHandleIndex + nodeById dirty 标记
+        // 复用 loadGraph 内的重建逻辑, 但这里 store 没有提供独立 API, 简单 trigger 即可
+        triggerRef(nodes)
+        store.saveHistory()
+        ElMessage.success(`已恢复 ${ageText} 的草稿`)
+      } catch (action) {
+        // 只有用户显式点「放弃」(action === 'cancel')才清草稿。
+        // 'close' 来自组件卸载时的强制关闭 —— 用户并未表态, 清掉会丢草稿。
+        if (action === 'cancel') {
+          store.clearLocalStorageDraft(graphId.value)
+        }
+      } finally {
+        closeDraftPrompt(draftPromptSeq)
+      }
+    }
+  } catch (err) {
+    console.error('草稿恢复检查失败:', err)
+  }
+
+  // P0-2 (2026-06-19) + Task 15: 草稿自动保存 —— 监听变更计数, 1.5s 防抖写一次。
+  // 只在"有未保存改动"时写; 保存成功后 isDirty 转 false → 取消待写入的计时器。
+  // 注意: 必须在草稿恢复检查**之后**再挂监听, 否则 loadGraph 的历史入栈会
+  // 抢先触发一次写入, 把用户还没来得及确认的草稿覆盖掉。
+  watch(
+    () => store.dirtyTick,
+    () => {
+      if (!store.isDirty) {
+        if (draftSaveTimer !== null) {
+          window.clearTimeout(draftSaveTimer)
+          draftSaveTimer = null
+        }
+        return
+      }
+      scheduleDraftSave()
+    }
+  )
+
+  // P0-2 (2026-06-19): beforeunload 拦截未保存
+  trackBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (store.isDirty) {
+      // 浏览器规范: 需 preventDefault + returnValue 才能弹原生确认框
+      e.preventDefault()
+      e.returnValue = '有未保存的改动，确定离开？'
+      return e.returnValue
+    }
+    return undefined
+  }
+  window.addEventListener('beforeunload', trackBeforeUnload)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeyDown)
-})
-
-// 加载规则图
-async function loadGraph() {
-  isLoading.value = true
-  try {
-    const res = await ruleEngineApi.getGraphDetail(graphId.value)
-    graph.value = res.data
-    graphName.value = graph.value.name
-
-    nodes.value = (graph.value.nodes || []).map((n: any) => ({
-      id: n.id,
-      type: n.type,
-      position: n.position || { x: 0, y: 0 },
-      data: { ...n.data },
-      category: getNodeCategory(n.type)
-    }))
-
-    edges.value = (graph.value.edges || []).map((e: any) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      sourceHandle: e.source_handle,
-      targetHandle: e.target_handle,
-      type: 'default',
-      animated: false,
-      markerEnd: MarkerType.ArrowClosed
-    }))
-
-    // 加载变量列表
-    try {
-      const vars = JSON.parse(graph.value.variables_json || '{}')
-      variables.value = Object.entries(vars).map(([name, config]: [string, any]) => ({
-        name,
-        type: config.type || 'STRING',
-        defaultValue: config.defaultValue || '',
-        description: config.description || ''
-      }))
-    } catch {
-      variables.value = []
+  // 草稿提示框挂在 body 上, 不随组件卸载消失 —— 不关闭的话会残留在页面上,
+  // 下次进入同一张图会再弹一个, 最终多层叠加。closeDraftPrompt 的序号配对
+  // 保证这里关掉的确实是本组件打开的那一个。
+  if (hasActiveDraftPrompt()) {
+    ElMessageBox.close()
+  }
+  if (trackGlobalMousePos) {
+    window.removeEventListener('mousemove', trackGlobalMousePos)
+    trackGlobalMousePos = null
+  }
+  // P0-2 (2026-06-19): 清理草稿保存计时器 + beforeunload
+  if (draftSaveTimer !== null) {
+    window.clearTimeout(draftSaveTimer)
+    draftSaveTimer = null
+    // 卸载前若仍有未保存改动, 立即落一次草稿 (防抖窗口内的最后改动不能丢)
+    if (store.isDirty) {
+      store.saveDraftToLocalStorage(graphId.value)
     }
-  } catch (err) {
-    console.error('加载规则图失败:', err)
-    showToast('加载规则图失败', 'error')
-  } finally {
-    isLoading.value = false
   }
-}
-
-// 加载节点定义
-async function loadNodeDefinitions() {
-  try {
-    const res = await ruleEngineApi.getNodeDefinitions()
-    nodeDefinitions.value = res.data
-  } catch (err) {
-    console.error('加载节点定义失败:', err)
+  if (trackBeforeUnload) {
+    window.removeEventListener('beforeunload', trackBeforeUnload)
+    trackBeforeUnload = null
   }
-}
-
-// 获取节点分类
-function getNodeCategory(type: string): string {
-  const def = nodeDefinitions.value.find((d) => d.type === type)
-  return def?.category || 'action'
-}
+  panelResizeCleanup.value?.()
+})
 
 // 返回
 function goBack() {
@@ -1277,19 +2562,23 @@ function goBack() {
 
 // 名称修改
 async function handleNameChange() {
-  if (graphName.value !== graph.value?.name) {
+  const meta = store.graphMeta
+  if (graphName.value !== meta?.name) {
     try {
-      await ruleEngineApi.updateGraph(graphId.value, { name: graphName.value })
-      graph.value.name = graphName.value
-      showToast('名称已更新', 'success')
+      // 直接更新 graphMeta 的 name
+      if (store.graphMeta) {
+        store.graphMeta = { ...store.graphMeta, name: graphName.value }
+      }
+      await store.saveGraph()
+      ElMessage.success('名称已更新')
     } catch {
-      showToast('更新名称失败', 'error')
+      ElMessage.error('更新名称失败')
     }
   }
 }
 
 // 拖拽
-function handleDragStart(event: DragEvent, nodeDef: any) {
+function handleDragStart(event: DragEvent, nodeDef: NodeDefinition) {
   event.dataTransfer?.setData('application/node-type', JSON.stringify(nodeDef))
 }
 
@@ -1298,247 +2587,444 @@ function handleDrop(event: DragEvent) {
   if (!data) return
 
   const nodeDef = JSON.parse(data)
-  const container = flowContainer.value
-  if (!container) return
-
-  const rect = container.getBoundingClientRect()
+  // 2026-06-21 修复: screenToFlowCoordinate 内部已减 vueFlowRef.getBoundingClientRect()
+  //   (useViewportHelper.ts:189), 这里不能再减 rect.left, 否则双重减法会让节点
+  //   落在画布左外侧 (palette 后面), 节点虽创建但被调色板遮挡无法点击/拖动.
+  //   之前表现: 第一个节点存 flow(-90, 300) → 渲染到 screen(222, 243) (palette 0-280 之后),
+  //   后续节点被前面节点遮住 → "第一个能拖, 后续不能拖".
   const position = screenToFlowCoordinate({
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
+    x: event.clientX,
+    y: event.clientY
   })
 
-  // 吸附到网格
   if (snapGrid.value) {
     position.x = Math.round(position.x / gridSize) * gridSize
     position.y = Math.round(position.y / gridSize) * gridSize
   }
 
-  const newNode = {
-    id: `node_${Date.now()}`,
-    type: 'ruleNode',
-    position,
-    data: {
-      id: `node_${Date.now()}`,
-      type: nodeDef.type,
-      category: nodeDef.category,
-      label: nodeDef.label,
-      description: nodeDef.description,
-      configSchema: nodeDef.config_schema,
-      inputs: nodeDef.inputs,
-      outputs: nodeDef.outputs,
-      config: {},
-      onDelete: handleNodeDelete
-    }
-  }
-
-  addNodes([newNode])
-  saveHistory()
+  store.createNode(nodeDef, position)
 }
 
 // 快速添加
-function quickAddNode(nodeDef: any) {
+function quickAddNode(nodeDef: NodeDefinition) {
   const centerX = (flowContainer.value?.clientWidth || 800) / 2 / zoomLevel.value
   const centerY = (flowContainer.value?.clientHeight || 600) / 2 / zoomLevel.value
 
-  const newNode = {
-    id: `node_${Date.now()}`,
-    type: 'ruleNode',
-    position: {
-      x: centerX + Math.random() * 100 - 50,
-      y: centerY + Math.random() * 100 - 50
-    },
-    data: {
-      id: `node_${Date.now()}`,
-      type: nodeDef.type,
-      category: nodeDef.category,
-      label: nodeDef.label,
-      description: nodeDef.description,
-      configSchema: nodeDef.config_schema,
-      inputs: nodeDef.inputs,
-      outputs: nodeDef.outputs,
-      config: {},
-      onDelete: handleNodeDelete
-    }
+  store.createNode(nodeDef, {
+    x: centerX + Math.random() * 100 - 50,
+    y: centerY + Math.random() * 100 - 50
+  })
+  ElMessage.success(`已添加 ${nodeDef.label}`)
+}
+
+// 节点点击 (Phase 19.7+ 还原: 选中完全交给 VueFlow 内部处理)
+//
+// BUG 根因 (2026-06-19 复盘):
+// - VueFlow NodeWrapper 节点的 onClick 处理器 (`onSelectNode`) 已经先一步调
+//   内部 `handleNodeClick` (utils/node.ts:34-54) 完成 addSelectedNodes / removeSelectedNodes
+//   (按 multiSelectionKeyCode + multiSelectionActive 状态做 toggle / 替换)
+// - 然后才 emit 'click' 事件 → 触发我们这里的 @node-click 监听器
+// - 若我们再调一次 addSelectedNodes/removeSelectedNodes, 会**反向覆盖** VueFlow 刚做对的选中
+//   → 表现为: Ctrl+点未选 B → 瞬间变 [A,B] 又被我们移除 B → 最终 [A] (错)
+//             Ctrl+点已选 B → 瞬间变 [A] 又被我们加回 B → 最终 [A,B] (错)
+//
+// 修复: 不在这里动选中。选中由 VueFlow NodeWrapper.onSelectNode 全权处理
+//   (它读 multiSelectionKeyCode=['Control','Meta','Shift'] 做 toggle, 见
+//    Pane.vue:71-73 watch multiSelectKeyPressed → multiSelectionActive.value)
+//
+// 我们这里只挂载 LOD 同步 / 状态调试,不动 selectedNodeIds / flowNode.selected。
+function handleNodeClick(_event: any) {
+  // (临时) 调试钩子: DevTools 控制台可直接看 @node-click 触发后 VueFlow 内部态
+  // - additive 反映 Ctrl/Meta/Shift 修饰键
+  // - currentSelectedIds 来自 VueFlow getSelectedNodes, 是 NodeWrapper.onSelectNode
+  //   处理完后的最终结果(也是 DOM .selected class 的来源)
+  const src = _event?.event as MouseEvent | undefined
+  const additive = !!(src && (src.ctrlKey || src.metaKey || src.shiftKey))
+  const currentSelectedIds = (getSelectedNodes.value as any[]).map((n: any) => n.id)
+  ;(window as any).__cfNodeClick = {
+    nodeId: _event?.node?.id,
+    additive,
+    ctrlKey: src?.ctrlKey,
+    metaKey: src?.metaKey,
+    shiftKey: src?.shiftKey,
+    currentSelectedIds,
   }
-
-  addNodes([newNode])
-  saveHistory()
-  showToast(`已添加 ${nodeDef.label}`, 'info')
+  // 不再调 addSelectedNodes / removeSelectedNodes — VueFlow 内部已处理完
 }
 
-// 节点点击
-function handleNodeClick(event: any) {
-  const nodeId = event.node.id
-  const node = nodes.value.find(n => n.id === nodeId)
-  if (node) {
-    selectedNode.value = node
-    nodeConfig.value = { ...node.data }
-  }
+// 节点双击 → 切换 LOD 2 展开 (Phase 17.1+)
+function handleNodeDoubleClick(event: any) {
+  const nodeId = event?.node?.id
+  if (nodeId) store.toggleNodeExpanded(nodeId)
 }
 
-// 节点拖拽
-function handleNodeDragStop() {
-  saveHistory()
-}
+// 节点拖拽 (路径 B: 由 useCogniFlowDrag composable 完全接管)
+// 之前 @node-drag-start/@node-drag-stop + handleNodeDragStart/Stop + dragStartPositions
+// 已删除: vue-flow 内部 useDrag 通过 :nodes-draggable="false" 关闭, 不再 emit 这些事件.
+// 拖动行为由 useCogniFlowDrag (见下) 通过 d3-drag 直接接管节点 wrapper DOM,
+// 拖动期间 0 次响应式写入, drag-end 一次性 setNodesPositions + recordMoveHistory.
 
-// 画布点击
-function handlePaneClick() {
-  selectedNode.value = null
-}
+// 画布空白点击 —— 原 handlePaneClick 走 VueFlow 的 @pane-click, 但该事件在本项目中
+// **永远不会发出**, 故该函数是不可达的死代码, 已删除。原因 (2026-09-12 溯源到 vue-flow-core):
+//   Pane 模板把点击绑成 `onClick: (e) => hasActiveSelection.value ? void 0 : ...`,
+//   而 hasActiveSelection = elementsSelectable && (isSelecting || userSelectionActive)。
+//   本项目为「空白拖拽 = 框选」设了 :selection-key-code="true" (恒真) + :elements-selectable="true",
+//   于是 hasActiveSelection 恒为真 → 模板 onClick 恒 return → emits.paneClick 从不触发。
+//   又因真实点击会带极小的 pointermove, userSelectionActive 变真, Pane 内部那条
+//   直呼局部 onClick 的兜底路径同样被跳过。
+// 「点空白收起全部展开节点」改由 handleSelectionEnd 用「点击 vs 拖拽」判定实现 (见下)。
 
-// 端口类型兼容性检查（14种类型 + ANY通配）
+// 端口类型兼容性检查 - 统一走后端下发的矩阵(唯一事实源)。
+// 旧实现只认 ANY/同型/TRIGGER→TRIGGER|CONTROL 四条规则, 与后端 14 类矩阵漂移,
+// 导致 BOOLEAN→TRIGGER 的边被 VueFlow 在 isValidConnection 阶段静默丢弃。
 function isPortCompatible(sourceType: string, targetType: string): boolean {
-  // ANY 可以连接任何类型
-  if (sourceType === 'ANY' || targetType === 'ANY') return true
-  // 相同类型可以连接
-  if (sourceType === targetType) return true
-  // TRIGGER 可以连接到 TRIGGER 或 CONTROL
-  if (sourceType === 'TRIGGER' && (targetType === 'TRIGGER' || targetType === 'CONTROL')) return true
-  // CONTROL 只能连接到 CONTROL
-  if (sourceType === 'CONTROL' && targetType === 'CONTROL') return true
-  return false
+  return portsStore.isCompatible(sourceType, targetType)
 }
 
 function getNodePortType(nodeId: string, handleId: string | null, isSource: boolean): string | null {
-  const node = nodes.value.find(n => n.id === nodeId)
+  // Phase B 任务6: 用 store.nodeById O(1) 查询替换 nodes.value.find
+  const node = store.nodeById.get(nodeId)
   if (!node) return null
   const ports = isSource ? (node.data?.outputs || []) : (node.data?.inputs || [])
   if (!ports?.length) return null
-  // handleId 是端口名，需要用 find 匹配（ports 是数组，不是对象）
   if (handleId) {
     const port = ports.find((p: any) => p.name === handleId)
     return port?.type || 'ANY'
   }
-  // 如果没有指定handle，返回第一个端口的类型
   return ports[0]?.type || 'ANY'
 }
 
 function validateConnection(params: any): { valid: boolean; error?: string } {
   const { source, target, sourceHandle, targetHandle } = params
-  
-  // 获取源节点和目标节点
-  const sourceNode = nodes.value.find(n => n.id === source)
-  const targetNode = nodes.value.find(n => n.id === target)
-  
-  if (!sourceNode || !targetNode) {
-    return { valid: false, error: '节点不存在' }
-  }
-  
-  // 禁止自己连接自己
-  if (source === target) {
-    return { valid: false, error: '不能连接到自己' }
-  }
-  
-  // 获取端口类型
+  // Phase B 任务6: 用 store.nodeById O(1) 查询
+  const sourceNode = store.nodeById.get(source)
+  const targetNode = store.nodeById.get(target)
+
+  if (!sourceNode || !targetNode) return { valid: false, error: '节点不存在' }
+  if (source === target) return { valid: false, error: '不能连接到自己' }
+
   const sourceType = getNodePortType(source, sourceHandle, true)
   const targetType = getNodePortType(target, targetHandle, false)
-  
-  if (sourceType === null || targetType === null) {
-    return { valid: false, error: '端口定义缺失' }
-  }
-  
-  // 类型兼容性检查
-  if (!isPortCompatible(sourceType, targetType)) {
-    return { valid: false, error: `类型不兼容: ${sourceType} → ${targetType}` }
-  }
-  
+
+  if (sourceType === null || targetType === null) return { valid: false, error: '端口定义缺失' }
+  // 矩阵未加载时给出明确原因, 而不是含糊的「类型不兼容」
+  if (!portsStore.loaded) return { valid: false, error: '端口类型矩阵未加载, 请刷新页面重试' }
+  if (!isPortCompatible(sourceType, targetType)) return { valid: false, error: `类型不兼容: ${sourceType} → ${targetType}` }
+
   return { valid: true }
 }
 
-// VueFlow 专用连接验证（用于高亮和阻止连接）
+// VueFlow 专用连接验证
 function isValidConnection(connection: any): boolean {
   const { source, target, sourceHandle, targetHandle } = connection
-
-  // 不能连接自己
   if (source === target) return false
 
-  // 获取端口类型
   const sourceType = getNodePortType(source, sourceHandle, true)
   const targetType = getNodePortType(target, targetHandle, false)
 
-  if (sourceType === null || targetType === null) return true // 未知类型允许连接
+  if (sourceType === null || targetType === null) return true
 
-  // 类型兼容性检查
   return isPortCompatible(sourceType, targetType)
 }
 
 // 连接
 function handleConnect(params: any) {
-  // 验证连接类型兼容性
   const validation = validateConnection(params)
   if (!validation.valid) {
-    showToast(validation.error || '连接失败', 'error')
+    ElMessage.error(validation.error || '连接失败')
     return
   }
-  
-  addEdges([{
-    ...params,
-    type: 'default',
-    animated: false,
-    markerEnd: MarkerType.ArrowClosed,
-    id: `e-${params.source}-${params.target}-${Date.now()}`
-  }])
-  saveHistory()
-}
 
-// 节点/边变化
-function handleNodesChange(changes: any[]) {
-  // VueFlow 会自动更新 nodes.value，我们需要同步本地状态
-  // 只在外部变化时保存历史
-  const hasRemoval = changes.some(c => c.type === 'remove')
-  if (hasRemoval) {
-    // 节点被删除，同步更新本地 edges
-    const remainingNodeIds = nodes.value.map((n: any) => n.id)
-    edges.value = edges.value.filter((e: any) =>
-      remainingNodeIds.includes(e.source) && remainingNodeIds.includes(e.target)
-    )
-    saveHistory()
+  const edge = {
+    source: params.source,
+    target: params.target,
+    sourceHandle: params.sourceHandle,
+    targetHandle: params.targetHandle
+  }
+  // P0-1 (2026-06-19): addEdge 返回 boolean, 重复边 / 自循环时给用户即时提示
+  const added = store.addEdge(edge)
+  if (!added) {
+    ElMessage.warning('该连接已存在或无效')
   }
 }
 
-function handleEdgesChange(_changes: any[]) {
-  // 只在外部变化时保存历史
+// P2-B (2026-06-19): 端口吸附高亮 — 拖连线期间高亮所有 handles
+//   监听 VueFlow 的 connect-start / connect-end 事件, 切换 isConnecting ref
+//   .is-connecting CSS class 让所有 .vue-flow__handle 放大 + 发光
+const isConnecting = ref(false)
+
+function handleConnectStart(_event: any) {
+  isConnecting.value = true
 }
 
-// 画布平移
-function handlePan(moveEvent: { event: unknown; flowTransform: { x: number; y: number; zoom: number } }) {
-  panX.value = -moveEvent.flowTransform.x
-  panY.value = -moveEvent.flowTransform.y
+function handleConnectEnd(_event: any) {
+  isConnecting.value = false
 }
 
-// 缩放
-function handleZoom({ zoom }: { zoom: number; event: unknown }) {
+// 框选拖拽标志: 框选拖拽期间过滤 select changes (避免每帧全量替换 store.nodes)
+// 单击选中/Ctrl+A 等其他场景仍需正常处理 select changes
+const isSelectionDragging = ref(false)
+/** P0 多节点拖拽节流: 拖拽中的 change 全部跳过, stop 统一同步。
+ *  true 时 handleNodesChange 立即 return, 不进行任何拆分/循环/处理,
+ *  消除多节点拖拽时 60Hz × N 节点的函数调用开销 */
+const isBatchDragging = ref(false)
+
+// 节点/边变化 - manual control 模式
+// 拖拽中（dragging=true）的 position 变化不写回 store（每帧 60Hz 会爆）
+// 框选拖拽中（isSelectionDragging）的 select 变化不写回 store（drag-stop 统一 sync）
+// 仅在拖拽结束（dragging=false）或非 position/select 类型变更时应用
+//
+// P0-1 优化：drag-stop 的 position change 走轻量路径，**不调用** applyVueFlowNodeChanges。
+// 旧实现: store.nodes = newNodes → 数组引用替换 → storeToRefs trigger → 父组件 re-render →
+//         VueFlow 内部 useVModel 浅 watch 检测到 props.nodes 引用变 → 整图 80 节点 vdom diff。
+// 新实现: mutate store.nodes[i].position + triggerRef(nodes) → 数组引用不变 →
+//         Vue 父组件重渲染但 patchProps 浅比较发现引用未变 → VueFlow 不重渲染。
+// 收益: 拖完 1 节点从 O(80) vdom diff 降到 O(1) 属性写入。
+function handleNodesChange(changes: any[]) {
+  if (changes.length === 0) return
+
+  // === P0 多节点拖拽节流: 拖拽中(含框选拖拽)全部跳过, stop 统一同步 ===
+  // 多节点拖拽时 VueFlow 每帧 emit N 个 position change (dragging=true),
+  // 虽然当前代码已经跳过了 dragging=true 的 position, 但 change 数组的
+  // 遍历/类型检查/循环本身在 60Hz × 50 节点下就是 ~3000 次/秒的函数调用.
+  // isBatchDragging 让 handleNodesChange 立即 return, 零成本.
+  if (isBatchDragging.value) return
+
+  // === 阶段 1: 拆分三类 change ===
+  // P0: dimensions change 不携带位置信息，忽略（节点初次渲染后尺寸稳定，
+  //     即使微调也不影响画布拓扑，跳过可消除 80+ 节点时 90% 的全量 diff）
+  // positionChanges: drag-stop 持久化（走轻量 mutate 路径，避免整图重渲染）
+  // meaningful: add/remove/select，走 VueFlow 完整重算
+  const positionChanges: any[] = []
+  const meaningful: any[] = []
+  for (const c of changes) {
+    // 拖拽中 transient position —— VueFlow 内部自有管理，跳过
+    if (c.type === 'position' && c.dragging === true) continue
+    // 框选拖拽中 transient select —— handleSelectionDragStop 统一处理
+    if (c.type === 'select' && isSelectionDragging.value) continue
+    // 拖拽结束 position change —— 走轻量 mutate 路径
+    if (c.type === 'position' && c.dragging === false) {
+      positionChanges.push(c)
+      continue
+    }
+    // P0: dimensions change —— 不影响拓扑/选中/删除，跳过全量重算
+    if (c.type === 'dimensions') continue
+    // 其他（add/remove/select 正常场景）走 VueFlow 完整重算
+    meaningful.push(c)
+  }
+
+  // === 阶段 2: position 轻量持久化（drag-stop 路径，60Hz 不会触发这里）===
+  // 关键: nodes.value.find().position 赋值是 O(1) 属性写入，不替换数组引用。
+  // triggerRef 仅通知 deps（父组件 render effect），但 patchProps 浅比较会过滤掉引用未变的情况。
+  if (positionChanges.length > 0) {
+    // P0-D (Phase 17.1): O(1) Map 查询替代 O(N) Array.find
+    // drag-stop 多节点拖动 → positionChanges.length = K, 改前 K×N 次比较 → 改后 K 次 Map.get
+    for (const c of positionChanges) {
+      const node = store.nodeById.get(c.id)
+      if (node && c.position) {
+        // 替换整个 position 对象（VueFlow 内部已存了完整 position 数据）
+        node.position = c.position
+      }
+    }
+    // 手动通知响应式 —— 不替换 .value 数组引用，避免 VueFlow useVModel 浅 watch 误判变化
+    triggerRef(nodes)
+    // 注意: 不调 saveHistory —— unpauseHistory 在 @node-drag-stop 时已记录 drag 前的旧 position，
+    // 撤销回到 drag 前的位置是用户期望行为。
+  }
+
+  // === 阶段 3: select 走增量路径, add/remove 走完整重算路径 ===
+  //
+  // Task 14 (2026-10-24): 旧实现把 select 也塞进 applyVueFlowNodeChanges,
+  //   导致每次选中都整体替换 nodes 数组 —— 500 节点图上点一下 = 全数组克隆
+  //   + VueFlow 整图 vdom diff。
+  // 现在 select 只做两件事: 改目标节点的 data.selected + 维护 store.selectedIds,
+  //   nodes 数组引用不变, VueFlow 不会重渲染整图。
+  //   (VueFlow 1.48 内部用 selectedNodeIds + node.selected 管理选中态,
+  //    它自己已经改好了, 不需要我们再把数组喂回去。)
+  const selectChanges = meaningful.filter(c => c.type === 'select')
+  const structuralChanges = meaningful.filter(c => c.type !== 'select')
+  for (const c of selectChanges) {
+    store.setNodeSelected(c.id, !!c.selected)
+  }
+  if (structuralChanges.length === 0) return
+
+  const newNodes = applyVueFlowNodeChanges(structuralChanges)
+  // remove 类型：附带清理孤立边 + 保存历史
+  const hasRemoval = structuralChanges.some(c => c.type === 'remove')
+  if (hasRemoval) {
+    const remainingIds = new Set(newNodes.map(n => n.id))
+    store.edges = store.edges.filter((e: Edge) =>
+      remainingIds.has(e.source) && remainingIds.has(e.target)
+    ) as any
+    // Phase 17.1+: 同步清理展开状态 (删除节点时, 它的 LOD 2 展开态也得收)
+    // 之前是清 selectedNodeId (右侧面板) — 现在是清 expandedNodeIds (内嵌配置)
+    const removedIds = new Set(structuralChanges.filter(c => c.type === 'remove').map(c => c.id))
+    if (removedIds.size > 0 && store.expandedNodeIds.size > 0) {
+      let changed = false
+      for (const id of removedIds) {
+        if (store.expandedNodeIds.has(id)) {
+          store.expandedNodeIds.delete(id)
+          changed = true
+        }
+      }
+      if (changed) store.syncExpandedNodeIds()
+    }
+    // Task 14: 删除的节点不能留在选中集合里 (否则属性面板会指向一个不存在的节点)
+    for (const id of removedIds) {
+      store.setNodeSelected(id, false)
+    }
+  }
+  store.nodes = newNodes as any
+  if (hasRemoval) store.saveHistory()
+}
+
+function handleEdgesChange(changes: any[]) {
+  if (changes.length === 0) return
+  const newEdges = applyVueFlowEdgeChanges(changes)
+  const hasRemoval = changes.some(c => c.type === 'remove')
+  store.edges = newEdges as any
+  if (hasRemoval) store.saveHistory()
+}
+
+// P1-2: 原 handlePan 死代码 (panX/panY 从未被消费) 已删除
+
+function handleZoom(viewport: { x: number; y: number; zoom: number }) {
+  // P0-2: 缩放走 DOM textContent 直写, 不走模板响应式
+  // 60Hz 触发不重渲染父组件, 仅一次 DOM 属性写入
+  const { zoom } = viewport
+  const text = `${Math.round(zoom * 100)}%`
+  if (text !== lastZoomText) {
+    lastZoomText = text
+    if (zoomLevelEl.value) {
+      zoomLevelEl.value.textContent = text
+    }
+  }
+  // 同步 zoomLevel ref (供 zoomIn/zoomOut/quickAddNode 读, 不参与响应式)
   zoomLevel.value = zoom
+  // LOD-1: 同步到 store, 触发 lodLevelMap 重新计算 (rAF 节流, 避免 60Hz 重建 80 entries Map)
+  scheduleViewportZoomUpdate(zoom)
 }
 
-// 鼠标滚轮缩放
+/** rAF 节流: 累积 zoom 值, 在下次 rAF 回调里一次性写入 store, 避免 60Hz 触发 80 entries Map 重建 */
+let viewportZoomRafId = 0
+let pendingZoom = 1
+function scheduleViewportZoomUpdate(zoom: number) {
+  pendingZoom = zoom
+  if (!viewportZoomRafId) {
+    viewportZoomRafId = requestAnimationFrame(() => {
+      viewportZoomRafId = 0
+      store.setViewportZoom(pendingZoom)
+    })
+  }
+}
+
 function handleWheel(event: WheelEvent) {
-  if (event.ctrlKey) {
+  if (event.ctrlKey) event.preventDefault()
+}
+
+function handleCanvasMouseDown(event: MouseEvent) {
+  if (event.button === 1 || (event.button === 0 && event.altKey)) {
+    isPanning.value = true
+    panLastScreen = { x: event.clientX, y: event.clientY }
+    // Phase 17.3: 拖动期间直接改 transformationpane transform, 绕过 vue-flow
+    // 起点记下当前 viewport, mousemove 时算 dx/dy 累加, mouseup 时统一 setViewport
+    const vp = getViewport()
+    panStartViewport = { x: vp.x, y: vp.y, zoom: vp.zoom }
+    // 锁光标 (CSS 拖动)
+    document.body.style.cursor = 'grabbing'
     event.preventDefault()
   }
 }
 
-// 画布拖拽平移
-function handleCanvasMouseDown(event: MouseEvent) {
-  if (event.button === 1 || (event.button === 0 && event.altKey)) {
-    isPanning.value = true
-    lastMousePos.value = { x: event.clientX, y: event.clientY }
-  }
-}
+/**
+ * 拖动起点 viewport 快照 — 用于 mousemove 时计算绝对 pan 位置
+ * (相对位移用 lastMousePos 即可, 但需要起点 viewport 才能算出最终 setViewport 值)
+ */
+let panStartViewport: { x: number; y: number; zoom: number } = { x: 0, y: 0, zoom: 1 }
+
+/** rAF 节流标志: 避免全选后拖拽时 mousemove 高频触发 setViewport 导致卡顿 */
+let panningRafId = 0
+/** 累积拖拽偏移 (在 rAF 回调里消费) */
+const panAccum = { x: 0, y: 0 }
 
 function handleCanvasMouseMove(event: MouseEvent) {
+  // Phase 17.5 (修复版): 框选期间更新自绘框 (mousemove 60Hz, 但只改 reactive rect, 0 响应式开销)
+  // 坐标: 转容器坐标 (减 flowContainer.getBoundingClientRect 偏移)
+  if (isSelectionDragging.value && selectionStartPos) {
+    const bounds = flowContainer.value?.getBoundingClientRect()
+    const offsetX = bounds?.left ?? 0
+    const offsetY = bounds?.top ?? 0
+    const cx = event.clientX - offsetX
+    const cy = event.clientY - offsetY
+    const sx = selectionStartPos.x
+    const sy = selectionStartPos.y
+    customSelectionRect.value = {
+      x: Math.min(sx, cx),
+      y: Math.min(sy, cy),
+      width: Math.abs(cx - sx),
+      height: Math.abs(cy - sy)
+    }
+    // 重要: 同步 selectionLastContainer (容器坐标), 供 handleSelectionEnd 算 finalRect
+    // BUG-CFL-3 修复: 不再污染全局 lastMousePos (避免与 pan 分支屏幕坐标冲突)
+    selectionLastContainer = { x: cx, y: cy }
+    // (Phase 18: isAdditiveSelection 不在 mousemove 里刷新 — 跟随 mousedown 锁定的 selectionAdditive,
+    //  与 macOS Finder / Windows Explorer 的加选行为一致: 拖动过程中切换 Ctrl 不会让行为跳变)
+    return  // 不进 pan 分支
+  }
+
   if (isPanning.value) {
-    const dx = event.clientX - lastMousePos.value.x
-    const dy = event.clientY - lastMousePos.value.y
-    panX.value += dx
-    panY.value += dy
-    lastMousePos.value = { x: event.clientX, y: event.clientY }
+    const dx = event.clientX - panLastScreen.x
+    const dy = event.clientY - panLastScreen.y
+    panLastScreen = { x: event.clientX, y: event.clientY }
+    panAccum.x += dx
+    panAccum.y += dy
+    // rAF 节流: 累积所有 mousemove 的偏移, 在一次 rAF 回调里批量消费,
+    // 避免 60Hz 高频 setViewport 重排导致卡顿
+    if (!panningRafId) {
+      panningRafId = requestAnimationFrame(() => {
+        panningRafId = 0
+        // Phase 17.3.1 (bug fix): 必须把这一帧的 dx/dy 累加到 panStartViewport!
+        // 否则每帧 rAF 都用同一个 panStartViewport + 单帧 panAccum → 永远写同一值 → 画布不动
+        const tp = document.querySelector<HTMLElement>('.vue-flow__transformationpane')
+        if (tp) {
+          panStartViewport.x += panAccum.x
+          panStartViewport.y += panAccum.y
+          tp.style.transform = `translate(${panStartViewport.x}px, ${panStartViewport.y}px) scale(${panStartViewport.zoom})`
+        }
+        panAccum.x = 0
+        panAccum.y = 0
+      })
+    }
   }
 }
 
 function handleCanvasMouseUp() {
+  if (isPanning.value) {
+    // 拖动结束: 一次性 setViewport 同步 vue-flow 内部 viewport ref
+    // (Transform.vue 的 transform computed 才能拿到正确 viewport 值)
+    const tp = document.querySelector<HTMLElement>('.vue-flow__transformationpane')
+    if (tp) {
+      // 读当前实际 transform (被我们直写过), 解析 x/y
+      const match = tp.style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)\s*scale\(([-\d.]+)\)/)
+      if (match) {
+        const x = parseFloat(match[1])
+        const y = parseFloat(match[2])
+        const zoom = parseFloat(match[3])
+        setViewport({ x, y, zoom })
+      }
+    }
+    // 释放光标
+    document.body.style.cursor = ''
+  }
   isPanning.value = false
   isResizingPanel.value = false
+  // 清除可能残留的 rAF + 重置累积偏移, 避免鼠标抬起后还触发 setViewport
+  if (panningRafId) {
+    cancelAnimationFrame(panningRafId)
+    panningRafId = 0
+    panAccum.x = 0
+    panAccum.y = 0
+  }
 }
 
 function startPanelResize(e: MouseEvent) {
@@ -1546,11 +3032,14 @@ function startPanelResize(e: MouseEvent) {
   const startY = e.clientY
   const startHeight = panelHeight.value
   const onMove = (ev: MouseEvent) => {
-    const newHeight = startHeight + (startY - ev.clientY)
-    panelHeight.value = Math.max(100, Math.min(500, newHeight))
+    panelHeight.value = Math.max(100, Math.min(500, startHeight + (startY - ev.clientY)))
   }
   const onUp = () => {
     isResizingPanel.value = false
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+  }
+  panelResizeCleanup.value = () => {
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
   }
@@ -1558,76 +3047,34 @@ function startPanelResize(e: MouseEvent) {
   document.addEventListener('mouseup', onUp)
 }
 
-// 更新配置
-function updateConfig(key: string, value: any) {
-  nodeConfig.value[key] = value
-  const node = nodes.value.find(n => n.id === selectedNode.value?.id)
-  if (node) {
-    node.data = node.data || {}
-    node.data.config = { ...nodeConfig.value }
-  }
-}
-
-// ============ 变量管理 ============
-function addVariable() {
-  const newVar = {
-    name: `var_${variables.value.length + 1}`,
-    type: 'STRING',
-    defaultValue: '',
-    description: ''
-  }
-  variables.value.push(newVar)
-  saveHistory()
-}
-
-function removeVariable(index: number) {
-  variables.value.splice(index, 1)
-  saveHistory()
-}
-
-function updateVariable(index: number, field: string, value: any) {
-  if (variables.value[index]) {
-    ;(variables.value[index] as any)[field] = value
-  }
-}
-
 // 保存
-async function handleSave() {
+async function handleSave(): Promise<boolean> {
+  // BUG-8 修复 (2026-06-19): 返回 boolean 让调用方 (handleExecute) 判断是否继续
+  //   之前仅打 toast, handleExecute 不管成功失败都跑, 服务端可能读到旧数据
   saving.value = true
   try {
-    // 构建变量 JSON
-    const varsObj: Record<string, any> = {}
-    for (const v of variables.value) {
-      varsObj[v.name] = {
-        type: v.type,
-        defaultValue: v.defaultValue,
-        description: v.description
-      }
+    await store.saveGraph()
+    // 缩略图生成较重（base64 编码 + HTTP），用 requestIdleCallback 推迟到
+    // 浏览器空闲时执行，避免阻塞主流程的 ElMessage.success() 反馈
+    // inflight 标志位：连击"保存"时若上一次 captureAndSaveThumbnail 仍在跑，跳过本次
+    if (!thumbnailInflight.value) {
+      thumbnailInflight.value = true
+      const scheduleIdle: (cb: () => void) => void =
+        (window as any).requestIdleCallback || ((cb) => setTimeout(cb, 100))
+      scheduleIdle(async () => {
+        try {
+          await captureAndSaveThumbnail()
+        } finally {
+          thumbnailInflight.value = false
+        }
+      })
     }
-
-    await ruleEngineApi.updateGraph(graphId.value, {
-      nodes_json: JSON.stringify(nodes.value.map(n => ({
-        id: n.id,
-        type: n.type,
-        position: n.position,
-        data: n.data
-      }))),
-      edges_json: JSON.stringify(edges.value.map(e => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        source_handle: e.sourceHandle,
-        target_handle: e.targetHandle
-      }))),
-      variables_json: JSON.stringify(varsObj)
-    })
-    // 生成并保存缩略图
-    await captureAndSaveThumbnail()
-    showToast('保存成功', 'success')
-    saveHistory()
+    ElMessage.success('保存成功')
+    return true
   } catch (err) {
     console.error('保存失败:', err)
-    showToast('保存失败', 'error')
+    ElMessage.error('保存失败')
+    return false
   } finally {
     saving.value = false
   }
@@ -1639,24 +3086,18 @@ async function captureAndSaveThumbnail() {
     const vueFlow = vueFlowRef.value
     if (!vueFlow) return
 
-    // 调用 VueFlow 的 toObject 获取当前视图内容
     const flowExport = vueFlow.toObject?.()
     if (!flowExport || !flowExport.nodes?.length) return
 
-    // 创建一个离屏 canvas 来渲染缩略图
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // 缩略图尺寸 320x180 (16:9)
-    canvas.width = 320
-    canvas.height = 180
-
-    // 填充深色背景
+    canvas.width = 80
+    canvas.height = 60
     ctx.fillStyle = '#1a1a2e'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    // 获取所有节点的位置范围
     const xs = flowExport.nodes.map((n: any) => n.position?.x || 0)
     const ys = flowExport.nodes.map((n: any) => n.position?.y || 0)
     if (!xs.length) return
@@ -1667,14 +3108,8 @@ async function captureAndSaveThumbnail() {
     const maxY = Math.max(...ys) + 60
     const graphW = maxX - minX || 1
     const graphH = maxY - minY || 1
-
-    // 计算缩放比例，完整容纳所有节点
     const padding = 20
-    const availW = canvas.width - padding * 2
-    const availH = canvas.height - padding * 2
-    const scale = Math.min(availW / graphW, availH / graphH, 1)
-
-    // 居中偏移
+    const scale = Math.min((canvas.width - padding * 2) / graphW, (canvas.height - padding * 2) / graphH, 1)
     const offsetX = (canvas.width - graphW * scale) / 2 - minX * scale
     const offsetY = (canvas.height - graphH * scale) / 2 - minY * scale
 
@@ -1683,19 +3118,15 @@ async function captureAndSaveThumbnail() {
     ctx.scale(scale, scale)
 
     // 绘制连线
-    ctx.strokeStyle = '#00f0ff'
+    ctx.strokeStyle = '#22d3ee'
     ctx.lineWidth = 2 / scale
     for (const edge of flowExport.edges || []) {
-      const sourceNode = flowExport.nodes.find((n: any) => n.id === edge.source)
-      const targetNode = flowExport.nodes.find((n: any) => n.id === edge.target)
-      if (sourceNode && targetNode) {
-        const sx = (sourceNode.position?.x || 0) + 60
-        const sy = (sourceNode.position?.y || 0) + 20
-        const tx = (targetNode.position?.x || 0) + 60
-        const ty = (targetNode.position?.y || 0) + 20
+      const sn = flowExport.nodes.find((n: any) => n.id === edge.source)
+      const tn = flowExport.nodes.find((n: any) => n.id === edge.target)
+      if (sn && tn) {
         ctx.beginPath()
-        ctx.moveTo(sx, sy)
-        ctx.lineTo(tx, ty)
+        ctx.moveTo((sn.position?.x || 0) + 60, (sn.position?.y || 0) + 20)
+        ctx.lineTo((tn.position?.x || 0) + 60, (tn.position?.y || 0) + 20)
         ctx.stroke()
       }
     }
@@ -1704,46 +3135,37 @@ async function captureAndSaveThumbnail() {
     for (const node of flowExport.nodes || []) {
       const x = node.position?.x || 0
       const y = node.position?.y || 0
-      const w = 120
-      const h = 40
-
-      // 根据节点类型设置颜色
       let bgColor = '#2d2d4a'
-      let borderColor = '#00f0ff'
-      if (node.type?.includes('trigger')) {
+      let borderColor = '#22d3ee'
+      if (node.data?.type?.includes('trigger')) {
         bgColor = '#1a3a4a'
-        borderColor = '#00f0ff'
-      } else if (node.type?.includes('condition') || node.type?.includes('logic')) {
+      } else if (node.data?.type?.includes('condition') || node.data?.type?.includes('logic')) {
         bgColor = '#3a2d4a'
         borderColor = '#aa66ff'
-      } else if (node.type?.includes('action') || node.type?.includes('yolo')) {
+      } else if (node.data?.type?.includes('action') || node.data?.type?.includes('yolo')) {
         bgColor = '#2d4a3a'
-        borderColor = '#00ff88'
+        borderColor = 'var(--color-success)'
       }
 
       ctx.fillStyle = bgColor
       ctx.strokeStyle = borderColor
       ctx.lineWidth = 2 / scale
       ctx.beginPath()
-      ctx.roundRect(x, y, w, h, 6 / scale)
+      ctx.roundRect(x, y, 120, 40, 6 / scale)
       ctx.fill()
       ctx.stroke()
 
-      // 节点名称
       ctx.fillStyle = '#fff'
       ctx.font = `${12 / scale}px sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      const label = node.data?.label || node.id || ''
-      ctx.fillText(label.substring(0, 12), x + w / 2, y + h / 2)
+      ctx.fillText((node.data?.label || node.id || '').substring(0, 12), x + 60, y + 20)
     }
 
     ctx.restore()
 
-    // 转换为 Base64
     const dataUrl = canvas.toDataURL('image/png', 0.7)
-    // 上传到后端
-    await ruleEngineApi.updateThumbnail(graphId.value, dataUrl)
+    await ruleEngineApi.updateThumbnail(store.graphMeta?.id || graphId.value, dataUrl)
   } catch (err) {
     console.error('生成缩略图失败:', err)
   }
@@ -1754,68 +3176,171 @@ async function handleValidate() {
   try {
     const res = await ruleEngineApi.validateGraph(graphId.value)
     if (res.data.valid) {
-      showToast('规则图校验通过', 'success')
+      ElMessage.success('规则图校验通过')
     } else {
-      showToast(`校验失败: ${res.data.errors?.join(', ') || '未知错误'}`, 'error')
+      // 后端返回 {valid, errors[], error}; 旧实现读 res.data.errors?.join()
+      // 而后端只返回 {valid, error}, 结果永远显示「未知错误」。
+      const errors = res.data.errors ?? []
+      const detail = errors.length > 0
+        ? errors.join('; ')
+        : (res.data.error ?? '未知错误')
+      ElMessage.error(`校验失败: ${detail}`)
     }
   } catch {
-    showToast('校验请求失败', 'error')
+    ElMessage.error('校验请求失败')
   }
 }
 
 // 执行
 async function handleExecute() {
-  await handleSave()
+  // BUG-8 修复 (2026-06-19): 检查 handleSave 返回值, 失败时中断执行
+  //   之前保存失败仍继续, 服务端读到旧数据执行出诡异结果
+  const saved = await handleSave()
+  if (!saved) {
+    ElMessage.warning('保存失败, 已取消本次执行')
+    return
+  }
 
   executing.value = true
-  executionStatus.value = 'running'
-  executionProgress.value = 0
+  // ⚠️ 顺序: 先 clearExecution (它会把状态重置为 idle), 再置 running。
+  // 旧实现是 setExecutionStatus('running') 在前、clearExecution() 在后 ——
+  // clearExecution 整体替换 executionState, 把刚设的 'running' 又抹成 'idle',
+  // 面板一直显示「等待执行」。
+  store.clearExecution()
+  store.setExecutionStatus('running')
+  store.setExecutionProgress(0)
   showExecutionPanel.value = true
-  executionLogs.value = []
-  nodeStates.value = {}
 
   try {
+    // 执行流程: 先登记执行(defer_start) -> 连上 WebSocket -> 再真正启动。
+    // 旧顺序(先 POST 执行再连 WS)存在竞态窗口, 执行早期的节点消息会在
+    // 订阅建立前产生并被丢弃, 前端表现为「执行了但什么都没发生」。
     const res = await ruleEngineApi.execute({
       graph_id: graphId.value,
-      trigger_type: 'manual'
+      trigger_type: 'manual',
+      defer_start: true
     })
 
-    // Phase 5: WebSocket 实时推送
     const execId = res.data.execution_id
-    executionId.value = execId
+    store.setExecutionId(execId)
     connectWebSocket(execId)
-
-    // 前端轮询作为降级（备用）
-    pollExecutionStatus(execId)
-
+    // 订阅建立后再触发真正的执行
+    await ruleEngineApi.startExecution(execId)
   } catch (err: any) {
-    executionStatus.value = 'failed'
-    executionLogs.value.push({
+    store.setExecutionStatus('failed')
+    store.addExecutionLog({
       level: 'error',
       timestamp: new Date().toLocaleTimeString(),
       message: err?.response?.data?.detail || '执行失败'
     })
-    showToast('执行失败', 'error')
+    ElMessage.error('执行失败')
     executing.value = false
+  } finally {
+    // executing 只表示「已发起」, 真正的结束由 execution_complete 事件复位。
+    // 这里兜底: 若启动请求本身失败/超时, 至少不能让执行按钮永久禁用。
+    // (旧实现只在 catch 里复位 executing → 成功发起后按钮永远禁用, 图只能执行一次)
+    window.setTimeout(() => {
+      if (executing.value && store.executionState.status !== 'running') {
+        executing.value = false
+      }
+    }, 3000)
   }
-}
-
-async function pollExecutionStatus(_execId: number) {
-  // WebSocket 足够可靠，仅在连接失败时启用轮询备用
 }
 
 // 清空日志
 function clearLogs() {
-  executionLogs.value = []
+  store.clearExecution()
+  // 节点高亮也一并复位 —— 用户点了「清空」就是想让画布回到编辑态
+  store.clearNodeStatuses()
+}
+
+// ============ P2-D (2026-06-19): 执行历史回放 ============
+
+const showReplayDialog = ref(false)
+const historyList = ref<Array<{
+  id: number
+  graph_id: number
+  status: string
+  trigger_type: string
+  start_time: string
+  end_time?: string
+  error?: string
+}>>([])
+const historyLoading = ref(false)
+const selectedExecution = ref<{
+  execution: any
+  logs: Array<{
+    node_id: string
+    node_type: string
+    status: string
+    start_time: string
+    end_time?: string
+    duration_ms?: number
+    error_message?: string
+    metrics?: Record<string, number>
+  }>
+} | null>(null)
+const replayLoading = ref(false)
+
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    const res = await ruleEngineApi.listExecutions(graphId.value, 50)
+    historyList.value = (res.data as any[]) || []
+  } catch (err) {
+    console.error('加载历史失败:', err)
+    ElMessage.error('加载执行历史失败')
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function selectExecutionForReplay(exec: any) {
+  replayLoading.value = true
+  try {
+    const res = await ruleEngineApi.getExecutionLogs(exec.id)
+    selectedExecution.value = {
+      execution: exec,
+      logs: (res.data as any[]) || [],
+    }
+    applyReplayToCanvas(selectedExecution.value.logs)
+  } catch (err) {
+    console.error('加载执行日志失败:', err)
+    ElMessage.error('加载执行日志失败')
+  } finally {
+    replayLoading.value = false
+  }
+}
+
+/**
+ * 把回放的节点状态写到 store (前端走 setNodeExecutionState)
+ * 不影响数据, 仅高亮节点边框色 (复用现有的 running/success/failed/timeout 视觉)
+ */
+function applyReplayToCanvas(logs: Array<{ node_id: string; status: string }>) {
+  store.clearExecution()
+  store.clearNodeStatuses()
+  for (const log of logs) {
+    store.setNodeExecutionState(log.node_id, log.status)
+  }
+  // 5 秒后清空回放高亮, 让用户回到编辑态
+  // 只清节点高亮, 不清执行日志(clearExecution 会把日志一起抹掉)
+  setTimeout(() => store.clearNodeStatuses(), 5000)
+}
+
+function closeReplay() {
+  showReplayDialog.value = false
+  selectedExecution.value = null
+  store.clearExecution()
+  store.clearNodeStatuses()
 }
 </script>
 
 <style scoped lang="scss">
 // 变量
-$header-height: 56px;
+$header-height: 44px;
 $palette-width: 280px;
 $panel-width: 320px;
-$panel-header-height: 52px;
+$panel-header-height: 44px;
 
 // 全屏布局
 .rule-canvas-fullscreen {
@@ -1830,18 +3355,75 @@ $panel-header-height: 52px;
   overflow: hidden;
 }
 
-// 顶部工具栏
+// Phase B 任务5: 大图渲染降级
+// ≥80 节点: 去除节点阴影 / transition / 边动画, 降低 paint 成本；
+//           边半透明减淡 + 减细，减少 SVG path 对帧率的消耗
+// ≥200 节点: 额外隐藏节点摘要 / 端口 label
+.large-graph-mode {
+  :deep(.rule-node) {
+    box-shadow: none !important;
+    transition: none !important;
+  }
+
+  :deep(.rule-node:hover) {
+    box-shadow: none !important;
+  }
+
+  :deep(.vue-flow__edge-path) {
+    transition: none !important;
+    stroke-opacity: 0.2 !important;
+    stroke-width: 1.5 !important;
+  }
+
+  :deep(.vue-flow__edge.animated .vue-flow__edge-path) {
+    animation: none !important;
+  }
+
+  // hover 态同步降级，避免半透明边 hover 时突兀跳变
+  :deep(.vue-flow__edge:hover .vue-flow__edge-path) {
+    stroke-opacity: 0.4 !important;
+    stroke-width: 1.5 !important;
+  }
+
+  // 连线选中态保持可辨识
+  :deep(.vue-flow__edge.selected .vue-flow__edge-path) {
+    stroke-opacity: 1 !important;
+    stroke-width: 2.5 !important;
+  }
+}
+
+.huge-graph-mode {
+  :deep(.node-summary) {
+    display: none !important;
+  }
+
+  :deep(.port-label) {
+    display: none !important;
+  }
+}
+
+// =====================================================================
+// 顶部工具栏 (2026-06-19 重设计: Dark Mode + 视觉层级 + 8dp 间距系统)
+// 设计依据: ui-ux-pro-max 推荐 Dark Mode (OLED) / Inter / Code dark
+// 视觉层级:
+//   1. 主操作 (执行) — 强调色 (Code dark + Run green) 渐变背景, 最右
+//   2. 次操作 (保存) — 中性背景 + 边框, 与执行同高
+//   3. 二级操作 (导入/导出/复制为新/校验) — 文字 + 图标
+//   4. 工具操作 (缩放/对齐/历史) — 仅图标, hover 浅灰背景
+// =====================================================================
 .canvas-header {
-  height: $header-height;
-  background: linear-gradient(180deg, #12121a 0%, #0e0e14 100%);
-  border-bottom: 1px solid #1e1e2e;
+  height: 48px;
+  background: linear-gradient(180deg, #0d0d14 0%, #08080d 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
   flex-shrink: 0;
   z-index: 100;
+  gap: 16px;
 
+  // 三段式 flex 布局: 左(身份) | 中(编辑, 占主) | 右(操作)
   .header-left,
   .header-center,
   .header-right {
@@ -1850,103 +3432,233 @@ $panel-header-height: 52px;
     gap: 8px;
   }
 
-  .header-left { flex: 0 0 auto; }
-  .header-center { flex: 0 0 auto; }
-  .header-right { flex: 0 0 auto; }
+  .header-left { flex: 0 0 auto; min-width: 0; }
+  .header-center {
+    flex: 1 1 auto;
+    min-width: 0;
+    // 修复 (2026-09-12): 原为 justify-content: center。中部工具栏共 17 个图标按钮
+    // 实测 732px，而分配宽度只有 639px（视口 1600px 时三区合计 1614px，物理放不下）。
+    // center + 内容超宽 = 向左右「对称外溢」：第一个工具组压住左侧规则名输入框
+    // (实测左边界 332 < header-left 右边界 363)，ws-status 压住右侧操作按钮
+    // (实测右边界 1064 > header-right 左边界 1033)。改为 flex-start + 横向滚动，
+    // 让溢出发生在本区内而不是撞到邻区。
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;          // 工具栏不显示横向滚动条
+    &::-webkit-scrollbar { display: none; }
+    gap: 4px;  // 组间由 divider 分隔, 组内紧凑
+  }
+  .header-right {
+    flex: 0 0 auto;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  // 子分组容器: 编辑操作按功能聚合
+  .header-right-secondary,
+  .header-right-primary {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
 }
 
+// 左侧: 规则名称 + 状态徽章
 .rule-name-section {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-left: 12px;
+  gap: 10px;
+  margin-left: 8px;
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  flex-wrap: nowrap;
 }
 
 .rule-name-input {
   background: transparent;
-  border: 1px solid transparent;
-  padding: 8px 14px;
+  padding: 6px 12px;
   border-radius: 6px;
-  color: #fff;
-  font-size: 15px;
+  color: #e8e8f0;
+  font-size: 13px;
   font-weight: 600;
-  min-width: 200px;
-  transition: all 0.2s;
+  letter-spacing: 0.2px;
+  min-width: 140px;
+  max-width: 240px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
 
   &:hover {
-    border-color: #2a2a3a;
-    background: rgba(255,255,255,0.03);
+    border-color: rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.02);
   }
 
   &:focus {
     outline: none;
-    border-color: #00f0ff;
-    background: rgba(0, 240, 255, 0.05);
+    border-color: var(--accent-blue);
+    background: rgba(34, 211, 238, 0.05);
   }
 }
 
+// 状态徽章 (运行中/已停止) - 紧凑 + 状态点
 .rule-status-badge {
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 10px;
   font-weight: 600;
-  background: #1e1e2e;
-  color: #666;
-  text-transform: uppercase;
   letter-spacing: 0.5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #888;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #555;
+    transition: all 0.2s ease;
+  }
 
   &.active {
-    background: rgba(0, 255, 136, 0.15);
-    color: #00ff88;
+    background: rgba(34, 197, 94, 0.08);
+    border-color: rgba(34, 197, 94, 0.3);
+    color: var(--color-success);
+    .status-dot {
+      background: var(--color-success);
+      box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+      animation: status-pulse 2s ease-in-out infinite;
+    }
   }
 }
 
-.tool-group {
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(34, 197, 94, 0.6); }
+  50% { box-shadow: 0 0 10px rgba(34, 197, 94, 0.9); }
+}
+
+// 工具栏分组容器 (历史/视图/对齐)
+.tb-group {
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: #1a1a24;
-  padding: 4px;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 8px;
 }
 
-.tool-divider {
+// 工具栏分隔条 (组间)
+.tb-divider {
   width: 1px;
   height: 24px;
-  background: #2a2a3a;
+  background: rgba(255, 255, 255, 0.08);
   margin: 0 4px;
+  flex-shrink: 0;
 }
 
+// 组内细分隔 (更细)
+.tb-divider-thin {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  margin: 0 2px;
+}
+
+// 缩放比例显示
 .zoom-level {
-  font-size: 12px;
-  color: #888;
-  min-width: 48px;
+  font-size: 11px;
+  color: #999;
+  font-weight: 500;
+  min-width: 42px;
   text-align: center;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', 'Menlo', monospace;
+  user-select: none;
+  letter-spacing: 0.5px;
 }
 
-// 按钮样式
-.icon-btn {
-  width: 36px;
-  height: 36px;
-  display: flex;
+// WebSocket 状态 (放最右, 紧凑)
+.ws-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  // 修复 (2026-09-12): 原缺 flex-shrink: 0。中部空间不足时本元素被压缩
+  // (实测 66px → 39px)，.ws-label 文字换行，高度撑到 53px，溢出 48px 的工具栏。
+  flex-shrink: 0;
+
+  .ws-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+  }
+
+  .ws-label {
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.3px;
+    white-space: nowrap;   // 修复: 禁止换行, 与 flex-shrink: 0 配套
+  }
+
+  &.connected {
+    color: var(--color-success);
+    .ws-dot {
+      background: var(--color-success);
+      box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+    }
+  }
+}
+
+// =====================================================================
+// 工具栏按钮系统 (重设计)
+// tb-icon-btn: 32x32 方形, 仅图标, 工具类
+// tb-text-btn: 32 高, 图标 + 文字, 操作类
+// =====================================================================
+.tb-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
   border-radius: 6px;
-  color: #888;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
 
   svg {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
   }
 
   &:hover:not(:disabled) {
-    background: #2a2a3a;
-    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    color: #e8e8f0;
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    transform: scale(0.92);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(34, 211, 238, 0.4);
+    outline-offset: 1px;
   }
 
   &:disabled {
@@ -1954,67 +3666,191 @@ $panel-header-height: 52px;
     cursor: not-allowed;
   }
 
+  // 激活态 (toggle 类按钮: 网格/吸附/小地图/面板)
   &.active {
-    background: rgba(0, 240, 255, 0.15);
-    color: #00f0ff;
+    background: rgba(34, 211, 238, 0.12);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.3);
   }
 
-  &.small {
-    width: 28px;
-    height: 28px;
+  // 对齐下拉触发器 (2026-09-12): 图标 + caret, 宽度自适应
+  // 基类是固定 32px 的图标按钮, 这里放开宽度以容纳 caret, 提示可展开
+  &.tb-align-menu {
+    width: auto;
+    padding: 0 4px;
+    gap: 1px;
 
-    svg { width: 14px; height: 14px; }
+    // 特异性需高于上面的 `.tb-icon-btn svg { 16px }`, 故嵌在基类块内
+    .tb-align-menu__caret {
+      width: 10px;
+      height: 10px;
+      opacity: 0.55;
+    }
   }
 }
 
-.back-btn:hover {
-  background: rgba(0, 240, 255, 0.1);
-  color: #00f0ff;
-}
-
-.action-btn {
+// tb-text-btn: 图标 + 文字, 用于次级/主操作
+.tb-text-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 6px 12px;
+  height: 32px;
+  padding: 0 12px;
+  background: transparent;
   border: none;
   border-radius: 6px;
+  color: #b0b0c0;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: 0.3px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
   white-space: nowrap;
 
   svg {
     width: 14px;
     height: 14px;
-    flex-shrink: 0;
+  }
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e8e8f0;
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(0.97);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(34, 211, 238, 0.4);
+    outline-offset: 1px;
   }
 
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
   }
 
-  &.secondary {
-    background: #1e1e2e;
-    color: #ccc;
-
-    &:hover:not(:disabled) {
-      background: #2a2a3a;
-      color: #fff;
-    }
+  // Loading 状态
+  .loading-text {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
   }
 
-  &.primary {
-    background: linear-gradient(135deg, #00f0ff, #00aa88);
-    color: #000;
-
-    &:hover:not(:disabled) {
-      box-shadow: 0 4px 20px rgba(0, 240, 255, 0.3);
-    }
+  .loading-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: tb-spin 0.7s linear infinite;
   }
 }
+
+@keyframes tb-spin {
+  to { transform: rotate(360deg); }
+}
+
+// 保存按钮 (次主操作)
+.tb-text-btn--save {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #d0d0e0;
+  font-weight: 600;
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #fff;
+  }
+}
+
+// 执行按钮 (主操作) — accent 渐变 + 阴影 + 微脉冲 (吸引注意)
+.tb-text-btn--execute {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--color-success) 100%);
+  border: 1px solid rgba(34, 211, 238, 0.4);
+  color: #060610;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 0 18px;
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.15),
+    0 4px 16px rgba(34, 211, 238, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+
+  &:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1af5ff 0%, #4ade80 100%);
+    color: #000;
+    box-shadow:
+      0 0 0 1px rgba(34, 211, 238, 0.3),
+      0 6px 20px rgba(34, 211, 238, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+    box-shadow:
+      0 0 0 1px rgba(34, 211, 238, 0.2),
+      0 2px 8px rgba(34, 211, 238, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  &:disabled {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.3);
+    box-shadow: none;
+  }
+}
+
+// 返回按钮 (左侧, 特殊背景)
+.back-btn {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  color: #8888a0 !important;
+
+  &:hover:not(:disabled) {
+    background: rgba(34, 211, 238, 0.08) !important;
+    border-color: rgba(34, 211, 238, 0.25) !important;
+    color: var(--accent) !important;
+  }
+}
+
+// 面板切换按钮 (active 态)
+.palette-toggle-btn {
+  &.active {
+    background: rgba(34, 211, 238, 0.12);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.3);
+  }
+}
+
+.back-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: #888;
+
+  :deep(button) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    color: inherit;
+  }
+
+  &:hover {
+    background: rgba(34, 211, 238, 0.06);
+    border-color: rgba(34, 211, 238, 0.2);
+    color: var(--accent-blue);
+  }
+}
+
+// .action-btn 已废弃 (2026-06-19 改用 .tb-text-btn) — 保留 placeholder 防冲突
 
 // 主体区域
 .canvas-body {
@@ -2024,26 +3860,18 @@ $panel-header-height: 52px;
   position: relative;
 }
 
-// 左侧节点面板
+// 左侧节点面板 (折叠时整段隐藏 — 完全收纳)
+// Phase 17.1+: 删除了右侧 .properties-panel SCSS 块 (改用 RuleNode LOD 2 内嵌配置)
 .node-palette {
   width: $palette-width;
   background: #0e0e14;
   border-right: 1px solid #1e1e2e;
   display: flex;
   flex-direction: column;
-  transition: width 0.3s ease;
   flex-shrink: 0;
   z-index: 50;
   position: relative;
   overflow: visible;
-
-  &.collapsed {
-    width: 48px;
-
-    .palette-content,
-    .palette-search,
-    .palette-header { display: none; }
-  }
 }
 
 .palette-header {
@@ -2064,38 +3892,52 @@ $panel-header-height: 52px;
   }
 }
 
-.collapse-btn {
-  position: absolute;
-  right: -14px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 14px;
-  height: 48px;
+// .palette-toggle-btn / .back-btn 旧样式已合并到上方 .tb-icon-btn 中
+// 2026-06-19 重设计后, 基础宽度/高度由 .tb-icon-btn 提供, 此处不再重复
+
+// =====================================================================
+// 通用 icon-btn / icon-btn.small (执行面板等其他位置复用)
+// 2026-06-19: 工具栏改用 .tb-icon-btn, 这里保留旧 .icon-btn 兼容执行面板按钮
+// =====================================================================
+.icon-btn {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0e0e14;
-  border: 1px solid #1e1e2e;
-  border-left: none;
-  border-radius: 0 6px 6px 0;
-  color: #666;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  color: #8888a0;
   cursor: pointer;
-  z-index: 20;
-  padding: 0;
-
-  &:hover {
-    color: #00f0ff;
-    border-color: #00f0ff;
-    border-left: none;
-  }
+  transition: all 0.15s ease;
+  flex-shrink: 0;
 
   svg {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
   }
 
-  &.collapsed svg {
-    transform: translateX(1px);
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.06);
+    color: #e8e8f0;
+  }
+
+  &:active:not(:disabled) {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(0.92);
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  &.small {
+    width: 22px;
+    height: 22px;
+
+    svg { width: 12px; height: 12px; }
   }
 }
 
@@ -2103,27 +3945,26 @@ $panel-header-height: 52px;
   display: flex;
   align-items: center;
   padding: 8px 12px;
-  border-bottom: 1px solid #1e1e2e;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   gap: 6px;
 
   .search-input {
     flex: 1;
     height: 30px;
     padding: 0 10px;
-    background: #12121a;
-    border: 1px solid #2a2a3e;
     border-radius: 6px;
-    color: #e0e0e0;
-    font-size: 13px;
+    color: #b0b0c0;
+    font-size: 12px;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.15s ease;
 
     &::placeholder {
       color: #555;
     }
 
     &:focus {
-      border-color: #4a4a6e;
+      border-color: var(--accent-blue);
+      background: rgba(34, 211, 238, 0.04);
     }
   }
 
@@ -2133,18 +3974,64 @@ $panel-header-height: 52px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #2a2a3e;
-    border: none;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 50%;
-    color: #888;
-    font-size: 14px;
+    color: #666;
+    font-size: 12px;
     cursor: pointer;
     flex-shrink: 0;
+    transition: all 0.15s ease;
+
+    :deep(button) {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: inherit;
+    }
 
     &:hover {
-      background: #3a3a5e;
-      color: #fff;
+      background: rgba(34, 211, 238, 0.08);
+      border-color: rgba(34, 211, 238, 0.2);
+      color: var(--accent-blue);
     }
+  }
+}
+
+.palette-port-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 12px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.port-filter-btn {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #888;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+  }
+
+  &.active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: #000;
+    font-weight: 600;
   }
 }
 
@@ -2176,7 +4063,7 @@ $panel-header-height: 52px;
     .section-title {
       font-size: 13px;
       font-weight: 500;
-      color: #00f0ff;
+      color: var(--accent-blue);
     }
 
     .section-count {
@@ -2221,7 +4108,7 @@ $panel-header-height: 52px;
 
       &:focus {
         outline: none;
-        border-color: #00f0ff;
+        border-color: var(--accent-blue);
       }
     }
 
@@ -2236,7 +4123,7 @@ $panel-header-height: 52px;
 
       &:focus {
         outline: none;
-        border-color: #00f0ff;
+        border-color: var(--accent-blue);
       }
     }
 
@@ -2254,9 +4141,17 @@ $panel-header-height: 52px;
       font-size: 14px;
       transition: all 0.2s;
 
+      :deep(button) {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        color: inherit;
+      }
+
       &:hover {
-        background: rgba(255, 76, 76, 0.2);
-        color: #ff4c4c;
+        background: var(--color-danger-bg);
+        color: var(--color-danger);
       }
     }
   }
@@ -2277,10 +4172,20 @@ $panel-header-height: 52px;
     cursor: pointer;
     transition: all 0.2s;
 
+    :deep(button) {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      color: inherit;
+      font-size: inherit;
+      font-weight: inherit;
+    }
+
     &:hover {
-      border-color: #00f0ff;
-      color: #00f0ff;
-      background: rgba(0, 240, 255, 0.05);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+      background: rgba(34, 211, 238, 0.05);
     }
 
     svg {
@@ -2318,12 +4223,12 @@ $panel-header-height: 52px;
 
     svg { width: 16px; height: 16px; }
 
-    &.input { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
-    &.detection { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
-    &.processing { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
-    &.action { background: rgba(255, 127, 76, 0.15); color: #FF7F4C; }
-    &.logic { background: rgba(220, 79, 220, 0.15); color: #DC4FDC; }
-    &.output { background: rgba(255, 76, 76, 0.15); color: #FF4C4C; }
+    &.input { background: var(--cat-input-bg); color: var(--cat-input); }
+    &.detection { background: var(--cat-detection-bg); color: var(--cat-detection); }
+    &.processing { background: var(--cat-processing-bg); color: var(--cat-processing); }
+    &.action { background: var(--cat-action-bg); color: var(--cat-action); }
+    &.logic { background: var(--cat-logic-bg); color: var(--cat-logic); }
+    &.output { background: var(--cat-output-bg); color: var(--cat-output); }
   }
 
   .category-name {
@@ -2382,12 +4287,12 @@ $panel-header-height: 52px;
 
     svg { width: 14px; height: 14px; }
 
-    &.input { background: rgba(76, 255, 76, 0.1); color: #4CFF4C; }
-    &.detection { background: rgba(0, 240, 255, 0.1); color: #00f0FF; }
-    &.processing { background: rgba(255, 255, 76, 0.1); color: #FFFF4C; }
-    &.action { background: rgba(255, 127, 76, 0.1); color: #FF7F4C; }
-    &.logic { background: rgba(220, 79, 220, 0.1); color: #DC4FDC; }
-    &.output { background: rgba(255, 76, 76, 0.1); color: #FF4C4C; }
+    &.input { background: var(--cat-input-bg); color: var(--cat-input); }
+    &.detection { background: var(--cat-detection-bg); color: var(--cat-detection); }
+    &.processing { background: var(--cat-processing-bg); color: var(--cat-processing); }
+    &.action { background: var(--cat-action-bg); color: var(--cat-action); }
+    &.logic { background: var(--cat-logic-bg); color: var(--cat-logic); }
+    &.output { background: var(--cat-output-bg); color: var(--cat-output); }
   }
 
   .node-info {
@@ -2424,10 +4329,32 @@ $panel-header-height: 52px;
   background-position: 0 0;
 }
 
+// 右侧栏 (Task 13): 属性面板 + 节点图例
+// 宽度与左侧 palette 对齐; 通过工具栏按钮可收起, 优先保证画布可用面积
+.canvas-right {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  overflow-y: auto;
+  background: #0e0e14;
+  border-left: 1px solid #1e1e2e;
+  z-index: 50;
+  position: relative;
+}
+
 .flow-container {
   width: 100%;
   height: 100%;
   position: relative;
+
+  &.panning {
+    :deep(.vue-flow__pane) {
+      cursor: grabbing !important;
+    }
+  }
 
   :deep(.vue-flow) {
     width: 100%;
@@ -2459,14 +4386,116 @@ $panel-header-height: 52px;
     cursor: crosshair;
   }
 
+  /* Phase 17.5: 自绘框选矩形样式 (替代 VueFlow 内部 UserSelection)
+   * 模仿 vue-flow__selection 视觉效果 — 浅蓝边 + 浅蓝半透填充
+   * position: absolute 让坐标相对 pane 容器, 与 clientX/clientY 对应 */
+  .custom-selection-rect {
+    position: absolute;
+    pointer-events: none;
+    z-index: 20;
+    border: 1px solid rgba(34, 211, 238, 0.8);
+    background: rgba(34, 211, 238, 0.08);
+    border-radius: 1px;
+    /* 0 transition, mousemove 60Hz 更新位置时无视觉延迟 */
+    will-change: left, top, width, height;
+  }
+
+  /* Phase 18: 加选模式 — 绿色区分 (老大一眼能看出是加选) */
+  .custom-selection-rect.additive {
+    border: 1px solid rgba(52, 217, 123, 0.9);
+    background: rgba(52, 217, 123, 0.1);
+  }
+
+  /* Phase 18: 框选模式角标 (跟随自绘框左上角) */
+  .selection-mode-hint {
+    position: absolute;
+    z-index: 21;
+    pointer-events: none;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    color: var(--on-vibrant);
+    background: rgba(34, 211, 238, 0.85);
+    border-radius: 3px;
+    white-space: nowrap;
+    user-select: none;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .selection-mode-hint.additive {
+    background: rgba(52, 217, 123, 0.85);
+    color: #000;
+  }
+
+  /* 隐藏选中后的包裹矩形框 */
+  :deep(.vue-flow__nodesselection-rect) {
+    display: none;
+  }
+
+  /* 拖拽性能优化: CSS containment 隔离子树布局重算 (节点内重排不影响其他节点).
+     2026-06-21: 移除 will-change: transform — 用户明确要求完全去掉 GPU 合成层效果,
+     will-change 同样会强制元素进入独立层, 触发文字 subpixel 抗锯齿丢失.
+     保留 contain: layout style (只隔离布局, 不影响渲染质量) */
+  :deep(.vue-flow__node) {
+    contain: layout style;
+  }
+
+  /* 节点选中视觉效果 — 通过父 wrapper 的 .selected class 驱动 (纯 CSS, 不触发 RuleNode 重渲染)
+     VueFlow 在框选/点击时自动给 .vue-flow__node 添加 .selected, 结束后移除。
+     RuleNode.vue 的 v-memo 不含 selected → 选中态变化不触发 Element Plus widget 重渲染
+
+     关键: 用 outline 替代 border-width 变化 (2px→1px)。
+     border-width 改变盒模型 → 每次选中/取消选中强制 layout → 80 节点框选 = 80 次 layout
+     outline 在盒模型外部绘制, 不触发布局, 配合 outline-offset: -1px 紧贴 border 内侧 */
+  :deep(.vue-flow__node.selected .rule-node) {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: -3px;
+    border-radius: 6px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      0 4px 16px rgba(0,0,0,0.4);
+  }
+  :deep(.vue-flow__node.selected .rule-node.category-input)      { outline-color: var(--cat-input); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px var(--cat-input-bg),   0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-detection)  { outline-color: var(--cat-detection); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px var(--cat-detection-bg),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-processing) { outline-color: var(--cat-processing); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px var(--cat-processing-bg),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-action)     { outline-color: var(--cat-action); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px var(--cat-action-bg),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-logic)      { outline-color: var(--cat-logic); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px var(--cat-logic-bg),  0 4px 16px rgba(0,0,0,0.4); }
+  :deep(.vue-flow__node.selected .rule-node.category-output)     { outline-color: var(--cat-output); box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px var(--cat-output-bg),  0 4px 16px rgba(0,0,0,0.4); }
+
+  /* 连接线：未选中 35% 蓝、悬停 70%、选中 100% 青色 + 发光 (决策 2) */
   :deep(.vue-flow__edge-path) {
-    stroke: #00f0ff;
+    stroke: var(--accent-blue);
     stroke-width: 2;
+    stroke-opacity: 0.35;
+    transition: stroke 0.15s ease, stroke-width 0.15s ease, stroke-opacity 0.15s ease;
   }
 
   :deep(.vue-flow__edge.animated .vue-flow__edge-path) {
     stroke-dasharray: 5;
     animation: dash 0.5s linear infinite;
+  }
+
+  /* 连线选中态：100% 青色 + 加粗（去掉 12px interaction 感应层外圈高亮,
+     只改 path 颜色和粗细, 跟节点选中态保持一致的"只改颜色"风格） */
+  :deep(.vue-flow__edge.selected .vue-flow__edge-path) {
+    stroke: var(--accent) !important;
+    stroke-width: 3 !important;
+    stroke-opacity: 1 !important;
+  }
+
+  /* 取消选中态 interaction 感应层的 12px 宽发光 (用户反馈"更宽的连续"多余视觉)
+     关键: 拖动过程中 Tier 2 边增量更新器只写 path.d, 不写 interaction.d
+     (interaction 的 d 保持陈旧旧值). 拖动中如果 interaction 有任何可见像素,
+     就会看到"旧位置"的残影 (interaction d 没跟手). 必须强制完全隐藏:
+     - display: none: 整个 path 元素不渲染 (最彻底, 不依赖 stroke)
+     - !important: 覆盖 vue-flow 内部/attribute 优先级 */
+  :deep(.vue-flow__edge.selected .vue-flow__edge-interaction) {
+    display: none !important;
+  }
+
+  /* hover 态：70% 蓝过渡 */
+  :deep(.vue-flow__edge:hover .vue-flow__edge-path) {
+    stroke-opacity: 0.7;
   }
 
   :deep(.vue-flow__controls) {
@@ -2573,7 +4602,7 @@ $panel-header-height: 52px;
     svg {
       width: 100%;
       height: 100%;
-      stroke: #00f0ff;
+      stroke: var(--accent-blue);
     }
   }
 
@@ -2609,6 +4638,16 @@ $panel-header-height: 52px;
     cursor: pointer;
     transition: all 0.2s;
 
+    :deep(button) {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      color: inherit;
+      font-size: inherit;
+      font-weight: inherit;
+    }
+
     .btn-icon {
       width: 24px;
       height: 24px;
@@ -2619,16 +4658,16 @@ $panel-header-height: 52px;
 
       svg { width: 14px; height: 14px; }
 
-      &.input { background: rgba(76, 255, 76, 0.1); color: #4CFF4C; }
-      &.detection { background: rgba(0, 240, 255, 0.1); color: #00f0FF; }
-      &.processing { background: rgba(255, 255, 76, 0.1); color: #FFFF4C; }
-      &.action { background: rgba(255, 127, 76, 0.1); color: #FF7F4C; }
-      &.logic { background: rgba(220, 79, 220, 0.1); color: #DC4FDC; }
-      &.output { background: rgba(255, 76, 76, 0.1); color: #FF4C4C; }
+      &.input { background: var(--cat-input-bg); color: var(--cat-input); }
+      &.detection { background: var(--cat-detection-bg); color: var(--cat-detection); }
+      &.processing { background: var(--cat-processing-bg); color: var(--cat-processing); }
+      &.action { background: var(--cat-action-bg); color: var(--cat-action); }
+      &.logic { background: var(--cat-logic-bg); color: var(--cat-logic); }
+      &.output { background: var(--cat-output-bg); color: var(--cat-output); }
     }
 
     &:hover {
-      border-color: #00f0ff;
+      border-color: var(--accent-blue);
       color: #fff;
     }
   }
@@ -2674,12 +4713,12 @@ $panel-header-height: 52px;
 
       svg { width: 12px; height: 12px; }
 
-      &.input { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
-      &.detection { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
-      &.processing { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
-      &.action { background: rgba(255, 127, 76, 0.15); color: #FF7F4C; }
-      &.logic { background: rgba(220, 79, 220, 0.15); color: #DC4FDC; }
-      &.output { background: rgba(255, 76, 76, 0.15); color: #FF4C4C; }
+      &.input { background: var(--cat-input-bg); color: var(--cat-input); }
+      &.detection { background: var(--cat-detection-bg); color: var(--cat-detection); }
+      &.processing { background: var(--cat-processing-bg); color: var(--cat-processing); }
+      &.action { background: var(--cat-action-bg); color: var(--cat-action); }
+      &.logic { background: var(--cat-logic-bg); color: var(--cat-logic); }
+      &.output { background: var(--cat-output-bg); color: var(--cat-output); }
     }
 
     .btn-label {
@@ -2687,10 +4726,10 @@ $panel-header-height: 52px;
     }
 
     &:hover {
-      border-color: #00f0ff;
+      border-color: var(--accent-blue);
       background: #22222e;
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 240, 255, 0.15);
+      box-shadow: 0 4px 12px rgba(34, 211, 238, 0.15);
     }
 
     &:active {
@@ -2699,52 +4738,8 @@ $panel-header-height: 52px;
   }
 }
 
-.loading-state {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(8, 8, 12, 0.9);
-  z-index: 10;
+// Phase 17.1+: 删除了 .properties-panel 块 (改用 RuleNode LOD 2 内嵌配置)
 
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid #1e1e2e;
-    border-top-color: #00f0ff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 16px;
-  }
-
-  span {
-    color: #666;
-    font-size: 13px;
-  }
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-// 右侧属性面板
-.properties-panel {
-  width: 0;
-  background: #0e0e14;
-  border-left: 1px solid transparent;
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s ease, border-color 0.3s ease;
-  overflow: hidden;
-  flex-shrink: 0;
-
-  &.visible {
-    width: $panel-width;
-    border-left-color: #1e1e2e;
-  }
-}
 
 .panel-header {
   height: $panel-header-height;
@@ -2771,12 +4766,12 @@ $panel-header-height: 52px;
 
     svg { width: 18px; height: 18px; }
 
-    &.input { background: rgba(76, 255, 76, 0.15); color: #4CFF4C; }
-    &.detection { background: rgba(0, 240, 255, 0.15); color: #00f0FF; }
-    &.processing { background: rgba(255, 255, 76, 0.15); color: #FFFF4C; }
-    &.action { background: rgba(255, 127, 76, 0.15); color: #FF7F4C; }
-    &.logic { background: rgba(220, 79, 220, 0.15); color: #DC4FDC; }
-    &.output { background: rgba(255, 76, 76, 0.15); color: #FF4C4C; }
+    &.input { background: var(--cat-input-bg); color: var(--cat-input); }
+    &.detection { background: var(--cat-detection-bg); color: var(--cat-detection); }
+    &.processing { background: var(--cat-processing-bg); color: var(--cat-processing); }
+    &.action { background: var(--cat-action-bg); color: var(--cat-action); }
+    &.logic { background: var(--cat-logic-bg); color: var(--cat-logic); }
+    &.output { background: var(--cat-output-bg); color: var(--cat-output); }
   }
 
   .panel-title-text {
@@ -2870,8 +4865,8 @@ $panel-header-height: 52px;
 
     &:focus {
       outline: none;
-      border-color: #00f0ff;
-      background: rgba(0, 240, 255, 0.03);
+      border-color: var(--accent-blue);
+      background: rgba(34, 211, 238, 0.03);
     }
 
     &::placeholder {
@@ -2919,8 +4914,8 @@ $panel-header-height: 52px;
       svg { width: 14px; height: 14px; }
 
       &:hover {
-        border-color: #ff4466;
-        color: #ff4466;
+        border-color: var(--color-danger);
+        color: var(--color-danger);
       }
     }
   }
@@ -2942,8 +4937,8 @@ $panel-header-height: 52px;
     svg { width: 14px; height: 14px; }
 
     &:hover {
-      border-color: #00f0ff;
-      color: #00f0ff;
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
     }
   }
 }
@@ -2988,15 +4983,15 @@ $panel-header-height: 52px;
     flex-shrink: 0;
 
     &.input {
-      background: rgba(0, 240, 255, 0.1);
-      color: #00f0ff;
-      border: 1px solid rgba(0, 240, 255, 0.2);
+      background: rgba(34, 211, 238, 0.1);
+      color: var(--accent-blue);
+      border: 1px solid rgba(34, 211, 238, 0.2);
     }
 
     &.output {
-      background: rgba(0, 255, 136, 0.1);
-      color: #00ff88;
-      border: 1px solid rgba(0, 255, 136, 0.2);
+      background: rgba(52, 217, 123, 0.1);
+      color: var(--color-success);
+      border: 1px solid rgba(52, 217, 123, 0.2);
     }
   }
 
@@ -3014,7 +5009,7 @@ $panel-header-height: 52px;
 
   .port-outgoing {
     font-size: 11px;
-    color: #00ff88;
+    color: var(--color-success);
   }
 
   .port-disconnect {
@@ -3072,6 +5067,8 @@ $panel-header-height: 52px;
   border-top: 1px solid #1e1e2e;
   z-index: 50;
   transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
 
   &:not(.expanded) {
     .execution-content { display: none; }
@@ -3088,7 +5085,7 @@ $panel-header-height: 52px;
   z-index: 10;
 
   &:hover {
-    background: rgba(0, 240, 255, 0.3);
+    background: rgba(34, 211, 238, 0.3);
   }
 }
 
@@ -3125,9 +5122,9 @@ $panel-header-height: 52px;
     font-weight: 600;
 
     &.idle { background: #1e1e2e; color: #666; }
-    &.running { background: rgba(0, 240, 255, 0.15); color: #00f0ff; }
-    &.success { background: rgba(0, 255, 136, 0.15); color: #00ff88; }
-    &.failed { background: rgba(255, 0, 170, 0.15); color: #ff00aa; }
+    &.running { background: rgba(34, 211, 238, 0.15); color: var(--accent-blue); }
+    &.success { background: rgba(52, 217, 123, 0.15); color: var(--color-success); }
+    &.failed { background: var(--color-danger-bg); color: var(--color-danger); }
   }
 }
 
@@ -3147,8 +5144,10 @@ $panel-header-height: 52px;
 }
 
 .execution-content {
-  max-height: 200px;
-  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 执行进度条 */
@@ -3157,7 +5156,7 @@ $panel-header-height: 52px;
   align-items: center;
   gap: 10px;
   padding: 8px 16px;
-  background: rgba(0, 240, 255, 0.03);
+  background: rgba(34, 211, 238, 0.03);
   border-bottom: 1px solid #1a1a24;
 }
 
@@ -3171,29 +5170,42 @@ $panel-header-height: 52px;
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #00f0ff, #00ff88);
+  background: linear-gradient(90deg, var(--accent-blue), var(--color-success));
   border-radius: 2px;
   transition: width 0.3s ease;
 }
 
 .progress-text {
   font-size: 11px;
-  color: #00f0ff;
+  color: var(--accent-blue);
   min-width: 32px;
   text-align: right;
 }
 
 .logs-list {
-  padding: 8px 16px;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.logs-scroller {
+  width: 100%;
+  height: 100%;
 }
 
 .log-entry {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 0;
+  padding: 8px 16px;
   border-bottom: 1px solid #1a1a24;
   font-size: 12px;
+  height: 34px;
+  box-sizing: border-box;
+  // 虚拟列表按固定 34px 定位每一行, 内容一旦换行就会溢出压到下一行。
+  // 强制单行 + 溢出省略, 保证行高与 item-size 一致。
+  white-space: nowrap;
+  overflow: hidden;
 
   &:last-child { border-bottom: none; }
 
@@ -3212,87 +5224,53 @@ $panel-header-height: 52px;
   }
 
   &.info .log-level-badge {
-    background: rgba(0, 240, 255, 0.15);
-    color: #00f0ff;
+    background: rgba(34, 211, 238, 0.15);
+    color: var(--accent-blue);
   }
 
   &.warning .log-level-badge {
     background: rgba(255, 221, 0, 0.15);
-    color: #ffdd00;
+    color: var(--color-warning);
   }
 
   &.error .log-level-badge {
-    background: rgba(255, 0, 170, 0.15);
-    color: #ff00aa;
+    background: rgba(242, 85, 95, 0.15);
+    color: var(--accent-blue);
   }
 
   .log-node {
     color: #555;
     flex-shrink: 0;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .log-message {
     color: #888;
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .log-metrics {
+    color: #6a8;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    flex-shrink: 0;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.85;
   }
 }
 
 .no-logs {
   text-align: center;
-  padding: 20px;
+  padding: 20px 16px;
   color: #444;
   font-size: 13px;
-}
-
-// Toast
-.toast-notification {
-  position: fixed;
-  bottom: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 14px;
-  z-index: 2000;
-  animation: toastIn 0.3s ease;
-
-  &.success {
-    background: linear-gradient(135deg, #00ff88, #00aa66);
-    color: #000;
-  }
-
-  &.error {
-    background: linear-gradient(135deg, #ff4466, #cc0033);
-    color: #fff;
-  }
-
-  &.info {
-    background: #1e1e2e;
-    border: 1px solid #2a2a3a;
-    color: #ccc;
-  }
-}
-
-@keyframes toastIn {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: all 0.3s ease;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(20px);
 }
 
 /* 右键菜单 */
@@ -3333,11 +5311,11 @@ $panel-header-height: 52px;
 }
 
 .context-menu-item.danger {
-  color: #ff4c4c;
+  color: var(--color-danger);
 }
 
 .context-menu-item.danger:hover {
-  background: rgba(255, 76, 76, 0.1);
+  background: var(--color-danger-bg);
 }
 
 .context-menu-divider {
@@ -3380,14 +5358,14 @@ $panel-header-height: 52px;
 
     &:hover {
       background: var(--hover-bg, #2a2a4a);
-      color: var(--accent, #00f0ff);
+      color: var(--accent, var(--accent-blue));
     }
 
     .var-type-tag {
       font-size: 10px;
       padding: 1px 5px;
-      background: rgba(0, 240, 255, 0.15);
-      color: #00f0ff;
+      background: rgba(34, 211, 238, 0.15);
+      color: var(--accent-blue);
       border-radius: 3px;
       margin-left: 6px;
     }
@@ -3429,10 +5407,87 @@ $panel-header-height: 52px;
 
     &:hover {
       background: var(--hover-bg, #2a2a4a);
-      color: var(--accent, #00f0ff);
-      border-color: var(--accent, #00f0ff);
+      color: var(--accent, var(--accent-blue));
+      border-color: var(--accent, var(--accent-blue));
     }
   }
+}
+
+/* === Tier 0 性能优化: 拖动期间整层边的命中测试关闭 ===
+   减少浏览器 hit-test 开销 (100 节点 + 200 边时 hit-test 占 1-2ms/帧)
+   :has() 选择器需要 Chrome 105+ / Safari 15.4+ / Firefox 121+ */
+.rule-canvas-fullscreen:has(.vue-flow__node.dragging) .vue-flow__edges {
+  pointer-events: none;
+}
+
+/* ========== P2-D (2026-06-19): 执行历史回放对话框 ========== */
+.replay-list { max-height: 480px; overflow-y: auto; }
+.replay-loading, .replay-empty { padding: 32px; text-align: center; color: #888; font-size: 13px; }
+.replay-item {
+  padding: 12px;
+  margin-bottom: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.replay-item:hover { background: rgba(34, 211, 238, 0.08); border-color: rgba(34, 211, 238, 0.3); }
+.replay-item-header { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; color: #e0e0e8; }
+.replay-item-id { color: #888; font-family: 'JetBrains Mono', monospace; }
+.replay-status-badge {
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.replay-status-badge.completed, .replay-status-badge.success { background: var(--color-success-bg); color: var(--color-success); }
+.replay-status-badge.failed { background: var(--color-danger-bg); color: var(--color-danger); }
+.replay-status-badge.running { background: rgba(34, 211, 238, 0.15); color: var(--accent); }
+.replay-status-badge.pending { background: rgba(255, 255, 255, 0.06); color: var(--text-muted); }
+.replay-status-badge.cancelled { background: rgba(255, 165, 0, 0.15); color: var(--color-warning); }
+.replay-trigger { margin-left: auto; font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+.replay-item-time { margin-top: 4px; font-size: 12px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; }
+.replay-item-error { margin-top: 4px; font-size: 11px; color: var(--color-danger); }
+.replay-detail-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.replay-detail-title { font-size: 14px; font-weight: 600; color: #e0e0e8; }
+.replay-logs { max-height: 400px; overflow-y: auto; }
+.replay-log-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-family: 'JetBrains Mono', monospace;
+}
+.replay-log-index { color: #555; min-width: 20px; }
+.replay-log-status {
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.replay-log-status.completed, .replay-log-status.success { background: var(--color-success-bg); color: var(--color-success); }
+.replay-log-status.failed { background: var(--color-danger-bg); color: var(--color-danger); }
+.replay-log-status.skipped { background: rgba(255, 255, 255, 0.06); color: #888; }
+.replay-log-status.running { background: rgba(34, 211, 238, 0.15); color: var(--accent); }
+.replay-log-status.timeout { background: rgba(255, 165, 0, 0.15); color: #ffa500; }
+.replay-log-node { min-width: 120px; color: #c0c0d0; }
+.replay-log-time { color: #888; }
+.replay-log-duration { color: #888; min-width: 60px; }
+.replay-log-error { color: #ff4c4c; margin-left: auto; }
+.replay-tip {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(34, 211, 238, 0.05);
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--accent);
 }
 
 </style>

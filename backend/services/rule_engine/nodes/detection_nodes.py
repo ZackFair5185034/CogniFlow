@@ -10,14 +10,50 @@ docs/research/rule-engine-phase1-node-registry.md
 """
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from backend.services.rule_engine.models import (
-    NodeDefinition, NodeCategory, PortDefinition, PortType, ConfigSchemaProperty
+    NodeConfigSchema, NodeDefinition, NodeCategory, PortDefinition,
+    PortType, ConfigSchemaProperty,
 )
+from backend.services.rule_engine.model_cache import ModelCache
+# BE-P0-1 修复 (2026-06-19): 之前 3 处函数内 from backend.routers.yolo_training import
+#   load_yolo_model, inference_yolo (依赖方向反了). 现走 services.inference_service
+#   (services 内部同层, 不再依赖 routers)
+from backend.services.inference_service import load_yolo_model, inference_yolo
+from pydantic import Field
 from .base import BaseExecutor
 
 logger = logging.getLogger(__name__)
+
+
+# P0-A (2026-09-11): 节点配置 schema（Pydantic 强类型校验）。
+# P0-2 (2026-09-11): ObjectDetector 仅保留 yolo, ssd/detectron2 选项已移除（未实现）。
+class YOLOModelConfig(NodeConfigSchema):
+    """YOLOModelNode 配置 schema。"""
+    model_id: int = Field(default=0, ge=0, description="模型 ID")
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="置信度阈值")
+    iou_threshold: float = Field(default=0.45, ge=0.0, le=1.0, description="IOU 阈值")
+    max_detections: int = Field(default=300, ge=1, le=1000, description="最大检测数")
+    device: Literal["auto", "cuda", "cpu"] = Field(default="auto", description="推理设备")
+
+
+class YOLOTriggerConfig(NodeConfigSchema):
+    """YOLOTriggerNode 配置 schema。"""
+    model_id: int = Field(default=0, ge=0, description="模型 ID")
+    class_names: List[str] = Field(
+        default_factory=list, description="要检测的类别名称列表"
+    )
+    min_confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="最小置信度")
+    max_objects: int = Field(default=10, ge=1, le=100, description="最大检测数")
+    device: Literal["auto", "cuda", "cpu"] = Field(default="auto", description="推理设备")
+
+
+class ObjectDetectorConfig(NodeConfigSchema):
+    """ObjectDetectorNode 配置 schema（P0-2: 仅支持 yolo）。"""
+    model_type: Literal["yolo"] = Field(default="yolo", description="检测模型类型")
+    model_path: str = Field(default="", description="模型文件的完整路径")
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0, description="置信度阈值")
 
 
 class YOLOModelNode(BaseExecutor):
@@ -37,6 +73,8 @@ class YOLOModelNode(BaseExecutor):
     description = "使用 YOLO 模型进行目标检测"
     icon = "radar"
     color = "#00f0FF"
+
+    ConfigSchema = YOLOModelConfig
 
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
@@ -88,10 +126,10 @@ class YOLOModelNode(BaseExecutor):
         """返回节点的可配置参数 schema。"""
         return {
             "model_id": ConfigSchemaProperty(
-                type="string",
+                type="integer",
                 title="模型",
                 description="选择要使用的 YOLO 检测模型",
-                default="",
+                default=0,
                 widget="model-select",
                 required=True,
             ),
@@ -149,15 +187,17 @@ class YOLOModelNode(BaseExecutor):
         model_id = params.get("model_id")
         model_path = params.get("model_path")
         confidence = params.get("confidence", 0.5)
+        iou_threshold = params.get("iou_threshold", 0.45)
+        max_detections = params.get("max_detections", 300)
+        device = params.get("device", "auto")
 
         if not model_id and not model_path:
             return {"error": "必须提供 model_id 或 model_path"}
 
         try:
-            # 加载模型并执行推理
             image_input = inputs.get("image")
 
-            # 获取图片路径
+            # 解析图片路径
             if isinstance(image_input, dict):
                 image_path = image_input.get("path", "")
             elif isinstance(image_input, str):
@@ -168,32 +208,36 @@ class YOLOModelNode(BaseExecutor):
             if not image_path:
                 return {"error": "图片路径为空"}
 
-            # 导入推理函数
-            from backend.routers.yolo_training import load_yolo_model, inference_yolo
-
-            # 加载模型
-            if model_id:
-                # 从数据库获取模型路径
+            # 获取模型路径（通过 model_id 查数据库）
+            if model_id and not model_path:
                 from backend.database import SessionLocal
                 from backend.database import Model
                 db = SessionLocal()
                 try:
                     model_record = db.query(Model).filter(Model.id == model_id).first()
-                    if model_record and model_record.model_path:
-                        model_path = model_record.model_path
+                    if model_record and model_record.file_path:
+                        model_path = model_record.file_path
                 finally:
                     db.close()
 
             if not model_path:
                 return {"error": f"模型 {model_id} 未找到或无模型文件"}
 
-            # 加载并推理
-            model = load_yolo_model(model_path)
-            result = inference_yolo(model, image_path, conf_threshold=confidence)
+            # 通过缓存加载模型（设备作为 cache key 一部分，避免跨设备误用）
+            # BE-P0-1 (2026-06-19): 顶部已 import, 删除函数内延迟 import (依赖方向修正)
+
+            cache_key = f"yolo:{model_path}:{device}"
+            cache = ModelCache.get_instance()
+            model = cache.get_or_load(
+                cache_key,
+                lambda: load_yolo_model(model_path, device=device)
+            )
+
+            # 执行推理
+            result = inference_yolo(model, image_path, conf_threshold=confidence, device=device)
 
             detections = result.get("detections", [])
 
-            # 解析检测结果
             bboxes = [d.get("bbox", []) for d in detections]
             scores = [d.get("confidence", 0) for d in detections]
             class_ids = [d.get("class_id", 0) for d in detections]
@@ -238,6 +282,8 @@ class YOLOTriggerNode(BaseExecutor):
     icon = "radar"
     color = "#4CFF4C"  # 使用输入类颜色
 
+    ConfigSchema = YOLOTriggerConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -272,19 +318,20 @@ class YOLOTriggerNode(BaseExecutor):
     def get_config_schema(self) -> Dict[str, ConfigSchemaProperty]:
         return {
             "model_id": ConfigSchemaProperty(
-                type="string",
+                type="integer",
                 title="模型",
                 description="选择要使用的 YOLO 检测模型",
-                default="",
+                default=0,
                 widget="model-select",
             ),
             "class_names": ConfigSchemaProperty(
                 type="array",
                 title="目标类别",
-                description="要检测的类别名称列表",
+                description="要检测的类别名称列表（可输入所选模型训练时的实际类别）",
                 default=[],
                 widget="multiselect",
-                enum=["person", "car", "dog", "cat", "bicycle", "truck", "bus"],
+                enum=[],
+                allow_create=True,
             ),
             "min_confidence": ConfigSchemaProperty(
                 type="number",
@@ -330,6 +377,7 @@ class YOLOTriggerNode(BaseExecutor):
         class_names = params.get("class_names", [])
         min_confidence = params.get("min_confidence", 0.5)
         max_objects = params.get("max_objects", 10)
+        device = params.get("device", "auto")
 
         try:
             # 优先使用 context.trigger_data 中的检测结果（外部触发）
@@ -353,8 +401,8 @@ class YOLOTriggerNode(BaseExecutor):
                         }
 
                     if image_path:
-                        # 执行 YOLO 检测
-                        from backend.routers.yolo_training import load_yolo_model, inference_yolo
+                        # 通过缓存加载模型并执行检测
+                        # BE-P0-1 (2026-06-19): 顶部已 import, 删除函数内延迟 import (依赖方向修正)
 
                         # 获取模型路径
                         if not model_path and model_id:
@@ -363,14 +411,22 @@ class YOLOTriggerNode(BaseExecutor):
                             db = SessionLocal()
                             try:
                                 model_record = db.query(Model).filter(Model.id == model_id).first()
-                                if model_record and model_record.model_path:
-                                    model_path = model_record.model_path
+                                if model_record and model_record.file_path:
+                                    model_path = model_record.file_path
                             finally:
                                 db.close()
 
                         if model_path:
-                            model = load_yolo_model(model_path)
-                            result = inference_yolo(model, image_path, conf_threshold=min_confidence)
+                            cache_key = f"yolo:{model_path}:{device}"
+                            cache = ModelCache.get_instance()
+                            model = cache.get_or_load(
+                                cache_key,
+                                lambda: load_yolo_model(model_path, device=device)
+                            )
+                            result = inference_yolo(
+                                model, image_path,
+                                conf_threshold=min_confidence, device=device
+                            )
                             detections = result.get("detections", [])
                         else:
                             return {
@@ -380,8 +436,13 @@ class YOLOTriggerNode(BaseExecutor):
                             }
 
             # 过滤符合条件的检测
+            # 先按 confidence 降序排序，确保 max_objects 截取的是"置信度最高的前 N 个"
+            # 而非"按 detections 顺序的前 N 个"（外部 trigger_data 可能不按 conf 排序）
             matched = []
-            for det in detections:
+            sorted_detections = sorted(
+                detections, key=lambda d: d.get("confidence", 0), reverse=True
+            )
+            for det in sorted_detections:
                 confidence = det.get("confidence", 0)
                 class_name = det.get("class_name", "")
 
@@ -428,6 +489,8 @@ class ObjectDetectorNode(BaseExecutor):
     icon = "eye"
     color = "#00f0FF"
 
+    ConfigSchema = ObjectDetectorConfig
+
     def get_definition(self) -> NodeDefinition:
         return NodeDefinition(
             type=self.node_type,
@@ -467,7 +530,15 @@ class ObjectDetectorNode(BaseExecutor):
                 description="选择检测模型类型",
                 default="yolo",
                 widget="dropdown",
-                enum=["yolo", "ssd", "mtcnn"],
+                # P0-2 (2026-09-11): ssd/detectron2/mtcnn 选项已移除, 后端未实现, 仅保留 yolo
+                enum=["yolo"],
+            ),
+            "model_path": ConfigSchemaProperty(
+                type="string",
+                title="模型路径",
+                description="模型文件的完整路径（仅 yolo 类型需要）",
+                default="",
+                widget="text",
             ),
             "confidence": ConfigSchemaProperty(
                 type="number",
@@ -491,9 +562,44 @@ class ObjectDetectorNode(BaseExecutor):
         inputs: Dict[str, Any],
         context
     ) -> Dict[str, Any]:
-        # 目前为占位实现，实际应对接各种检测模型
-        return {
-            "detections": [],
-            "count": 0,
-            "error": "通用检测器待实现"
-        }
+        params = self.config.get("params", {})
+        model_type = params.get("model_type", "yolo")
+        model_path = params.get("model_path")
+        confidence = params.get("confidence", 0.5)
+
+        if model_type != "yolo":
+            return {"error": f"模型类型 '{model_type}' 暂未实现，当前仅支持 yolo"}
+
+        if not model_path:
+            return {"error": "必须提供 model_path"}
+
+        try:
+            image_input = inputs.get("image")
+
+            if isinstance(image_input, dict):
+                image_path = image_input.get("path", "")
+            elif isinstance(image_input, str):
+                image_path = image_input
+            else:
+                return {"error": "无法解析图片输入"}
+
+            if not image_path:
+                return {"error": "图片路径为空"}
+
+            # BE-P0-1 (2026-06-19): 顶部已 import, 删除函数内延迟 import (依赖方向修正)
+
+            cache_key = f"yolo:{model_path}"
+            cache = ModelCache.get_instance()
+            model = cache.get_or_load(cache_key, lambda: load_yolo_model(model_path))
+
+            result = inference_yolo(model, image_path, conf_threshold=confidence)
+            detections = result.get("detections", [])
+
+            return {
+                "detections": detections,
+                "count": len(detections),
+            }
+
+        except Exception as e:
+            logger.error(f"目标检测失败: {e}")
+            return {"error": f"目标检测失败: {str(e)}"}

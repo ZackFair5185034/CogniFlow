@@ -48,6 +48,13 @@ def _setup_logging():
     file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 
     logger.addHandler(file_handler)
+
+    # 控制台输出
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+    logger.addHandler(console_handler)
+
     return logger
 
 
@@ -83,6 +90,13 @@ async def lifespan(app: FastAPI):
     os.makedirs(YOLO_RUNS_DIR, exist_ok=True)
 
     init_db()
+    # P0-B (2026-09-11): 启动期幂等补齐 rule_graph.schema_version 列 (无 Alembic)
+    from backend.services.rule_engine.migrations import ensure_rule_graph_schema_column
+    ensure_rule_graph_schema_column()
+    # 启动时初始化节点注册表单例（修复 2026-06-04 验收发现的 P1：
+    # 否则 executor 用 get_registry() 拿不到节点，所有执行都报"未知节点类型"）
+    from backend.services.rule_engine.registry import init_builtin_executors
+    init_builtin_executors()
     # 启动规则引擎调度器
     from backend.services.rule_engine.scheduler import rule_scheduler
     rule_scheduler.start()
@@ -144,6 +158,18 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 os.makedirs(INFERENCE_OUTPUT_DIR, exist_ok=True)
 app.mount("/inference_output", StaticFiles(directory=INFERENCE_OUTPUT_DIR), name="inference_output")
 
+
+@app.get("/api/health")
+async def health_check():
+    """健康检查端点。
+
+    必须在下方 catch-all 路由（serve_frontend）之前注册，
+    否则 FastAPI 按注册顺序匹配会被前端路由吞掉返回 index.html。
+    （修复 2026-06-04 验收发现的 P0：监控/探活失败）
+    """
+    return {"status": "ok"}
+
+
 # 挂载 Vue 前端静态文件（开发时若无 dist 目录则跳过）
 # Docker 环境: WEBUI_DIST=/app/webui/dist
 _WEBUI_DIST = os.environ.get("WEBUI_DIST", os.path.join(os.path.dirname(os.path.abspath(__file__)), "webui", "dist"))
@@ -166,11 +192,8 @@ async def root():
     return {"message": "CogniFlow API running", "docs": "/docs"}
 
 
-@app.get("/api/health")
-async def health_check():
-    """健康检查端点。"""
-    return {"status": "ok"}
-
+# 端口配置（由环境变量控制，默认 18080）
+BACKEND_PORT = int(os.environ.get("COGNIFLOW_PORT", 18080))
 
 def start_with_tray(browser: bool = False) -> None:
     """启动应用并集成系统托盘（仅 Windows）。"""
@@ -186,7 +209,7 @@ def start_with_tray(browser: bool = False) -> None:
 
     # 配置日志（写入 data/logs/cogniflow.log）
     logger = _setup_logging()
-    logger.info("CogniFlow 启动中...")
+    logger.info(f"CogniFlow 启动中... 后端端口: {BACKEND_PORT}")
 
     # 用于存储 uvicorn 服务器实例
     server_config = {"server": None}
@@ -213,18 +236,22 @@ def start_with_tray(browser: bool = False) -> None:
             # 自动打开浏览器
             logger.info("正在打开浏览器...")
             open_browser()
-        logger.info("CogniFlow WebUI 已启动 http://localhost:8000")
+        logger.info("CogniFlow WebUI 已启动 http://localhost:{BACKEND_PORT}")
 
-        # 启动 FastAPI 应用（阻塞）
-        config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
-        server_config["server"] = uvicorn.Server(config)
-        server_config["server"].run()
+        try:
+            # 启动 FastAPI 应用（阻塞）
+            config = uvicorn.Config(app, host="0.0.0.0", port=BACKEND_PORT, log_level="warning")
+            server_config["server"] = uvicorn.Server(config)
+            server_config["server"].run()
+        except KeyboardInterrupt:
+            logger.info("收到键盘中断信号，正在关闭服务器...")
+            stop_server()
     else:
         # 非 Windows 平台：直接启动
         if browser:
             open_browser()
-        logger.info("CogniFlow WebUI 已启动 http://localhost:8000")
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        logger.info("CogniFlow WebUI 已启动 http://localhost:{BACKEND_PORT}")
+        uvicorn.run(app, host="0.0.0.0", port=BACKEND_PORT)
 
 
 if __name__ == "__main__":

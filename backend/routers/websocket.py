@@ -64,7 +64,7 @@ async def websocket_launch(websocket: WebSocket):
 async def websocket_system(websocket: WebSocket):
     """系统状态 WebSocket 连接。
 
-    客户端连接后接收系统状态的实时更新（CPU、内存、磁盘）。
+    客户端连接后接收系统状态的实时更新（CPU、内存、磁盘、GPU）。
     """
     await ws_manager.connect_system(websocket)
     try:
@@ -73,6 +73,20 @@ async def websocket_system(websocket: WebSocket):
             data = await websocket.receive_text()
     except WebSocketDisconnect:
         ws_manager.disconnect_system(websocket)
+
+
+@router.websocket("/export/{export_id}")
+async def websocket_export(websocket: WebSocket, export_id: str):
+    """导出进度 WebSocket 连接。
+
+    客户端连接后接收模型导出任务的实时进度更新。
+    """
+    await ws_manager.connect_export(websocket, export_id)
+    try:
+        while True:
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect_export(websocket, export_id)
 
 
 @router.websocket("/rule-execution")
@@ -103,7 +117,9 @@ async def websocket_rule_execution(websocket: WebSocket):
             execution_id = msg.get("execution_id")
 
             if action == "subscribe" and execution_id:
-                await rule_ws_manager.subscribe(websocket, execution_id)
+                # 用 subscribe_with_replay: 订阅建立之前产生的消息在无订阅者时被
+                # 存入回放缓冲, 这里补发给客户端, 消除「先触发执行再连 WS」的竞态。
+                await rule_ws_manager.subscribe_with_replay(websocket, execution_id)
             elif action == "unsubscribe" and execution_id:
                 await rule_ws_manager.unsubscribe(websocket, execution_id)
     except WebSocketDisconnect:

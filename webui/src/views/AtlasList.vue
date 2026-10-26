@@ -3,7 +3,7 @@
     <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-info">
-        <h2>图集管理</h2>
+        <h2 class="cf-gradient-text text-2xl font-semibold">图集管理</h2>
         <span class="subtitle">管理训练数据集</span>
       </div>
       <button
@@ -16,16 +16,13 @@
     </div>
 
     <!-- 图集表格 -->
-    <div
-      class="ui-card"
-      style="width: 100%; min-width: 0;"
-    >
+    <div class="ui-card w-full min-w-0">
       <div class="table-wrapper">
         <el-table
           v-loading="loading"
           :data="atlases"
           :row-class-name="tableRowClassName"
-          style="width: 100%"
+          class="w-full"
         >
           <el-table-column
             prop="id"
@@ -77,21 +74,21 @@
                 <el-button
                   link
                   size="small"
-                  @click="handleRename(row)"
+                  @click="handleRename(row as AtlasResponse)"
                 >
                   编辑
                 </el-button>
                 <el-button
                   link
                   size="small"
-                  @click="$router.push(`/atlas/${row.id}`)"
+                  @click="$router.push(`/atlas/${(row as AtlasResponse).id}`)"
                 >
                   查看
                 </el-button>
                 <el-button
                   link
                   size="small"
-                  @click="handleDelete(row)"
+                  @click="handleDelete(row as AtlasResponse)"
                 >
                   删除
                 </el-button>
@@ -131,7 +128,7 @@
             <el-input
               v-model="createForm.description"
               type="textarea"
-              rows="3"
+              :rows="3"
               placeholder="输入描述（可选）"
             />
           </div>
@@ -183,7 +180,7 @@
             <el-input
               v-model="renameForm.description"
               type="textarea"
-              rows="3"
+              :rows="3"
               placeholder="输入描述（可选）"
             />
           </div>
@@ -209,8 +206,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { atlasApi } from '@/api'
 import type { AtlasResponse } from '@/types/api'
 
@@ -282,6 +277,10 @@ const handleRenameSubmit = async () => {
     ElMessage.warning('请输入图集名称')
     return
   }
+  if (!renameTarget.value) {
+    ElMessage.warning('请先选择要编辑的图集')
+    return
+  }
   renaming.value = true
   try {
     await atlasApi.update(renameTarget.value.id, renameForm.value)
@@ -335,11 +334,7 @@ onMounted(loadAtlases)
 }
 
 .header-info h2 {
-  @apply text-2xl font-semibold;
-  background: linear-gradient(90deg, var(--text-primary), var(--accent-cyan));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  // cf-gradient-text + text-2xl font-semibold 已上移到 class
 }
 
 .header-info .subtitle {
@@ -390,7 +385,7 @@ onMounted(loadAtlases)
 }
 
 .id-badge {
-  @apply font-mono text-xs text-[var(--accent-cyan)] px-2 py-1 bg-[rgba(0,240,255,0.1)] rounded;
+  @apply font-mono text-xs text-[var(--accent-blue)] px-2 py-1 bg-[rgba(34, 211, 238, 0.1)] rounded;
 }
 
 .name-cell {
@@ -398,7 +393,7 @@ onMounted(loadAtlases)
 }
 
 .folder-icon {
-  @apply w-5 h-5 text-[var(--accent-yellow)];
+  @apply w-5 h-5 text-[var(--color-warning)];
 }
 
 .time-badge {
@@ -470,8 +465,8 @@ onMounted(loadAtlases)
 
   input:focus,
   textarea:focus {
-    @apply outline-none border-[var(--accent-cyan)];
-    box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+    @apply outline-none border-[var(--accent-blue)];
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.1);
   }
 
   input::placeholder,

@@ -43,6 +43,9 @@ export const BUILTIN_VARIABLES: Record<string, BuiltinValue> = {
 // 匹配 {{variable_name}} 或 {{object.property}}
 const VARIABLE_REF_REGEX = /\{\{([^}]+)\}\}/g
 
+// 非全局版本用于 hasVariableRef（避免 lastIndex 问题）
+const VARIABLE_REF_REGEX_NO_G = /\{\{([^}]+)\}\}/
+
 // 匹配完整的表达式（包含 {{...}}）
 const EXPRESSION_REGEX = /^\{\{([^}]+)\}\}$/
 
@@ -52,7 +55,7 @@ const EXPRESSION_REGEX = /^\{\{([^}]+)\}\}$/
  * 检查字符串是否包含变量引用
  */
 export function hasVariableRef(str: string): boolean {
-  return VARIABLE_REF_REGEX.test(str)
+  return VARIABLE_REF_REGEX_NO_G.test(str)
 }
 
 /**
@@ -235,13 +238,13 @@ export function formatVariableType(type: Variable['type']): string {
  */
 export function getVariableTypeColor(type: Variable['type']): string {
   const colors: Record<Variable['type'], string> = {
-    STRING: '#8888aa',
-    NUMBER: '#00f0ff',
-    BOOLEAN: '#DC4FDC',
-    IMAGE: '#4CFF4C',
-    BBOX: '#FF7F4C'
+    STRING: '#9a9ab2',
+    NUMBER: '#22d3ee',
+    BOOLEAN: '#b158e4',
+    IMAGE: '#58e49e',
+    BBOX: '#e48b58'
   }
-  return colors[type] || '#8888aa'
+  return colors[type] || '#9a9ab2'
 }
 
 // ============ 快捷构建函数 ============

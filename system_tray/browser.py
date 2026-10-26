@@ -3,11 +3,13 @@
 
 提供跨平台浏览器打开功能。
 """
+import os
 import webbrowser
 import threading
 
-# CogniFlow WebUI 默认地址
-DEFAULT_URL = "http://localhost:8000"
+# CogniFlow WebUI 后端地址
+COGNIFLOW_PORT = os.environ.get("COGNIFLOW_PORT", "18080")
+DEFAULT_URL = f"http://localhost:{COGNIFLOW_PORT}"
 
 
 def open_browser(url: str = DEFAULT_URL) -> bool:

@@ -2,55 +2,72 @@
 /**
  * Element Plus CSS 变量主题
  *
- * 覆盖 EP 设计令牌，使深色主题与 CogniFlow 品牌风格一致。
+ * 覆盖 EP 设计令牌，统一使用 CogniFlow 设计系统（v2, 2026-09-12）。
  * 参考：https://element-plus.org/zh-CN/guide/theming
+ *
+ * 本文件所有色值均镜像 _variables.scss 的令牌，改动必须两边同步。
+ *
+ * ⚠️ 关于 --el-color-primary 为亮青 #22d3ee：
+ * 品牌青是「亮色」，EP 组件默认在 primary 背景上放白字（--el-color-white），
+ * 白字在亮青上对比度仅 1.81:1，不可读。因此凡是「primary 底 + 文字/图标」的
+ * EP 组件，其前景色在 _element-plus.scss 中统一改为深墨色 --on-vibrant（10.24:1）。
+ * 已处理：el-checkbox 勾选态对勾 / el-switch 选中态旋钮。
+ * 注：el-button 因 _element-plus.scss 已把 .el-button 重置为透明底，不受此问题影响。
  */
 
 :root {
-  // CogniFlow 品牌主色替换 EP 默认蓝色
-  --el-color-primary: #00f0ff;
-  --el-color-primary-light-3: #4df5ff;
-  --el-color-primary-light-5: #33e0ff;
-  --el-color-primary-light-7: #1ac5e6;
-  --el-color-primary-light-8: #0fb8d9;
-  --el-color-primary-light-9: #00a8c7;
-  --el-color-primary-dark-2: #00d4e0;
+  // CogniFlow 品牌主色 — 青色（替换 v1 的蓝色）
+  --el-color-primary: #22d3ee;
+  --el-color-primary-light-3: #64e0f3;
+  --el-color-primary-light-5: #90e9f6;
+  --el-color-primary-light-7: #bdf2fa;
+  --el-color-primary-light-8: #d3f6fc;
+  --el-color-primary-light-9: #e9fbfd;
+  --el-color-primary-dark-2: #1ba9be;
 
-  // 文字色
-  --el-text-color-primary: #ffffff;
-  --el-text-color-regular: #d0d0e0;
-  --el-text-color-secondary: #8888aa;
-  --el-text-color-placeholder: #555566;
-  --el-text-color-disabled: #444455;
+  // primary 底上的前景墨色 —— 定义在 _variables.scss 的 --on-vibrant，此处不重复定义
 
-  // 边框色
-  --el-border-color: #2a2a3a;
-  --el-border-color-light: #222230;
-  --el-border-color-lighter: #1e1e2c;
-  --el-border-color-extra-light: #1a1a28;
-  --el-border-color-dark: #3a3a4a;
-  --el-border-color-darker: #4a4a5a;
+  // 成功/警告/危险/信息色 — 镜像 _variables.scss 语义色
+  --el-color-success: #34d97b;
+  --el-color-warning: #e8b93c;
+  --el-color-danger: #f2555f;
+  --el-color-info: #5b9dff;
 
-  // 填充色（背景）
+  // 文字色 — 镜像 --text-* 三档
+  --el-text-color-primary: #e8e8f0;
+  --el-text-color-regular: #c2c2d4;
+  --el-text-color-secondary: #9a9ab2;
+  --el-text-color-placeholder: #8585a0;
+  --el-text-color-disabled: #4a4a58;
+
+  // 边框色 — 由 --border-color #2e2e3c 派生的梯度
+  --el-border-color: #2e2e3c;
+  --el-border-color-light: #262632;
+  --el-border-color-lighter: #22222c;
+  --el-border-color-extra-light: #1e1e28;
+  --el-border-color-dark: #3e3e4e;
+  --el-border-color-darker: #4e4e5e;
+
+  // 填充色（背景）— 由 --bg-* 四层派生
   --el-fill-color: #1a1a24;
-  --el-fill-color-light: #141420;
-  --el-fill-color-lighter: #12121c;
-  --el-fill-color-blank: #0a0a0f;
+  --el-fill-color-light: #14141b;
+  --el-fill-color-lighter: #121219;
+  --el-fill-color-blank: #0b0b10;
 
   // 背景色
-  --el-bg-color: #0a0a0f;
-  --el-bg-color-page: #0a0a0f;
+  --el-bg-color: #0b0b10;
+  --el-bg-color-page: #0b0b10;
   --el-bg-color-overlay: #1a1a24;
 
   // 阴影
-  --el-box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --el-box-shadow-light: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --el-box-shadow-lighter: 0 2px 6px rgba(0, 0, 0, 0.2);
+  --el-box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --el-box-shadow-light: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --el-box-shadow-lighter: 0 1px 4px rgba(0, 0, 0, 0.2);
 
   // 禁用
   --el-disabled-fill-color: #1a1a24;
-  --el-disabled-border-color: #2a2a3a;
-  --el-disabled-color: #444455;
+  --el-disabled-border-color: #2e2e3c;
+  --el-disabled-color: #4a4a58;
 
   // 遮罩层
   --el-overlay-color: rgba(0, 0, 0, 0.7);
@@ -58,5 +75,5 @@
   --el-overlay-color-lighter: rgba(0, 0, 0, 0.3);
 
   // 下拉菜单
-  --el-dropdown-menu-box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --el-dropdown-menu-box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }

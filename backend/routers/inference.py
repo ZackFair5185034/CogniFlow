@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db, SessionLocal, Model, ModelFile, InferenceJob
 from backend.utils.frame_buffer import stream_job_manager
+from backend.utils.safe_path import safe_join
 
 router = APIRouter()
 
@@ -129,14 +130,20 @@ async def detect_image(
     if not model_file or not os.path.exists(model_file.file_path):
         raise HTTPException(status_code=400, detail="模型文件不存在")
 
-    # 保存上传的图片
+    # 保存上传的图片（只取 basename，防止路径穿越）
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    file_path = INFERENCE_OUTPUT_DIR / f"input_{timestamp}_{file.filename}"
+    raw_name = os.path.basename(file.filename or "")
+    if not raw_name:
+        raise HTTPException(status_code=400, detail="非法路径")
+    try:
+        file_path = Path(safe_join(str(INFERENCE_OUTPUT_DIR), f"input_{timestamp}_{raw_name}"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法路径")
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     try:
-        from backend.routers.yolo_training import load_yolo_model, inference_yolo
+        from backend.services.inference_service import load_yolo_model, inference_yolo
         import cv2
         import numpy as np
 
@@ -170,7 +177,7 @@ async def detect_image(
             }
         else:
             # YOLO 模型，使用原有的 inference_yolo
-            result = inference_yolo(detector, str(file_path), conf_threshold)
+            result = inference_yolo(detector, str(file_path), conf_threshold, device=actual_device)
 
         # 返回原图（画框由前端 SVG overlay 负责）
         with open(file_path, 'rb') as f:
@@ -486,7 +493,7 @@ def process_video_stream_background(
     3. ws_stream.py 推送协程：从 frame_buffer 取数据 → WebSocket 推送给前端
     """
     import cv2
-    from backend.routers.yolo_training import load_yolo_model
+    from backend.services.inference_service import load_yolo_model
 
     if stream_job_manager.get_job_frame_buffer(job_id) is None:
         return
@@ -592,9 +599,15 @@ async def detect_video_stream(
     for cat in categories:
         cat['color'] = name_to_color.get(cat['name'], cat.get('color', '#FF0000'))
 
-    # 保存上传的视频
+    # 保存上传的视频（只取 basename，防止路径穿越）
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    input_path = INFERENCE_OUTPUT_DIR / f"stream_{timestamp}_{file.filename}"
+    raw_name = os.path.basename(file.filename or "")
+    if not raw_name:
+        raise HTTPException(status_code=400, detail="非法路径")
+    try:
+        input_path = Path(safe_join(str(INFERENCE_OUTPUT_DIR), f"stream_{timestamp}_{raw_name}"))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法路径")
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
@@ -833,7 +846,7 @@ async def rerun_inference_job(
         }
     else:
         # 图片：重新执行 detect_image 逻辑（只返回原图，画框由前端负责）
-        from backend.routers.yolo_training import load_yolo_model, inference_yolo
+        from backend.services.inference_service import load_yolo_model, inference_yolo
 
         # 从 model.metrics 提取 class_names（ONNX/OpenVINO fallback）
         _img_class_names = None
@@ -860,7 +873,7 @@ async def rerun_inference_job(
             }
         else:
             # YOLO 模型
-            result = inference_yolo(detector, job.file_path, conf_threshold)
+            result = inference_yolo(detector, job.file_path, conf_threshold, device=actual_device)
 
         # 返回原图（画框由前端 SVG overlay 负责）
         with open(job.file_path, 'rb') as f:

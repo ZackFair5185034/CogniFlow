@@ -1,6 +1,39 @@
-# CogniFlow Design Specification v1.0
+# CogniFlow Design Specification
 
 > 深色主题 AI 推理工具 UI 设计规范
+
+---
+
+> ## ⚠️ 权威来源声明（v2 修订, 2026-09-12）
+>
+> **本文件的色值表已过时。代码中的唯一权威来源是：**
+> - `src/style/_variables.scss` — 设计令牌（CSS 变量）
+> - `src/style/_element-plus-vars.scss` — Element Plus 主题令牌
+> - `uno.config.ts` — 组件类 shortcut
+>
+> 本文件保留作为**设计意图与原则**的说明；**具体色值一律以上面三个文件为准**。
+>
+> ### v1.0 → v2 的主要变更
+>
+> | 项 | v1.0（本文件原文） | v2（实际实现） |
+> |---|---|---|
+> | 品牌强调色 | `#00f0ff` 青 | `#22d3ee` 青（更收敛，9.55:1 on 卡片） |
+> | 辅助强调色 | `#ff00aa` 品红 | **取消** —— 辅助色改用语义色 `--color-info` |
+> | 主背景 | `#0a0a0f` | `#0b0b10`（四层基底重新分层） |
+> | 副文字 | `#a0a0b0` | `#9a9ab2`（三档文字全部 ≥4.5:1） |
+> | 弱化文字 | `#606070` | `#8585a0`（**修正**：v1 值在卡片上仅 2.38:1，违反本文件 §5 自己的 AA 要求） |
+> | 危险色 | `#ff4466` | `#f2555f`（5.13:1，脱离擦线） |
+> | 大圆角 | `--rounded-lg: 24px` / `--rounded-pill: 50px` | `24px`/`50px` **未采用**，实际最大 12px（工程工具风，不做胶囊） |
+> | 青色发光阴影 | `--shadow-cyan: 0 0 16px rgba(0,240,255,.2)` | **保留但收敛**，仅用于「进行中」状态与聚焦环，不做装饰铺色 |
+> | 节点分类色 | （未定义） | 新增 6 色板 `--cat-*`，低眩光调 |
+>
+> ### 仍然成立的核心原则
+>
+> 1. 通过明度差异建立层次，不依赖阴影
+> 2. 极淡边框，聚焦时才点亮品牌色
+> 3. 文字三级对比（primary / secondary / muted）
+> 4. **文字与背景对比度 ≥ 4.5:1（WCAG AA）** —— v2 首次真正达成
+> 5. 强调色不滥用
 
 ---
 
@@ -35,7 +68,7 @@
 
 | Token | Hex | 用途 |
 |-------|-----|------|
-| `--accent-cyan` | `#00f0ff` | 主强调色（检测框、进度条、选中态） |
+| `--accent` | `#22d3ee` | 主强调色（检测框、进度条、选中态、聚焦环） |
 | `--accent-magenta` | `#ff00aa` | 辅助强调色（分类标签、游戏元素） |
 | `--accent-green` | `#00ff88` | 成功状态 |
 | `--accent-yellow` | `#ffdd00` | 警告/视频相关 |
@@ -167,7 +200,7 @@
 }
 
 .progress-playback {
-  background: var(--accent-cyan);
+  background: var(--accent);
   border-radius: 3px;
   box-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
 }
@@ -180,7 +213,7 @@
 ### 悬停态（Hover）
 
 - 背景：`var(--bg-hover)`
-- 边框：`var(--border-active)` 或 `var(--accent-cyan)`
+- 边框：`var(--accent)`
 - 过渡：`all 0.15s ease`
 
 ### 禁用态（Disabled）
@@ -193,7 +226,7 @@ cursor: not-allowed;
 ### 聚焦态（Focus）
 
 ```scss
-outline: 2px solid var(--accent-cyan);
+outline: 2px solid var(--accent);
 outline-offset: 2px;
 ```
 

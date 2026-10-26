@@ -30,8 +30,18 @@ setup_data_dir() {
 
 start_backend() {
     echo "[INFO] 启动后端 :$API_PORT ..."
-    cd "$BACKEND_DIR"
-    python -m uvicorn app:app --host 0.0.0.0 --port $API_PORT "$@"
+    cd "$SCRIPT_DIR"  # app.py 在项目根目录，不是 backend/
+
+    # 优先使用项目根 .venv（老大本机已装好 numpy/torch/opencv）
+    if [ -x "$SCRIPT_DIR/.venv/bin/python" ]; then
+        PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python"
+        echo "[INFO] 使用 venv: $PYTHON_BIN"
+    else
+        PYTHON_BIN="${PYTHON_BIN:-python3}"
+        echo "[WARN] 未发现 $SCRIPT_DIR/.venv，使用系统: $PYTHON_BIN"
+    fi
+
+    PYTHONPATH="$SCRIPT_DIR" "$PYTHON_BIN" -m uvicorn app:app --host 0.0.0.0 --port $API_PORT "$@"
 }
 
 start_frontend() {

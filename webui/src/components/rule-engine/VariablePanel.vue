@@ -4,8 +4,6 @@
  *
  * 提供变量的 CRUD 操作界面，支持添加、删除、编辑变量。
  */
-import { ref } from 'vue'
-import SvgIcon from '@/components/SvgIcon.vue'
 
 // ============ 类型定义 ============
 
@@ -42,10 +40,10 @@ const expanded = ref(true)
 
 const VARIABLE_TYPES: Array<{ value: VariableType; label: string; color: string }> = [
   { value: 'STRING', label: '字符串', color: '#8888aa' },
-  { value: 'NUMBER', label: '数字', color: '#00f0ff' },
-  { value: 'BOOLEAN', label: '布尔', color: '#DC4FDC' },
-  { value: 'IMAGE', label: '图像', color: '#4CFF4C' },
-  { value: 'BBOX', label: '边界框', color: '#FF7F4C' }
+  { value: 'NUMBER', label: '数字', color: '#22d3ee' },
+  { value: 'BOOLEAN', label: '布尔', color: '#b158e4' },
+  { value: 'IMAGE', label: '图像', color: '#58e49e' },
+  { value: 'BBOX', label: '边界框', color: '#e48b58' }
 ]
 
 // ============ 方法 ============
@@ -234,12 +232,12 @@ function handleUpdate(index: number, field: keyof Variable, value: VariableDefau
   }
 
   .el-input__wrapper:hover {
-    border-color: var(--accent-cyan, #00f0ff);
+    border-color: var(--accent);
   }
 
   .el-input__wrapper.is-focus {
-    border-color: var(--accent-cyan, #00f0ff);
-    box-shadow: 0 0 0 1px var(--accent-cyan, #00f0ff) inset;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent) inset;
   }
 
   .el-input.is-disabled .el-input__wrapper {
@@ -268,12 +266,12 @@ function handleUpdate(index: number, field: keyof Variable, value: VariableDefau
   }
 
   .el-select__wrapper:hover {
-    border-color: var(--accent-cyan, #00f0ff);
+    border-color: var(--accent);
   }
 
   .el-select__wrapper.is-focus {
-    border-color: var(--accent-cyan, #00f0ff);
-    box-shadow: 0 0 0 1px var(--accent-cyan, #00f0ff) inset;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent) inset;
   }
 
   .el-select__caret {
@@ -331,9 +329,9 @@ function handleUpdate(index: number, field: keyof Variable, value: VariableDefau
 }
 
 .add-var-btn:hover:not(:disabled) {
-  border-color: var(--accent-cyan, #00f0ff);
-  color: var(--accent-cyan, #00f0ff);
-  background: rgba(0, 240, 255, 0.05);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(34, 211, 238, 0.05);
 }
 
 .add-var-btn:disabled {

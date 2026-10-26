@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PortType(str, Enum):
@@ -36,6 +36,26 @@ class PortDefinition(BaseModel):
     required: bool = Field(True, description="是否为必需端口")
     default: Any = Field(None, description="默认值（未连接时使用）")
     description: str = Field("", description="端口功能描述")
+
+
+class Region(BaseModel):
+    """屏幕采集区域 - screen_capture.region 输出的标准序列化格式。
+
+    用于规范 OBJECT 类型端口的数据契约，下游节点可基于该 Pydantic model
+    解析（通过 model_validate(dict)）而不依赖隐式的 dict 结构。
+
+    字段：
+        x: 区域左上角 X 坐标（像素）
+        y: 区域左上角 Y 坐标（像素）
+        width: 区域宽度（像素）
+        height: 区域高度（像素）
+        monitor: 多显示器场景下的屏幕索引，None 表示默认主屏
+    """
+    x: int = Field(..., description="左上角 X 坐标")
+    y: int = Field(..., description="左上角 Y 坐标")
+    width: int = Field(..., description="宽度", ge=1)
+    height: int = Field(..., description="高度", ge=1)
+    monitor: Optional[int] = Field(None, description="显示器索引（多屏场景）")
 
 
 class NodeCategory(str, Enum):
@@ -71,6 +91,7 @@ class ConfigSchemaProperty(BaseModel):
     enum: Optional[List[Any]] = Field(None, description="枚举选项（dropdown）")
     widget: str = Field("text", description="控件类型：text/number/slider/dropdown/model-select/checkbox/file-path/textarea/code")
     required: bool = Field(False, description="是否为必填项")
+    allow_create: bool = Field(False, description="multiselect 控件是否允许用户输入自定义选项（不限于 enum）")
 
 
 class NodeDefinition(BaseModel):
@@ -84,6 +105,46 @@ class NodeDefinition(BaseModel):
     inputs: Dict[str, PortDefinition] = Field(default_factory=dict, description="输入端口定义")
     outputs: Dict[str, PortDefinition] = Field(default_factory=dict, description="输出端口定义")
     config_schema: Dict[str, ConfigSchemaProperty] = Field(default_factory=dict, description="节点可配置参数定义")
+
+
+class NodeConfigSchema(BaseModel):
+    """节点配置 schema 基类 - P0-A (2026-09-11)。
+
+    所有节点的 ConfigSchema 必须继承此类。
+
+    关键约束：
+    - extra='forbid'：禁止未知字段。前端字段名拼错（如 confidenc）会立即报
+      ValidationError, 避免静默使用默认值导致运行时难定位的 bug。
+    - validate_assignment=False（默认）：执行期校验一次性读取，避免运行中
+      修改 config 触发二次校验。
+    """
+    model_config = ConfigDict(extra="forbid")
+
+
+def prop_to_pydantic_field(prop: ConfigSchemaProperty) -> Dict[str, Any]:
+    """把 ConfigSchemaProperty 转换为 Pydantic Field 参数。
+
+    这是手工编写 NodeConfigSchema 时的辅助参考（不强制使用）。
+    用于从现有 ConfigSchemaProperty 单源派生 Pydantic Field 约束。
+
+    Args:
+        prop: 节点配置项定义
+
+    Returns:
+        dict 包含 default / ge / le / description 等键，可展开给 Field()
+
+    注意：返回 dict 中的 type 注解（int/float/bool/str）需人工映射,
+    因为 widget 语义无法完全靠 Pydantic Field 表达（如 dropdown 需用 Literal）。
+    """
+    result: Dict[str, Any] = {
+        "default": prop.default,
+        "description": prop.description or prop.title,
+    }
+    if prop.minimum is not None:
+        result["ge"] = prop.minimum
+    if prop.maximum is not None:
+        result["le"] = prop.maximum
+    return result
 
 
 class NodeDefinitionsResponse(BaseModel):

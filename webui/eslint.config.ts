@@ -4,6 +4,18 @@ import tseslint from 'typescript-eslint'
 import globals from 'globals'
 import vueParser from 'vue-eslint-parser'
 import tsParser from '@typescript-eslint/parser'
+import autoImportGlobals from './.eslintrc-auto-import.json' with { type: 'json' }
+
+/**
+ * ESLint flat config: globals 是 readonly/writable
+ * unplugin-auto-import 生成的 .eslintrc-auto-import.json 用 true/false 表示
+ * 这里统一转换为 readonly (auto-import 生成的都是 const, 只读)
+ */
+const autoImportGlobalsReadonly: Record<string, 'readonly'> = Object.fromEntries(
+  Object.entries(autoImportGlobals.globals as Record<string, boolean>).map(
+    ([key]) => [key, 'readonly' as const],
+  ),
+)
 
 export default tseslint.config(
   // 忽略文件
@@ -61,6 +73,10 @@ export default tseslint.config(
       globals: {
         ...globals.browser,
         ...globals.node,
+        // unplugin-auto-import 注入的全局（来自 .eslintrc-auto-import.json）
+        ...autoImportGlobalsReadonly,
+        // main.ts 全局注册的 SvgIcon 组件 (auto-import 未覆盖)
+        SvgIcon: 'readonly',
       },
     },
     rules: {

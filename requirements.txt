@@ -20,7 +20,10 @@ pillow>=10.0.0
 
 # ============ 模型格式支持 ============
 onnx>=1.12.0
-onnxruntime>=1.15.0
+# Windows AMD/Intel/NVIDIA GPU: onnxruntime-directml
+# Linux NVIDIA GPU: onnxruntime-gpu
+# 纯 CPU 回退: onnxruntime
+onnxruntime-directml>=1.15.0
 onnxslim>=0.1.71
 openvino>=2024.0.0
 

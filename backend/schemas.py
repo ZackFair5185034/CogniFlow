@@ -297,6 +297,7 @@ class RuleGraphBase(BaseModel):
     is_active: bool = False
     cron_expression: Optional[str] = None  # 定时触发 Cron 表达式
     thumbnail: Optional[str] = None
+    webhook_api_key: Optional[str] = None  # Webhook API Key（仅在响应中显示，创建后不可读取）
 
 
 class RuleGraphCreate(RuleGraphBase):
@@ -319,8 +320,9 @@ class RuleGraphUpdate(BaseModel):
 class RuleGraphResponse(RuleGraphBase):
     """规则图响应。"""
     id: int
-    created_at: datetime
-    updated_at: datetime
+    # 兼容历史数据：早期插入的规则图可能没有时间戳
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -344,6 +346,10 @@ class ExecutionTrigger(BaseModel):
     graph_id: int
     trigger_type: str = "manual"  # yolo/timer/manual/http
     trigger_data: Optional[dict] = None
+    # 延后启动: 为 True 时只创建执行记录并返回 execution_id,
+    # 由前端连上 WebSocket 后再调用 /executions/{execution_id}/start 真正触发。
+    # 用于消除「先 POST 执行再连 WS」的竞态窗口。
+    defer_start: bool = False
 
 
 class ExecutionResponse(BaseModel):
